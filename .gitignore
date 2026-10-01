@@ -1,0 +1,34 @@
+# Original game data and reference material stay local.
+/Original Sub Culture/
+/Sub Culture/
+/OST/
+/Reference Material/
+
+# Conversions of original game models/textures are generated locally.
+/godot/assets/
+/Mods/example-glb-submarine/models/
+/Mods/example-png-texture/textures/
+
+# Engine caches, script caches and generated verification output.
+.godot/
+__pycache__/
+*.py[cod]
+*.log
+/godot/tests/*.png
+/godot/tests/*.wav
+/godot/tests/*.import
+/godot/tests/capture_world.gd.uid
+
+# Backups and personal documents.
+*.7z
+*.bak
+*.gdoc
+/To Do*
+/ToDo*
+/TODO*
+
+# Local credentials/configuration.
+.env
+.env.*
+!.env.example
+export_credentials.cfg

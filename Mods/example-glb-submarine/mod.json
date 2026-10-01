@@ -1,0 +1,26 @@
+{
+  "assets": {
+    "submarine.player": {
+      "file": "models/submarine.glb",
+      "forward_axis": "+Z",
+      "parts": {
+        "left_pod": "SUB/Hull/RightPod",
+        "left_propeller": "SUB/Hull/RightPod/RightPropeller",
+        "main_propeller": "SUB/Hull/RearPropeller",
+        "right_pod": "SUB/Hull/LeftPod",
+        "right_propeller": "SUB/Hull/LeftPod/LeftPropeller"
+      },
+      "scale": 1.0,
+      "material_textures": {
+        "2": "texture.sub1",
+        "5": "texture.sub1",
+        "4": "texture.sub1"
+      }
+    }
+  },
+  "description": "All six original submarine parts converted into a self-contained GLB. Same appearance, modern model format, working propellers. Disabled until enabled.",
+  "id": "example.glb-submarine",
+  "name": "Example: GLB submarine",
+  "schema_version": 1,
+  "version": "1.0"
+}

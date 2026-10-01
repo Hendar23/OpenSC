@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.glb -text
+*.png -text
+*.wav -text
+*.raw -text
+*.mp3 -text
+*.ogg -text
