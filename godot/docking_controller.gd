@@ -1,4 +1,5 @@
 extends Node
+signal docked
 
 const Morph = preload("res://morph_animation.gd")
 const Radio = preload("res://docking_radio.gd")
@@ -39,7 +40,7 @@ func setup(player: RigidBody3D, world: Node3D, folder: String = "", follow_view:
 	view_camera = follow_view
 	radio_messages = Radio.messages(folder)
 	var portraits := {}
-	for node in world.get_node("Scenery").get_children():
+	for node in world.find_children("*", "Node3D", true, false):
 		if not node.has_meta("city_id"): continue
 		var meshes: Array[MeshInstance3D] = []
 		Morph.collect(node, meshes)
@@ -277,6 +278,7 @@ func _physics_process(delta: float) -> void:
 			pilot.visual.visible = false
 			current.collision.collision_layer = 1
 			_transition(Stage.DOCKED)
+			docked.emit()
 		Stage.EXIT_OPEN:
 			current.collision.collision_layer = 0
 			pilot.visual.visible = true
@@ -347,6 +349,8 @@ func cancel() -> void:
 	_set_open(0.0)
 	current.collision.collision_layer = 1
 	pilot.global_position = current.entry
+	pilot.force_update_transform()
+	pilot.reset_physics_interpolation()
 	_restore_pilot()
 	stage = Stage.IDLE
 	current = {}

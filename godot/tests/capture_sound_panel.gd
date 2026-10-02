@@ -17,5 +17,11 @@ func _run() -> void:
 	for frame in range(8): await process_frame
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png(ProjectSettings.globalize_path("res://tests/sound-panel-preview.png"))
+	for tab_name in ["Movement", "Graphics", "Mods", "System"]:
+		game._select_developer_tab(tab_name)
+		for frame in range(12): await process_frame
+		print(tab_name, " menu size=", game.developer_menu.size)
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png(ProjectSettings.globalize_path("res://tests/menu-" + tab_name.to_lower() + ".png"))
 	print("Sound panel preview saved")
 	quit()

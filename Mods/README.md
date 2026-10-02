@@ -1,10 +1,10 @@
 # Modding OpenSubCulture
 
-Press **F8** in the game or asset viewer to open **Mods**. Put each mod into
+Use **F1 → Mods** in the game or the top-row **Mods** button in the editor. Put each mod into
 its own folder here, select it in the menu, and choose **Apply and reload**.
 The game resets the world when applying mods. The viewer refreshes its previews.
 Original files remain the fallback; disabling all mods restores the base assets.
-After editing an enabled mod's file, press **F8 → Apply and reload** again
+After editing an enabled mod's file, choose **Mods → Apply and reload** again
 to load the updated file, or restart the game.
 
 Three examples are included, disabled by default:

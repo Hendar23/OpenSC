@@ -138,8 +138,8 @@ func _run() -> void:
 		game.pilot.movement.tilt = PI / 4
 		game.pilot._update_animation(0.1)
 		check(not pod.basis.is_equal_approx(rest), "GLB side pods animate through mapped attachment points")
-		game.mod_panel.open()
-		check(game.mod_panel.visible and game.mod_panel.choices.size() == 3, "In-game Mods menu lists installed examples")
+		game._select_developer_tab("Mods")
+		check(game.mod_panel.embedded and game.mod_panel.choices.has("example.glb-submarine") and game.mod_panel.choices.has("test.remastered-submarine") and game.developer_tabs.get_current_tab_control().name == "Mods", "In-game Mods tab lists installed examples and remastered submarine")
 		for checkbox in game.mod_panel.choices.values(): checkbox.button_pressed = false
 		game.mod_panel._apply()
 		for frame in range(1200):

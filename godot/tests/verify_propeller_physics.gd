@@ -126,7 +126,8 @@ func _run() -> void:
 	key(KEY_W, true)
 	for frame in range(180): await physics_frame
 	key(KEY_W, false)
-	check(pilot.position.z < -1.5 and pilot.position.z > -2.1, "Rigid-body thrust hits solid scenery without tunnelling through it")
+	var contact_z: float = wall.position.z + box.size.z * 0.5 + Pilot.COLLIDER_RADIUS
+	check(absf(pilot.position.z - contact_z) < 0.1, "Rigid-body thrust stops at scenery using the current submarine radius")
 	wall.queue_free()
 	pilot.reset_at(Vector3(0, 10, 0))
 	key(KEY_E, true)

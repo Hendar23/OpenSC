@@ -7,13 +7,15 @@ var message: Label
 var export_dialog: FileDialog
 var preview_button: CheckButton
 var all_button: CheckBox
+var embedded := false
 const ROWS := [
 	["master_volume", "Master volume", -60.0, 6.0, 1.0, "dB"],
 	["volume_response", "Volume response time", 0.01, 2.0, 0.01, "s"],
 	["pitch_response", "Pitch response time", 0.01, 2.0, 0.01, "s"],
 	["loop_blend_ms", "Loop join smoothing", 0.0, 50.0, 1.0, "ms"]
 ]
-func setup(sound: Node) -> void:
+func setup(sound: Node, in_tabs: bool = false) -> void:
+	embedded = in_tabs
 	audio = sound
 	set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	grow_horizontal = Control.GROW_DIRECTION_BEGIN
@@ -36,6 +38,7 @@ func setup(sound: Node) -> void:
 	close.focus_mode = Control.FOCUS_NONE
 	close.pressed.connect(func() -> void: stop_preview(); dismissed.emit())
 	heading.add_child(close)
+	heading.visible = not embedded
 	var hint := Label.new()
 	hint.text = "Live controls · pitch 1.0 = original sample rate.\n-60 dB mutes a layer. Lower response = faster changes."
 	hint.add_theme_font_size_override("font_size", 12)
@@ -134,7 +137,7 @@ func setup(sound: Node) -> void:
 	add_child(export_dialog)
 	get_viewport().size_changed.connect(_resize)
 	_resize()
-	visible = false
+	visible = embedded
 
 func _row(parent: VBoxContainer, row: Array) -> void:
 	var key := str(row[0])
@@ -159,7 +162,9 @@ func _row(parent: VBoxContainer, row: Array) -> void:
 	# Rebuild once on release rather than restarting loops every drag tick.
 	if key == "loop_blend_ms": slider.drag_ended.connect(func(_changed: bool) -> void: audio.rebuild_loops())
 
-func _resize() -> void: offset_bottom = minf(800.0, get_viewport_rect().size.y - 18.0)
+func _resize() -> void:
+	if embedded: set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	else: offset_bottom = minf(800.0, get_viewport_rect().size.y - 18.0)
 func stop_preview() -> void:
 	preview_button.button_pressed = false
 	audio.preview = false

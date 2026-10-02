@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "test.remastered-submarine",
+  "name": "Test: remastered submarine",
+  "version": "0.4",
+  "description": "Rounded yellow submarine from Other resources, using the gameplay GLB with embedded textures and animated pods and propellers. Disabled until enabled.",
+  "assets": {
+    "submarine.player": {
+      "file": "models/submarine.glb",
+      "scale": 1.0,
+      "forward_axis": "+Z",
+      "parts": {
+        "left_pod": "Submarine_Remaster/Hull/RightPod",
+        "right_pod": "Submarine_Remaster/Hull/LeftPod",
+        "main_propeller": "Submarine_Remaster/Hull/RearPropeller",
+        "left_propeller": "Submarine_Remaster/Hull/RightPod/RightPropeller",
+        "right_propeller": "Submarine_Remaster/Hull/LeftPod/LeftPropeller"
+      }
+    }
+  }
+}

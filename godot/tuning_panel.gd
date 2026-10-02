@@ -32,8 +32,10 @@ var sliders := {}
 var labels := {}
 var message: Label
 var export_dialog: FileDialog
+var embedded := false
 
-func setup(state: RefCounted) -> void:
+func setup(state: RefCounted, in_tabs: bool = false, graphics_rows: VBoxContainer = null) -> void:
+	embedded = in_tabs
 	movement = state
 	set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	grow_horizontal = Control.GROW_DIRECTION_BEGIN
@@ -56,6 +58,7 @@ func setup(state: RefCounted) -> void:
 	close.text = "Close (T)"
 	close.pressed.connect(func() -> void: dismissed.emit())
 	heading.add_child(close)
+	heading.visible = not embedded
 	var hint := Label.new()
 	hint.text = "Changes apply live. Lower drag = longer coasting.\nW/S: thrust · A/D: turn · Q/E: pods · ↑/↓: pitch\nPad: pull back = nose up · right stick pods · triggers thrust"
 	hint.add_theme_font_size_override("font_size", 12)
@@ -69,9 +72,10 @@ func setup(state: RefCounted) -> void:
 	scroll.add_child(rows)
 	for row in ROWS:
 		var key := str(row[0])
+		var row_parent := graphics_rows if key == "bubble_rate" and graphics_rows != null else rows
 		var label := Label.new()
 		label.add_theme_font_size_override("font_size", 13)
-		rows.add_child(label)
+		row_parent.add_child(label)
 		labels[key] = label
 		var slider := HSlider.new()
 		slider.min_value = float(row[2])
@@ -79,7 +83,7 @@ func setup(state: RefCounted) -> void:
 		slider.step = float(row[4])
 		slider.value = float(movement.settings[key])
 		slider.focus_mode = Control.FOCUS_NONE
-		rows.add_child(slider)
+		row_parent.add_child(slider)
 		sliders[key] = slider
 		_update_label(row, slider.value)
 		slider.value_changed.connect(func(value: float) -> void:
@@ -114,9 +118,12 @@ func setup(state: RefCounted) -> void:
 	add_child(export_dialog)
 	get_viewport().size_changed.connect(_resize)
 	_resize()
-	visible = false
+	visible = embedded
 
 func _resize() -> void:
+	if embedded:
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		return
 	offset_bottom = minf(710.0, get_viewport_rect().size.y - 18.0)
 
 func _update_label(row: Array, value: float) -> void:

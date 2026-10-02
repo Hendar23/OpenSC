@@ -104,7 +104,8 @@ static func _read_pack(folder: String) -> Dictionary:
 		var model := asset_id == "submarine.player" or asset_id.begins_with("model.")
 		var texture := asset_id.begins_with("texture.")
 		var audio := asset_id in ["audio.submarine.main_propeller", "audio.submarine.side_pods", "audio.submarine.pod_rotation", "audio.submarine.impact_hit1", "audio.submarine.impact_hit3", "audio.submarine.impact_creaking", "audio.docking.sequence", "audio.docking.doors", "audio.docking.door_stop"]
-		if (not model and not texture and not audio) or (model and extension not in ["glb", "dff"]) or (texture and extension not in ["png", "jpg", "jpeg", "webp", "bmp", "ras"]) or (audio and extension not in ["wav", "ogg", "mp3", "raw"]):
+		var map := asset_id == "map.scen1"
+		if (not model and not texture and not audio and not map) or (model and extension not in ["glb", "dff"]) or (texture and extension not in ["png", "jpg", "jpeg", "webp", "bmp", "ras"]) or (audio and extension not in ["wav", "ogg", "mp3", "raw"]) or (map and extension != "json"):
 			pack.errors.append("Unsupported asset ID or file type: " + str(key)); continue
 		if not FileAccess.file_exists(resolved):
 			pack.errors.append("Missing asset file: " + relative); continue

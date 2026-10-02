@@ -23,6 +23,7 @@ func capture(path: String) -> void:
 
 func _run() -> void:
 	var game := Game.new()
+	game.use_map_overrides = false
 	game.remember_preferences = false
 	root.add_child(game)
 	for frame in range(1200):
@@ -34,7 +35,9 @@ func _run() -> void:
 	key.keycode = KEY_F11
 	key.pressed = true
 	game._input(key)
-	check(root.mode == Window.MODE_WINDOWED, "Game F11 window toggle")
+	check(root.mode == Window.MODE_FULLSCREEN, "Game remains full screen after F11")
+	# Use a fixed capture size without exposing a window toggle in either app.
+	root.mode = Window.MODE_WINDOWED
 	root.size = Vector2i(1280, 720)
 	game.set_physics_process(false)
 	game.pilot.controls_enabled = false
@@ -64,7 +67,8 @@ func _run() -> void:
 	await process_frame
 	check(root.mode == Window.MODE_FULLSCREEN, "Editor full-screen startup")
 	editor._input(key)
-	check(root.mode == Window.MODE_WINDOWED, "Editor F11 window toggle")
+	check(root.mode == Window.MODE_FULLSCREEN, "Editor remains full screen after F11")
+	root.mode = Window.MODE_WINDOWED
 	root.size = Vector2i(1280, 720)
 	editor.category.select(1)
 	editor._filter_assets()

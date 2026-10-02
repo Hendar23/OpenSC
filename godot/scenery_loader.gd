@@ -1,6 +1,7 @@
 extends RefCounted
 
 const Assets = preload("res://clump_loader.gd")
+const PulseLight = preload("res://pulse_light.gd")
 
 # Serialized fields are always present; the row mask says which values are
 # initialized. Runtime pointers and each matrix's fourth lanes are garbage.
@@ -157,7 +158,7 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 					solid = definition.get("collision") == "yes"
 				# Pulse-light generators have no mesh; don't render their editor clump.
 				if definition.get("object") == "PULSELIGHT":
-					_add_light(scenery, placement(row, offset).origin, 0.7, 4.0)
+					_add_light(scenery, placement(row, offset).origin, 0.7, 4.0, folder)
 		elif object_id == 32 and row.get("clump") == "CLAM":
 			model_name = "CLAM"
 		elif row.get("clump") == "PIPEBARS":
@@ -172,7 +173,7 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 			await tree.process_frame
 	for row in tables.get("Lights", []):
 		var pose := placement(row, offset)
-		_add_light(scenery, pose.origin, float(row.get("intensity", 1.0)), maxf(1.0, float(row.get("radius", 1.0))))
+		_add_light(scenery, pose.origin, float(row.get("intensity", 1.0)), maxf(1.0, float(row.get("radius", 1.0))), folder)
 	for row in tables.get("Scenarios", []):
 		if int(row.get("ID", 0)) == 1:
 			world.set_meta("player_spawn", Vector3(float(row.PlayerX), float(row.PlayerY), float(row.PlayerZ)) + offset)
@@ -201,6 +202,7 @@ static func _place_prop(parent: Node3D, row: Dictionary, name: String, offset: V
 	if template == null: return false
 	var instance := template.duplicate() as Node3D
 	instance.name = "%s_%d" % [name, int(row.index)]
+	instance.set_meta("editor_model", name)
 	instance.transform = pose * template.transform
 	instance.set_meta("source_comment", row.get("Comment", row.get("CityName", "")))
 	if row.has("CityID"):
@@ -262,17 +264,18 @@ static func _plant_patch(parent: Node3D, row: Dictionary, center: Vector3, world
 			plant.position = hit.position
 			plant.rotation.y = rng.randf() * TAU
 			plant.name = "Plant_%d" % index
+			plant.set_meta("editor_model", names[0] if names.size() == 1 else str(template.name).get_basename().to_upper())
 			parent.add_child(plant)
 			plants += 1
 			break
 		if index % 24 == 0: await tree.process_frame
 	return plants
 
-static func _add_light(parent: Node3D, point: Vector3, energy: float, radius: float) -> void:
+static func _add_light(parent: Node3D, point: Vector3, energy: float, radius: float, folder: String) -> void:
 	if not point.is_finite() or not is_finite(energy) or not is_finite(radius): return
-	var light := OmniLight3D.new()
+	var light := PulseLight.new()
+	light.name = "Light_%d" % parent.get_child_count()
 	light.position = point
 	light.light_color = Color(0.48, 0.8, 0.68)
-	light.light_energy = clampf(energy, 0.0, 2.0)
-	light.omni_range = clampf(radius, 1.0, 12.0)
+	light.configure(folder, {"energy": clampf(energy, 0.0, 2.0), "range": clampf(radius, 1.0, 12.0)})
 	parent.add_child(light)

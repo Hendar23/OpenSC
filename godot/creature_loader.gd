@@ -31,7 +31,7 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 	var surface: float = world.get_meta("surface_height")
 	var player: Vector3 = world.get_meta("player_spawn", bounds.get_center())
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 8675309
+	rng.seed = 8675309 + int(world.get_meta("wildlife_generation", 0)) * 104729
 	var count := 0
 	for school in range(SPECIES.size()):
 		var template := Assets.load_clump(folder.path_join("CLUMPS/" + SPECIES[school] + ".DFF"), PackedStringArray(), true)
@@ -70,7 +70,8 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 		progress.call("Adding ambient fish: %d" % count)
 		await tree.process_frame
 	world.set_meta("ambient_fish_count", count)
-	world.set_meta("scenery_summary", "%s · %d ambient fish" % [world.get_meta("scenery_summary", ""), count])
+	if not world.has_meta("scenery_base_summary"): world.set_meta("scenery_base_summary", world.get_meta("scenery_summary", ""))
+	world.set_meta("scenery_summary", "%s · %d ambient fish" % [world.get_meta("scenery_base_summary"), count])
 
 static func _open_water(world: Node3D, x: float, z: float, surface: float, radius: float, rng: RandomNumberGenerator) -> Vector3:
 	var bounds: AABB = world.get_meta("bounds")

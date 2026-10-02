@@ -87,7 +87,13 @@ func _run() -> void:
 	editor.animation_time = 0.0
 	editor._apply_animation()
 	check(is_zero_approx(fish.get_blend_shape_value(0)), "Restart returns to resting pose")
-	for name in ["SUB.DFF", "BUSH2.DFF", "SEAHORSE.DFF", "TURTLE.DFF"]:
+	editor._select_asset(editor.filtered_names.find("TURTLE.DFF"))
+	check(editor.animation_playing and editor.creature_animation.parts.size() == 5 and not editor.animation_button.disabled, "Turtle previews a procedural swim cycle using its rigid parts")
+	var flipper: Node3D = editor.creature_animation.parts[0].node
+	var rest: Basis = editor.creature_animation.parts[0].rest
+	editor.animation_time = 0.3; editor._apply_animation()
+	check(not flipper.basis.is_equal_approx(rest), "Turtle flippers move in the asset preview")
+	for name in ["SUB.DFF", "BUSH2.DFF", "SEAHORSE.DFF"]:
 		editor._select_asset(editor.filtered_names.find(name))
 		check(editor.animated_meshes.is_empty() and not editor.animation_playing and editor.animation_button.disabled, name + " remains static without morph poses")
 	if DisplayServer.get_name() != "headless":
@@ -96,7 +102,14 @@ func _run() -> void:
 		key.keycode = KEY_F11
 		key.pressed = true
 		editor._input(key)
-		check(editor.get_window().mode == Window.MODE_WINDOWED, "F11 returns editor to window")
+		check(editor.get_window().mode == Window.MODE_FULLSCREEN, "F11 leaves editor full screen")
+	check(editor.mods_button.get_parent().get_child(0).text == "Assets" and editor.mods_button.get_parent().get_child(1).text == "Map" and editor.mods_button.get_index() == 2, "Mods is beside Assets and Map")
+	editor.mods_button.pressed.emit()
+	check(editor.mod_panel.visible, "Top-row Mods button opens mod controls")
+	editor.mod_panel.hide()
+	var old_mod_key := InputEventKey.new(); old_mod_key.keycode = KEY_F8; old_mod_key.pressed = true
+	editor._input(old_mod_key)
+	check(not editor.mod_panel.visible, "Editor no longer uses hidden F8 shortcut")
 	var folder := preload("res://asset_paths.gd").find_game_folder().path_join("GAMETEX")
 	var rle := BMP.load_image(folder.path_join("BLADES.BMP"))
 	check(rle != null and rle.get_size() == Vector2i(128, 128), "RLE8 texture decodes")

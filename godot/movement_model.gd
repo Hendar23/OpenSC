@@ -14,7 +14,7 @@ const DEFAULTS := {
 	"forward_drag": 0.65, "lateral_drag": 0.95, "vertical_drag": 0.95,
 	"turn_acceleration": 138.0, "turn_speed": 144.0,
 	"turn_drag": 0.95, "tilt_speed": 100.0,
-	"camera_distance": FollowCamera.MIN_DISTANCE,
+	"camera_distance": FollowCamera.DEFAULT_DISTANCE,
 	"mass": 100.0, "water_resistance": 0.08,
 	"pitch_acceleration": 90.0, "pitch_speed": 45.0,
 	"upright_strength": 4.0, "upright_damping": 3.0,

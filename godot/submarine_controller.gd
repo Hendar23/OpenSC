@@ -35,6 +35,7 @@ var previous_contacts := {}
 var previous_velocity := Vector3.ZERO
 
 func _ready() -> void:
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON
 	custom_integrator = true
 	gravity_scale = 0.0
 	can_sleep = false
@@ -87,6 +88,9 @@ func reset_at(point: Vector3) -> void:
 	pending_reset = true
 	previous_contacts.clear()
 	previous_velocity = Vector3.ZERO
+	force_update_transform()
+	get_global_transform_interpolated()
+	reset_physics_interpolation()
 
 func _physics_process(delta: float) -> void:
 	if not active: return

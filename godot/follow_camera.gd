@@ -1,6 +1,7 @@
 extends RefCounted
 
-const MIN_DISTANCE := 1.5
+const MIN_DISTANCE := 0.35
+const DEFAULT_DISTANCE := 0.9
 const MAX_DISTANCE := 16.0
 const IDLE_TURN_FOLLOW := 0.35
 const FORWARD_TURN_FOLLOW := 3.0

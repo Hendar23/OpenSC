@@ -8,6 +8,8 @@ var info: Label
 var choices := {}
 var pending_order: Array[String] = []
 var pending_enabled: Array[String] = []
+var embedded := false
+var content: MarginContainer
 
 func _ready() -> void:
 	title = "Mods"
@@ -16,6 +18,7 @@ func _ready() -> void:
 	exclusive = true
 	close_requested.connect(hide)
 	var margin := MarginContainer.new()
+	content = margin
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side in ["left", "right", "top", "bottom"]: margin.add_theme_constant_override("margin_" + side, 16)
 	add_child(margin)
@@ -52,16 +55,23 @@ func _ready() -> void:
 	buttons.add_child(apply)
 	var cancel := Button.new()
 	cancel.text = "Cancel"
-	cancel.pressed.connect(hide)
+	cancel.pressed.connect(func() -> void: open() if embedded else hide())
 	buttons.add_child(cancel)
 	visible = false
+
+func embed(parent: Control) -> void:
+	embedded = true
+	content.reparent(parent)
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	open()
 
 func open() -> void:
 	Mods.ensure(persist_preferences)
 	pending_order = Mods.order.duplicate()
 	pending_enabled = Mods.enabled.duplicate()
 	_build_rows()
-	popup_centered()
+	if not embedded: popup_centered()
 
 func _build_rows() -> void:
 	for child in rows.get_children(): child.free()

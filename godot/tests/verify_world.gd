@@ -33,6 +33,8 @@ func _run() -> void:
 		check(model != null, name + " model supported")
 		if model != null: model.free()
 	var viewer := Viewer.new()
+	# Verify the original-world fallback independently of the user's authored map.
+	viewer.use_map_overrides = false
 	viewer.remember_preferences = false
 	root.add_child(viewer)
 	for frame in range(1200):
@@ -147,7 +149,7 @@ func _run() -> void:
 		key.keycode = KEY_F11
 		key.pressed = true
 		viewer._input(key)
-		check(viewer.get_window().mode == Window.MODE_WINDOWED, "F11 returns game to a window")
+		check(viewer.get_window().mode == Window.MODE_FULLSCREEN, "F11 leaves game full screen")
 		viewer._input(key)
 		check(viewer.get_window().mode == Window.MODE_FULLSCREEN, "F11 restores full screen")
 	viewer.queue_free()

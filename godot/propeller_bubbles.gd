@@ -12,6 +12,7 @@ var material: StandardMaterial3D
 var surface_height := INF
 
 func _ready() -> void:
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	top_level = true
 	global_transform = Transform3D.IDENTITY
 	random.randomize()

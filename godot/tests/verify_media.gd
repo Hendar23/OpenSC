@@ -68,6 +68,13 @@ func _run() -> void:
 	var stream: AudioStreamWAV = editor.media.audio_player.stream
 	check(stream != null and stream.mix_rate == 11025 and not stream.stereo, "RAW defaults to configurable 11025 Hz mono PCM")
 	check(not editor.media.audio_player.playing and editor.media.raw_tools.visible, "Selecting audio does not autoplay")
+	editor.media.audio_player.volume_db = -80
+	editor.asset_list.item_activated.emit(editor.filtered_names.find(editor.selected_name))
+	check(editor.media.audio_player.playing and not editor.media.audio_player.stream_paused, "Double-click activation plays the selected sound")
+	editor.media._toggle_audio()
+	editor.asset_list.item_activated.emit(editor.filtered_names.find(editor.selected_name))
+	check(editor.media.audio_player.playing and not editor.media.audio_player.stream_paused and is_zero_approx(editor.media.audio_seek.value), "Double-click restarts a paused sound from the beginning")
+	editor.media._stop_audio()
 	check(not editor.media.waveform.peaks.is_empty(), "PCM waveform is generated")
 	var converted := Media.raw_stream(PackedByteArray([0, 128, 255]), 11025, 0, false)
 	check(converted.data == PackedByteArray([128, 0, 127]), "Unsigned raw samples are converted to Godot signed PCM without shifting silence")
@@ -107,6 +114,8 @@ func _run() -> void:
 	check(editor.selected_name == fixture_path and editor.media.audio_panel.visible, "Open asset file previews external WAV through the browser")
 	check(editor.media.audio_player.stream is AudioStreamWAV and is_equal_approx(editor.media.audio_seek.max_value, 1), "WAV loader preserves duration and native sample rate")
 	check(not editor.media.raw_tools.visible and not editor.media.waveform.peaks.is_empty(), "WAV uses header format and displays waveform")
+	editor.asset_list.item_activated.emit(editor.filtered_names.find(editor.selected_name))
+	check(editor.media.audio_player.playing, "Double-click also plays modern WAV assets")
 	DirAccess.remove_absolute(fixture_path)
 	choose(editor, "OST/01_Ambient.mp3", 4)
 	check(editor.media.audio_player.stream is AudioStreamMP3 and editor.media.audio_seek.max_value > 10, "MP3 soundtrack previews with its duration")
@@ -116,6 +125,8 @@ func _run() -> void:
 	check(editor.media.text_view.visible and not editor.media.text_view.text.is_empty(), "Text files have a read-only preview")
 	choose(editor, "ANGEL.DFF", 0)
 	check(editor.model != null and editor.animation_playing and not editor.media.visible and editor.media.audio_player.stream == null, "Returning to animated 3D stops media playback and restores model controls")
+	editor.asset_list.item_activated.emit(editor.filtered_names.find(editor.selected_name))
+	check(editor.model != null and editor.media.audio_player.stream == null, "Activating a model leaves its preview intact")
 	editor.search.text = "nothing-matches"
 	editor._filter_assets()
 	check(editor.model == null and not editor.preview.visible and editor.media.audio_player.stream == null, "Empty results clear stale previews")

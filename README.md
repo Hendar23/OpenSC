@@ -1,7 +1,7 @@
 # OpenSC
 OpenSC is an open-source game engine that supports playing Criterion Games [Sub Culture](https://en.wikipedia.org/wiki/Sub_Culture)
 
-You will need a copy of the original Sub Culture files. 
+You will need a copy of the original Sub Culture files.
 
 Built with [Godot](https://godotengine.org/)
 
@@ -11,7 +11,13 @@ Built with [Godot](https://godotengine.org/)
 + Static objects loaded in
 + Some test fish spawning, animated and moving around
 + Docking/undocking
-+ Basic Modding support
-+ Bubbles when moving
++ Basic modding support
++ Propellers producing bubbles when moving
 + Propeller deceleration when controllers released.
 + Sub and docking sound effects
++ Asset viewer for models, images and sounds
++ Map editor for placing and editing scenery, lights and wildlife
++ Editable wildlife populations, shoals, schooling and startled fleeing fish
++ Animated building lights
++ Floating particles in the water
++ Gamepad controls and impact rumble

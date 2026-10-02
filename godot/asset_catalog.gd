@@ -13,7 +13,7 @@ static func index(folder: String) -> Dictionary:
 	for pack in Mods.packs:
 		for entry in pack.assets.values():
 			var key := "Mods/%s/%s" % [str(pack.id), str(entry.relative)]
-			var kind := "audio" if str(entry.id).begins_with("audio.") else "image" if str(entry.id).begins_with("texture.") else "model"
+			var kind := "text" if str(entry.id).begins_with("map.") else "audio" if str(entry.id).begins_with("audio.") else "image" if str(entry.id).begins_with("texture.") else "model"
 			result[key] = {"path": entry.path, "relative": key, "folder": key.get_base_dir(), "kind": kind, "mod_asset": true, "descriptor": entry}
 	return result
 

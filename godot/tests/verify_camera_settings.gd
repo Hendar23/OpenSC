@@ -23,7 +23,7 @@ func _run() -> void:
 		fast_offset = fast.desired_position(Vector3.ZERO, PI * 0.5, Vector3.LEFT * 2.3, Vector3.LEFT, 2.3, Follow.MIN_DISTANCE, 1.0 / 60.0)
 	check(rad_to_deg(PI * 0.5 - slow.orbit_yaw) > 70.0, "Stationary turn leaves submarine almost side-on after half a second")
 	check(absf(PI * 0.5 - fast.orbit_yaw) < absf(PI * 0.5 - slow.orbit_yaw) * 0.4, "Forward movement pulls camera into alignment faster")
-	check(is_equal_approx(Vector2(slow_offset.x, slow_offset.z).length(), 1.5), "Closest zoom is halved for smaller ship")
+	check(is_equal_approx(Vector2(slow_offset.x, slow_offset.z).length(), 0.35), "Closest zoom allows the camera substantially nearer the smaller ship")
 	slow.resume(Vector3(3, 1, 0), Vector3.ZERO)
 	check(is_equal_approx(slow.orbit_yaw, PI * 0.5), "Reattachment seeds orbit from actual frozen camera position")
 	for length in [0.0, 0.1, 4.0, 30.0]:
@@ -43,7 +43,7 @@ func _run() -> void:
 	var movement := Movement.new()
 	movement.load_settings(true, saved_path, source_path)
 	check(is_equal_approx(movement.settings.turn_speed, 144.0), "New exported defaults replace stale saved settings")
-	check(is_equal_approx(movement.settings.camera_distance, 1.5), "Older exports without camera distance use closer default")
+	check(is_equal_approx(movement.settings.camera_distance, 0.9), "Older exports without camera distance use closer default")
 	movement.settings.turn_speed = 120.0
 	movement.settings.camera_distance = 2.75
 	movement.save_settings(saved_path)
