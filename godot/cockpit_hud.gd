@@ -30,13 +30,60 @@ var map_zoom := 2.0:
 			if display.kind == "map": display.map_span = 140.0 / map_zoom
 var pilot: Node3D
 var equipment: Node3D
+var lighting_environment: Environment
+var sunlight: DirectionalLight3D
+var lighting_elapsed := 1.0
+var sunlight_visible := true
+var crt_reflection_strength := 0.25:
+	set(value):
+		crt_reflection_strength = clampf(value,0.0,1.0)
+		for view in model_views:
+			var glass: ShaderMaterial = view.get_meta("crt_glass")
+			glass.set_shader_parameter("reflection_strength",crt_reflection_strength)
+			var material: StandardMaterial3D = view.get_meta("crt_glass_material")
+			material.clearcoat = crt_reflection_strength
+			material.metallic_specular = crt_reflection_strength
+			material.metallic = float(view.get_meta("crt_original_metallic")) * crt_reflection_strength
+
+func setup_lighting(environment: Environment, light: DirectionalLight3D) -> void:
+	lighting_environment = environment
+	sunlight = light
+	lighting_elapsed = 1.0
+
+func _update_instrument_lighting(delta: float) -> void:
+	if sunlight == null or lighting_environment == null or pilot == null: return
+	lighting_elapsed += delta
+	if lighting_elapsed >= 0.15:
+		lighting_elapsed = 0.0
+		sunlight_visible = false
+		if sunlight.light_energy > 0.0:
+			var start: Vector3 = pilot.global_position + pilot.global_basis * Vector3(0,0.05,-0.16)
+			var query := PhysicsRayQueryParameters3D.create(start,start + sunlight.global_basis.z * 600.0,1)
+			sunlight_visible = pilot.get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+	var direct := sunlight.light_energy if sunlight_visible else 0.0
+	var ambient := lighting_environment.ambient_light_color * lighting_environment.ambient_light_energy
+	var illumination := ambient + sunlight.light_color * direct * 0.55
+	var casing := Color(clampf(illumination.r,0.035,1.0),clampf(illumination.g,0.035,1.0),clampf(illumination.b,0.035,1.0))
+	for display in displays: display.casing_light = casing
+	for view in model_views:
+		var environment: WorldEnvironment = view.get_node("InstrumentEnvironment")
+		environment.environment.ambient_light_color = lighting_environment.ambient_light_color
+		environment.environment.ambient_light_energy = lighting_environment.ambient_light_energy
+		var light: DirectionalLight3D = view.get_node("InstrumentSun")
+		light.basis = pilot.global_basis.inverse() * sunlight.global_basis
+		light.light_color = sunlight.light_color
+		light.light_energy = direct
+		var glass: ShaderMaterial = view.get_meta("crt_glass")
+		glass.set_shader_parameter("sunlight_direction",light.basis.z)
+		glass.set_shader_parameter("sunlight_color",sunlight.light_color)
+		glass.set_shader_parameter("sunlight_energy",direct)
 
 func setup(player: Node3D, mounted_equipment: Node3D, world: Node3D, folder: String) -> void:
 	pilot = player
 	equipment = mounted_equipment
 	name = "CockpitHUD"
 	layer = 0
-	map_data.setup(world,2.0 * (player.COLLIDER_RADIUS + player.safe_margin))
+	map_data.setup(world,player.collision_height() + 2.0 * player.safe_margin)
 	map_data.initialize_exploration()
 	map_data.bake_world(world,get_tree())
 	holder = Control.new()
@@ -118,8 +165,9 @@ func _refresh_views() -> void:
 		for child in view.get_children():
 			if child is SubViewport: child.render_target_update_mode = view.render_target_update_mode
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_refresh_views()
+	_update_instrument_lighting(delta)
 	if pilot != null:
 		map_data.explore(pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.05)
 
@@ -153,9 +201,9 @@ func _model_instrument(definition: Dictionary, display: Control) -> Control:
 		if model == null: continue
 		var screen_mesh: MeshInstance3D
 		for mesh in model.find_children("*", "MeshInstance3D", true, false):
-			if mesh.name == "Screen_Display": screen_mesh = mesh; break
+			if mesh.name in ["Screen_Display","Dial_Display"]: screen_mesh = mesh; break
 		if screen_mesh == null:
-			Mods.note("%s: HUD instrument needs a Screen_Display mesh; using original sprites." % descriptor.name)
+			Mods.note("%s: HUD instrument needs a Screen_Display or Dial_Display mesh; using original sprites." % descriptor.name)
 			model.free()
 			continue
 		var container := Control.new()
@@ -176,9 +224,35 @@ func _model_instrument(definition: Dictionary, display: Control) -> Control:
 		display.size = definition.screen.size
 		display.scale = Vector2.ONE * 3.0
 		content.add_child(display)
-		var material := StandardMaterial3D.new()
-		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		# Retain the model's glass response; only the displayed picture emits
+		# its own light. An unshaded replacement discards the CRT highlights.
+		var original_material := screen_mesh.get_active_material(0) as StandardMaterial3D
+		var material := original_material.duplicate() as StandardMaterial3D if original_material != null else StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+		if original_material == null:
+			material.albedo_color = Color(0.012,0.042,0.038)
+			material.metallic = 0.12
+			material.roughness = 0.22
 		material.albedo_texture = content.get_texture()
+		material.emission_enabled = true
+		material.emission = Color.WHITE
+		material.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY
+		material.emission_texture = content.get_texture()
+		material.emission_energy_multiplier = 1.0
+		material.clearcoat_enabled = true
+		material.clearcoat = 1.0
+		material.clearcoat_roughness = 0.12
+		material.metallic_specular = 1.0
+		var glass := ShaderMaterial.new()
+		glass.shader = preload("res://crt_glass.gdshader")
+		glass.set_shader_parameter("reflection_strength",crt_reflection_strength)
+		material.next_pass = glass
+		view.set_meta("crt_glass",glass)
+		view.set_meta("crt_glass_material",material)
+		view.set_meta("crt_original_metallic",material.metallic)
+		material.metallic *= crt_reflection_strength
+		material.clearcoat = crt_reflection_strength
+		material.metallic_specular = crt_reflection_strength
 		screen_mesh.material_override = material
 		var boxes: Array[AABB] = []
 		Assets_bounds(model, Transform3D.IDENTITY, boxes)
@@ -190,12 +264,15 @@ func _model_instrument(definition: Dictionary, display: Control) -> Control:
 		camera.position = box.get_center() + Vector3(0,0,maxf(box.size.length() * 2.0, 1.0))
 		view.add_child(camera)
 		var environment := WorldEnvironment.new()
+		environment.name = "InstrumentEnvironment"
 		environment.environment = Environment.new()
 		environment.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		environment.environment.ambient_light_color = Color.WHITE
 		environment.environment.ambient_light_energy = 0.7
 		view.add_child(environment)
 		var light := DirectionalLight3D.new()
+		light.name = "InstrumentSun"
+		light.shadow_enabled = true
 		light.rotation_degrees = Vector3(-25,-25,0)
 		view.add_child(light)
 		var image := TextureRect.new()

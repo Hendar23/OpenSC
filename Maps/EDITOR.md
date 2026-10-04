@@ -1,8 +1,8 @@
 # Map and wildlife editor
 
 Launch the existing editor and choose **Map** at the top. It loads the original
-terrain, scenery, plants and lights, plus an editable player spawn and seeded
-wildlife groups. Original game files are never written.
+terrain, scenery, plants and lights, plus an editable player spawn and creature
+types. Original game files are never written.
 
 Hold right mouse and use WASD to fly, Q/E to descend/ascend, and Shift to move
 faster. Mouse wheel adjusts flight speed. Select from the entity list or click
@@ -16,10 +16,22 @@ Ctrl+Z / Ctrl+Y and Ctrl+S work when the viewport has focus. Visibility filters
 affect only the editor view. The terrain itself is read-only in this version.
 
 **Creature types** define the model, mobility, group behaviour, submarine
-response, speed, detection distance and scale range. Scale is a percentage of
+response, speed, detection distance and scale range. A live model preview updates
+when choosing a different model; drag it to rotate. Random spawning settings
+control minimum/maximum groups, creatures per group, group chance and roaming
+radius. Groups may overlap. Scale is a percentage of
 the supplied model: 40–60 means 0.4–0.6 times its original size. **Wildlife groups**
 place a type in the world, with population range, roaming radius, spawn chance
 and optional size/behaviour overrides. 1–1 produces one creature.
+
+Random groups are distributed across clear parts of the map. Creatures spawn
+within four units beyond the visibility distance. Beyond six units plus their
+body radius, encountered creatures become hidden and stop movement, animation
+and collision processing. They resume from their retained positions on returning.
+Unvisited groups remain lightweight population records.
+Each new game and completed docking reshuffles
+them. F1 → Graphics → Wildlife density scales random groups from 0–300%; it is
+saved and included in Export all settings. Fixed groups remain independent.
 
 Spawn chance is rolled once for the entire group at world load and again when
 the submarine finishes docking. 0% never spawns; 100% always attempts to spawn.
@@ -48,7 +60,7 @@ it uses a gentle procedural swim cycle in both the asset preview and world.
 
 **Save map** writes `Maps/scen1.json` beside this document. Restart the game or
 apply/reload its mods to load it. The game retains the original world as its
-foundation, applies entity overrides, and uses the authored wildlife groups.
+foundation, applies entity overrides, and uses random populations plus any fixed groups.
 Docking now shows a simple opaque docked screen before population changes;
 press Y or controller A to undock. This screen can later become the dock UI.
 

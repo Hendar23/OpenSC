@@ -19,6 +19,9 @@ func _ready() -> void:
 	close_requested.connect(hide)
 	var margin := MarginContainer.new()
 	content = margin
+	# Keep these styles on the content so the editor's embedded Mods tab and
+	# the game's popup use the same readable controls.
+	margin.theme = _control_theme()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side in ["left", "right", "top", "bottom"]: margin.add_theme_constant_override("margin_" + side, 16)
 	add_child(margin)
@@ -58,6 +61,43 @@ func _ready() -> void:
 	cancel.pressed.connect(func() -> void: open() if embedded else hide())
 	buttons.add_child(cancel)
 	visible = false
+
+func _control_theme() -> Theme:
+	var result := Theme.new()
+	for kind in ["Button","CheckBox"]:
+		result.set_color("font_color",kind,Color("edf7f8"))
+		result.set_color("font_hover_color",kind,Color.WHITE)
+		result.set_color("font_pressed_color",kind,Color.WHITE)
+		result.set_color("font_disabled_color",kind,Color("93a8ad"))
+	for state in ["normal","hover","pressed","disabled","focus"]:
+		var box := StyleBoxFlat.new()
+		box.bg_color = Color("203c46") if state == "normal" else Color("315a65")
+		box.border_color = Color("789fa8") if state == "normal" else Color("79dfdb")
+		if state == "disabled": box.bg_color = Color("1c3038"); box.border_color = Color("516b73")
+		if state == "focus": box.bg_color = Color.TRANSPARENT
+		box.set_border_width_all(2 if state == "focus" else 1)
+		box.set_corner_radius_all(4)
+		box.content_margin_left = 10; box.content_margin_right = 10
+		box.content_margin_top = 5; box.content_margin_bottom = 5
+		result.set_stylebox(state,"Button",box)
+	for checked in [false,true]:
+		for disabled in [false,true]:
+			var icon := _checkbox_icon(checked,disabled)
+			var key := "checked" if checked else "unchecked"
+			if disabled: key += "_disabled"
+			result.set_icon(key,"CheckBox",icon)
+			result.set_icon(key + "_mirrored","CheckBox",icon)
+	result.set_constant("h_separation","CheckBox",10)
+	return result
+
+func _checkbox_icon(checked: bool, disabled: bool) -> Texture2D:
+	var border := "#879fa6" if disabled else "#d4f3f2"
+	var tick := "#879fa6" if disabled else "#79efdb"
+	var svg := '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="3" fill="#17323c" stroke="%s" stroke-width="2"/>' % border
+	if checked: svg += '<path d="M6 12 L10 16 L18 8" fill="none" stroke="%s" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' % tick
+	svg += '</svg>'
+	var image := Image.new(); image.load_svg_from_string(svg)
+	return ImageTexture.create_from_image(image)
 
 func embed(parent: Control) -> void:
 	embedded = true

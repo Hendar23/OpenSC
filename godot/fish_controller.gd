@@ -34,6 +34,113 @@ var startle_timer := 0.0
 var startle_cooldown := 0.0
 var startle_direction := Vector3.ZERO
 var fleeing := false
+var ground_normal := Vector3.UP
+var ground_clearance := 0.1
+var walking_animation_rate := 1.0
+var ground_span := Vector2(0.2,0.2)
+var crawl_stuck_time := 0.0
+var crawl_turn_sign := 1.0
+var crawl_probe_timer := 0.0
+var playback_rate := ANIMATION_SPEED
+var ground_initialized := false
+
+func _ready() -> void:
+	# Bind playback to the live instance after its visual enters the scene.
+	animation = CreatureAnimation.new(get_child(1))
+	meshes = animation.meshes
+	animation.apply(animation_time)
+
+func _process(_delta: float) -> void:
+	if animation == null or not is_physics_processing(): return
+	var between_ticks := Engine.get_physics_interpolation_fraction() / float(Engine.physics_ticks_per_second)
+	animation.apply(animation_time + between_ticks * playback_rate)
+
+func configure_crawler(size: Vector3) -> void:
+	ground_clearance = size.y * 0.5 + 0.02
+	ground_span = Vector2(size.x,size.z) * 0.35
+	var box := BoxShape3D.new()
+	# Legs can straddle small stones without the entire footprint snagging.
+	box.size = (size * Vector3(0.6,0.8,0.6)).max(Vector3.ONE * 0.02)
+	(get_child(0) as CollisionShape3D).shape = box
+	crawl_turn_sign = -1.0 if rng.randf() < 0.5 else 1.0
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON
+	# A complete stored walking cycle every two seconds at normal speed.
+	for mesh in meshes: walking_animation_rate = maxf(walking_animation_rate,(mesh.mesh.get_blend_shape_count() + 1) / 4.0)
+
+func _ground_on_terrain(delta: float) -> void:
+	if population == null: return
+	var contact := _crawler_contact(global_position)
+	if contact.is_empty(): return
+	ground_normal = ground_normal.lerp(Vector3(contact.normal),1.0 - exp(-8.0 * delta)).normalized()
+	# Offset vertically: offsetting along the normal also pushes a stationary
+	# crawler sideways on every tick, causing drift and triangle-edge jitter.
+	global_position.y = float(contact.height) + ground_clearance / maxf(0.3,ground_normal.y)
+	ground_initialized = true
+	_update_orientation()
+
+func _crawler_contact(point: Vector3) -> Dictionary:
+	var center: Dictionary = population.floor_contact(point)
+	if center.is_empty(): return {}
+	var normal := Vector3(center.normal)
+	var height := float(center.position.y)
+	var forward := Vector3(direction.x,0,direction.z).normalized()
+	var side := Vector3(forward.z,0,-forward.x)
+	var contacts := 1
+	for offset in [forward * ground_span.y,-forward * ground_span.y,side * ground_span.x,-side * ground_span.x]:
+		var hit: Dictionary = population.floor_contact(point + offset)
+		if hit.is_empty() or Vector3(hit.normal).y < 0.4 or absf(float(hit.position.y) - float(center.position.y)) > 0.5: continue
+		normal += Vector3(hit.normal); contacts += 1
+		# Extrapolate each foot's supporting plane to the body centre.
+		var n := Vector3(hit.normal)
+		height = maxf(height,float(hit.position.y) + (n.x * offset.x + n.z * offset.z) / maxf(n.y,0.3))
+	normal = normal.normalized()
+	return {"height":height,"normal":normal}
+
+func _crawler_step(point: Vector3) -> Dictionary:
+	var contact := _crawler_contact(point)
+	if contact.is_empty() or Vector3(contact.normal).y < cos(deg_to_rad(55.0)): return {}
+	var horizontal := Vector2(point.x - global_position.x,point.z - global_position.z).length()
+	var height: float = float(contact.height) + ground_clearance / maxf(Vector3(contact.normal).y,0.3)
+	if absf(height - global_position.y) > maxf(0.25,horizontal * 1.5): return {}
+	point.y = height
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = (get_child(0) as CollisionShape3D).shape
+	var forward := direction.slide(contact.normal).normalized()
+	query.transform = Transform3D(Basis(Vector3(contact.normal).cross(forward).normalized(),contact.normal,forward),point)
+	query.collision_mask = 5
+	if not get_world_3d().direct_space_state.intersect_shape(query,1).is_empty(): return {}
+	contact.position = point
+	return contact
+
+func _crawler_steering(desired: Vector3, delta: float) -> Vector3:
+	crawl_probe_timer -= delta
+	if crawl_probe_timer > 0.0 or population == null: return desired
+	crawl_probe_timer = 0.15
+	var heading := direction * maxf(0.3,ground_span.y + 0.15)
+	if not _crawler_step(global_position + heading).is_empty(): return desired
+	for degrees in [45.0,80.0,120.0,160.0]:
+		for sign_value in [crawl_turn_sign,-crawl_turn_sign]:
+			var next := direction.rotated(Vector3.UP,deg_to_rad(degrees) * sign_value)
+			if not _crawler_step(global_position + next * heading.length()).is_empty():
+				avoidance = next; avoidance_timer = 0.8
+				return next
+	return -direction
+
+func _move_crawler(delta: float, speed: float) -> void:
+	if population == null: velocity = Vector3.ZERO; return
+	var step := _crawler_step(global_position + direction * speed * delta)
+	if step.is_empty():
+		velocity = Vector3.ZERO; crawl_stuck_time += delta
+		if crawl_stuck_time > 0.4:
+			avoidance = direction.rotated(Vector3.UP,deg_to_rad(110.0) * crawl_turn_sign)
+			avoidance_timer = 1.2; goal = position + avoidance * 3.0; turn_timer = 2.0
+			crawl_stuck_time = 0.0; crawl_probe_timer = 0.0
+		return
+	crawl_stuck_time = 0.0
+	velocity = (Vector3(step.position) - global_position) / maxf(delta,0.001)
+	global_position = step.position
+	ground_normal = ground_normal.lerp(Vector3(step.normal),1.0 - exp(-8.0 * delta)).normalized()
+	_update_orientation()
 
 func setup(visual: Node3D, point: Vector3, world_bounds: AABB, surface: float, body_radius: float, seed_value: int) -> void:
 	position = point
@@ -69,23 +176,29 @@ func _choose_goal() -> void:
 	turn_timer = rng.randf_range(3.0, 7.0)
 
 func _physics_process(delta: float) -> void:
+	if mobility == "crawling" and not ground_initialized: _ground_on_terrain(1.0)
 	turn_timer -= delta
 	# Arrival belongs to the goal's centre, not the collision sphere size.
 	# Large creatures otherwise replace nearby goals every tick.
 	var arrival_distance := clampf(roam_radius * 0.15, 0.2, 1.0)
-	if turn_timer <= 0.0 or position.distance_to(goal) < arrival_distance: _choose_goal()
+	var goal_distance := Vector2(position.x,position.z).distance_to(Vector2(goal.x,goal.z)) if mobility == "crawling" else position.distance_to(goal)
+	if turn_timer <= 0.0 or goal_distance < arrival_distance: _choose_goal()
 	var desired := (goal - position).normalized()
 	if group_behaviour != "solitary" and not group_members.is_empty():
 		var center := Vector3.ZERO
 		var alignment := Vector3.ZERO
 		var separation := Vector3.ZERO
+		var active_members := 0
+		var shared_goal := goal
 		for other in group_members:
+			if not other.get_meta("wildlife_awake",true): continue
+			if active_members == 0: shared_goal = other.goal
+			active_members += 1
 			center += other.position
 			alignment += other.direction
 			var away: Vector3 = position - other.position
 			if away.length_squared() > 0.001 and away.length() < radius * 3.0: separation += away.normalized()
-		center /= group_members.size()
-		var shared_goal: Vector3 = group_members[0].goal
+		center /= maxi(1,active_members)
 		desired = ((shared_goal - position).normalized() + (center - position).normalized() * 0.6 + separation * 1.5 + alignment.normalized() * (1.0 if group_behaviour == "schooling" else 0.0)).normalized()
 	defense_timer = maxf(0.0, defense_timer - delta)
 	startle_timer = maxf(0.0, startle_timer - delta)
@@ -120,15 +233,15 @@ func _physics_process(delta: float) -> void:
 	avoidance_timer = maxf(0.0, avoidance_timer - delta)
 	if avoidance_timer > 0.0: desired = avoidance
 	if mobility == "crawling": desired.y = 0.0; desired = desired.normalized()
+	if mobility == "crawling": desired = _crawler_steering(desired,delta)
 	_steer(desired, delta, maxf(turn_speed, startle_turn_speed) if startle_timer > 0.0 else turn_speed)
-	animation_time += delta * ANIMATION_SPEED * (speed / maxf(swim_speed, 0.001) if escaping else 1.0)
+	playback_rate = (walking_animation_rate if mobility == "crawling" else ANIMATION_SPEED) * (speed / maxf(swim_speed, 0.001) if escaping else 1.0)
+	animation_time += delta * playback_rate
 	if animation != null: animation.apply(animation_time)
 	velocity = direction * speed
-	move_and_slide()
-	if mobility == "crawling" and population != null:
-		var grounded: Vector3 = population.floor_point(position, radius)
-		if grounded.is_finite(): position.y = grounded.y
-	if get_slide_collision_count() > 0:
+	if mobility == "crawling": _move_crawler(delta,speed)
+	else: move_and_slide()
+	if mobility != "crawling" and get_slide_collision_count() > 0:
 		var normal := get_slide_collision(0).get_normal()
 		avoidance = (direction + normal * 2.0).normalized()
 		avoidance_timer = 1.0
@@ -153,6 +266,10 @@ func _steer(desired: Vector3, delta: float, rate: float = -1.0) -> void:
 	direction = Vector3(sin(heading) * cos(elevation), sin(elevation), cos(heading) * cos(elevation))
 
 func _update_orientation() -> void:
+	if mobility == "crawling":
+		var forward := direction.slide(ground_normal).normalized()
+		if forward.length_squared() > 0.001: basis = Basis(ground_normal.cross(forward).normalized(),ground_normal,forward).orthonormalized()
+		return
 	# +Z is the legacy model's nose. Bounded pitch keeps the up axis stable,
 	# avoiding look_at's vertical singularity and unexpected roll flips.
 	rotation = Vector3(-asin(clampf(direction.y, -1.0, 1.0)), atan2(direction.x, direction.z), 0.0)

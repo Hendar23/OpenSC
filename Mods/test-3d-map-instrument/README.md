@@ -1,8 +1,8 @@
-# Test 3D map instrument
+# Test 3D HUD instruments
 
-Enable this pack in F1 → Mods to replace the minimap's original frame with the supplied 3D instrument. The map stays live. Key 3 hides either version.
+Enable this pack in F1 → Mods to replace all five HUD panels with the supplied 3D instruments: attitude, equipment, minimap, weapon and health. Displays stay live, and keys 1–5 still hide each panel independently. Casings follow world lighting, and F1 → Graphics controls CRT reflection strength.
 
-Cockpit models use `hud.tilt`, `hud.equipment`, `hud.map`, `hud.weapon` or `hud.shield` as replacement IDs. Use a self-contained GLB, with local +Z facing the viewer, +Y pointing up, and a mesh named `Screen_Display` whose UVs cover the live display. Set `forward_axis` to `+Z` in the manifest. The engine fits the instrument to its HUD slot and binds the live display to that mesh.
+Cockpit models use `hud.tilt`, `hud.equipment`, `hud.map`, `hud.weapon` or `hud.shield` as replacement IDs. Use a self-contained GLB, with local +Z facing the viewer, +Y pointing up, and a mesh named `Screen_Display` or `Dial_Display` whose UVs cover the live display. Set `forward_axis` to `+Z` in the manifest. The engine fits the instrument to its HUD slot and binds the live display to that mesh.
 
 The original HUD frames can also be replaced through the usual `texture.*` IDs (for example `texture.maprov`). Replacement images supply their own transparency. Deep-Sea Lights use `model.light` for their housing and `texture.deepwp1` / `texture.deepwp2` for their active / inactive icons.
 

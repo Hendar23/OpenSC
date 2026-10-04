@@ -4,3 +4,4 @@
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1")
+show_start_menu = true

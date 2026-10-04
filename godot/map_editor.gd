@@ -5,6 +5,8 @@ const Creatures = preload("res://creature_loader.gd")
 const Document = preload("res://map_document.gd")
 const Wildlife = preload("res://wildlife_population.gd")
 const Mods = preload("res://mod_registry.gd")
+const SpeciesPreview = preload("res://species_preview.gd")
+var species_preview: SubViewportContainer
 var folder := ""
 var loaded := false
 var loading := false
@@ -22,6 +24,7 @@ var search: LineEdit
 var status: Label
 var fields := {}
 var properties: VBoxContainer
+var properties_scroll: ScrollContainer
 var view: SubViewportContainer
 var viewport: SubViewport
 var scene: Node3D
@@ -108,6 +111,7 @@ func _ready() -> void:
 	var inspector := VBoxContainer.new(); inspector.custom_minimum_size.x = 280; add_child(inspector)
 	var heading := Label.new(); heading.text = "Properties"; heading.add_theme_font_size_override("font_size", 22); inspector.add_child(heading)
 	var scroll := ScrollContainer.new(); scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	properties_scroll = scroll
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; inspector.add_child(scroll)
 	properties = VBoxContainer.new(); properties.size_flags_horizontal = Control.SIZE_EXPAND_FILL; scroll.add_child(properties)
 	button(inspector, "Apply properties", apply_properties)
@@ -166,12 +170,8 @@ func _progress(message: String) -> void: status.text = message
 func _seed_species() -> void:
 	for id in Creatures.SPECIES:
 		document.species.append({"id": id.to_lower(), "name": id.capitalize(), "model": id, "mobility": "swimming", "group_behaviour": "shoaling", "response": "flee", "speed": 1.3, "detection": 8.0, "scale_min": 100.0, "scale_max": 100.0})
-		var members: Array = world.get_node("AmbientFish").get_children().filter(func(fish: Node) -> bool: return fish.get_meta("species") == id)
-		if members.is_empty(): continue
-		var center := Vector3.ZERO
-		for member in members: center += member.home
-		center /= members.size()
-		document.groups.append({"id": "group_" + id.to_lower(), "name": id.capitalize() + " group", "species": id.to_lower(), "position": Document.array(center), "count_min": members.size(), "count_max": members.size(), "radius": 10.0, "chance": 100.0})
+		document.species[-1].merge(Document.POPULATION_DEFAULTS)
+		document.species[-1].random_spawn = true
 func _exit_tree() -> void:
 	for node in base_nodes.values(): node.free()
 func reload_map() -> void:
@@ -266,12 +266,25 @@ func record(key: String = "") -> Dictionary:
 	return {}
 func select(key: String) -> void:
 	selected = key; fields.clear()
+	properties_scroll.scroll_vertical = 0
+	species_preview = null
 	for child in properties.get_children(): child.free()
 	var entry := record()
 	if entry.is_empty(): return
 	text_field("name", "Name", str(entry.name))
 	if key.begins_with("species:"):
+		species_preview = SpeciesPreview.new(); properties.add_child(species_preview)
+		species_preview.show_model(str(entry.model),folder)
 		choice("model", "3D model", models, str(entry.model))
+		fields.model.item_selected.connect(func(_index: int) -> void: species_preview.show_model(str(_value("model")),folder))
+		var random_spawn := CheckBox.new(); random_spawn.text = "Spawn randomly across the map"
+		random_spawn.button_pressed = entry.get("random_spawn",false); properties.add_child(random_spawn); fields.random_spawn = random_spawn
+		number("groups_min","Minimum groups",entry.get("groups_min",3),0,100,1)
+		number("groups_max","Maximum groups",entry.get("groups_max",8),0,100,1)
+		number("count_min","Minimum creatures per group",entry.get("count_min",1),1,100,1)
+		number("count_max","Maximum creatures per group",entry.get("count_max",10),1,100,1)
+		number("spawn_chance","Group spawn chance (%)",entry.get("spawn_chance",100.0),0,100,1)
+		number("roam_radius","Group roaming radius",entry.get("roam_radius",10.0),0.5,1000,0.5)
 		choice("mobility", "Mobility", ["swimming", "crawling"], entry.mobility)
 		choice("group_behaviour", "Group movement", Document.GROUP_BEHAVIOURS, entry.group_behaviour)
 		choice("response", "Response to submarine", Document.RESPONSES, entry.response)
@@ -358,6 +371,7 @@ func apply_properties() -> void:
 	var before := document.duplicate(true); var entry := record()
 	entry.name = _value("name")
 	if selected.begins_with("species:"):
+		for key in Document.POPULATION_DEFAULTS: entry[key] = _value(key)
 		for key in ["model", "mobility", "group_behaviour", "response", "speed", "turn_speed", "pitch_limit", "detection", "startle_duration", "startle_speed_multiplier", "startle_turn_speed", "scale_min", "scale_max"]: entry[key] = _value(key)
 	else:
 		var point := Vector3(float(_value("position_0")), float(_value("position_1")), float(_value("position_2")))
@@ -397,6 +411,8 @@ func add_species() -> void:
 	if not loaded: return
 	var before := document.duplicate(true); var id := _new_id()
 	document.species.append({"id": id, "name": "New creature", "model": "ANGEL", "mobility": "swimming", "group_behaviour": "shoaling", "response": "flee", "speed": 1.3, "detection": 8.0, "scale_min": 100.0, "scale_max": 100.0})
+	document.species[-1].merge(Document.POPULATION_DEFAULTS)
+	document.species[-1].random_spawn = true
 	_remember(before); category.select(4); select("species:" + id)
 func add_group() -> void:
 	if not loaded or document.species.is_empty(): return

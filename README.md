@@ -11,7 +11,7 @@ Built with [Godot](https://godotengine.org/)
 + Sub loaded in and moving, with propellers and pods attached and animated
 + World loading in, surface rendered
 + Static objects loaded in
-+ Some test fish spawning, animated and moving around
++ Random wildlife populations, animated and moving around as you explore
 + Docking/undocking
 + Basic modding support
 + Propellers producing bubbles when moving
@@ -23,9 +23,15 @@ Built with [Godot](https://godotengine.org/)
 + Animated building lights
 + Floating particles in the water
 + Gamepad controls and impact rumble
-+ Day/night cycle
++ Day/night cycle with moving sunlight and natural shadows
 + Five individually toggleable HUD panels
 + Detailed minimap with fog of war revealed while exploring
 + First and third person camera views
 + Modular submarine equipment, starting with working headlights
 + Tabbed developer menu for adjusting and exporting settings
++ 3D cockpit HUD instruments available as a mod
++ Classic loading screen and main menu, with controller navigation and sounds
++ More accurate submarine collisions
++ Crawling creatures that follow the terrain
++ Plants swaying in currents and reacting to propeller wash
++ Toggleable FPS counter and screenshot capture

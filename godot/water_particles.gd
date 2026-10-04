@@ -25,7 +25,7 @@ func _init() -> void:
 func configure(values: Dictionary) -> void:
 	var previous_count := int(settings.count)
 	settings.merge(values, true)
-	settings.count = clampf(float(settings.count), 0.0, 2000.0)
+	settings.count = clampf(float(settings.count), 0.0, 4000.0)
 	settings.size = clampf(float(settings.size), 0.005, 0.08)
 	settings.drift = clampf(float(settings.drift), 0.0, 0.3)
 	settings.radius = clampf(float(settings.radius), 3.0, 30.0)

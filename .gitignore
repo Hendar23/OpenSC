@@ -19,6 +19,9 @@ __pycache__/
 /godot/tests/*.wav
 /godot/tests/*.import
 /godot/tests/capture_world.gd.uid
+/godot/tests/*-fixtures/
+/godot/tests/*-test.cfg
+/Screenshots/
 
 # Backups and personal documents.
 *.7z

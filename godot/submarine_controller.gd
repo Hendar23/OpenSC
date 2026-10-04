@@ -5,8 +5,13 @@ const Controls = preload("res://pilot_input.gd")
 const Bubbles = preload("res://propeller_bubbles.gd")
 const SubAudio = preload("res://submarine_audio.gd")
 const Rumble = preload("res://impact_rumble.gd")
+const HullCollision = preload("res://submarine_collision.gd")
 const VISUAL_SCALE := 0.8
 const COLLIDER_RADIUS := 0.54
+# The legacy radius remains the docking manoeuvre/inertia reference.
+# Physical contact follows the smaller rendered hull and side pods.
+const COLLIDER_SIZE := Vector3(0.60, 0.44, 0.78)
+const COLLIDER_CENTER := Vector3(0.0, 0.02, 0.04)
 var movement := Movement.new()
 var active := false:
 	set(value):
@@ -33,6 +38,7 @@ var pending_reset := false
 var reset_transform := Transform3D.IDENTITY
 var previous_contacts := {}
 var previous_velocity := Vector3.ZERO
+var collision_parts: Array[Dictionary] = []
 
 func _ready() -> void:
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON
@@ -44,13 +50,7 @@ func _ready() -> void:
 	freeze = not active
 	collision_layer = 2
 	collision_mask = 5
-	# A conservative sphere covers the hull and pods and remains safe while yawing.
-	var shape := SphereShape3D.new()
-	shape.radius = COLLIDER_RADIUS
-	var collider := CollisionShape3D.new()
-	collider.name = "HullCollision"
-	collider.shape = shape
-	add_child(collider)
+	_build_collision(HullCollision.fallback())
 	movement.load_settings(remember_settings)
 	mass = float(movement.settings.mass)
 	physics_material_override = PhysicsMaterial.new()
@@ -67,11 +67,36 @@ func _ready() -> void:
 	add_child(impact_rumble)
 	submarine_audio.impact_accepted.connect(impact_rumble.impact)
 
+func fit_collision_to_visual() -> void:
+	var fitted := HullCollision.fit(visual,self)
+	if not fitted.is_empty(): _build_collision(fitted)
+
+func _build_collision(parts: Array[Dictionary]) -> void:
+	for part in collision_parts: part.collider.free()
+	collision_parts = parts
+	for part in collision_parts:
+		var shape := ConvexPolygonShape3D.new()
+		shape.points = part.points
+		shape.margin = 0.005
+		var collider := CollisionShape3D.new()
+		collider.name = part.name
+		collider.shape = shape
+		add_child(collider)
+		part["collider"] = collider
+
+func _sync_pod_collisions() -> void:
+	for part in collision_parts:
+		if part.has("source") and is_instance_valid(part.source):
+			part.collider.transform = global_transform.affine_inverse() * part.source.global_transform * part.rest_pose.affine_inverse()
+
+func collision_height() -> float:
+	return surface_clearance(Basis.IDENTITY) + surface_clearance(Basis(Vector3.RIGHT,PI))
+
 func _process(delta: float) -> void:
 	submarine_audio.update(delta)
 
 func reset_at(point: Vector3) -> void:
-	spawn = Vector3(point.x, minf(point.y, surface_height - COLLIDER_RADIUS - safe_margin), point.z)
+	spawn = Vector3(point.x, minf(point.y, surface_height - surface_clearance(Basis.IDENTITY) - safe_margin), point.z)
 	position = spawn
 	rotation = Vector3.ZERO
 	velocity = Vector3.ZERO
@@ -96,6 +121,7 @@ func _physics_process(delta: float) -> void:
 	if not active: return
 	mass = maxf(1.0, float(movement.settings.mass))
 	_update_animation(delta)
+	_sync_pod_collisions()
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	if not active: return
@@ -125,10 +151,10 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	var limited_rate := clampf(pitch_rate, (-Movement.PITCH_LIMIT - elevation) / state.step, (Movement.PITCH_LIMIT - elevation) / state.step)
 	state.angular_velocity += pitch_axis * (limited_rate - pitch_rate)
 	# Guard both the current location and the next integration step at the surface.
-	var ceiling := surface_height - COLLIDER_RADIUS - safe_margin
+	# Rotating the fitted hull changes how much room it needs below the surface.
+	var ceiling := surface_height - surface_clearance(pose.basis) - safe_margin
 	pose.origin.y = minf(pose.origin.y, ceiling)
 	if pose.origin.y + state.linear_velocity.y * state.step >= ceiling:
-		impact_speed = maxf(impact_speed, maxf(0.0, state.linear_velocity.y))
 		state.linear_velocity.y = minf(state.linear_velocity.y, maxf(0.0, (ceiling - pose.origin.y) / state.step))
 	state.transform = pose
 	movement.velocity = state.linear_velocity
@@ -136,10 +162,20 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	previous_velocity = state.linear_velocity
 	if impact_speed > 0.0: submarine_audio.call_deferred("impact", impact_speed)
 
+func surface_clearance(orientation: Basis) -> float:
+	var highest := -INF
+	for part in collision_parts:
+		var pose: Transform3D = part.collider.transform
+		for point in part.points: highest = maxf(highest,(orientation * (pose * point)).y)
+	return highest
+
 func _contact_impact(state: PhysicsDirectBodyState3D) -> float:
 	var contacts := {}
 	var strongest := 0.0
 	for index in range(state.get_contact_count()):
+		var body := state.get_contact_collider_object(index) as CollisionObject3D
+		# The water ceiling still blocks motion, but is not a solid hull impact.
+		if body != null and body.collision_layer & 4 != 0 and body.collision_layer & 1 == 0: continue
 		var collider := state.get_contact_collider_id(index)
 		var normal := state.get_contact_local_normal(index)
 		if not contacts.has(collider): contacts[collider] = []

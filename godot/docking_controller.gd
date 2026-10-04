@@ -52,7 +52,7 @@ func setup(player: RigidBody3D, world: Node3D, folder: String = "", follow_view:
 		for index in range(1, boxes.size()): box = box.merge(boxes[index])
 		var center := box.get_center()
 		var entry: Vector3 = node.to_global(Vector3(center.x, box.end.y, center.z)) + Vector3.UP * (pilot.COLLIDER_RADIUS + 0.6)
-		entry.y = minf(entry.y, pilot.surface_height - pilot.COLLIDER_RADIUS - pilot.safe_margin)
+		entry.y = minf(entry.y, pilot.surface_height - pilot.surface_clearance(Basis.IDENTITY) - pilot.safe_margin)
 		var race := int(node.get_meta("race_id", 1))
 		if not portraits.has(race): portraits[race] = Radio.portrait(folder, race)
 		ports.append({"node": node, "meshes": meshes, "entry": entry,

@@ -14,6 +14,8 @@ var screen_only := false
 var map_span := 70.0
 var fog_material: ShaderMaterial
 var player_marker: Polygon2D
+var casing_light := Color.WHITE
+var casing_panel: TextureRect
 
 func _ready() -> void:
 	if kind != "map": return
@@ -31,6 +33,9 @@ void fragment() {
     vec2 map_uv = map_centre + (location - vec2(0.5)) * map_span_uv;
     float revealed = texture(explored_mask, map_uv).r;
     if (any(lessThan(map_uv, vec2(0.0))) || any(greaterThan(map_uv, vec2(1.0)))) revealed = 0.0;
+    bool orange = COLOR.r > COLOR.g * 1.7 && COLOR.r > COLOR.b * 2.0;
+    bool label = COLOR.g > COLOR.r * 2.0 && COLOR.g > COLOR.b * 2.0;
+    if (!orange && !label) COLOR.rgb *= vec3(0.45, 0.72, 1.0);
     COLOR.rgb = mix(vec3(0.002, 0.005, 0.015), COLOR.rgb, revealed);
 }"""
 	fog_material = ShaderMaterial.new()
@@ -46,15 +51,16 @@ void fragment() {
 	if not screen_only and frame != null:
 		# Frame goes above the content, preserving the original bevel and
 		# angled corners; its transparent opening supplies the exact shape.
-		var panel := TextureRect.new()
-		panel.texture = frame
-		panel.size = size
-		panel.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		add_child(panel)
+		casing_panel = TextureRect.new()
+		casing_panel.texture = frame
+		casing_panel.size = size
+		casing_panel.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		casing_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		casing_panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		add_child(casing_panel)
 
 func _process(_delta: float) -> void:
+	if casing_panel != null: casing_panel.modulate = casing_light
 	if kind == "map" and fog_material != null and map_data.exploration_texture != null:
 		var rect := Rect2(Vector2.ZERO,size) if screen_only else screen
 		var point: Vector3 = pilot.get_global_transform_interpolated().origin
@@ -74,7 +80,7 @@ func _process(_delta: float) -> void:
 
 func _draw() -> void:
 	if pilot == null: return
-	if frame != null and not screen_only and kind != "map": draw_texture_rect(frame, Rect2(Vector2.ZERO,size), false)
+	if frame != null and not screen_only and kind != "map": draw_texture_rect(frame, Rect2(Vector2.ZERO,size), false,casing_light)
 	var rect := Rect2(Vector2.ZERO, size) if screen_only else screen
 	if kind == "map":
 		_draw_map(rect)

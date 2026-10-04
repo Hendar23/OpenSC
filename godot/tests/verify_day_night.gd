@@ -17,6 +17,17 @@ func _run() -> void:
 	cycle.hour = 0; check(cycle.daylight() == 0.0, "Midnight has full night")
 	cycle.hour = 6; var sunrise := cycle.daylight(); cycle.hour = 18
 	check(sunrise > 0.0 and sunrise < 1.0 and is_equal_approx(sunrise, cycle.daylight()), "Sunrise and sunset blend smoothly")
+	var environment := Environment.new()
+	var sun := DirectionalLight3D.new()
+	cycle.hour = 8.0; cycle.apply(environment,sun)
+	check(sun.basis.z.x > 0.0 and sun.basis.z.y > 0.0,"Morning sun is above the eastern horizon")
+	cycle.hour = 12.0; cycle.apply(environment,sun)
+	check(sun.basis.z.is_equal_approx(Vector3.UP) and sun.shadow_enabled,"Noon sunlight shines down and casts shadows")
+	cycle.hour = 16.0; cycle.apply(environment,sun)
+	check(sun.basis.z.x < 0.0 and sun.basis.z.y > 0.0,"Afternoon sun moves towards the west")
+	cycle.hour = 0.0; cycle.apply(environment,sun)
+	check(is_zero_approx(sun.light_energy),"Sun below the horizon contributes no direct light")
+	sun.free()
 	Mods.initialize(false)
 	var game := Game.new(); game.remember_preferences = false; root.add_child(game)
 	for frame in range(1200):
@@ -32,7 +43,28 @@ func _run() -> void:
 	game._update_daylight()
 	var day_energy := game.water_environment.ambient_light_energy
 	var day_color := game.water_environment.fog_light_color
+	check(game.world_root.get_node("WaterSurface").cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,"Water surface transmits sunlight rather than shadowing the seabed")
+	var original_position: Vector3 = game.pilot.global_position
+	game.pilot.freeze = true; game.pilot.set_physics_process(false)
+	game.pilot.global_position = game.cockpit_hud.map_data.bounds.end + Vector3(30,10,30)
+	game.pilot.global_basis = Basis.IDENTITY
+	game.cockpit_hud._update_instrument_lighting(1.0)
+	var bright_casing: Color = game.cockpit_hud.displays[0].casing_light
+	var shade := StaticBody3D.new()
+	shade.collision_layer = 1
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new(); shape.size = Vector3(4,0.5,4)
+	collision.shape = shape; shade.add_child(collision)
+	game.add_child(shade)
+	shade.global_position = game.pilot.global_position + Vector3.UP * 3.0
+	await physics_frame
+	game.cockpit_hud._update_instrument_lighting(1.0)
+	check(game.cockpit_hud.displays[0].casing_light.get_luminance() < bright_casing.get_luminance() * 0.6,"HUD casings become darker when scenery blocks sunlight")
+	shade.free()
+	game.pilot.global_position = original_position
 	game.daylight_controls.time_of_day.value = 0; game._update_daylight()
+	game.cockpit_hud._update_instrument_lighting(1.0)
+	check(game.cockpit_hud.displays[0].casing_light.get_luminance() < bright_casing.get_luminance() * 0.3,"HUD casings follow night lighting without modulating their displays")
 	check(game.water_environment.ambient_light_energy < day_energy * 0.3 and game.water_environment.fog_light_color.b > game.water_environment.fog_light_color.g and game.water_environment.fog_light_color.get_luminance() < day_color.get_luminance() * 0.15, "Night is darker deep blue water")
 	check(game.surface_material.get_shader_parameter("daylight") == 0.0 and game.sun.light_energy < 0.1, "Surface and sunlight follow night")
 	game.fog_button.button_pressed = false; game._update_daylight(); check(not game.water_environment.fog_enabled, "Cycle respects fog toggle")

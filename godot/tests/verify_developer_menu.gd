@@ -16,11 +16,17 @@ func _run() -> void:
 		if game.startup_complete: break
 		await physics_frame
 	check(game.startup_complete, "Game starts with tabbed controls")
+	var start_button := InputEventJoypadButton.new()
+	start_button.button_index = JOY_BUTTON_START; start_button.pressed = true
+	game._unhandled_input(start_button)
+	check(not game.developer_ui_visible,"Controller Start does not open the developer menu")
 	var key := InputEventKey.new()
 	key.pressed = true
 	key.keycode = KEY_F1
 	game._input(key)
 	check(game.developer_ui_visible and game.canvas.visible, "F1 opens the developer menu")
+	game._unhandled_input(start_button)
+	check(game.developer_ui_visible,"Controller Start does not close the developer menu")
 	check(game.developer_tabs.get_tab_count() == 5, "Movement, Sound, Graphics, Mods and System are available")
 	game.pilot.global_position = game.docking.ports[0].entry + Vector3.RIGHT * 3.0
 	game.pilot.velocity = Vector3.ZERO

@@ -89,13 +89,17 @@ func _run() -> void:
 	viewer.pilot.controls_enabled = false
 	viewer.set_physics_process(false)
 	viewer.pilot.reset_at(Vector3(10000, surface + 100, 10000))
-	check(viewer.pilot.position.y < surface - viewer.pilot.COLLIDER_RADIUS, "Reset stays fully submerged")
+	check(viewer.pilot.position.y < surface - viewer.pilot.surface_clearance(viewer.pilot.global_basis), "Reset stays fully submerged")
 	viewer.pilot.position.y -= 1.0
 	viewer.pilot.velocity = Vector3(0, 10000, 0)
 	viewer.pilot.movement.settings.vertical_speed = 10000.0
 	for frame in range(30): await physics_frame
-	check(viewer.pilot.position.y <= surface - viewer.pilot.COLLIDER_RADIUS, "High-speed ascent cannot breach surface")
+	check(viewer.pilot.position.y <= surface - viewer.pilot.surface_clearance(viewer.pilot.global_basis), "High-speed ascent cannot breach surface")
 	check(viewer.pilot.velocity.y <= 0.001, "Surface removes upward momentum")
+	viewer.pilot.rotation.x = PI / 4.0
+	viewer.pilot.position.y = surface
+	for frame in range(10): await physics_frame
+	check(viewer.pilot.position.y + viewer.pilot.surface_clearance(viewer.pilot.global_basis) <= surface + 0.01, "Tilted fitted hull remains below the impenetrable surface")
 	var height := viewer.pilot.position.y
 	viewer.pilot.velocity = Vector3(0, -3, 0)
 	for frame in range(10): await physics_frame

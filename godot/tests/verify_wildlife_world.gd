@@ -18,8 +18,9 @@ func _run() -> void:
 		if editor.map_editor.loaded: break
 		await physics_frame
 	var data: Dictionary = editor.map_editor.document.duplicate(true)
-	var home: Array = data.groups[0].position.duplicate()
-	for group in data.groups: group.chance = 0
+	var home: Array = editor.map_editor.population.random_groups[0].group.position.duplicate()
+	for species in data.species: species.random_spawn = false
+	data.groups = [{"id":"fixed_test", "name":"Fixed test","species":data.species[0].id,"position":home,"chance":100.0,"count_min":2,"count_max":4,"radius":10.0}]
 	data.groups[0].chance = 100; data.groups[0].count_min = 2; data.groups[0].count_max = 4
 	data.species[0].scale_min = 40; data.species[0].scale_max = 60
 	data.entities["Added/test_light"] = {"name": "Test lamp", "kind": "light", "transform": Document.encode(Transform3D(Basis.IDENTITY, Document.vector(home))), "energy": 1.5, "range": 9.0}
@@ -58,8 +59,8 @@ func _run() -> void:
 	creature.response = "attack"; creature.direction = Vector3.FORWARD; creature._physics_process(0.1)
 	check(creature.direction.dot((game.pilot.global_position - creature.global_position).normalized()) > 0, "Aggressive creatures pursue a nearby submarine")
 	creature.response = "ignore"; creature.mobility = "crawling"; creature._physics_process(0.1)
-	var floor: Vector3 = pop.floor_point(creature.position, creature.radius)
-	check(floor.is_finite() and absf(creature.position.y - floor.y) < 0.01 and is_zero_approx(creature.direction.y), "Crawling wildlife follows the seabed with horizontal movement")
+	var contact: Dictionary = pop.floor_contact(creature.global_position)
+	check(not contact.is_empty() and absf((creature.global_position - Vector3(contact.position)).dot(contact.normal) - creature.ground_clearance) < 0.01 and creature.basis.y.dot(contact.normal) > 0.999 and is_zero_approx(creature.direction.y), "Crawling wildlife stays grounded and aligns with the seabed")
 	game.set_process(false); game.set_physics_process(false); game.docking.set_physics_process(false)
 	var generation: int = pop.generation
 	game.docking.current = game.docking.ports[0]

@@ -79,7 +79,8 @@ func _run() -> void:
 	for frame in range(90):
 		audio.update(1.0 / 60.0)
 		await physics_frame
-	check(events.size() == 1 and pilot.position.x <= wall.position.x - box.size.x / 2.0 - pilot.COLLIDER_RADIUS + 0.02, "Real wall collision plays one impact and blocks the hull")
+	check(events.size() == 1 and pilot.position.x <= wall.position.x - box.size.x / 2.0 - pilot.COLLIDER_SIZE.x * 0.5 + 0.02, "Real wall collision plays one impact and blocks the hull")
+	check(pilot.position.x > wall.position.x - box.size.x * 0.5 - pilot.COLLIDER_RADIUS + 0.1, "Submarine can approach closer than the old oversized sphere allowed")
 	var hits_before := events.size()
 	for frame in range(60):
 		pilot.velocity = Vector3.RIGHT * 0.1
@@ -90,7 +91,7 @@ func _run() -> void:
 	var floor_box := BoxShape3D.new()
 	floor_box.size = Vector3(10, 1, 10)
 	floor_collision.shape = floor_box
-	floor_collision.position = Vector3(-2, -pilot.COLLIDER_RADIUS - 0.5, 0)
+	floor_collision.position = Vector3(-2, pilot.COLLIDER_CENTER.y - pilot.COLLIDER_SIZE.y * 0.5 - 0.5, 0)
 	wall.add_child(floor_collision)
 	pilot.reset_at(Vector3.ZERO)
 	events.clear()
@@ -109,7 +110,19 @@ func _run() -> void:
 	for frame in range(60):
 		audio.update(1.0 / 60.0)
 		await physics_frame
-	check(events.size() == 1 and pilot.position.y <= 1.5 - pilot.COLLIDER_RADIUS, "Water surface impact also plays a single hit while blocking ascent")
+	check(events.is_empty() and audio.pending_creaks.is_empty() and pilot.position.y <= 1.5 - pilot.surface_clearance(pilot.global_basis), "Water surface blocks ascent without hit or creaking sounds")
+	# Check actual water-layer physics contacts too, independently of the
+	# controller's height guard, which deliberately leaves a small gap.
+	var water := StaticBody3D.new(); water.collision_layer = 4; water.collision_mask = 2
+	var water_shape := CollisionShape3D.new(); var water_box := BoxShape3D.new()
+	water_box.size = Vector3(10,0.5,10); water_shape.shape = water_box
+	water.add_child(water_shape); water.position = Vector3(0,1.5,0); root.add_child(water)
+	pilot.surface_height = INF; pilot.reset_at(Vector3.ZERO); pilot.velocity = Vector3.UP * 3.0
+	for frame in range(60):
+		audio.update(1.0 / 60.0)
+		await physics_frame
+	check(events.is_empty() and pilot.position.y + pilot.surface_clearance(pilot.global_basis) <= 1.27,"Physical water-layer contacts stay silent and still block the sub")
+	water.queue_free()
 	# Mod replacements are decoded through the same one-shot path.
 	var fixture := "res://tests/collision-audio-mod"
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(fixture))

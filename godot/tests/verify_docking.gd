@@ -45,7 +45,7 @@ func _run() -> void:
 		check(stream.loop_mode == (AudioStreamWAV.LOOP_FORWARD if role == "sequence" else AudioStreamWAV.LOOP_DISABLED), "Only the docking background loops")
 	check(audio.players.values().all(func(p: AudioStreamPlayer) -> bool: return not p.playing), "Idle docking audio is silent")
 	check(controller.ports.size() == 6, "Six original city ports registered")
-	check(game.pilot.visual.scale.is_equal_approx(Vector3.ONE * 0.8) and is_equal_approx(game.pilot.get_node("HullCollision").shape.radius, 0.54), "Ship visual and collider are 20 percent smaller")
+	check(game.pilot.visual.scale.is_equal_approx(Vector3.ONE * 0.8) and game.pilot.get_node("HullCollision").shape is ConvexPolygonShape3D and game.pilot.collision_parts.size() >= 5, "Ship keeps its visual scale and uses separate fitted hull and pod shapes")
 	game.pilot.movement.settings.forward_speed = 4.6
 	check(is_equal_approx(controller.maximum_docking_speed(), 4.6 * 2.0 / 3.0), "Docking permission uses two-thirds of configured forward speed")
 	game.pilot.movement.settings.forward_speed = 6.0
@@ -125,7 +125,7 @@ func _run() -> void:
 		check(game.pilot.global_basis.is_equal_approx(Basis(Vector3.UP, heading)), "Undocking retains the compass heading")
 		check(not audio.players.sequence.playing and not audio.players.doors.playing and audio.players.door_stop.playing and finishes.size() == finish_count + 4, "Departure completion stops loops and plays the final DOCKSHUT once")
 		check(game.pilot.active and game.pilot.collision_mask == 5 and game.pilot.velocity.is_zero_approx(), "Departure restores piloting and collision without stale velocity")
-		check(game.pilot.global_position.distance_to(port.entry) < 0.001 and game.pilot.global_position.y + game.pilot.COLLIDER_RADIUS < game.pilot.surface_height, "Departure ends above port and below water surface")
+		check(game.pilot.global_position.distance_to(port.entry) < 0.001 and game.pilot.global_position.y + game.pilot.surface_clearance(game.pilot.global_basis) < game.pilot.surface_height, "Departure ends above port and below water surface")
 	controller.request_docking()
 	advance(controller, Docking.Stage.DESCEND)
 	game._reset_submarine()

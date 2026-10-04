@@ -6,6 +6,7 @@ const PulseLight = preload("res://pulse_light.gd")
 const DEFAULT_PATH := "res://../Maps/scen1.json"
 const GROUP_BEHAVIOURS := ["solitary", "shoaling", "schooling"]
 const RESPONSES := ["ignore", "flee", "defend", "attack"]
+const POPULATION_DEFAULTS := {"random_spawn": false, "groups_min": 3, "groups_max": 8, "count_min": 1, "count_max": 10, "spawn_chance": 100.0, "roam_radius": 10.0}
 static func empty() -> Dictionary:
 	return {"schema_version": 1, "seed": 8675309, "entities": {}, "species": [], "groups": []}
 static func vector(values: Array) -> Vector3:
@@ -30,6 +31,15 @@ static func valid(data: Variant) -> bool:
 	for species in data.species:
 		if not species is Dictionary or str(species.get("id", "")).is_empty() or ids.has(species.id): return false
 		ids[species.id] = true
+		if species.has("random_spawn") and not species.random_spawn is bool: return false
+		for key in ["groups_min","groups_max","count_min","count_max","spawn_chance","roam_radius"]:
+			if not finite_array([species.get(key,POPULATION_DEFAULTS[key])],1): return false
+		for prefix in ["groups","count"]:
+			var minimum := float(species.get(prefix + "_min",POPULATION_DEFAULTS[prefix + "_min"]))
+			var maximum := float(species.get(prefix + "_max",POPULATION_DEFAULTS[prefix + "_max"]))
+			if minimum != floorf(minimum) or maximum != floorf(maximum) or minimum < (0 if prefix == "groups" else 1) or maximum < minimum or maximum > 100: return false
+		if float(species.get("spawn_chance",100.0)) < 0 or float(species.get("spawn_chance",100.0)) > 100: return false
+		if float(species.get("roam_radius",10.0)) < 0.5 or float(species.get("roam_radius",10.0)) > 1000: return false
 		if str(species.get("model", "")).is_empty() or species.get("mobility") not in ["swimming", "crawling"]: return false
 		if species.get("group_behaviour") not in GROUP_BEHAVIOURS or species.get("response") not in RESPONSES: return false
 		for key in ["speed", "detection", "scale_min", "scale_max"]:

@@ -16,14 +16,24 @@ func _run() -> void:
 	check(game.startup_complete and not game.export_all_button.disabled, "Export available after game loads")
 	if not game.startup_complete: quit(1); return
 	game._load_preferences("res://view_defaults.cfg")
-	check(is_equal_approx(game.fog_slider.value, 29.0) and is_equal_approx(game.fog_start_slider.value, 1.0) and is_equal_approx(game.fog_curve_slider.value, 1.9), "Preferred fog defaults load")
-	check(is_equal_approx(game.docking.approach_radius, 3.0) and is_equal_approx(game.day_night.night_brightness, 0.02) and is_equal_approx(game.day_night.cycle_minutes, 5.0), "Preferred docking and day/night defaults load")
+	var defaults := ConfigFile.new(); defaults.load("res://view_defaults.cfg")
+	check(is_equal_approx(game.fog_slider.value,defaults.get_value("view","fog_visibility")) and is_equal_approx(game.fog_start_slider.value,defaults.get_value("view","fog_start")) and is_equal_approx(game.fog_curve_slider.value,defaults.get_value("view","fog_curve")), "Preferred fog defaults load")
+	check(is_equal_approx(game.docking.approach_radius,defaults.get_value("view","docking_radius")) and is_equal_approx(game.day_night.night_brightness,defaults.get_value("view","night_brightness")) and is_equal_approx(game.day_night.cycle_minutes,defaults.get_value("view","cycle_minutes")), "Preferred docking and day/night defaults load")
 	game.pilot.movement.settings.camera_distance = 0.55
 	game.pilot.movement.settings.bubble_rate = 9.0
 	game.pilot.submarine_audio.tuning.settings.master_volume = -13.0
 	game.fog_slider.value = 48.0
 	game.particle_controls.count.value = 900
 	game.particle_controls.enabled.button_pressed = false
+	game.crt_reflection_slider.value = 55.0
+	game.wildlife_density_slider.value = 150.0
+	game.plant_controls.strength.value = 0.25
+	game.plant_controls.speed.value = 0.65
+	game.plant_controls.direction.value = 120
+	game.plant_controls.variation.value = 0.8
+	game.plant_controls.wash_strength.value = 0.9; game.plant_controls.wash_range.value = 6; game.plant_controls.wash_recovery.value = 2
+	game.plant_controls.enabled.button_pressed = false
+	check(is_equal_approx(game.cockpit_hud.crt_reflection_strength,0.55),"CRT reflection slider updates the HUD live")
 	var path := "res://tests/export-all-settings.cfg"
 	check(game._export_all_settings(path) == OK, "Combined export writes successfully")
 	var exported := ConfigFile.new(); check(exported.load(path) == OK, "Combined export reads as CFG")
@@ -35,6 +45,19 @@ func _run() -> void:
 	check(complete, "Every current sound value exported")
 	check(exported.get_value("view", "fog_visibility") == 48 and exported.get_value("view", "particles_count") == 900 and exported.get_value("view", "particles_enabled") == false, "Current fog and particle settings exported")
 	check(not exported.has_section("game") and not exported.has_section("mods"), "Export contains tuning rather than machine paths or active mod choices")
+	check(is_equal_approx(exported.get_value("view","crt_reflection_strength"),0.55),"CRT reflection strength exports")
+	check(is_equal_approx(exported.get_value("view","wildlife_density"),1.5),"Wildlife density exports")
+	check(is_equal_approx(exported.get_value("view","plants_strength"),0.25) and is_equal_approx(exported.get_value("view","plants_speed"),0.65) and exported.get_value("view","plants_direction") == 120 and is_equal_approx(exported.get_value("view","plants_variation"),0.8) and not exported.get_value("view","plants_enabled"),"All plant current settings export")
+	check(is_equal_approx(exported.get_value("view","plants_wash_strength"),0.9) and exported.get_value("view","plants_wash_range") == 6 and exported.get_value("view","plants_wash_recovery") == 2,"Propeller wash tuning exports")
+	game.plant_controls.strength.value = 0.0; game.plant_controls.enabled.button_pressed = true
+	game.plant_controls.wash_strength.value = 0
+	game.wildlife_density_slider.value = 0.0
+	game.crt_reflection_slider.value = 0.0
+	game._load_preferences(path)
+	check(is_equal_approx(game.plant_controls.strength.value,0.25) and not game.plant_controls.enabled.button_pressed and not game.plant_current.materials[0].get_shader_parameter("sway_enabled"),"Plant current settings reload into the live world")
+	check(is_equal_approx(game.plant_current.settings.wash_strength,0.9),"Propeller wash tuning reloads")
+	check(is_equal_approx(game.wildlife_density_slider.value,150.0) and is_equal_approx(game.wildlife.density,1.5),"Wildlife density reloads into the live population")
+	check(is_equal_approx(game.crt_reflection_slider.value,55.0) and is_equal_approx(game.cockpit_hud.crt_reflection_strength,0.55),"CRT reflection strength reloads")
 	game.export_all_dialog.show(); game._update_mouse_pointer()
 	check(game._desired_mouse_mode() == Input.MOUSE_MODE_VISIBLE, "Combined export dialog restores pointer")
 	game._physics_process(0.0); check(not game.pilot.controls_enabled, "Combined export dialog blocks piloting")

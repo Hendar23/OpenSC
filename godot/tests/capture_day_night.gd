@@ -14,7 +14,10 @@ func _run() -> void:
 	game.fog_slider.value = 24.0
 	game._update_water_environment()
 	game.day_night.enabled = false
-	for preset in [["day", 12.0], ["night", 0.0]]:
+	game.pilot.freeze = true
+	game.pilot.set_physics_process(false)
+	game.pilot.reset_physics_interpolation()
+	for preset in [["morning",8.0],["day", 12.0],["evening",16.0], ["night", 0.0]]:
 		game.day_night.hour = preset[1]; game._update_daylight()
 		for frame in range(20): await process_frame
 		await RenderingServer.frame_post_draw

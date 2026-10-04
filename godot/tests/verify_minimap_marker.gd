@@ -16,6 +16,7 @@ func _run() -> void:
 	map.initialize_exploration()
 	var terrain := Image.create(128,128,false,Image.FORMAT_RGB8)
 	terrain.fill(Color.WHITE)
+	terrain.fill_rect(Rect2i(40,48,8,8),Color(1.0,0.25,0.05))
 	map.texture = ImageTexture.create_from_image(terrain)
 	var display := Display.new()
 	display.screen_only = true
@@ -34,9 +35,14 @@ func _run() -> void:
 			failures += 1
 			push_error("Player marker must stay orange with revealed=%s: %s" % [revealed,orange])
 		var background := picture.get_pixel(10,10)
-		if (revealed and background.r < 0.95) or (not revealed and background.r > 0.02):
+		if (revealed and (background.b < 0.95 or background.r > 0.5 or background.g < 0.65)) or (not revealed and background.r > 0.02):
 			failures += 1
-			push_error("Terrain must still respect exploration")
+			push_error("Terrain must be blue while respecting exploration")
+		if revealed:
+			var border := picture.get_pixel(35,22)
+			if border.r < 0.95 or border.g < 0.20 or border.g > 0.30 or border.b > 0.10:
+				failures += 1
+				push_error("Blue map tint must preserve orange impassable borders")
 	pilot.rotation.y = PI / 2.0
 	pilot.reset_physics_interpolation()
 	await physics_frame
@@ -47,5 +53,5 @@ func _run() -> void:
 		push_error("Player marker must still follow heading: %s" % display.player_marker.rotation)
 	view.queue_free()
 	await process_frame
-	print("Minimap marker: 5 checks, %d failures" % failures)
+	print("Minimap marker: 6 checks, %d failures" % failures)
 	quit(1 if failures else 0)

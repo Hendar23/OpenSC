@@ -1,8 +1,14 @@
 {
   "schema_version": 1,
   "id": "test-3d-map-instrument",
-  "name": "Test 3D map instrument",
-  "version": "0.1",
-  "description": "Replaces the original minimap sprite with the supplied physical cockpit instrument, displaying the live map on its screen.",
-  "assets": {"hud.map": {"file": "MapPanel.glb", "forward_axis": "+Z"}}
+  "name": "Test 3D HUD instruments",
+  "version": "0.2",
+  "description": "Replaces all five HUD panels with physical 3D cockpit instruments and live illuminated displays.",
+  "assets": {
+    "hud.tilt": {"file": "AttitudePanel.glb", "forward_axis": "+Z"},
+    "hud.equipment": {"file": "ToolPanel.glb", "forward_axis": "+Z"},
+    "hud.map": {"file": "MapPanel.glb", "forward_axis": "+Z"},
+    "hud.weapon": {"file": "WeaponPanel.glb", "forward_axis": "+Z"},
+    "hud.shield": {"file": "HealthPanel.glb", "forward_axis": "+Z"}
+  }
 }

@@ -133,6 +133,7 @@ func _run() -> void:
 		await create_timer(0.4).timeout
 		for frame in range(30): await process_frame
 		root.get_texture().get_image().save_png("res://tests/cockpit-hud-preview.png")
+		var daytime_hud := root.get_texture().get_image()
 		game.daylight_controls.time_of_day.value = 0.0
 		# Use a broad beam consistently, regardless of personal preferences,
 		# so the capture also exposes grazing-angle terrain shadow artefacts.
@@ -141,6 +142,11 @@ func _run() -> void:
 		if game.wildlife != null: game.wildlife.process_mode = Node.PROCESS_MODE_DISABLED
 		for frame in range(20): await process_frame
 		var unlit := root.get_texture().get_image()
+		var instrument: Control = hud.displays[1]
+		var casing_pixel := Vector2i(instrument.get_global_transform() * Vector2(60,8))
+		var screen_pixel := Vector2i(instrument.get_global_transform() * instrument.screen.get_center())
+		check(unlit.get_pixelv(casing_pixel).get_luminance() < daytime_hud.get_pixelv(casing_pixel).get_luminance() * 0.4,"Rendered HUD casing darkens at night")
+		check(unlit.get_pixelv(screen_pixel).is_equal_approx(daytime_hud.get_pixelv(screen_pixel)),"Rendered equipment display remains illuminated at night")
 		equipment.toggle_selected()
 		for frame in range(20): await process_frame
 		var lit := root.get_texture().get_image()
@@ -177,11 +183,24 @@ func _run() -> void:
 	hud.free()
 	game.cockpit_hud = HUD.new(); root.get_child(0).add_child(game.cockpit_hud)
 	game.cockpit_hud.setup(game.pilot, equipment, game.world_root, game.game_folder)
+	game.cockpit_hud.setup_lighting(game.water_environment,game.sun)
 	hud = game.cockpit_hud
-	check(hud.model_views.size() == 1 and hud.displays[2].screen_only, "3D minimap binds the same live map display")
-	var mesh := hud.model_views[0].find_child("Screen_Display", true, false) as MeshInstance3D
+	check(hud.model_views.size() == 5 and hud.displays.all(func(display: Control) -> bool: return display.screen_only), "All five 3D instruments bind the live displays")
+	for index in range(5):
+		var live_mesh: MeshInstance3D = hud.model_views[index].find_child("Dial_Display" if index in [0,4] else "Screen_Display",true,false)
+		check(live_mesh != null and live_mesh.material_override.emission_texture is ViewportTexture,"Instrument %d binds its screen or circular dial" % index)
+	var mesh := hud.model_views[2].find_child("Screen_Display", true, false) as MeshInstance3D
 	check(mesh != null and mesh.material_override.albedo_texture is ViewportTexture, "Supplied physical screen displays the live viewport texture")
+	game.daylight_controls.time_of_day.value = 0.0
+	hud._update_instrument_lighting(1.0)
+	check(is_zero_approx(hud.model_views[2].get_node("InstrumentSun").light_energy) and mesh.material_override.emission_enabled and mesh.material_override.emission_texture is ViewportTexture,"3D instrument casing follows night while its screen stays illuminated")
+	check(mesh.material_override.shading_mode == BaseMaterial3D.SHADING_MODE_PER_PIXEL and is_equal_approx(mesh.material_override.roughness,0.22) and mesh.material_override.clearcoat_enabled,"3D screen preserves the model's glossy glass with reflective clearcoat")
+	game.daylight_controls.time_of_day.value = 12.0
 	key(KEY_3)
+	for index in [0,1,3,4]:
+		hud.set_enabled(index,false,false)
+		check(not hud.instruments[index].visible and hud.instruments[2].visible,"3D instrument %d hides independently" % index)
+		hud.set_enabled(index,true,false)
 	await advance_slide(hud,2,0.35)
 	check(not hud.instruments[2].visible, "Key 3 also hides the modded instrument")
 	key(KEY_3)
@@ -189,6 +208,30 @@ func _run() -> void:
 		await create_timer(0.4).timeout
 		for frame in range(45): await process_frame
 		root.get_texture().get_image().save_png("res://tests/cockpit-3d-map-preview.png")
+		hud.set_process(false)
+		var glass_view: SubViewport = hud.model_views[2]
+		var glass_light: DirectionalLight3D = glass_view.get_node("InstrumentSun")
+		glass_light.light_energy = 0.0
+		var glass: ShaderMaterial = glass_view.get_meta("crt_glass")
+		glass.set_shader_parameter("sunlight_energy",0.0)
+		for frame in range(4): await process_frame
+		await RenderingServer.frame_post_draw
+		var without_glint := glass_view.get_texture().get_image()
+		glass_light.basis = Basis.IDENTITY
+		glass_light.light_energy = 0.7
+		# Test actual overhead sunlight, not just a light aimed straight at
+		# the flat screen: the CRT reflection should show during piloting.
+		glass.set_shader_parameter("sunlight_direction",Vector3.UP)
+		glass.set_shader_parameter("sunlight_energy",1.2)
+		for frame in range(4): await process_frame
+		await RenderingServer.frame_post_draw
+		var with_glint := glass_view.get_texture().get_image()
+		with_glint.save_png("res://tests/crt-glass-glint-preview.png")
+		var glint_pixels := 0
+		for y in range(int(glass_view.size.y * 0.3),int(glass_view.size.y * 0.7),4):
+			for x in range(int(glass_view.size.x * 0.3),int(glass_view.size.x * 0.7),4):
+				if with_glint.get_pixel(x,y).get_luminance() - without_glint.get_pixel(x,y).get_luminance() > 0.02: glint_pixels += 1
+		check(glint_pixels > 20,"CRT glass visibly catches light from the matching angle")
 	game.queue_free(); await process_frame
 	print("Cockpit HUD verification: %d checks, %d failures" % [checks, failures])
 	quit(1 if failures else 0)

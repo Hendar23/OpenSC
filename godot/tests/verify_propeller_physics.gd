@@ -108,7 +108,7 @@ func _run() -> void:
 		await physics_frame
 		maximum_pitch = maxf(maximum_pitch, absf(asin(clampf(-pilot.global_basis.z.y, -1, 1))))
 	key(KEY_UP, false)
-	check(pilot is RigidBody3D and pilot.mass == 100.0, "Live pilot is a rigid body with configured mass")
+	check(pilot is RigidBody3D and is_equal_approx(pilot.mass,float(pilot.movement.settings.mass)), "Live pilot is a rigid body with configured mass")
 	check(maximum_pitch <= PI / 4 + 0.002 and maximum_pitch > 0.7, "Live rigid-body pitching obeys 45-degree limit")
 	for frame in range(300): await physics_frame
 	check(pilot.global_basis.y.dot(Vector3.UP) > 0.995, "Live rigid body levels after pitch input is released")
@@ -126,8 +126,8 @@ func _run() -> void:
 	key(KEY_W, true)
 	for frame in range(180): await physics_frame
 	key(KEY_W, false)
-	var contact_z: float = wall.position.z + box.size.z * 0.5 + Pilot.COLLIDER_RADIUS
-	check(absf(pilot.position.z - contact_z) < 0.1, "Rigid-body thrust stops at scenery using the current submarine radius")
+	var contact_z: float = wall.position.z + box.size.z * 0.5 + Pilot.COLLIDER_SIZE.z * 0.5 - Pilot.COLLIDER_CENTER.z
+	check(absf(pilot.position.z - contact_z) < 0.1, "Rigid-body thrust stops at scenery using the fitted submarine hull")
 	wall.queue_free()
 	pilot.reset_at(Vector3(0, 10, 0))
 	key(KEY_E, true)
