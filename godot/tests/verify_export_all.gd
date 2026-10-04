@@ -15,6 +15,9 @@ func _run() -> void:
 		await physics_frame
 	check(game.startup_complete and not game.export_all_button.disabled, "Export available after game loads")
 	if not game.startup_complete: quit(1); return
+	game._load_preferences("res://view_defaults.cfg")
+	check(is_equal_approx(game.fog_slider.value, 29.0) and is_equal_approx(game.fog_start_slider.value, 1.0) and is_equal_approx(game.fog_curve_slider.value, 1.9), "Preferred fog defaults load")
+	check(is_equal_approx(game.docking.approach_radius, 3.0) and is_equal_approx(game.day_night.night_brightness, 0.02) and is_equal_approx(game.day_night.cycle_minutes, 5.0), "Preferred docking and day/night defaults load")
 	game.pilot.movement.settings.camera_distance = 0.55
 	game.pilot.movement.settings.bubble_rate = 9.0
 	game.pilot.submarine_audio.tuning.settings.master_volume = -13.0

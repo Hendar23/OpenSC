@@ -67,7 +67,16 @@ static func load_world(path: String, tree: SceneTree, progress: Callable) -> Nod
 			var positions: Array = buffer["vertices"]
 			var vertex_normals: Array = buffer["normals"]
 			var texture_coordinates: Array = buffer["uvs"]
-			for corner in range(3):
+			# The seventh byte stores the coordinate mip level. Most faces use
+			# 128-pixel coordinates, but some roof faces use 64 or 32 instead.
+			var coordinate_level := int(data[uvs_offset + i * 8 + 6])
+			if coordinate_level > 7:
+				push_error("Unsupported world texture-coordinate level")
+				return null
+			var coordinate_size := 128.0 / pow(2.0,coordinate_level)
+			# Convert legacy winding to Godot's clockwise front faces, moving
+			# each corner's UV and normal with its position.
+			for corner in PackedInt32Array([0, 2, 1]):
 				var index := int(data[p + 1 + corner])
 				if index >= vertex_count:
 					push_error("World triangle refers to an invalid vertex")
@@ -76,7 +85,7 @@ static func load_world(path: String, tree: SceneTree, progress: Callable) -> Nod
 				vertex_normals.append(normals[index])
 				var uv := uvs_offset + i * 8 + corner * 2
 				# BSP corners store U then V, unlike the packed DFF coordinates.
-				texture_coordinates.append(Vector2(float(data[uv]), float(data[uv + 1])) / 128.0)
+				texture_coordinates.append(Vector2(float(data[uv]), float(data[uv + 1])) / coordinate_size)
 		triangle_total += triangle_count
 		if sector_index % 24 == 0:
 			progress.call("Loading environment: %d / %d sectors" % [sector_index + 1, sectors.size()])

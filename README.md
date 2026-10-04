@@ -21,3 +21,9 @@ Built with [Godot](https://godotengine.org/)
 + Animated building lights
 + Floating particles in the water
 + Gamepad controls and impact rumble
++ Day/night cycle
++ Five individually toggleable HUD panels
++ Detailed minimap with fog of war revealed while exploring
++ First and third person camera views
++ Modular submarine equipment, starting with working headlights
++ Tabbed developer menu for adjusting and exporting settings

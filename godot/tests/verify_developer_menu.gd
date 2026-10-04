@@ -22,6 +22,19 @@ func _run() -> void:
 	game._input(key)
 	check(game.developer_ui_visible and game.canvas.visible, "F1 opens the developer menu")
 	check(game.developer_tabs.get_tab_count() == 5, "Movement, Sound, Graphics, Mods and System are available")
+	game.pilot.global_position = game.docking.ports[0].entry + Vector3.RIGHT * 3.0
+	game.pilot.velocity = Vector3.ZERO
+	game.docking_radius_slider.value = 2.0
+	game.docking.update_approach()
+	check(game.docking.message.is_empty(), "Small docking radius requires a close approach")
+	game.docking_radius_slider.value = 4.0
+	check(game.docking.message.contains("(Y/N)"), "Docking radius slider updates the live prompt")
+	var radius_path := "res://tests/docking-radius-test.cfg"
+	check(game._export_all_settings(radius_path) == OK, "Docking radius can be exported with all settings")
+	game.docking_radius_slider.value = 1.0
+	game._load_preferences(radius_path)
+	check(is_equal_approx(game.docking.approach_radius, 4.0) and is_equal_approx(game._view_settings().docking_radius, 4.0), "Docking radius reloads from exported settings")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(radius_path))
 	game._physics_process(0.0)
 	check(not game.pilot.controls_enabled, "Menu prevents steering while adjusting settings")
 	check(game.tuning_panel.sliders.camera_distance.min_value == 0.35, "Camera slider permits much closer distances")

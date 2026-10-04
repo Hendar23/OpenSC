@@ -120,11 +120,11 @@ func _run() -> void:
 	viewer._update_water_environment()
 	check(not viewer.water_environment.fog_enabled, "Fog can be disabled for inspection")
 	viewer.fog_button.button_pressed = true
-	var old_density := viewer.water_environment.fog_density
+	var old_visibility := viewer.water_environment.fog_depth_end
 	viewer.fog_slider.value = 150.0
-	check(viewer.water_environment.fog_density < old_density, "Longer visibility reduces fog density immediately")
+	check(viewer.water_environment.fog_depth_end > old_visibility, "Longer visibility pushes distant fog back immediately")
 	viewer.fog_slider.value = 10.0
-	check(viewer.water_environment.fog_density > old_density, "Shorter visibility increases fog density immediately")
+	check(viewer.water_environment.fog_depth_end < old_visibility, "Shorter visibility brings distant fog closer immediately")
 	viewer._toggle_tuning()
 	check(viewer.canvas.visible and viewer.tuning_panel.visible, "T reveals developer UI and movement tuning")
 	viewer._toggle_developer_ui()

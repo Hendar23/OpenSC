@@ -165,10 +165,12 @@ static func _build_mesh(data: PackedByteArray, geometry: int, end: int, path: St
 		if not by_material.has(material):
 			by_material[material] = PackedInt32Array()
 		var indices: PackedInt32Array = by_material[material]
-		indices.append_array(PackedInt32Array([a, b, c]))
+		# Legacy faces are counterclockwise; Godot's front faces are clockwise.
+		# Keep the outward normals and reverse the face, including morph poses.
+		indices.append_array(PackedInt32Array([a, c, b]))
 		by_material[material] = indices
 		if not has_normals:
-			var normal := (vertices[c] - vertices[a]).cross(vertices[b] - vertices[a]).normalized()
+			var normal := (vertices[b] - vertices[a]).cross(vertices[c] - vertices[a]).normalized()
 			for vertex in [a, b, c]: normals[vertex] += normal
 	if not has_normals:
 		for vertex in range(normals.size()): normals[vertex] = normals[vertex].normalized()

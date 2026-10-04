@@ -3,7 +3,7 @@
   "id": "test.remastered-submarine",
   "name": "Test: remastered submarine",
   "version": "0.4",
-  "description": "Rounded yellow submarine from Other resources, using the gameplay GLB with embedded textures and animated pods and propellers. Disabled until enabled.",
+  "description": "Remastered Sub to demo mods. Just an AI generated placeholder.",
   "assets": {
     "submarine.player": {
       "file": "models/submarine.glb",

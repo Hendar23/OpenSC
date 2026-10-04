@@ -6,10 +6,11 @@ const Radio = preload("res://docking_radio.gd")
 const Transit = preload("res://transit_motion.gd")
 const DockAudio = preload("res://docking_audio.gd")
 const DOCK_SPEED_FRACTION := 2.0 / 3.0
-const APPROACH_RADIUS := 7.0
+const APPROACH_RADIUS := 2.0
 enum Stage { IDLE, SETTLE, ALIGN, OPEN, DESCEND, CLOSE, DOCKED, EXIT_OPEN, ASCEND, EXIT_CLOSE, APPROACH }
 
 var stage := Stage.IDLE
+var approach_radius := APPROACH_RADIUS
 var pilot: RigidBody3D
 var ports: Array[Dictionary] = []
 var nearby: Dictionary = {}
@@ -80,7 +81,7 @@ static func approach_basis(pose: Basis, position: Vector3, destination: Vector3)
 func update_approach() -> void:
 	if stage != Stage.IDLE: return
 	nearby = {}
-	var nearest := APPROACH_RADIUS
+	var nearest := approach_radius
 	for port in ports:
 		var distance: float = pilot.global_position.distance_to(port.entry)
 		if distance < nearest:

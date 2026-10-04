@@ -46,6 +46,7 @@ func _run() -> void:
 	check(audio.players.values().all(func(p: AudioStreamPlayer) -> bool: return not p.playing), "Idle docking audio is silent")
 	check(controller.ports.size() == 6, "Six original city ports registered")
 	check(game.pilot.visual.scale.is_equal_approx(Vector3.ONE * 0.8) and is_equal_approx(game.pilot.get_node("HullCollision").shape.radius, 0.54), "Ship visual and collider are 20 percent smaller")
+	game.pilot.movement.settings.forward_speed = 4.6
 	check(is_equal_approx(controller.maximum_docking_speed(), 4.6 * 2.0 / 3.0), "Docking permission uses two-thirds of configured forward speed")
 	game.pilot.movement.settings.forward_speed = 6.0
 	check(is_equal_approx(controller.maximum_docking_speed(), 4.0), "Docking speed limit updates with live speed tuning")
@@ -54,6 +55,14 @@ func _run() -> void:
 	controller.update_approach()
 	check(controller.message.is_empty() and not controller.request_docking(), "Cannot dock away from a port")
 	var port_index := 0
+	game.docking_radius_slider.value = 2.0
+	game.pilot.velocity = Vector3.ZERO
+	game.pilot.global_position = controller.ports[0].entry + Vector3.RIGHT * 2.1
+	controller.update_approach()
+	check(controller.message.is_empty() and not controller.request_docking(), "Docking stays unavailable outside the configured radius")
+	game.pilot.global_position = controller.ports[0].entry + Vector3.RIGHT * 1.9
+	controller.update_approach()
+	check(controller.message.contains("(Y/N)"), "Docking appears close above the port")
 	for port in controller.ports:
 		var heading := port_index * TAU / 6.0
 		game.pilot.global_basis = Basis(Vector3.UP, heading)
@@ -148,7 +157,7 @@ func _run() -> void:
 	advance(controller, Docking.Stage.OPEN)
 	check(game.pilot.global_basis.is_equal_approx(upright), "Autopilot levels pitch and roll and faces the docking position after settling")
 	game._reset_submarine()
-	game.pilot.global_position = controller.ports[0].entry + Vector3(2.0, 0.0, 0.0)
+	game.pilot.global_position = controller.ports[0].entry + Vector3(1.5, 0.0, 0.0)
 	game.pilot.velocity = Vector3(0.8, 0.0, 0.0)
 	game.pilot.rotation.y = PI * 0.75
 	check(controller.request_docking() and controller.stage == Docking.Stage.SETTLE, "Moving approach settles before alignment")
@@ -223,7 +232,7 @@ func _run() -> void:
 	advance(controller, Docking.Stage.OPEN)
 	check(game.pilot.global_basis.is_equal_approx(Basis(Vector3.UP, 2.3)), "Docking with turning disabled preserves heading")
 	game._reset_submarine()
-	game.pilot.global_position = controller.ports[0].entry + Vector3.BACK * 2.0
+	game.pilot.global_position = controller.ports[0].entry + Vector3.BACK * 1.5
 	game.pilot.global_basis = Basis.IDENTITY
 	game.pilot.velocity = Vector3.RIGHT * 0.8
 	check(controller.request_docking(), "Aligned moving approach can begin settling with turning disabled")

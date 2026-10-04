@@ -101,7 +101,7 @@ static func _read_pack(folder: String) -> Dictionary:
 		if relative.is_empty() or relative.is_absolute_path() or not resolved.begins_with(folder + "/"):
 			pack.errors.append("Asset path must stay inside its mod folder: " + str(key)); continue
 		var extension := relative.get_extension().to_lower()
-		var model := asset_id == "submarine.player" or asset_id.begins_with("model.")
+		var model := asset_id == "submarine.player" or asset_id.begins_with("model.") or asset_id in ["hud.tilt", "hud.equipment", "hud.map", "hud.weapon", "hud.shield"]
 		var texture := asset_id.begins_with("texture.")
 		var audio := asset_id in ["audio.submarine.main_propeller", "audio.submarine.side_pods", "audio.submarine.pod_rotation", "audio.submarine.impact_hit1", "audio.submarine.impact_hit3", "audio.submarine.impact_creaking", "audio.docking.sequence", "audio.docking.doors", "audio.docking.door_stop"]
 		var map := asset_id == "map.scen1"

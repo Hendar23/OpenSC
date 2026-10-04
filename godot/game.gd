@@ -15,6 +15,9 @@ const ModPanel = preload("res://mod_panel.gd")
 const MapDocument = preload("res://map_document.gd")
 const Wildlife = preload("res://wildlife_population.gd")
 const WaterParticles = preload("res://water_particles.gd")
+const DayNight = preload("res://day_night_cycle.gd")
+const HUD = preload("res://cockpit_hud.gd")
+const Equipment = preload("res://submarine_equipment.gd")
 const DEFAULT_VISIBILITY := 35.0
 const MIN_VISIBILITY := 10.0
 const MAX_VISIBILITY := 250.0
@@ -24,6 +27,11 @@ var model: Node3D
 var world_root: Node3D
 var camera: Camera3D
 var water_environment: Environment
+var sun: DirectionalLight3D
+var surface_material: ShaderMaterial
+var day_night := DayNight.new()
+var daylight_controls := {}
+var clock_label: Label
 var canvas: CanvasLayer
 var loading_canvas: CanvasLayer
 var loading_label: Label
@@ -45,6 +53,12 @@ var export_all_message: Label
 var fog_button: CheckButton
 var fog_slider: HSlider
 var fog_label: Label
+var fog_start_slider: HSlider
+var docking_radius_slider: HSlider
+var docking_radius_label: Label
+var fog_start_label: Label
+var fog_curve_slider: HSlider
+var fog_curve_label: Label
 var game_folder := ""
 var world_loading := false
 var pilot_mode := false
@@ -52,6 +66,9 @@ var startup_complete := false
 var developer_ui_visible := false
 var camera_follow := FollowCamera.new()
 var camera_was_frozen := false
+const SUB_RENDER_LAYER := 2
+var first_person := false
+var cockpit_camera_offset := Vector3(0,0.025,-0.16)
 var fog_visibility := DEFAULT_VISIBILITY
 var remember_preferences := true
 var use_map_overrides := true
@@ -63,6 +80,16 @@ var mod_panel: Window
 var wildlife: Node3D
 var docked_screen: ColorRect
 var docked_label: Label
+var cockpit_hud: CanvasLayer
+var equipment: Node3D
+var equipment_controls := {}
+var hud_enabled: Array[bool] = [true,true,true,true,true]
+var hud_scale_slider: HSlider
+var hud_scale_label: Label
+var hud_map_zoom_slider: HSlider
+var hud_map_zoom_label: Label
+var map_reveal_slider: HSlider
+var map_reveal_label: Label
 
 func _ready() -> void:
 	# Only the physics-driven submarine interpolates; camera and scenery keep
@@ -83,10 +110,9 @@ func _ready() -> void:
 	var environment := WorldEnvironment.new()
 	environment.environment = water_environment
 	add_child(environment)
-	var light := DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-42, -32, 0)
-	light.light_energy = 1.0
-	add_child(light)
+	sun = DirectionalLight3D.new()
+	sun.rotation_degrees = Vector3(-42, -32, 0)
+	add_child(sun)
 	camera = Camera3D.new()
 	camera.current = true
 	camera.far = 4000.0
@@ -95,6 +121,7 @@ func _ready() -> void:
 	particles.camera = camera
 	add_child(particles)
 	_build_interface()
+	_load_preferences("res://view_defaults.cfg")
 	_load_preferences()
 	_update_water_environment()
 	call_deferred("_bootstrap")
@@ -159,6 +186,50 @@ func _build_interface() -> void:
 	graphics_controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	graphics_controls.add_theme_constant_override("separation", 12)
 	graphics_scroll.add_child(graphics_controls)
+	hud_scale_label = Label.new()
+	graphics_controls.add_child(hud_scale_label)
+	hud_scale_slider = HSlider.new()
+	hud_scale_slider.min_value = 25.0
+	hud_scale_slider.max_value = 150.0
+	hud_scale_slider.step = 1.0
+	hud_scale_slider.value = 50.0
+	hud_scale_slider.focus_mode = Control.FOCUS_NONE
+	graphics_controls.add_child(hud_scale_slider)
+	hud_scale_slider.value_changed.connect(func(_value: float) -> void: _update_hud_scale())
+	hud_scale_slider.drag_ended.connect(func(_changed: bool) -> void: _save_preferences())
+	_update_hud_scale()
+	hud_map_zoom_label = Label.new()
+	graphics_controls.add_child(hud_map_zoom_label)
+	hud_map_zoom_slider = HSlider.new()
+	hud_map_zoom_slider.min_value = 0.5
+	hud_map_zoom_slider.max_value = 4.0
+	hud_map_zoom_slider.step = 0.1
+	hud_map_zoom_slider.value = 2.0
+	hud_map_zoom_slider.focus_mode = Control.FOCUS_NONE
+	graphics_controls.add_child(hud_map_zoom_slider)
+	hud_map_zoom_slider.value_changed.connect(func(_value: float) -> void: _update_hud_scale())
+	hud_map_zoom_slider.drag_ended.connect(func(_changed: bool) -> void: _save_preferences())
+	_update_hud_scale()
+	map_reveal_label = Label.new()
+	graphics_controls.add_child(map_reveal_label)
+	map_reveal_slider = HSlider.new()
+	map_reveal_slider.min_value = 2.0
+	map_reveal_slider.max_value = 30.0
+	map_reveal_slider.step = 0.5
+	map_reveal_slider.value = 10.0
+	map_reveal_slider.focus_mode = Control.FOCUS_NONE
+	graphics_controls.add_child(map_reveal_slider)
+	map_reveal_slider.value_changed.connect(func(_value: float) -> void: _update_hud_scale())
+	map_reveal_slider.drag_ended.connect(func(_changed: bool) -> void: _save_preferences())
+	var reset_map := Button.new()
+	reset_map.text = "Reset minimap exploration"
+	reset_map.tooltip_text = "Clear discovered areas to test the current reveal radius. Smaller radii keep previous discoveries."
+	reset_map.focus_mode = Control.FOCUS_NONE
+	reset_map.pressed.connect(func() -> void:
+		if cockpit_hud != null: cockpit_hud.map_data.reset_exploration()
+	)
+	graphics_controls.add_child(reset_map)
+	_update_hud_scale()
 	fog_button = CheckButton.new()
 	fog_button.text = "Underwater fog"
 	fog_button.button_pressed = true
@@ -197,7 +268,20 @@ func _build_interface() -> void:
 			_save_preferences()
 		)
 		presets.add_child(button)
+	fog_start_label = Label.new(); graphics_controls.add_child(fog_start_label)
+	fog_start_slider = HSlider.new(); fog_start_slider.min_value = 0.0; fog_start_slider.max_value = 30.0
+	fog_start_slider.step = 0.5; fog_start_slider.value = 5.0; fog_start_slider.focus_mode = Control.FOCUS_NONE
+	graphics_controls.add_child(fog_start_slider)
+	fog_curve_label = Label.new(); graphics_controls.add_child(fog_curve_label)
+	fog_curve_slider = HSlider.new(); fog_curve_slider.min_value = 0.5; fog_curve_slider.max_value = 4.0
+	fog_curve_slider.step = 0.1; fog_curve_slider.value = 1.8; fog_curve_slider.focus_mode = Control.FOCUS_NONE
+	graphics_controls.add_child(fog_curve_slider)
+	for slider in [fog_start_slider, fog_curve_slider]:
+		slider.value_changed.connect(func(_value: float) -> void: _update_water_environment())
+		slider.drag_ended.connect(func(_changed: bool) -> void: _save_preferences())
+	_build_daylight_controls()
 	_build_particle_controls()
+	_build_equipment_controls()
 	bubble_controls = VBoxContainer.new()
 	graphics_controls.add_child(bubble_controls)
 	var graphics_hint := Label.new()
@@ -224,6 +308,18 @@ func _build_interface() -> void:
 	system.add_child(status_label)
 	telemetry = Label.new()
 	system.add_child(telemetry)
+	docking_radius_label = Label.new()
+	system.add_child(docking_radius_label)
+	docking_radius_slider = HSlider.new()
+	docking_radius_slider.min_value = 0.5
+	docking_radius_slider.max_value = 10.0
+	docking_radius_slider.step = 0.1
+	docking_radius_slider.value = Docking.APPROACH_RADIUS
+	docking_radius_slider.focus_mode = Control.FOCUS_NONE
+	system.add_child(docking_radius_slider)
+	docking_radius_slider.value_changed.connect(func(_value: float) -> void: _update_docking_radius())
+	docking_radius_slider.drag_ended.connect(func(_changed: bool) -> void: _save_preferences())
+	_update_docking_radius()
 	var reset := Button.new()
 	reset.text = "Reset submarine (R)"
 	reset.focus_mode = Control.FOCUS_NONE
@@ -284,6 +380,12 @@ func _start_game(folder: String) -> void:
 		docking.free()
 		docking = null
 	if pilot != null: pilot.active = false
+	if cockpit_hud != null:
+		cockpit_hud.free()
+		cockpit_hud = null
+	if equipment != null:
+		equipment.free()
+		equipment = null
 	loading_canvas.visible = true
 	game_folder = folder
 	if model != null:
@@ -343,6 +445,21 @@ func _start_game(folder: String) -> void:
 	model.rotation.y = PI
 	pilot.add_child(model)
 	pilot.visual = model
+	equipment = Equipment.new()
+	pilot.add_child(equipment)
+	equipment.setup(pilot, folder)
+	# Keep lights and equipment working while excluding the sub geometry
+	# from the cockpit camera. Visibility still belongs to docking.
+	for node in pilot.find_children("*","MeshInstance3D",true,false): node.layers = SUB_RENDER_LAYER
+	var hull_bounds := Equipment._bounds(Equipment._meshes(pilot.visual,Transform3D.IDENTITY,true))
+	cockpit_camera_offset = Vector3(hull_bounds.get_center().x,hull_bounds.position.y + hull_bounds.size.y * 0.48,hull_bounds.position.z + hull_bounds.size.z * 0.25)
+	_update_equipment_settings()
+	cockpit_hud = HUD.new()
+	add_child(cockpit_hud)
+	cockpit_hud.setup(pilot, equipment, world_root, folder)
+	_update_hud_scale()
+	for index in range(5):
+		cockpit_hud.set_enabled(index,hud_enabled[index],false)
 	pilot.reset_physics_interpolation()
 	pilot.bubbles.configure(Assets._load_texture(folder, "BUBBLE", "BUBBLEM", {}))
 	pilot.submarine_audio.setup(pilot, folder)
@@ -358,6 +475,7 @@ func _start_game(folder: String) -> void:
 	docking = Docking.new()
 	add_child(docking)
 	docking.setup(pilot, world_root, folder, camera)
+	_update_docking_radius()
 	if wildlife != null: wildlife.player = pilot
 	docking.docked.connect(_reset_docked_wildlife)
 	if docking_prompt == null: _build_docking_prompt()
@@ -432,13 +550,36 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not pilot_mode or world_loading: return
+	if not developer_ui_visible and docking.stage == Docking.Stage.IDLE:
+		var toggle_view: bool = event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_Y
+		toggle_view = toggle_view or (event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_V)
+		if toggle_view:
+			_set_camera_mode(not first_person)
+			get_viewport().set_input_as_handled()
+			return
+	if not developer_ui_visible and cockpit_hud != null and event is InputEventKey and event.pressed and not event.echo and event.keycode >= KEY_1 and event.keycode <= KEY_5:
+		var index: int = event.keycode - KEY_1
+		cockpit_hud.toggle(index)
+		hud_enabled[index] = cockpit_hud.enabled[index]
+		_save_preferences()
+		get_viewport().set_input_as_handled()
+		return
+	if not developer_ui_visible and equipment != null and docking.stage == Docking.Stage.IDLE:
+		if event is InputEventJoypadButton and event.pressed:
+			if event.button_index == JOY_BUTTON_DPAD_LEFT: equipment.cycle(-1)
+			elif event.button_index == JOY_BUTTON_DPAD_RIGHT: equipment.cycle(1)
+			elif event.button_index == JOY_BUTTON_B and docking.nearby.is_empty(): equipment.toggle_selected()
+		elif event is InputEventKey and event.pressed and not event.echo:
+			if event.keycode == KEY_BRACKETLEFT: equipment.cycle(-1)
+			elif event.keycode == KEY_BRACKETRIGHT: equipment.cycle(1)
+			elif event.keycode == KEY_L: equipment.toggle_selected()
 	if event is InputEventJoypadButton and event.pressed:
-		if event.button_index == JOY_BUTTON_A: docking.request_docking()
+		if event.button_index == JOY_BUTTON_A: _request_docking()
 		elif event.button_index == JOY_BUTTON_B: docking.decline_docking()
 		elif event.button_index == JOY_BUTTON_START: _toggle_developer_ui()
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_Y:
-			docking.request_docking()
+			_request_docking()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_N:
 			docking.decline_docking()
@@ -484,6 +625,7 @@ func _select_developer_tab(tab_name: String) -> void:
 # Retained for capture/test scripts; F1 is the only menu keyboard shortcut.
 func _toggle_tuning() -> void:
 	if not pilot_mode: return
+	if cockpit_hud != null: cockpit_hud.visible = not world_loading and docking.stage != Docking.Stage.DOCKED
 	developer_ui_visible = true
 	canvas.visible = true
 	_select_developer_tab("Movement")
@@ -513,6 +655,8 @@ func _physics_process(_delta: float) -> void:
 func _process(delta: float) -> void:
 	_update_mouse_pointer()
 	particles.active = pilot_mode and not world_loading
+	if pilot_mode and not world_loading and not developer_ui_visible: day_night.step(delta)
+	_update_daylight()
 	if not pilot_mode: return
 	if docked_screen != null:
 		docked_screen.visible = docking.stage == Docking.Stage.DOCKED
@@ -538,6 +682,9 @@ func _process(delta: float) -> void:
 
 func _update_follow_camera(delta: float, snap: bool = false) -> void:
 	var pose := pilot.global_transform if snap else pilot.get_global_transform_interpolated()
+	if first_person:
+		camera.global_transform = pose * Transform3D(Basis.IDENTITY,cockpit_camera_offset)
+		return
 	var target := pose.origin + Vector3.UP * 0.35
 	var forward := -pose.basis.z
 	var heading := atan2(-forward.x, -forward.z)
@@ -551,10 +698,104 @@ func _update_follow_camera(delta: float, snap: bool = false) -> void:
 	camera.global_position = next
 	if next.distance_to(target) > 0.01: camera.look_at(target, Vector3.UP)
 
+func _set_camera_mode(cockpit: bool) -> void:
+	first_person = cockpit
+	if cockpit: camera.cull_mask &= ~SUB_RENDER_LAYER
+	else: camera.cull_mask |= SUB_RENDER_LAYER
+	_update_follow_camera(0.0,true)
+
+func _request_docking() -> void:
+	if docking.request_docking() and first_person:
+		_set_camera_mode(false)
+		docking.cinematic_camera = camera.global_position
+
 func _update_water_environment() -> void:
 	water_environment.fog_enabled = fog_button.button_pressed
-	water_environment.fog_density = 3.0 / fog_visibility
+	water_environment.fog_mode = Environment.FOG_MODE_DEPTH
+	water_environment.fog_density = 1.0
+	if fog_start_slider != null:
+		fog_start_slider.max_value = minf(30.0, fog_visibility - 1.0)
+		water_environment.fog_depth_begin = fog_start_slider.value
+		water_environment.fog_depth_curve = fog_curve_slider.value
+		fog_start_label.text = "Clear water near camera: %.1f units" % fog_start_slider.value
+		fog_curve_label.text = "Fog build-up curve: %.1f" % fog_curve_slider.value
+	water_environment.fog_depth_end = fog_visibility
+	water_environment.fog_sun_scatter = 0.0
 	fog_label.text = "Fog visibility distance: %.0f units" % fog_visibility
+	_update_daylight()
+
+func _build_daylight_controls() -> void:
+	var run := CheckButton.new(); run.text = "Run day/night cycle"
+	run.button_pressed = true; run.focus_mode = Control.FOCUS_NONE
+	graphics_controls.add_child(run); daylight_controls.cycle_enabled = run
+	run.toggled.connect(func(on: bool) -> void: day_night.enabled = on; _save_preferences())
+	clock_label = Label.new(); graphics_controls.add_child(clock_label)
+	for row in [["time_of_day", "Time of day", 0.0, 24.0, 0.1], ["cycle_minutes", "Full cycle length (minutes)", 1.0, 60.0, 1.0], ["night_brightness", "Night brightness", 0.02, 0.5, 0.01]]:
+		var key: String = row[0]; var caption: String = row[1]
+		var label := Label.new(); graphics_controls.add_child(label)
+		var slider := HSlider.new(); slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]
+		slider.value = float(DayNight.DEFAULTS[key]); slider.focus_mode = Control.FOCUS_NONE
+		graphics_controls.add_child(slider); daylight_controls[key] = slider
+		label.text = caption if key == "time_of_day" else "%s: %.2f" % [caption, slider.value]
+		slider.value_changed.connect(func(value: float) -> void:
+			if key == "time_of_day": day_night.hour = fposmod(value, 24.0)
+			elif key == "cycle_minutes": day_night.cycle_minutes = value
+			else: day_night.night_brightness = value
+			label.text = caption if key == "time_of_day" else "%s: %.2f" % [caption, value]
+			_update_daylight()
+		)
+		slider.drag_ended.connect(func(_changed: bool) -> void: _save_preferences())
+	var presets := HBoxContainer.new(); graphics_controls.add_child(presets)
+	for preset in [["Day", 12.0], ["Sunset", 18.0], ["Night", 0.0], ["Sunrise", 6.0]]:
+		var button := Button.new(); button.text = preset[0]; button.focus_mode = Control.FOCUS_NONE
+		button.pressed.connect(func() -> void: daylight_controls.time_of_day.value = preset[1]; _save_preferences())
+		presets.add_child(button)
+	var hint := Label.new(); hint.text = "Pause the cycle to hold a time. F1 pauses it while you adjust settings."
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; graphics_controls.add_child(hint)
+
+func _update_daylight() -> void:
+	day_night.apply(water_environment, sun, surface_material)
+	if clock_label != null:
+		var minutes := int(day_night.hour * 60.0) % 1440
+		clock_label.text = "World time: %02d:%02d" % [minutes / 60, minutes % 60]
+		daylight_controls.time_of_day.set_value_no_signal(day_night.hour)
+
+func _update_hud_scale() -> void:
+	hud_scale_label.text = "HUD size: %.0f%%" % hud_scale_slider.value
+	if cockpit_hud != null: cockpit_hud.scale_multiplier = hud_scale_slider.value / 100.0
+	if hud_map_zoom_slider != null:
+		hud_map_zoom_label.text = "Minimap zoom: %.1f×" % hud_map_zoom_slider.value
+		if cockpit_hud != null: cockpit_hud.map_zoom = hud_map_zoom_slider.value
+	if map_reveal_slider != null:
+		map_reveal_label.text = "Minimap reveal radius: %.1f units" % map_reveal_slider.value
+		if cockpit_hud != null: cockpit_hud.map_data.reveal_radius = map_reveal_slider.value
+
+func _build_equipment_controls() -> void:
+	var hint := Label.new()
+	hint.text = "Deep-Sea Lights · D-pad left/right: select · B: toggle\nKeyboard: [ / ] select · L toggle · 1–5 hide/show HUD instruments\nV / controller Y: switch cockpit view"
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	graphics_controls.add_child(hint)
+	for row in [["light_energy", "Light brightness", 0.1, 12.0, 0.1], ["light_range", "Light range", 2.0, 60.0, 1.0], ["light_angle", "Light beam angle", 5.0, 75.0, 1.0], ["light_down_angle", "Light downward angle", 0.0, 80.0, 1.0]]:
+		var key: String = row[0]
+		var caption: String = row[1]
+		var label := Label.new()
+		graphics_controls.add_child(label)
+		var slider := HSlider.new()
+		slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]
+		slider.value = Equipment.DEFAULTS[key]; slider.focus_mode = Control.FOCUS_NONE
+		equipment_controls[key] = slider
+		graphics_controls.add_child(slider)
+		label.text = "%s: %.1f" % [caption, slider.value]
+		slider.value_changed.connect(func(value: float) -> void:
+			label.text = "%s: %.1f" % [caption, value]
+			_update_equipment_settings()
+		)
+		slider.drag_ended.connect(func(_changed: bool) -> void: _save_preferences())
+
+func _update_equipment_settings() -> void:
+	if equipment == null: return
+	for key in equipment_controls: equipment.settings[key] = equipment_controls[key].value
+	equipment.apply_settings()
 
 func _build_particle_controls() -> void:
 	var enabled := CheckButton.new(); enabled.text = "Floating water particles"
@@ -617,22 +858,59 @@ func _reset_provisional_wildlife() -> void:
 			fish.reset_physics_interpolation()
 			break
 
+func _update_docking_radius() -> void:
+	docking_radius_label.text = "Docking prompt radius: %.1f units" % docking_radius_slider.value
+	if docking != null:
+		docking.approach_radius = docking_radius_slider.value
+		docking.update_approach()
+
 func _load_preferences(path: String = "user://opensubculture.cfg") -> void:
 	var config := ConfigFile.new()
 	if config.load(path) != OK: return
 	loading_preferences = true
-	var value: Variant = config.get_value("view", "fog_visibility", DEFAULT_VISIBILITY)
+	var hud_scale: Variant = config.get_value("view", "hud_scale", hud_scale_slider.value / 100.0)
+	if (hud_scale is float or hud_scale is int) and is_finite(float(hud_scale)):
+		hud_scale_slider.value = clampf(float(hud_scale) * 100.0, hud_scale_slider.min_value, hud_scale_slider.max_value)
+	var map_zoom: Variant = config.get_value("view","hud_map_zoom",hud_map_zoom_slider.value)
+	if (map_zoom is float or map_zoom is int) and is_finite(float(map_zoom)):
+		hud_map_zoom_slider.value = clampf(float(map_zoom),hud_map_zoom_slider.min_value,hud_map_zoom_slider.max_value)
+	var reveal_radius: Variant = config.get_value("view","map_reveal_radius",map_reveal_slider.value)
+	if (reveal_radius is float or reveal_radius is int) and is_finite(float(reveal_radius)):
+		map_reveal_slider.value = clampf(float(reveal_radius),map_reveal_slider.min_value,map_reveal_slider.max_value)
+	var value: Variant = config.get_value("view", "fog_visibility", fog_slider.value)
 	if (value is float or value is int) and is_finite(float(value)):
 		fog_slider.value = clampf(float(value), MIN_VISIBILITY, MAX_VISIBILITY)
-	var enabled: Variant = config.get_value("view", "fog_enabled", true)
+	var enabled: Variant = config.get_value("view", "fog_enabled", fog_button.button_pressed)
 	if enabled is bool: fog_button.button_pressed = enabled
+	for row in [["fog_start", fog_start_slider, 5.0], ["fog_curve", fog_curve_slider, 1.8], ["docking_radius", docking_radius_slider, Docking.APPROACH_RADIUS]]:
+		var setting: Variant = config.get_value("view", row[0], row[1].value)
+		if (setting is float or setting is int) and is_finite(float(setting)):
+			row[1].value = clampf(float(setting), row[1].min_value, row[1].max_value)
+	for key in daylight_controls:
+		var fallback: Variant = daylight_controls[key].button_pressed if key == "cycle_enabled" else daylight_controls[key].value
+		var setting: Variant = config.get_value("view", key, fallback)
+		if key == "cycle_enabled":
+			if setting is bool: daylight_controls[key].button_pressed = setting
+		elif (setting is float or setting is int) and is_finite(float(setting)):
+			daylight_controls[key].value = clampf(float(setting), daylight_controls[key].min_value, daylight_controls[key].max_value)
 	for key in particle_controls:
-		var setting: Variant = config.get_value("view", "particles_" + str(key), WaterParticles.DEFAULTS[key])
+		var fallback: Variant = particle_controls[key].button_pressed if key == "enabled" else particle_controls[key].value
+		var setting: Variant = config.get_value("view", "particles_" + str(key), fallback)
 		if key == "enabled":
 			if setting is bool: particle_controls[key].button_pressed = setting
 		elif (setting is float or setting is int) and is_finite(float(setting)):
 			particle_controls[key].value = clampf(float(setting), particle_controls[key].min_value, particle_controls[key].max_value)
 	loading_preferences = false
+	for key in equipment_controls:
+		var setting: Variant = config.get_value("view", key, equipment_controls[key].value)
+		if (setting is float or setting is int) and is_finite(float(setting)):
+			equipment_controls[key].value = clampf(float(setting), equipment_controls[key].min_value, equipment_controls[key].max_value)
+	for index in range(5):
+		var setting: Variant = config.get_value("view", "hud_" + str(HUD.DEFINITIONS[index].id), hud_enabled[index])
+		if setting is bool:
+			hud_enabled[index] = setting
+			if cockpit_hud != null:
+				cockpit_hud.set_enabled(index,setting,false)
 
 func _save_preferences(path: String = "user://opensubculture.cfg") -> void:
 	if not remember_preferences or loading_preferences: return
@@ -644,7 +922,14 @@ func _save_preferences(path: String = "user://opensubculture.cfg") -> void:
 	if config.save(path) != OK: status_label.text = "Visibility settings could not be saved."
 
 func _view_settings() -> Dictionary:
-	var settings := {"fog_visibility": fog_visibility, "fog_enabled": fog_button.button_pressed}
+	var settings := {"fog_visibility": fog_visibility, "fog_enabled": fog_button.button_pressed, "fog_start": fog_start_slider.value, "fog_curve": fog_curve_slider.value}
+	settings.merge(day_night.settings())
+	settings["docking_radius"] = docking_radius_slider.value
+	settings["hud_scale"] = hud_scale_slider.value / 100.0
+	settings["hud_map_zoom"] = hud_map_zoom_slider.value
+	settings["map_reveal_radius"] = map_reveal_slider.value
+	for key in equipment_controls: settings[key] = equipment_controls[key].value
+	for index in range(5): settings["hud_" + str(HUD.DEFINITIONS[index].id)] = hud_enabled[index]
 	for key in particle_controls:
 		settings["particles_" + str(key)] = particle_controls[key].button_pressed if key == "enabled" else particle_controls[key].value
 	return settings
@@ -670,5 +955,7 @@ func _add_water_surface() -> void:
 	surface.position = Vector3(bounds.get_center().x, float(world_root.get_meta("surface_height")), bounds.get_center().z)
 	var material := ShaderMaterial.new()
 	material.shader = preload("res://water_surface.gdshader")
+	surface_material = material
+	_update_daylight()
 	surface.material_override = material
 	world_root.add_child(surface)
