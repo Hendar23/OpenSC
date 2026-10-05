@@ -30,10 +30,12 @@ var map_zoom := 2.0:
 			if display.kind == "map": display.map_span = 140.0 / map_zoom
 var pilot: Node3D
 var equipment: Node3D
+var weapons: Node3D
 var lighting_environment: Environment
 var sunlight: DirectionalLight3D
 var lighting_elapsed := 1.0
 var sunlight_visible := true
+var natural_light: RefCounted
 var crt_reflection_strength := 0.25:
 	set(value):
 		crt_reflection_strength = clampf(value,0.0,1.0)
@@ -60,15 +62,18 @@ func _update_instrument_lighting(delta: float) -> void:
 			var start: Vector3 = pilot.global_position + pilot.global_basis * Vector3(0,0.05,-0.16)
 			var query := PhysicsRayQueryParameters3D.create(start,start + sunlight.global_basis.z * 600.0,1)
 			sunlight_visible = pilot.get_world_3d().direct_space_state.intersect_ray(query).is_empty()
-	var direct := sunlight.light_energy if sunlight_visible else 0.0
-	var ambient := lighting_environment.ambient_light_color * lighting_environment.ambient_light_energy
+	var natural: float = natural_light.visibility(pilot.global_position) if natural_light != null else 1.0
+	var direct := sunlight.light_energy * natural if sunlight_visible else 0.0
+	var ambient := lighting_environment.ambient_light_color * lighting_environment.ambient_light_energy * natural
+	var cave_ambient: float = float(natural_light.settings.cave_ambient) * (1.0 - natural) if natural_light != null else 0.0
+	ambient += Color(0.75,0.8,0.88) * cave_ambient
 	var illumination := ambient + sunlight.light_color * direct * 0.55
-	var casing := Color(clampf(illumination.r,0.035,1.0),clampf(illumination.g,0.035,1.0),clampf(illumination.b,0.035,1.0))
+	var casing := Color(clampf(illumination.r,0.0,1.0),clampf(illumination.g,0.0,1.0),clampf(illumination.b,0.0,1.0))
 	for display in displays: display.casing_light = casing
 	for view in model_views:
 		var environment: WorldEnvironment = view.get_node("InstrumentEnvironment")
-		environment.environment.ambient_light_color = lighting_environment.ambient_light_color
-		environment.environment.ambient_light_energy = lighting_environment.ambient_light_energy
+		environment.environment.ambient_light_color = ambient
+		environment.environment.ambient_light_energy = 1.0
 		var light: DirectionalLight3D = view.get_node("InstrumentSun")
 		light.basis = pilot.global_basis.inverse() * sunlight.global_basis
 		light.light_color = sunlight.light_color
@@ -78,9 +83,10 @@ func _update_instrument_lighting(delta: float) -> void:
 		glass.set_shader_parameter("sunlight_color",sunlight.light_color)
 		glass.set_shader_parameter("sunlight_energy",direct)
 
-func setup(player: Node3D, mounted_equipment: Node3D, world: Node3D, folder: String) -> void:
+func setup(player: Node3D, mounted_equipment: Node3D, world: Node3D, folder: String, mounted_weapons: Node3D = null) -> void:
 	pilot = player
 	equipment = mounted_equipment
+	weapons = mounted_weapons
 	name = "CockpitHUD"
 	layer = 0
 	map_data.setup(world,player.collision_height() + 2.0 * player.safe_margin)
@@ -100,6 +106,7 @@ func setup(player: Node3D, mounted_equipment: Node3D, world: Node3D, folder: Str
 		if definition.id == "map": display.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
 		display.pilot = pilot
 		display.equipment = equipment
+		display.weapons = weapons
 		display.map_data = map_data
 		display.frame = Assets._load_texture(folder, definition.frame, definition.mask, cache)
 		display.sub_icon = tilt_icon

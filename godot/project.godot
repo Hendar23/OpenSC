@@ -18,6 +18,10 @@ config/name="OpenSubCulture: asset viewer"
 run/main_scene="res://game.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
+[autoload]
+
+InputBindings="*res://input_bindings.gd"
+
 [display]
 
 window/size/viewport_width=1280

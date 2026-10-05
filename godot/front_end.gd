@@ -18,6 +18,7 @@ const MENU_NEIGHBOURS := {
 	"exit": {JOY_BUTTON_DPAD_UP: "website"}
 }
 signal new_game_requested
+signal load_requested
 signal resume_requested
 signal toggle_menu_requested
 signal exit_requested
@@ -175,6 +176,7 @@ func _activate_button(id: String) -> void:
 	match id:
 		"new_game": new_game_requested.emit()
 		"continue": resume_requested.emit()
+		"load": load_requested.emit()
 		"website": OS.shell_open(WEBSITE_URL)
 		"exit": _exit_after_sound()
 
@@ -237,6 +239,6 @@ func _input(event: InputEvent) -> void:
 		if selected != null and selected in buttons.values() and not selected.disabled:
 			selected.pressed.emit()
 		return
-	if can_resume and not loading_layer.visible and event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_START:
+	if can_resume and not loading_layer.visible and event.is_action_pressed("main_menu"):
 		toggle_menu_requested.emit()
 		get_viewport().set_input_as_handled()

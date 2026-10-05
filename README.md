@@ -28,3 +28,12 @@ Built with [Godot](https://godotengine.org/)
 + Classic loading screen and main menu, with controller navigation and sounds
 + Plants swaying in currents.
 + Toggleable FPS counter and screenshot capture
++ Animated sunlight caustics and small water surface waves
++ Darker caves and deep water, with adjustable lighting and fog
++ Working zapper weapon with creature damage and animated impact effects
++ Organic explosions with adjustable gore and persistent chunks that settle on the seabed
++ Equipment and weapon mounting editor
++ Full-screen map sharing the minimap's exploration progress
++ Docked interface with working save/load slots and placeholder equipment, trading and mission screens
++ Moddable dock menus and layouts
++ Input action system ready for future control rebinding

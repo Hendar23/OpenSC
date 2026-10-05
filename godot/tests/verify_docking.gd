@@ -99,6 +99,13 @@ func _run() -> void:
 		advance(controller, Docking.Stage.CLOSE)
 		check(audio.players.sequence.playing and audio.players.doors.playing, "Door sound starts once when closing begins")
 		check(game.pilot.global_position.distance_to(port.inside) < 0.001 and game.pilot.visual.visible, "Submarine remains visible after descending")
+		var dock_boxes: Array[AABB] = []
+		Docking._bounds(port.node,Transform3D.IDENTITY,dock_boxes)
+		var dock_bounds := dock_boxes[0]
+		for box in dock_boxes: dock_bounds = dock_bounds.merge(box)
+		var dock_bottom: float = port.node.to_global(dock_bounds.position).y
+		var sub_bottom: float = game.pilot.global_position.y - game.pilot.surface_clearance(Basis(Vector3.RIGHT,PI))
+		check(sub_bottom > dock_bottom and game.pilot.global_position.y < port.entry.y, "%s keeps the descended sub above the dock bottom" % port.name)
 		controller._physics_process(0.6)
 		check(game.pilot.visual.visible, "Submarine remains visible while hatch closes")
 		advance(controller, Docking.Stage.DOCKED)

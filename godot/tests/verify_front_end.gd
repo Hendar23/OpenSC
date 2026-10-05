@@ -27,6 +27,7 @@ func _run() -> void:
 		if game.startup_complete: break
 		await process_frame
 	check(game.startup_complete and game.front_end.menu_layer.visible and paused,"Startup finishes at the classic menu with the world paused")
+	check(game.gameplay_catalogue.tables.equipment.records.size() == 30 and game.gameplay_catalogue.warnings.is_empty(),"Startup imports original gameplay data before opening the menu")
 	check(game.front_end.menu_picture.texture == game.front_end.MENU_BACKGROUND and game.front_end.progress_bar.value == 100.0,"Project menu artwork loads and startup progress completes")
 	check(not game.front_end.is_button_available("continue") and not game.front_end.is_button_available("load") and not game.front_end.is_button_available("controls") and not game.front_end.is_button_available("audio") and not game.front_end.is_button_available("graphics"),"Unimplemented entries and Continue before a new game are inactive")
 	check(game.front_end.is_button_available("website") and game.front_end.WEBSITE_URL == "https://github.com/Hendar23/OpenSC","Website is enabled and targets the project repository")

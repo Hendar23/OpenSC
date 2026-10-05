@@ -55,6 +55,7 @@ var mods_button: Button
 var asset_interface: MarginContainer
 var map_editor: HBoxContainer
 var map_mode := false
+var mount_editor: HBoxContainer
 
 func _ready() -> void:
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
@@ -71,6 +72,14 @@ func _ready() -> void:
 		folder_dialog.popup_centered(Vector2i(850, 600))
 
 func _build_interface() -> void:
+	var exit_button := Button.new()
+	exit_button.text = "Exit"
+	exit_button.focus_mode = Control.FOCUS_NONE
+	exit_button.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	exit_button.offset_left = -96; exit_button.offset_right = -16
+	exit_button.offset_top = 5; exit_button.offset_bottom = 37
+	exit_button.pressed.connect(func() -> void: get_tree().quit())
+	add_child(exit_button)
 	var modes := HBoxContainer.new()
 	modes.position = Vector2(16, 5)
 	add_child(modes)
@@ -78,6 +87,8 @@ func _build_interface() -> void:
 		var mode_button := Button.new(); mode_button.text = caption; mode_button.focus_mode = Control.FOCUS_NONE
 		mode_button.pressed.connect(func() -> void: _set_mode(caption == "Map"))
 		modes.add_child(mode_button)
+	var mounts_button := Button.new(); mounts_button.text = "Mounts"; mounts_button.focus_mode = Control.FOCUS_NONE
+	mounts_button.pressed.connect(_show_mounts); modes.add_child(mounts_button)
 	mods_button = Button.new()
 	mods_button.text = "Mods"
 	mods_button.focus_mode = Control.FOCUS_NONE
@@ -258,8 +269,13 @@ func _build_interface() -> void:
 	map_editor.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	map_editor.offset_left = 16; map_editor.offset_right = -16; map_editor.offset_top = 46; map_editor.offset_bottom = -16
 	add_child(map_editor); map_editor.visible = false
+	mount_editor = preload("res://mount_editor.gd").new()
+	mount_editor.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mount_editor.offset_left = 16; mount_editor.offset_right = -16; mount_editor.offset_top = 46; mount_editor.offset_bottom = -16
+	add_child(mount_editor); mount_editor.hide()
 
 func _set_mode(on: bool) -> void:
+	if mount_editor != null: mount_editor.hide()
 	map_mode = on
 	asset_interface.visible = not on
 	map_editor.visible = on
@@ -271,6 +287,11 @@ func _set_mode(on: bool) -> void:
 	else:
 		map_editor.fly = false
 		if map_editor.population != null: map_editor.population.set_simulating(false)
+
+func _show_mounts() -> void:
+	_set_mode(false); asset_interface.hide(); media._stop_audio(); mount_editor.show()
+	if not game_folder.is_empty(): mount_editor.open(game_folder)
+	else: mount_editor.status.text = "Choose the game folder in Assets first."
 
 func _open_asset_file(path: String) -> void:
 	var extension := path.get_extension().to_lower()
@@ -449,7 +470,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed: dragging = false
 
 func _process(delta: float) -> void:
-	if map_mode: return
+	if map_mode or (mount_editor != null and mount_editor.visible): return
 	if animation_playing:
 		animation_time += delta * animation_speed.value
 		_apply_animation()

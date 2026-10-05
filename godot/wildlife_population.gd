@@ -20,11 +20,18 @@ var visibility_range := 30.0
 var view_camera: Camera3D
 var session_seed := -1
 var stream_timer := 0.0
+var gameplay_catalogue := {}
+var death_texture: Texture2D
+var death_sound: AudioStream
+var death_frames: Array[Texture2D] = []
 func setup(parent_world: Node3D, game_folder: String, data: Dictionary, stream_near_player: bool = false) -> void:
 	world = parent_world
 	folder = game_folder
 	document = data
 	streaming = stream_near_player
+	death_texture = preload("res://clump_loader.gd")._load_texture(folder,"BUBBLE","BUBBLEM",{})
+	death_sound = preload("res://submarine_weapons.gd")._sound(folder,"audio.creature.death","SPLAT")
+	death_frames = preload("res://creature_death.gd").load_gore(folder)
 	if session_seed < 0:
 		var session := RandomNumberGenerator.new()
 		if streaming: session.randomize(); session_seed = session.randi()
@@ -81,7 +88,7 @@ func _random_home(species: Dictionary, random: RandomNumberGenerator) -> Vector3
 		point = floor_point(point,radius)
 		if not point.is_finite() or point.y >= surface - radius - 0.2: continue
 		if species.mobility != "crawling": point.y = random.randf_range(point.y,surface - radius - 0.2)
-		# Wildlife has no collision layer: different groups can share water.
+		# Weapon-only wildlife collisions let different groups share water.
 		if Creatures._clear(world,point,radius): return point
 	return Vector3(INF,INF,INF)
 
@@ -115,6 +122,7 @@ func _stream_update(initial: bool = false) -> void:
 	var budget := 2 if not initial and streaming else 100000
 	if streaming:
 		for fish in get_children():
+			if fish.dead: continue
 			var distance: float = fish.global_position.distance_to(center)
 			if distance > retirement + fish.radius: _set_awake(fish,false)
 			elif not bool(fish.get_meta("wildlife_awake",true)) and distance <= activation and (initial or not _visible_spawn(fish.global_position,center,fish.radius)):
@@ -135,10 +143,11 @@ func _stream_update(initial: bool = false) -> void:
 func active_count() -> int:
 	var count := 0
 	for fish in get_children():
-		if fish.get_meta("wildlife_awake",true): count += 1
+		if not fish.dead and fish.get_meta("wildlife_awake",true): count += 1
 	return count
 
 func _set_awake(fish: Node3D, awake: bool) -> void:
+	if fish.dead: return
 	if bool(fish.get_meta("wildlife_awake",true)) == awake: return
 	fish.set_meta("wildlife_awake",awake)
 	fish.visible = awake
@@ -192,6 +201,9 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 		fish.response = species.response
 		fish.detection_distance = float(species.detection)
 		fish.mobility = species.mobility
+		var stats: Dictionary = gameplay_catalogue.get("tables",{}).get("creature_stats",{}).get("records",{}).get(str(species.model).to_lower(),{})
+		fish.configure_health(float(species.get("health",stats.get("health",10.0))))
+		fish.death_texture = death_texture; fish.death_sound = death_sound; fish.death_frames = death_frames
 		if fish.mobility == "crawling": fish.configure_crawler(box.size * size)
 		fish.population = self
 		fish.group_members = members
@@ -219,5 +231,5 @@ func floor_contact(point: Vector3) -> Dictionary:
 func set_simulating(on: bool) -> void:
 	simulating = on
 	for child in get_children():
-		var running := on and bool(child.get_meta("wildlife_awake",true))
+		var running: bool = on and not child.dead and bool(child.get_meta("wildlife_awake",true))
 		child.set_physics_process(running); child.set_process(running)

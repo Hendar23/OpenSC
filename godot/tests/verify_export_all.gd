@@ -33,6 +33,12 @@ func _run() -> void:
 	game.plant_controls.variation.value = 0.8
 	game.plant_controls.wash_strength.value = 0.9; game.plant_controls.wash_range.value = 6; game.plant_controls.wash_recovery.value = 2
 	game.plant_controls.enabled.button_pressed = false
+	game.water_controls.caustics_strength.value = 0.8; game.water_controls.wave_height.value = 0.075
+	game.water_controls.surface_shine.value = 0.65
+	game.weapon_controls.range.value = 5.5; game.weapon_controls.damage_per_second.value = 7.5
+	game.weapon_controls.gore_amount.value = 45; game.weapon_controls.chunk_lifetime.value = 120
+	game.weapon_controls.gore_settle_speed.value = 3.0; game.weapon_controls.gore_lifetime.value = 7.0
+	game.natural_light_controls.sun_depth.value = 18.0; game.natural_light_controls.sun_falloff.value = 9.0
 	check(is_equal_approx(game.cockpit_hud.crt_reflection_strength,0.55),"CRT reflection slider updates the HUD live")
 	var path := "res://tests/export-all-settings.cfg"
 	check(game._export_all_settings(path) == OK, "Combined export writes successfully")
@@ -49,11 +55,22 @@ func _run() -> void:
 	check(is_equal_approx(exported.get_value("view","wildlife_density"),1.5),"Wildlife density exports")
 	check(is_equal_approx(exported.get_value("view","plants_strength"),0.25) and is_equal_approx(exported.get_value("view","plants_speed"),0.65) and exported.get_value("view","plants_direction") == 120 and is_equal_approx(exported.get_value("view","plants_variation"),0.8) and not exported.get_value("view","plants_enabled"),"All plant current settings export")
 	check(is_equal_approx(exported.get_value("view","plants_wash_strength"),0.9) and exported.get_value("view","plants_wash_range") == 6 and exported.get_value("view","plants_wash_recovery") == 2,"Propeller wash tuning exports")
+	complete = true
+	for key in game.water_controls: complete = complete and is_equal_approx(float(exported.get_value("view",key)),game.water_controls[key].value)
+	check(complete,"All caustic and surface wave settings export")
+	check(exported.get_value("view","zapper_range") == 5.5 and exported.get_value("view","zapper_damage_per_second") == 7.5,"Zapper tuning exports")
+	check(exported.get_value("view","zapper_gore_amount") == 45 and exported.get_value("view","zapper_chunk_lifetime") == 120,"Gore and debris lifetime export")
+	check(is_equal_approx(exported.get_value("view","zapper_gore_settle_speed"),3.0) and is_equal_approx(exported.get_value("view","zapper_gore_lifetime"),7.0),"Gore settling and disappearance settings export")
+	check(exported.get_value("view","sun_depth") == 18 and exported.get_value("view","sun_falloff") == 9,"Sunlight depth and falloff export")
+	game.weapon_controls.range.value = 1
+	game.water_controls.caustics_strength.value = 0; game.water_controls.wave_height.value = 0
 	game.plant_controls.strength.value = 0.0; game.plant_controls.enabled.button_pressed = true
 	game.plant_controls.wash_strength.value = 0
 	game.wildlife_density_slider.value = 0.0
 	game.crt_reflection_slider.value = 0.0
 	game._load_preferences(path)
+	check(game.weapons.settings.range == 5.5 and game.weapons.settings.damage_per_second == 7.5,"Zapper tuning reloads into the live weapon")
+	check(is_equal_approx(game.water_visuals.settings.caustics_strength,0.8) and is_equal_approx(game.water_visuals.surface.get_shader_parameter("wave_height"),0.075),"Water tuning reloads into the live shaders")
 	check(is_equal_approx(game.plant_controls.strength.value,0.25) and not game.plant_controls.enabled.button_pressed and not game.plant_current.materials[0].get_shader_parameter("sway_enabled"),"Plant current settings reload into the live world")
 	check(is_equal_approx(game.plant_current.settings.wash_strength,0.9),"Propeller wash tuning reloads")
 	check(is_equal_approx(game.wildlife_density_slider.value,150.0) and is_equal_approx(game.wildlife.density,1.5),"Wildlife density reloads into the live population")

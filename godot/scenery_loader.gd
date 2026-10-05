@@ -12,7 +12,7 @@ static func read_database(path: String) -> Dictionary:
 		return {}
 	return decode_database(file.get_buffer(file.get_length()))
 
-static func decode_database(data: PackedByteArray) -> Dictionary:
+static func decode_database(data: PackedByteArray, read_all: bool = false) -> Dictionary:
 	if not Assets._has_tag(data, 0, "Dive"):
 		push_warning("Unsupported scenery database")
 		return {}
@@ -30,7 +30,7 @@ static func decode_database(data: PackedByteArray) -> Dictionary:
 			if not Assets._fits(data, offset, 36): return {}
 			var kind := int(data.decode_u32(offset + 20))
 			var length := int(data.decode_u32(offset + 24))
-			if kind > 3 or length < 1 or length > 4096: return {}
+			if kind > 4 or length < 1 or length > 4096: return {}
 			var size := ((length + 3) & ~3) if kind == 2 else length * 4
 			fields.append({"name": _string(data, offset, 20), "kind": kind,
 				"length": length, "size": size, "bit": int(data.decode_u32(offset + 32))})
@@ -43,6 +43,17 @@ static func decode_database(data: PackedByteArray) -> Dictionary:
 			offset += 4
 			for field in fields:
 				if not Assets._fits(data, offset, int(field.size)): return {}
+				if int(field.kind) == 4:
+					# A saved pointer is followed by a length and text only when
+					# the row mask marks this dynamic string as initialized.
+					offset += 4
+					if (mask & int(field.bit)) != 0:
+						if not Assets._fits(data,offset,4): return {}
+						var text_size := int(data.decode_u32(offset)); offset += 4
+						if text_size > 1048576 or not Assets._fits(data,offset,text_size): return {}
+						row[field.name] = _string(data,offset,text_size)
+						offset += text_size
+					continue
 				if (mask & int(field.bit)) != 0 and int(field.kind) != 3:
 					var value: Variant
 					if int(field.kind) == 2:
@@ -61,7 +72,7 @@ static func decode_database(data: PackedByteArray) -> Dictionary:
 			rows.append(row)
 		tables[name] = rows
 		# Later tables describe missions and use additional string layouts.
-		if tables.has("Cities") and tables.has("Objects") and tables.has("Lights"):
+		if not read_all and tables.has("Cities") and tables.has("Objects") and tables.has("Lights"):
 			return tables
 	return tables
 

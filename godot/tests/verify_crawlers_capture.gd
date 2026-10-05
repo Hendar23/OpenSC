@@ -27,6 +27,7 @@ func _run() -> void:
 	var crab := Fish.new(); crab.setup(model,Vector3(0,2,0),world.get_meta("bounds"),10,0.7,1)
 	crab.mobility = "crawling"; crab.population = pop; crab.configure_crawler(bounds.size)
 	world.add_child(crab); crab.set_physics_process(false); crab._ground_on_terrain(1)
+	check(crab.walks_sideways and absf(model.global_basis.z.normalized().dot(crab.basis.z.normalized())) < 0.001,"Crab visual faces perpendicular to its walking direction")
 	check(crab.meshes.size() == 1 and crab.meshes[0].mesh.get_blend_shape_count() == 7,"Crab retains all eight original walking poses")
 	check(crab.get_child(0).shape is BoxShape3D,"Crawlers use a body-shaped box instead of a swimming sphere")
 	var contact: Dictionary = pop.floor_contact(crab.global_position)
@@ -65,6 +66,9 @@ func _run() -> void:
 			await process_frame
 			if not capture.last_screenshot.is_empty(): break
 		check(FileAccess.file_exists(capture.last_screenshot) and capture.last_screenshot.get_file().begins_with("OpenSC "),"F12 saves a dated PNG screenshot")
+		check(capture.screenshot_label.visible and capture.screenshot_label.text == "Screenshot saved","Successful screenshot displays a brief confirmation")
+		capture.fps_label.show(); capture._process(0)
+		check(capture.screenshot_label.offset_top > capture.fps_label.offset_top + capture.fps_label.size.y,"Screenshot confirmation sits beneath the visible FPS counter")
 	world.queue_free(); capture.queue_free(); await process_frame
 	print("Crawlers and capture: %d checks, %d failures" % [checks,failures])
 	quit(1 if failures else 0)

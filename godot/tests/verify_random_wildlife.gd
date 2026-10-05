@@ -26,7 +26,7 @@ func _run() -> void:
 	check(pop.get_child_count() > 0 and pop.spawned_groups.size() < pop.random_groups.size(),"Only nearby groups are active in the game")
 	var safe := true
 	for fish in pop.get_children():
-		safe = safe and fish.position.y + fish.radius < game.pilot.surface_height and fish.collision_layer == 0
+		safe = safe and fish.position.y + fish.radius < game.pilot.surface_height and fish.collision_layer == 8 and (fish.collision_mask & 8) == 0
 	check(safe,"Creatures stay submerged and do not exclude other groups from their space")
 	print("Initial random wildlife: %d groups, %d active groups, %d creatures" % [pop.random_groups.size(),pop.spawned_groups.size(),pop.get_child_count()])
 	pop.session_seed = 444; pop.reroll(false)

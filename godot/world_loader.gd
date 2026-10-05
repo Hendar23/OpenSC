@@ -151,6 +151,11 @@ static func add_collision(root: Node3D, tree: SceneTree, progress: Callable) -> 
 	body.collision_layer = 1
 	body.collision_mask = 2
 	root.add_child(body)
+	var shelter := StaticBody3D.new()
+	shelter.name = "TerrainLightCollision"
+	shelter.collision_layer = 16
+	shelter.collision_mask = 0
+	root.add_child(shelter)
 	var count := 0
 	for child in root.get_children():
 		if not child is MeshInstance3D: continue
@@ -160,6 +165,12 @@ static func add_collision(root: Node3D, tree: SceneTree, progress: Callable) -> 
 		var collider := CollisionShape3D.new()
 		collider.shape = shape
 		body.add_child(collider)
+		# Cutout vegetation is part of the original BSP too; leaves must not
+		# be mistaken for solid cave ceilings by shelter queries.
+		var material := child.mesh.surface_get_material(0) as StandardMaterial3D
+		if material != null and material.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED:
+			var light_shape := CollisionShape3D.new(); light_shape.shape = shape
+			shelter.add_child(light_shape)
 		count += 1
 		progress.call("Building environment collision: %d materials" % count)
 		await tree.process_frame

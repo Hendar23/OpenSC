@@ -16,8 +16,6 @@ def read_ddb(path):
         start = offset
         name = data[offset:offset + 20].split(b"\0")[0].decode("ascii")
         columns, memory_size, count = struct.unpack_from("<3I", data, offset + 20)
-        if name == "Missions":
-            break  # This inspector only needs the world tables before mission text.
         if not (0 < columns < 100 and count < 10000):
             raise ValueError(f"Invalid table at {offset:#x}: {name!r}")
         offset += 32
@@ -35,6 +33,18 @@ def read_ddb(path):
             for label, kind, length, size, bit in fields:
                 if offset + size > len(data):
                     raise ValueError("Truncated database")
+                if kind == 4:
+                    offset += 4  # Discard the serialized runtime pointer.
+                    if row["_mask"] & bit:
+                        if offset + 4 > len(data):
+                            raise ValueError("Truncated dynamic string length")
+                        text_size = struct.unpack_from("<I", data, offset)[0]
+                        offset += 4
+                        if text_size > len(data) - offset:
+                            raise ValueError("Truncated dynamic string")
+                        row[label] = data[offset:offset + text_size].split(b"\0")[0].decode("latin1")
+                        offset += text_size
+                    continue
                 if kind == 2:
                     value = data[offset:offset + length].split(b"\0")[0].decode("latin1")
                 elif kind == 1:

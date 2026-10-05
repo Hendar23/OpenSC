@@ -19,11 +19,12 @@ static func from_axes(left: Vector2, right: Vector2, reverse: float, forward: fl
 	return Vector4(trigger(forward) - trigger(reverse), -right.y, -left.x, left.y)
 
 static func read() -> Vector4:
+	preload("res://input_bindings.gd").install()
 	var result := Vector4(
-		float(Input.is_physical_key_pressed(KEY_W)) - float(Input.is_physical_key_pressed(KEY_S)),
-		float(Input.is_physical_key_pressed(KEY_E)) - float(Input.is_physical_key_pressed(KEY_Q)),
-		float(Input.is_physical_key_pressed(KEY_A)) - float(Input.is_physical_key_pressed(KEY_D)),
-		float(Input.is_physical_key_pressed(KEY_UP)) - float(Input.is_physical_key_pressed(KEY_DOWN)))
+		float(Input.is_action_pressed("thrust_forward")) - float(Input.is_action_pressed("thrust_reverse")),
+		float(Input.is_action_pressed("thrust_up")) - float(Input.is_action_pressed("thrust_down")),
+		float(Input.is_action_pressed("turn_left")) - float(Input.is_action_pressed("turn_right")),
+		float(Input.is_action_pressed("pitch_up")) - float(Input.is_action_pressed("pitch_down")))
 	var pads := Input.get_connected_joypads()
 	if not pads.is_empty():
 		var pad := pads[0]

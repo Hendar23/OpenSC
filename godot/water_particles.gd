@@ -11,6 +11,7 @@ var rng := RandomNumberGenerator.new()
 var material := ShaderMaterial.new()
 
 func _init() -> void:
+	preload("res://natural_light.gd").ensure_globals()
 	name = "WaterParticles"
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

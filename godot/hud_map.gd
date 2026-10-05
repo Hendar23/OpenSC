@@ -112,10 +112,10 @@ func bake_world(world: Node3D, tree: SceneTree) -> void:
 		if excluded: continue
 		var copy := MeshInstance3D.new()
 		copy.mesh = source.mesh
-		copy.material_override = source.material_override
+		copy.material_override = _map_material(source.material_override)
 		copy.transform = world.global_transform.affine_inverse() * source.global_transform
 		for surface in range(source.get_surface_override_material_count()):
-			copy.set_surface_override_material(surface,source.get_surface_override_material(surface))
+			copy.set_surface_override_material(surface,_map_material(source.get_surface_override_material(surface)))
 		view.add_child(copy)
 	var camera := Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -152,6 +152,19 @@ func bake_world(world: Node3D, tree: SceneTree) -> void:
 	image.generate_mipmaps()
 	texture = ImageTexture.create_from_image(image)
 	scenery_baked = true
+
+static func _map_material(material: Material) -> Material:
+	if material == null: return null
+	# The map is an illuminated instrument, baked in its own daylight scene.
+	# Use source colours rather than the live cave/depth lighting shaders.
+	if material.has_meta("natural_original"): material = material.get_meta("natural_original")
+	if material is ShaderMaterial and material.shader in [preload("res://plant_current.gdshader"),preload("res://natural_plant.gdshader")]:
+		var leaf := StandardMaterial3D.new(); leaf.albedo_color = material.get_shader_parameter("albedo_color")
+		if material.get_shader_parameter("has_texture"): leaf.albedo_texture = material.get_shader_parameter("albedo_texture")
+		leaf.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR; leaf.alpha_scissor_threshold = 0.5; leaf.cull_mode = BaseMaterial3D.CULL_DISABLED; leaf.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		return leaf
+	var copy: Material = material.duplicate(); copy.next_pass = null
+	return copy
 
 func _border_edge(x: int, y: int) -> bool:
 	var height := height_samples[y * RESOLUTION + x]

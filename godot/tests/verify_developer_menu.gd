@@ -27,7 +27,7 @@ func _run() -> void:
 	check(game.developer_ui_visible and game.canvas.visible, "F1 opens the developer menu")
 	game._unhandled_input(start_button)
 	check(game.developer_ui_visible,"Controller Start does not close the developer menu")
-	check(game.developer_tabs.get_tab_count() == 5, "Movement, Sound, Graphics, Mods and System are available")
+	check(game.developer_tabs.get_tab_count() == 6, "Movement, Sound, Graphics, Weapons, Mods and System are available")
 	game.pilot.global_position = game.docking.ports[0].entry + Vector3.RIGHT * 3.0
 	game.pilot.velocity = Vector3.ZERO
 	game.docking_radius_slider.value = 2.0

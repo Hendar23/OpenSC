@@ -103,7 +103,7 @@ func _run() -> void:
 		key.pressed = true
 		editor._input(key)
 		check(editor.get_window().mode == Window.MODE_FULLSCREEN, "F11 leaves editor full screen")
-	check(editor.mods_button.get_parent().get_child(0).text == "Assets" and editor.mods_button.get_parent().get_child(1).text == "Map" and editor.mods_button.get_index() == 2, "Mods is beside Assets and Map")
+	check(editor.mods_button.get_parent().get_child(0).text == "Assets" and editor.mods_button.get_parent().get_child(1).text == "Map" and editor.mods_button.get_index() == 3, "Mods is beside Assets, Map and Mounts")
 	editor.mods_button.pressed.emit()
 	check(editor.mod_panel.visible, "Top-row Mods button opens mod controls")
 	editor.mod_panel.hide()

@@ -57,7 +57,7 @@ func _run() -> void:
 	var fish_start: Array[Vector3] = []
 	for fish in fish_population.get_children():
 		fish_start.append(fish.position)
-		check(fish.get_meta("spawn_source") == "provisional_ambient" and fish.collision_layer == 0 and fish.collision_mask == 5, "Fish are ambient and collide with terrain/surface without blocking the submarine")
+		check(fish.get_meta("spawn_source") == "provisional_ambient" and fish.collision_layer == 8 and fish.collision_mask == 5 and (viewer.pilot.collision_mask & fish.collision_layer) == 0, "Fish can be targeted by weapons without blocking the submarine")
 		check(not fish.meshes.is_empty() and is_equal_approx(fish.ANIMATION_SPEED, 0.5), "Fish use original morph poses at half speed")
 	for frame in range(90): await physics_frame
 	var moved := 0

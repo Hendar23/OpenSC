@@ -540,11 +540,11 @@ func _input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT and move_drag: move_drag = false; _remember(drag_before); _sync(); select(selected)
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not is_visible_in_tree() or not loaded or not event.pressed: return
-	if event.keycode == KEY_F: frame_selection()
-	elif event.ctrl_pressed and event.keycode == KEY_Z: undo()
-	elif event.ctrl_pressed and event.keycode == KEY_Y: redo()
-	elif event.ctrl_pressed and event.keycode == KEY_S: save_map()
+	if event.is_action_pressed("editor_frame"): frame_selection()
+	elif event.is_action_pressed("editor_undo"): undo()
+	elif event.is_action_pressed("editor_redo"): redo()
+	elif event.is_action_pressed("editor_save"): save_map()
 func _process(delta: float) -> void:
 	if not is_visible_in_tree() or not loaded or not fly: return
-	var input := Vector3(float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)), float(Input.is_physical_key_pressed(KEY_E)) - float(Input.is_physical_key_pressed(KEY_Q)), float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
-	camera.position += camera.basis * input.normalized() * fly_speed * (3.0 if Input.is_key_pressed(KEY_SHIFT) else 1.0) * delta
+	var input := Vector3(float(Input.is_action_pressed("turn_right")) - float(Input.is_action_pressed("turn_left")), float(Input.is_action_pressed("thrust_up")) - float(Input.is_action_pressed("thrust_down")), float(Input.is_action_pressed("thrust_reverse")) - float(Input.is_action_pressed("thrust_forward")))
+	camera.position += camera.basis * input.normalized() * fly_speed * (3.0 if Input.is_action_pressed("editor_fast") else 1.0) * delta

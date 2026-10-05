@@ -31,6 +31,7 @@ func setup(player: Node3D, folder: String) -> void:
 		_prepare_bulb(housing)
 		housing_bounds = _bounds(_meshes(housing, Transform3D.IDENTITY))
 	if socket == null: mount.position = _hull_mount(player.visual, housing_bounds)
+	preload("res://submarine_mounts.gd").apply(mount,player.visual,"deep_sea_lights")
 	lamp = SpotLight3D.new()
 	lamp.name = "DeepSeaBeam"
 	lamp.position = Vector3(0, housing_bounds.get_center().y, housing_bounds.position.z - 0.008)

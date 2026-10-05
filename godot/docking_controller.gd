@@ -56,7 +56,7 @@ func setup(player: RigidBody3D, world: Node3D, folder: String = "", follow_view:
 		var race := int(node.get_meta("race_id", 1))
 		if not portraits.has(race): portraits[race] = Radio.portrait(folder, race)
 		ports.append({"node": node, "meshes": meshes, "entry": entry,
-			"inside": node.to_global(Vector3(center.x, box.position.y + 0.5, center.z)),
+			"inside": node.to_global(Vector3(center.x, box.position.y + 0.5, center.z)) + Vector3.UP * pilot.collision_height(),
 			"name": node.get_meta("city_name"), "race": race, "portrait": portraits[race],
 			"collision": node.get_node("SceneryCollision")})
 	update_approach()
@@ -118,6 +118,7 @@ func decline_docking() -> void:
 
 func request_docking() -> bool:
 	if stage == Stage.DOCKED:
+		_prepare_transit_settings()
 		# Reveal behind the closed hatch before it starts opening.
 		pilot.visual.visible = true
 		_transition(Stage.EXIT_OPEN)
@@ -126,12 +127,7 @@ func request_docking() -> bool:
 	update_approach()
 	if nearby.is_empty() or pilot.velocity.length() > maximum_docking_speed(): return false
 	current = nearby
-	transit_settings = pilot.movement.settings.duplicate()
-	# Transit planning still consumes acceleration rather than force ratings.
-	for key in ["main_forward", "main_reverse", "side_thrust"]:
-		transit_settings[key] /= maxf(1.0, float(transit_settings.mass))
-	for key in ["forward_drag", "lateral_drag", "vertical_drag", "water_resistance"]:
-		transit_settings[key] *= 100.0 / maxf(1.0, float(transit_settings.mass))
+	_prepare_transit_settings()
 	if minf(float(transit_settings.forward_speed), float(transit_settings.reverse_speed)) <= 0.0 or float(transit_settings.vertical_speed) <= 0.0 or float(transit_settings.side_thrust) <= 0.0:
 		message = "Docking requires movement speed and vertical thrust."
 		current = {}
@@ -157,6 +153,14 @@ func request_docking() -> bool:
 		_transition(Stage.SETTLE)
 	else: _transition(Stage.ALIGN)
 	return true
+
+func _prepare_transit_settings() -> void:
+	transit_settings = pilot.movement.settings.duplicate()
+	# Transit planning consumes acceleration rather than force ratings.
+	for key in ["main_forward", "main_reverse", "side_thrust"]:
+		transit_settings[key] /= maxf(1.0, float(transit_settings.mass))
+	for key in ["forward_drag", "lateral_drag", "vertical_drag", "water_resistance"]:
+		transit_settings[key] *= 100.0 / maxf(1.0, float(transit_settings.mass))
 
 func camera_frozen() -> bool:
 	return stage not in [Stage.IDLE, Stage.EXIT_CLOSE]

@@ -1,0 +1,91 @@
+extends SceneTree
+const Game = preload("res://game.gd")
+var failures := 0
+var checks := 0
+func check(ok: bool, text: String) -> void:
+	checks += 1
+	if not ok: failures += 1; push_error(text)
+func _initialize() -> void: call_deferred("run")
+func capture(name: String) -> void:
+	if DisplayServer.get_name() == "headless": return
+	for frame in range(6): await process_frame
+	await RenderingServer.frame_post_draw
+	root.get_texture().get_image().save_png("res://tests/dock-ui-" + name + ".png")
+func run() -> void:
+	var game := Game.new(); game.remember_preferences = false; root.add_child(game)
+	for frame in range(2400):
+		if game.startup_complete: break
+		await physics_frame
+	check(game.startup_complete,"Game loads")
+	if not game.startup_complete: quit(1); return
+	game._begin_new_game(); game.pilot.set_physics_process(false); game.docking.set_physics_process(false)
+	game.save_games.folder = "res://tests/save-fixture"
+	var port: Dictionary = game.docking.ports[0]
+	game.docking.current = port; game.docking.saved_collision_mask = game.pilot.collision_mask
+	game.pilot.global_position = port.inside; game.pilot.active = false; game.pilot.freeze = true
+	game.docking._transition(game.Docking.Stage.DOCKED)
+	game.day_night.hour = 18.25; game.equipment.mounted[0].enabled = true
+	game.cockpit_hud.map_data.explored.fill(Color.BLACK)
+	game.cockpit_hud.map_data.explored.set_pixel(100,101,Color.WHITE)
+	var snapshot: Dictionary = game._save_snapshot("Test dock")
+	check(game.save_games.write(0,snapshot) == OK,"Writes named slot")
+	snapshot.name = "Replacement"
+	check(game.save_games.write(0,snapshot) == OK,"Atomically replaces existing slot")
+	check(game.save_games.read(0).name == "Replacement","Replacement is readable")
+	check(game.save_games.slots().size() == 7,"Seven slots available")
+	game._show_main_menu()
+	check(game.front_end.is_button_available("load"),"Main menu enables Load Game when a save exists")
+	game.front_end._activate_button("load")
+	check(game.dock_interface.visible and game.dock_interface.page == "load" and not game.front_end.menu_layer.visible,"Main menu opens the load browser")
+	game._dock_ui_action("close",{}); game._resume_game()
+	var corrupt := FileAccess.open(game.save_games.path(6),FileAccess.WRITE); corrupt.store_string("broken"); corrupt.close()
+	check(not game.save_games.slots()[6].valid,"Corrupt slot cannot be loaded")
+	game.dock_interface.open("home"); await capture("home")
+	game.dock_interface.button_nodes[1].grab_focus()
+	var accept := InputEventJoypadButton.new(); accept.button_index = JOY_BUTTON_A; accept.pressed = true
+	game.dock_interface._input(accept)
+	check(game.dock_interface.page == "equipment","Controller A activates the focused dock control")
+	var override_path := "res://tests/dock-layout-fixture.json"
+	var layout_file := FileAccess.open(override_path,FileAccess.WRITE)
+	layout_file.store_string(JSON.stringify({"schema_version":1,"text_colour":[1,0,0],"pages":{"home":{"title":[20,20,100,30]}}})); layout_file.close()
+	game.Mods.layers["ui.dock"] = [{"path":override_path}]
+	game.dock_interface.setup(game.game_folder,game._dock_ui_model); game.dock_interface.open("home")
+	check(game.dock_interface.text_colour == Color.RED and game.dock_interface.rect(game.dock_interface.pages.home.title) == Rect2(20,20,100,30),"Mod layout and text colour override survives a screen rebuild")
+	game.Mods.layers.erase("ui.dock"); DirAccess.remove_absolute(ProjectSettings.globalize_path(override_path))
+	game.dock_interface.setup(game.game_folder,game._dock_ui_model)
+	for page in ["equipment","goods","missions","save","load"]:
+		game.dock_interface.open(page); await capture(page)
+	game.day_night.hour = 7; game.equipment.mounted[0].enabled = false
+	game.cockpit_hud.map_data.explored.fill(Color.WHITE)
+	var restored: bool = await game._load_saved_game(0)
+	check(restored,"Saved game reloads")
+	check(game.docking.stage == game.Docking.Stage.DOCKED and game.docking.current.name == port.name,"Returns to saved dock")
+	check(is_equal_approx(game.day_night.hour,18.25),"Restores time of day")
+	check(game.equipment.mounted[0].enabled,"Restores headlight state")
+	check(game.cockpit_hud.map_data.explored.get_pixel(100,101).r > 0.99 and game.cockpit_hud.map_data.explored.get_pixel(99,101).r < 0.01,"Restores explored fog mask")
+	check(game.dock_interface.visible and not game.pilot.visual.visible,"Dock UI displayed with docked sub hidden")
+	var launch_camera: Vector3 = game.docking.cinematic_camera
+	var launch_basis: Basis = game.Docking.upright_basis(game.pilot.global_basis)
+	var launch_offset: Vector3 = launch_camera - game.docking.current.entry
+	check(is_equal_approx(launch_camera.y,game.docking.current.entry.y),"Restored camera is at launch height above the dock")
+	check(launch_offset.dot(launch_basis.z) > 1.99 and launch_offset.dot(launch_basis.x) > 0,"Restored camera is behind and to the right of the sub")
+	var incompatible := snapshot.duplicate(true); incompatible.map_signature = "different"
+	game.save_games.write(1,incompatible)
+	check(not await game._load_saved_game(1),"Rejects incompatible map without loading")
+	# Switching from cockpit must not snap the launch camera back into the dock.
+	game.first_person = true
+	game._dock_ui_action("launch",{})
+	check(game.docking.stage != game.Docking.Stage.DOCKED,"Launch starts undocking")
+	game.docking.set_physics_process(false)
+	game._process(0)
+	check(game.camera.global_position.is_equal_approx(launch_camera) and not game.first_person,"Launch preserves outside camera even after cockpit mode")
+	check((-game.camera.global_basis.z).y > -0.01,"Launch view frames the exit instead of looking down through the lid")
+	await capture("launch-camera")
+	for frame in range(2000):
+		if game.docking.stage == game.Docking.Stage.IDLE: break
+		game.docking._physics_process(0.1)
+	check(game.docking.stage == game.Docking.Stage.IDLE and game.pilot.active,"Loaded save can finish undocking")
+	for slot in [0,1,6]: DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.path(slot)))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.folder))
+	paused = false; game.queue_free(); await process_frame
+	print("Dock save/load: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)
