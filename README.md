@@ -9,14 +9,10 @@ Built with [Godot](https://godotengine.org/)
 
 ## Current Progress
 + Sub loaded in and moving, with propellers and pods attached and animated
-+ World loading in, surface rendered
-+ Static objects loaded in
 + Random wildlife populations, animated and moving around as you explore
 + Docking/undocking
 + Basic modding support
 + Propellers producing bubbles when moving
-+ Propeller deceleration when controllers released.
-+ Sub and docking sound effects
 + Asset viewer for models, images and sounds
 + Map editor for placing and editing scenery, lights and wildlife
 + Editable wildlife populations, shoals, schooling and startled fleeing fish
@@ -29,9 +25,6 @@ Built with [Godot](https://godotengine.org/)
 + First and third person camera views
 + Modular submarine equipment, starting with working headlights
 + Tabbed developer menu for adjusting and exporting settings
-+ 3D cockpit HUD instruments available as a mod
 + Classic loading screen and main menu, with controller navigation and sounds
-+ More accurate submarine collisions
-+ Crawling creatures that follow the terrain
-+ Plants swaying in currents and reacting to propeller wash
++ Plants swaying in currents.
 + Toggleable FPS counter and screenshot capture
