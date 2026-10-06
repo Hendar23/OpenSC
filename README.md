@@ -22,7 +22,7 @@ Implemented so far
 - Editor tools for the map and entities.
 - Floating mines with explosions.
 - Mod support.
-- 
+  
 Still to do
 - Submarine hull/shield health, damage, destruction.
 - Complete dock services: trading, equipment purchases/upgrades\
