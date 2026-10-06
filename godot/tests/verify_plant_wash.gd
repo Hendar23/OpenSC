@@ -8,6 +8,14 @@ func check(ok: bool,message: String) -> void:
 	if not ok: failures += 1; push_error(message)
 func _run() -> void:
 	var current := Current.new()
+	var leaf := ArrayMesh.new(); var arrays := []; arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(-0.2,0,0),Vector3(0.2,0,0),Vector3(0,1,0)])
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.BACK,Vector3.BACK,Vector3.BACK])
+	arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array([Vector2.ZERO,Vector2.RIGHT,Vector2(0.5,1)])
+	leaf.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+	var flexible := current._flexible_mesh(leaf)
+	check(flexible.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() == 48 and leaf.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() == 3,"Sparse leaves gain intermediate bending vertices without modifying original assets")
+	check(current._flexible_mesh(leaf) == flexible,"Plant instances share the subdivided mesh")
 	var sources: Array[Dictionary] = [{"position":Vector3.ZERO,"direction":Vector3.BACK,"power":1.0}]
 	var near := current.wash_at(Vector3(0,0,0.5),sources)
 	check(near.z > 0.1 and near.x == 0,"Nearby plants bend with the outgoing propeller stream")

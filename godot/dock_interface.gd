@@ -1,4 +1,5 @@
 extends CanvasLayer
+const Bindings = preload("res://input_bindings.gd")
 signal action_requested(action: String, payload: Dictionary)
 const Mods = preload("res://mod_registry.gd")
 const BMP = preload("res://legacy_bmp.gd")
@@ -168,16 +169,16 @@ func report(message: String) -> void:
 	status = message; rebuild()
 func _input(event: InputEvent) -> void:
 	if not visible or name_dialog.visible or overwrite_dialog.visible: return
-	if event.is_action_pressed("menu_cancel"):
+	if Bindings.pressed(event,"menu_cancel"):
 		if page == "load": action_requested.emit("close",{})
 		elif page != "home": open("home")
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("menu_accept"):
+	elif Bindings.pressed(event,"menu_accept"):
 		var focused := get_viewport().gui_get_focus_owner() as Button
 		if focused != null and not focused.disabled: focused.pressed.emit(); get_viewport().set_input_as_handled()
 	else:
 		for direction in [["menu_left",SIDE_LEFT],["menu_right",SIDE_RIGHT],["menu_up",SIDE_TOP],["menu_down",SIDE_BOTTOM]]:
-			if not event.is_action_pressed(direction[0]): continue
+			if not Bindings.pressed(event,direction[0]): continue
 			var focused := get_viewport().gui_get_focus_owner() as Button
 			if focused == null:
 				if not button_nodes.is_empty(): button_nodes[0].grab_focus()

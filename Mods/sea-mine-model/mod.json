@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "sea-mine-model",
+  "name": "Sea Mine: 3D Model",
+  "version": "1.0",
+  "description": "3D Mine model.\n\n\"sea mine\" (https://skfb.ly/onJQC) by AbsoluteMadLadd is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).",
+  "assets": {
+    "model.mine": {
+      "file": "sea_mine.glb"
+    }
+  }
+}

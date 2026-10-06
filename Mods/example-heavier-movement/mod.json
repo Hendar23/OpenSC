@@ -1,8 +1,0 @@
-{
-  "schema_version": 1,
-  "id": "example.heavier-movement",
-  "name": "Example: heavier movement",
-  "version": "1.0",
-  "description": "A partial movement preset: 125 kg mass and stronger turn damping. Everything else retains your existing defaults. Disabled until you enable it.",
-  "movement": { "mass": 125.0, "turn_drag": 1.4 }
-}

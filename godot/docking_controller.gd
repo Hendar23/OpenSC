@@ -20,6 +20,7 @@ var saved_collision_mask := 5
 var message := ""
 var cinematic_camera := Vector3.ZERO
 var radio_messages := {}
+var radio_static: Array[Texture2D] = []
 var declined_port: Node3D
 var view_camera: Camera3D
 var transit_settings := {}
@@ -30,8 +31,13 @@ var travel_direction := Vector3.ZERO
 var turn_basis := Basis.IDENTITY
 var turn_axis := Vector3.UP
 var audio: Node
+var greeting_port: Dictionary = {}
+var greeting_remaining := 0.0
+var greeting_text := ""
+var greeted_ports := {}
+const GREETING_SECONDS := 8.0
 
-func setup(player: RigidBody3D, world: Node3D, folder: String = "", follow_view: Camera3D = null) -> void:
+func setup(player: RigidBody3D, world: Node3D, folder: String = "", follow_view: Camera3D = null, catalogue: Dictionary = {}) -> void:
 	pilot = player
 	if audio != null: audio.free()
 	audio = DockAudio.new()
@@ -40,7 +46,14 @@ func setup(player: RigidBody3D, world: Node3D, folder: String = "", follow_view:
 	audio.setup(pilot.submarine_audio, folder)
 	view_camera = follow_view
 	radio_messages = Radio.messages(folder)
+	if catalogue.is_empty(): catalogue = preload("res://original_game_data.gd").load_catalogue(folder)
+	preload("res://original_game_data.gd").apply_city_names(world,catalogue)
+	if catalogue.tables.has("radio_messages"): radio_messages.clear()
+	for id in catalogue.tables.get("radio_messages",{}).get("records",{}):
+		radio_messages[id] = str(catalogue.tables.radio_messages.records[id].get("text",""))
 	var portraits := {}
+	var distorted := {}
+	radio_static = Radio.static_frames(folder)
 	for node in world.find_children("*", "Node3D", true, false):
 		if not node.has_meta("city_id"): continue
 		var meshes: Array[MeshInstance3D] = []
@@ -54,11 +67,14 @@ func setup(player: RigidBody3D, world: Node3D, folder: String = "", follow_view:
 		var entry: Vector3 = node.to_global(Vector3(center.x, box.end.y, center.z)) + Vector3.UP * (pilot.COLLIDER_RADIUS + 0.6)
 		entry.y = minf(entry.y, pilot.surface_height - pilot.surface_clearance(Basis.IDENTITY) - pilot.safe_margin)
 		var race := int(node.get_meta("race_id", 1))
-		if not portraits.has(race): portraits[race] = Radio.portrait(folder, race)
+		var city: Dictionary = catalogue.tables.get("city_info",{}).get("records",{}).get(str(int(node.get_meta("city_id"))),{})
+		if not portraits.has(race):
+			portraits[race] = Radio.portrait(folder, race)
+			distorted[race] = Radio.distorted_portrait(folder,race)
 		ports.append({"node": node, "meshes": meshes, "entry": entry,
 			"inside": node.to_global(Vector3(center.x, box.position.y + 0.5, center.z)) + Vector3.UP * pilot.collision_height(),
-			"name": node.get_meta("city_name"), "race": race, "portrait": portraits[race],
-			"collision": node.get_node("SceneryCollision")})
+			"name": node.get_meta("city_name"), "race": race, "portrait": portraits[race],"distorted_portrait":distorted[race],
+			"collision": node.get_node("SceneryCollision"),"greeting_radius":float(city.get("greeting_radius",0.0)),"greeting":str(radio_messages.get(str(city.get("greeting_neutral","")),""))})
 	update_approach()
 
 static func _bounds(node: Node3D, pose: Transform3D, boxes: Array[AABB]) -> void:
@@ -80,6 +96,7 @@ static func approach_basis(pose: Basis, position: Vector3, destination: Vector3)
 
 func update_approach() -> void:
 	if stage != Stage.IDLE: return
+	_update_greeting()
 	nearby = {}
 	var nearest := approach_radius
 	for port in ports:
@@ -89,13 +106,30 @@ func update_approach() -> void:
 			nearby = port
 	if nearby.is_empty():
 		declined_port = null
-		message = ""
+		message = greeting_text if greeting_remaining > 0.0 else ""
 	elif nearby.node == declined_port:
 		nearby = {}
 		message = ""
 	elif pilot.velocity.length() > maximum_docking_speed():
 		message = _radio_line(nearby, "warning", "CITY DOCKING PAD : Approach too fast to dock. Slow down.")
 	else: message = _radio_line(nearby, "prompt", "CITY DOCKING PAD : Do you want to dock? (Y/N)")
+
+func _update_greeting() -> void:
+	var nearest: Dictionary = {}
+	var nearest_distance := INF
+	for port in ports:
+		var distance: float = pilot.global_position.distance_to(port.entry)
+		var radius := float(port.get("greeting_radius",0.0))
+		var id: int = port.node.get_instance_id()
+		if distance > radius + 2.0: greeted_ports.erase(id)
+		if distance < radius and distance < nearest_distance and not str(port.get("greeting","")).is_empty():
+			nearest = port; nearest_distance = distance
+	if nearest.is_empty(): return
+	var id: int = nearest.node.get_instance_id()
+	if greeted_ports.has(id): return
+	greeted_ports[id] = true
+	greeting_port = nearest; greeting_text = str(nearest.greeting)
+	greeting_remaining = GREETING_SECONDS
 
 func _radio_line(port: Dictionary, kind: String, fallback: String) -> String:
 	var code := 22
@@ -104,11 +138,18 @@ func _radio_line(port: Dictionary, kind: String, fallback: String) -> String:
 	if kind == "warning": code = 19 + (1 if int(port.race) == 2 else 2 if int(port.race) == 4 else 0)
 	elif kind == "docking": code += 1
 	elif kind == "launch": code += 2
-	return str(radio_messages.get("city%d" % code, fallback))
+	return "%s: %s" % [port.name,str(radio_messages.get("city%d" % code, fallback))]
 
 func portrait_texture() -> Texture2D:
+	return _portrait_port().get("portrait")
+
+func distorted_portrait_texture() -> Texture2D:
+	return _portrait_port().get("distorted_portrait")
+
+func _portrait_port() -> Dictionary:
 	var port := nearby if stage == Stage.IDLE else current
-	return port.get("portrait") if not port.is_empty() else null
+	if port.is_empty() and stage == Stage.IDLE and greeting_remaining > 0.0: port = greeting_port
+	return port
 
 func decline_docking() -> void:
 	if stage != Stage.IDLE or nearby.is_empty(): return
@@ -141,6 +182,7 @@ func request_docking() -> bool:
 		current = {}
 		return false
 	saved_collision_mask = pilot.collision_mask
+	greeting_remaining = 0.0
 	pilot.active = false
 	pilot.controls_enabled = false
 	# Scripted transit through the open port replaces normal piloting collision.
@@ -244,6 +286,7 @@ func _travel_limits(direction: Vector3) -> Vector2:
 
 func _physics_process(delta: float) -> void:
 	if stage == Stage.IDLE:
+		greeting_remaining = maxf(0.0,greeting_remaining - delta)
 		update_approach()
 		return
 	if stage == Stage.DOCKED: return
@@ -321,6 +364,7 @@ func _animate_pilot(delta: float) -> void:
 	var moving: bool = pilot.velocity.length() > 0.001
 	var tilt := atan2(pilot.velocity.y, horizontal) if moving else 0.0
 	pilot.movement.tilt = move_toward(pilot.movement.tilt, tilt, deg_to_rad(float(transit_settings.tilt_speed)) * delta)
+	pilot.movement.pods_aligned = is_equal_approx(pilot.movement.tilt,tilt)
 	pilot.movement.main_power = 1.0 if horizontal > 0.001 else 0.0
 	pilot.movement.left_power = 1.0 if moving else 0.0
 	pilot.movement.right_power = pilot.movement.left_power

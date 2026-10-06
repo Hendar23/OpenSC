@@ -7,13 +7,17 @@ types. Original game files are never written.
 Hold right mouse and use WASD to fly, Q/E to descend/ascend, and Shift to move
 faster. Mouse wheel adjusts flight speed. Select from the entity list or click
 near an entity's origin in the viewport. Double-click its list entry, or press
-F, to frame it. Shift-drag moves horizontally; position fields handle vertical
-movement. **Snap to seabed** uses terrain rather than the selected model.
+F, to frame it. Shift-drag moves horizontally; Ctrl + Shift-drag moves vertically.
+**Snap to seabed** uses terrain rather than the selected model.
 
 Edit properties and press **Apply properties**. Add, duplicate and delete
 entities using the sidebar. Undo/Redo also restore deleted original entities.
 Ctrl+Z / Ctrl+Y and Ctrl+S work when the viewport has focus. Visibility filters
 affect only the editor view. The terrain itself is read-only in this version.
+
+For the main-menu background, fly to the desired position and angle, click
+**Use current view for menu**, then **Save map**. **View menu camera** restores
+the captured view so you can adjust it. This is independent of the player spawn.
 
 **Creature types** define the model, mobility, group behaviour, submarine
 response, speed, detection distance and scale range. A live model preview updates
@@ -89,3 +93,14 @@ a period and minimum brightness percentage. Peak energy, range, and flare
 size apply to every style. Apply properties and save the map to retain changes.
 Original lights and older maps without saved style settings default to flashing.
 Previously saved pulse/steady choices are preserved.
+
+## Object types and groups
+
+Choose **Object types** to adjust the Floating Mine appearance, size, health,
+damage, blast impulse, explosion radius and trigger distance. **Add object group** places a
+group in front of the editor camera. Its **Number in this group** and **Group
+scatter radius** are local to that group. Set the count to one for an individual
+mine. Apply properties, then Save map and reload the game. Mines stay inert
+in the editor; the game allows proximity and zapper detonations. No original
+mission placements are included. See [Object modding](../Mods/OBJECTS.md) for
+image/3D replacements and the current damage limitations.

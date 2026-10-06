@@ -3,6 +3,7 @@ const VERSION := 1
 const SLOT_COUNT := 7
 var folder := "user://saves"
 var error := ""
+var city_names := {}
 func path(slot: int) -> String:
 	return folder.path_join("slot-%d.json" % slot)
 func read(slot: int) -> Dictionary:
@@ -50,5 +51,7 @@ func slots() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for slot in range(SLOT_COUNT):
 		var data := read(slot)
-		result.append({"slot":slot,"exists":FileAccess.file_exists(path(slot)),"valid":not data.is_empty(),"name":data.get("name","Empty slot"),"city":data.get("dock",{}).get("name",""),"saved_at":data.get("saved_at",""),"error":error})
+		var dock: Dictionary = data.get("dock",{})
+		var city := str(city_names.get(int(dock.get("id",-1)),dock.get("name","")))
+		result.append({"slot":slot,"exists":FileAccess.file_exists(path(slot)),"valid":not data.is_empty(),"name":data.get("name","Empty slot"),"city":city,"saved_at":data.get("saved_at",""),"error":error})
 	return result

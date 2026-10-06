@@ -103,10 +103,10 @@ static func _read_pack(folder: String) -> Dictionary:
 		var extension := relative.get_extension().to_lower()
 		var model := asset_id == "submarine.player" or asset_id.begins_with("model.") or asset_id in ["hud.tilt", "hud.equipment", "hud.map", "hud.weapon", "hud.shield"]
 		var texture := asset_id.begins_with("texture.")
-		var audio := asset_id in ["audio.submarine.main_propeller", "audio.submarine.side_pods", "audio.submarine.pod_rotation", "audio.submarine.impact_hit1", "audio.submarine.impact_hit3", "audio.submarine.impact_creaking", "audio.docking.sequence", "audio.docking.doors", "audio.docking.door_stop", "audio.weapon.zapper", "audio.creature.death"]
+		var audio := asset_id in ["audio.submarine.main_propeller", "audio.submarine.side_pods", "audio.submarine.pod_rotation", "audio.submarine.impact_hit1", "audio.submarine.impact_hit3", "audio.submarine.impact_creaking", "audio.docking.sequence", "audio.docking.doors", "audio.docking.door_stop", "audio.weapon.zapper", "audio.creature.death", "audio.object.mine.explosion"]
 		var map := asset_id == "map.scen1"
 		var gameplay := asset_id == "data.gameplay"
-		var ui := asset_id in ["ui.dock","ui.saves"]
+		var ui := asset_id in ["ui.dock","ui.saves","ui.main","ui.controls"]
 		if (not model and not texture and not audio and not map and not gameplay and not ui) or (model and extension not in ["glb", "dff"]) or (texture and extension not in ["png", "jpg", "jpeg", "webp", "bmp", "ras"]) or (audio and extension not in ["wav", "ogg", "mp3", "raw"]) or ((map or gameplay or ui) and extension != "json"):
 			pack.errors.append("Unsupported asset ID or file type: " + str(key)); continue
 		if not FileAccess.file_exists(resolved):
@@ -128,7 +128,11 @@ static func _read_pack(folder: String) -> Dictionary:
 		var axis := str(entry.get("forward_axis", "-Z" if extension == "glb" else "+Z"))
 		if axis not in ["+Z", "-Z"]:
 			pack.errors.append("forward_axis must be +Z or -Z: " + str(key)); continue
+		var trigger: Variant = entry.get("trigger_distance","")
+		if trigger != "" and (not model or trigger != "model_radius"):
+			pack.errors.append("Model trigger_distance must be model_radius: " + str(key)); continue
 		pack.assets[asset_id] = {"id": asset_id, "path": resolved, "relative": relative, "pack": pack.id, "name": pack.name, "scale": float(scale), "forward_axis": axis, "parts": parts.duplicate(), "material_textures": material_textures}
+		if trigger == "model_radius": pack.assets[asset_id].trigger_distance = trigger
 	return pack
 
 static func canonical_id(id: String) -> String:

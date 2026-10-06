@@ -42,6 +42,8 @@ var crawl_stuck_time := 0.0
 var crawl_turn_sign := 1.0
 var crawl_probe_timer := 0.0
 var playback_rate := ANIMATION_SPEED
+var visual_animation_enabled := true
+var offscreen_delta := 0.0
 var ground_initialized := false
 var walks_sideways := false
 var lure_light: OmniLight3D
@@ -56,6 +58,7 @@ var dead := false
 var death_texture: Texture2D
 var death_sound: AudioStream
 var death_frames: Array[Texture2D] = []
+var death_flesh_texture: Texture2D
 
 func configure_health(value: float) -> void:
 	max_health = maxf(0.1,value); health = max_health
@@ -70,7 +73,7 @@ func take_damage(amount: float, _source: Vector3 = Vector3.ZERO) -> void:
 	set_physics_process(false); set_process(false)
 	var holder: Node = population.world if population != null else get_parent()
 	var burst := Death.new(); holder.add_child(burst); burst.global_position = global_position
-	burst.setup(self,death_texture,death_sound,death_frames)
+	burst.setup(self,death_texture,death_sound,death_frames,death_flesh_texture)
 	visible = false; died.emit()
 
 func _ready() -> void:
@@ -80,7 +83,7 @@ func _ready() -> void:
 	animation.apply(animation_time)
 
 func _process(_delta: float) -> void:
-	if animation == null or not is_physics_processing(): return
+	if animation == null or not is_physics_processing() or not visual_animation_enabled: return
 	var between_ticks := Engine.get_physics_interpolation_fraction() / float(Engine.physics_ticks_per_second)
 	animation.apply(animation_time + between_ticks * playback_rate)
 	_update_lure()
@@ -263,6 +266,14 @@ func _choose_goal() -> void:
 
 func _physics_process(delta: float) -> void:
 	if dead: return
+	# Offscreen wildlife still roams, but need not run expensive steering and
+	# terrain probes at 60 Hz. Close creatures retain full-rate reactions.
+	if not visual_animation_enabled and population != null and population.streaming and is_instance_valid(population.player) and global_position.distance_squared_to(population.player.global_position) > pow(maxf(detection_distance,3.0) + radius,2):
+		offscreen_delta += delta
+		if offscreen_delta < 0.1: return
+		delta = offscreen_delta; offscreen_delta = 0.0
+	else:
+		delta += offscreen_delta; offscreen_delta = 0.0
 	if mobility == "crawling" and not ground_initialized: _ground_on_terrain(1.0)
 	turn_timer -= delta
 	# Arrival belongs to the goal's centre, not the collision sphere size.
@@ -324,7 +335,7 @@ func _physics_process(delta: float) -> void:
 	_steer(desired, delta, maxf(turn_speed, startle_turn_speed) if startle_timer > 0.0 else turn_speed)
 	playback_rate = (walking_animation_rate if mobility == "crawling" else ANIMATION_SPEED) * (speed / maxf(swim_speed, 0.001) if escaping else 1.0)
 	animation_time += delta * playback_rate
-	if animation != null: animation.apply(animation_time)
+	if animation != null and visual_animation_enabled: animation.apply(animation_time)
 	velocity = direction * speed
 	if mobility == "crawling": _move_crawler(delta,speed)
 	else: move_and_slide()

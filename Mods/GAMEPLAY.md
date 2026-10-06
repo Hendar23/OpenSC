@@ -66,6 +66,25 @@ The basic zapper now consumes `weapon_tuning/zapper`, and wildlife consumes `cre
 
 ## Local extraction
 
+City labels and approach greetings also use the gameplay catalogue. `city_info`
+records are keyed by dock CityID and contain `name`, `legacy_name`,
+`greeting_radius` and the `greeting_neutral`, `greeting_hostile` and
+`greeting_friendly` radio-message IDs. `radio_messages` records contain `text`.
+Both tables are recovered at startup from the user's original language files
+and accept ordinary `data.gameplay` patches. Explicit custom map dock names are
+preserved; original internal database labels resolve to the proper place names.
+
+Approach greetings currently use the neutral variant, because faction reputation
+is not implemented. Each lasts eight seconds and plays once per visit; leaving
+the imported radius by two units rearms it. Docking prompts take priority.
+
+Radio portraits briefly flicker through static and the distorted portrait as
+transmissions appear or disappear. The existing texture replacement IDs apply:
+`texture.rttradh` / `texture.rttrad6`, `texture.rttechh` / `texture.rttech6`,
+`texture.rtfacth` / `texture.rtfact6`, and static textures `texture.rtblurh` /
+`texture.rtblur6`. Missing optional interference images fall back to the clear
+portrait.
+
 Run the exporter with Godot (replace paths as appropriate):
 
 ```text

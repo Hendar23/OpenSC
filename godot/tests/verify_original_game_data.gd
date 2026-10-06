@@ -11,6 +11,9 @@ func check(ok: bool, message: String) -> void:
 func _run() -> void:
 	var folder := Paths.find_game_folder()
 	var base := Data.load_catalogue(folder,false)
+	check(base.tables.city_info.records.size() == 6,"All six city names are recovered from original place and relay data")
+	check(base.tables.city_info.records["1"].name == "Touka Reef" and base.tables.city_info.records["2"].name == "Velcova Station" and base.tables.city_info.records["3"].name == "Beluga Basin" and base.tables.city_info.records["4"].name == "Tryton Institute" and base.tables.city_info.records["5"].name == "Aquatraz" and base.tables.city_info.records["6"].name == "Refinery","Original dock IDs map to the correct named places")
+	check(base.tables.radio_messages.records.city1.text.contains("TOUKA REEF") and base.tables.city_info.records["1"].greeting_radius == 20.0,"Relay greeting text and approach radius are imported")
 	check(base.warnings.is_empty(),"All original archives and full database decode without warnings")
 	check(base.tables.equipment.records.size() == 30,"Original equipment catalogue has thirty records")
 	check(base.tables.economy_cities.records.size() == 5 and base.tables.economy_commodities.records.size() == 95,"Economy contains five cities and nineteen commodities per city")

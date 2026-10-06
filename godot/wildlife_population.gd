@@ -24,6 +24,7 @@ var gameplay_catalogue := {}
 var death_texture: Texture2D
 var death_sound: AudioStream
 var death_frames: Array[Texture2D] = []
+var death_flesh_texture: Texture2D
 func setup(parent_world: Node3D, game_folder: String, data: Dictionary, stream_near_player: bool = false) -> void:
 	world = parent_world
 	folder = game_folder
@@ -32,6 +33,7 @@ func setup(parent_world: Node3D, game_folder: String, data: Dictionary, stream_n
 	death_texture = preload("res://clump_loader.gd")._load_texture(folder,"BUBBLE","BUBBLEM",{})
 	death_sound = preload("res://submarine_weapons.gd")._sound(folder,"audio.creature.death","SPLAT")
 	death_frames = preload("res://creature_death.gd").load_gore(folder)
+	death_flesh_texture = preload("res://clump_loader.gd")._load_texture(folder,"BEEF2","",{})
 	if session_seed < 0:
 		var session := RandomNumberGenerator.new()
 		if streaming: session.randomize(); session_seed = session.randi()
@@ -106,20 +108,26 @@ func _physics_process(delta: float) -> void:
 		_stream_update()
 
 func _visible_spawn(point: Vector3, center: Vector3, body_radius: float = 0.0) -> bool:
-	if center.distance_to(point) > visibility_range + body_radius + 0.75: return false
+	var viewer := view_camera.global_position if is_instance_valid(view_camera) else center
+	if viewer.distance_to(point) > visibility_range + body_radius + 0.75: return false
 	if not is_instance_valid(view_camera): return true
 	if not view_camera.is_position_in_frustum(point): return false
 	var query := PhysicsRayQueryParameters3D.create(view_camera.global_position,point,1)
 	query.hit_back_faces = true
 	return world.get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 
+func _activation_margin() -> float:
+	return 4.0 + player.global_position.distance_to(view_camera.global_position) if is_instance_valid(player) and is_instance_valid(view_camera) else 4.0
+
 func _stream_update(initial: bool = false) -> void:
 	var center: Vector3 = player.global_position if is_instance_valid(player) else world.get_meta("player_spawn",world.get_meta("bounds").get_center())
 	# A small band outside the fog prepares creatures before they are visible.
 	# Park individual fish, so one nearby member cannot retain a distant shoal.
-	var activation := visibility_range + 4.0
-	var retirement := visibility_range + 6.0
+	var activation := visibility_range + _activation_margin()
+	var retirement := activation + 2.0
 	var budget := 2 if not initial and streaming else 100000
+	var viewer := view_camera.global_position if is_instance_valid(view_camera) else center
+	var planes: Array = view_camera.get_frustum() if is_instance_valid(view_camera) else []
 	if streaming:
 		for fish in get_children():
 			if fish.dead: continue
@@ -127,11 +135,19 @@ func _stream_update(initial: bool = false) -> void:
 			if distance > retirement + fish.radius: _set_awake(fish,false)
 			elif not bool(fish.get_meta("wildlife_awake",true)) and distance <= activation and (initial or not _visible_spawn(fish.global_position,center,fish.radius)):
 				_set_awake(fish,true)
+			_update_activity(fish,viewer,planes)
 	for state in random_groups:
 		var group: Dictionary = state.group
 		var home := Document.vector(group.position)
 		var members: Array = state.members
 		if not members.is_empty():
+			# Random populations need no retained offscreen bodies. Recreate
+			# members on return, before they become visible, using a fresh roll.
+			if streaming and home.distance_to(center) > retirement and members.all(func(fish: Node3D) -> bool: return fish.dead or fish.global_position.distance_to(center) > retirement + fish.radius):
+				for fish in members: fish.free()
+				members.clear(); state.attempted = false
+				state.seed = int(state.seed) + 104729
+				spawned_groups.erase(group.id)
 			continue
 		if state.attempted or budget <= 0: continue
 		if streaming and (home.distance_to(center) > activation or (not initial and _visible_spawn(home,center))): continue
@@ -150,6 +166,9 @@ func _set_awake(fish: Node3D, awake: bool) -> void:
 	if fish.dead: return
 	if bool(fish.get_meta("wildlife_awake",true)) == awake: return
 	fish.set_meta("wildlife_awake",awake)
+	# Disable the whole dormant subtree, including any mod-provided animation
+	# players or scripts, rather than only the creature controller callbacks.
+	fish.process_mode = Node.PROCESS_MODE_INHERIT if awake else Node.PROCESS_MODE_DISABLED
 	fish.visible = awake
 	fish.set_physics_process(awake and simulating)
 	fish.set_process(awake and simulating)
@@ -157,6 +176,18 @@ func _set_awake(fish: Node3D, awake: bool) -> void:
 	var collider := fish.get_child(0) as CollisionShape3D
 	if collider != null: collider.set_deferred("disabled",not awake)
 	if awake: fish.reset_physics_interpolation()
+
+func _update_activity(fish: Node3D, viewer: Vector3, planes: Array) -> void:
+	var awake: bool = not fish.dead and bool(fish.get_meta("wildlife_awake",true))
+	var in_range := viewer.distance_squared_to(fish.global_position) <= pow(visibility_range + fish.radius,2)
+	var on_screen := in_range
+	for plane in planes:
+		if plane.distance_to(fish.global_position) > fish.radius: on_screen = false; break
+	fish.visual_animation_enabled = awake and on_screen
+	# Keep nearby AI operating behind the player; creatures in the preparation
+	# band beyond the absolute view distance need neither AI nor pose uploads.
+	fish.set_physics_process(simulating and awake and in_range)
+	fish.set_process(simulating and awake and on_screen)
 
 func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visible: bool = false, limit_to_visible_range: bool = false) -> Array[Node3D]:
 	var members: Array[Node3D] = []
@@ -175,7 +206,7 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 			var spread := minf(float(group.radius) * 0.4, 5.0)
 			var candidate := home + Vector3(random.randf_range(-spread, spread), random.randf_range(-0.5, 0.5), random.randf_range(-spread, spread))
 			if species.mobility == "crawling": candidate = floor_point(candidate, radius)
-			if limit_to_visible_range and candidate.distance_to(player_position) > visibility_range + 4.0: continue
+			if limit_to_visible_range and candidate.distance_to(player_position) > visibility_range + _activation_margin(): continue
 			if avoid_visible and candidate.is_finite() and _visible_spawn(candidate,player_position,radius): continue
 			if candidate.is_finite() and candidate.y + radius < float(world.get_meta("surface_height")) and Creatures._clear(world, candidate, radius): point = candidate; break
 		if not point.is_finite(): continue
@@ -201,9 +232,9 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 		fish.response = species.response
 		fish.detection_distance = float(species.detection)
 		fish.mobility = species.mobility
-		var stats: Dictionary = gameplay_catalogue.get("tables",{}).get("creature_stats",{}).get("records",{}).get(str(species.model).to_lower(),{})
-		fish.configure_health(float(species.get("health",stats.get("health",10.0))))
+		fish.configure_health(Document.creature_health(species,gameplay_catalogue))
 		fish.death_texture = death_texture; fish.death_sound = death_sound; fish.death_frames = death_frames
+		fish.death_flesh_texture = death_flesh_texture
 		if fish.mobility == "crawling": fish.configure_crawler(box.size * size)
 		fish.population = self
 		fish.group_members = members
@@ -230,6 +261,11 @@ func floor_contact(point: Vector3) -> Dictionary:
 	return hit
 func set_simulating(on: bool) -> void:
 	simulating = on
+	var center: Vector3 = player.global_position if is_instance_valid(player) else world.get_meta("player_spawn",Vector3.ZERO)
+	var viewer := view_camera.global_position if is_instance_valid(view_camera) else center
+	var planes: Array = view_camera.get_frustum() if is_instance_valid(view_camera) else []
 	for child in get_children():
-		var running: bool = on and not child.dead and bool(child.get_meta("wildlife_awake",true))
-		child.set_physics_process(running); child.set_process(running)
+		if streaming: _update_activity(child,viewer,planes)
+		else:
+			var running: bool = on and not child.dead and bool(child.get_meta("wildlife_awake",true))
+			child.set_physics_process(running); child.set_process(running)

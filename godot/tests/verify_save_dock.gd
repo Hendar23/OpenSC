@@ -28,11 +28,33 @@ func run() -> void:
 	game.cockpit_hud.map_data.explored.fill(Color.BLACK)
 	game.cockpit_hud.map_data.explored.set_pixel(100,101,Color.WHITE)
 	var snapshot: Dictionary = game._save_snapshot("Test dock")
+	var map_document: Dictionary = preload("res://map_document.gd").load_active()
+	var transitional_signature := JSON.stringify(map_document).sha256_text()
+	check(not game._exploration_matches_map(transitional_signature),"Legacy placement hashes cannot identify explored terrain")
+	map_document.erase("object_types"); map_document.erase("object_groups")
+	check(not game._exploration_matches_map(JSON.stringify(map_document).sha256_text()),"Pre-object hashes do not restore uncertain exploration")
+	check(snapshot.map_signature == "terrain-v1:" + FileAccess.get_sha256(game.game_folder.path_join("DATA/SCEN1.BSP")),"New saves identify the underlying terrain")
+	map_document.object_types = [preload("res://object_definitions.gd").FLOATING_MINE.duplicate(true)]
+	map_document.object_groups = [{"id":"test_mines","name":"Mines","type":"floating_mine","position":[1,2,3],"count":10,"radius":5.0}]
+	map_document.object_types[0].damage = 45
+	# Load an edited map through the real mod path without changing the user's map.
+	map_document.entities.player_spawn.transform[9] += 10.0
+	var pack_dir := "res://tests/save-map-fixture/edited"
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(pack_dir))
+	check(preload("res://map_document.gd").save(map_document,pack_dir.path_join("map.json")) == OK,"Edited map fixture validates")
+	var manifest := FileAccess.open(pack_dir.path_join("mod.json"),FileAccess.WRITE)
+	manifest.store_string(JSON.stringify({"schema_version":1,"id":"save-map-test","name":"Save map test","assets":{"map.scen1":"map.json"}})); manifest.close()
+	game.Mods.initialize(false,"res://tests/save-map-fixture"); game.Mods.apply(["save-map-test"],[],false)
+	check(snapshot.map_signature == game._map_signature() and game._exploration_matches_map(snapshot.map_signature),"Object stats, mine placement and spawn moves preserve save compatibility")
+	game.Mods.initialize(false)
+	for file in ["map.json","mod.json"]: DirAccess.remove_absolute(ProjectSettings.globalize_path(pack_dir.path_join(file)))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(pack_dir)); DirAccess.remove_absolute(ProjectSettings.globalize_path(pack_dir.get_base_dir()))
 	check(game.save_games.write(0,snapshot) == OK,"Writes named slot")
 	snapshot.name = "Replacement"
 	check(game.save_games.write(0,snapshot) == OK,"Atomically replaces existing slot")
 	check(game.save_games.read(0).name == "Replacement","Replacement is readable")
 	check(game.save_games.slots().size() == 7,"Seven slots available")
+	check(game.save_games.slots()[0].city == port.name,"Save slots display the current proper city name")
 	game._show_main_menu()
 	check(game.front_end.is_button_available("load"),"Main menu enables Load Game when a save exists")
 	game.front_end._activate_button("load")
@@ -69,9 +91,19 @@ func run() -> void:
 	var launch_offset: Vector3 = launch_camera - game.docking.current.entry
 	check(is_equal_approx(launch_camera.y,game.docking.current.entry.y),"Restored camera is at launch height above the dock")
 	check(launch_offset.dot(launch_basis.z) > 1.99 and launch_offset.dot(launch_basis.x) > 0,"Restored camera is behind and to the right of the sub")
+	check(not game._exploration_matches_map("a".repeat(64)),"Unknown legacy terrain resets exploration only")
+	check(not game._exploration_matches_map("terrain-v1:" + "a".repeat(64)),"Different terrain resets exploration only")
 	var incompatible := snapshot.duplicate(true); incompatible.map_signature = "different"
 	game.save_games.write(1,incompatible)
-	check(not await game._load_saved_game(1),"Rejects incompatible map without loading")
+	check(await game._load_saved_game(1),"Loads a save from a different physical map")
+	check(game.cockpit_hud.map_data.explored.get_pixel(100,101).r == 0.0,"Changed map starts with fresh exploration")
+	check(game.pilot.global_position.is_equal_approx(game.docking.current.inside),"Load uses the current dock location")
+	var missing_dock := snapshot.duplicate(true); missing_dock.dock.id = -999
+	game.save_games.write(1,missing_dock)
+	check(not await game._load_saved_game(1),"Missing saved dock still prevents loading")
+	var missing_item := snapshot.duplicate(true); missing_item.weapons.append("unavailable-test-weapon")
+	game.save_games.write(1,missing_item)
+	check(not await game._load_saved_game(1),"Missing inventory item still prevents loading")
 	# Switching from cockpit must not snap the launch camera back into the dock.
 	game.first_person = true
 	game._dock_ui_action("launch",{})
@@ -85,7 +117,15 @@ func run() -> void:
 		if game.docking.stage == game.Docking.Stage.IDLE: break
 		game.docking._physics_process(0.1)
 	check(game.docking.stage == game.Docking.Stage.IDLE and game.pilot.active,"Loaded save can finish undocking")
-	for slot in [0,1,6]: DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.path(slot)))
+	# Read real legacy saves, but only write copies into the isolated test folder.
+	var actual_saves := preload("res://save_games.gd").new()
+	for slot in [0,6]:
+		var actual := actual_saves.read(slot)
+		if actual.is_empty(): continue
+		check(not game._exploration_matches_map(actual.map_signature),"Legacy slot %d starts with fresh exploration" % slot)
+		game.save_games.write(2,actual)
+		check(await game._load_saved_game(2),"Loads a fixture copy of user's legacy slot %d" % slot)
+	for slot in [0,1,2,6]: DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.path(slot)))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.folder))
 	paused = false; game.queue_free(); await process_frame
 	print("Dock save/load: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

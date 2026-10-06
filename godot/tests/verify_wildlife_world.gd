@@ -20,6 +20,7 @@ func _run() -> void:
 	var data: Dictionary = editor.map_editor.document.duplicate(true)
 	var home: Array = editor.map_editor.population.random_groups[0].group.position.duplicate()
 	for species in data.species: species.random_spawn = false
+	data.object_groups = [{"id":"mine_test","name":"Mine test","type":"floating_mine","position":home,"count":3,"radius":2.0}]
 	data.groups = [{"id":"fixed_test", "name":"Fixed test","species":data.species[0].id,"position":home,"chance":100.0,"count_min":2,"count_max":4,"radius":10.0}]
 	data.groups[0].chance = 100; data.groups[0].count_min = 2; data.groups[0].count_max = 4
 	data.species[0].scale_min = 40; data.species[0].scale_max = 60
@@ -47,20 +48,29 @@ func _run() -> void:
 	check(game.startup_complete and game.wildlife != null, "Game loads authored wildlife from an enabled map mod")
 	check(game.world_root.get_node_or_null(NodePath(removed)) == null and game.world_root.has_node("Added/test_light"), "Map removals and added light affect the game world")
 	check(game.docking.ports.size() == 7 and game.docking.ports.any(func(port: Dictionary) -> bool: return port.name == "Test dock"), "Duplicated docks retain working docking components")
+	check(game.object_population.get_child_count() == 3 and game.object_population.player == game.pilot,"Runtime loads authored mine groups and links player proximity")
+	check(game.object_population.get_children().all(func(mine: Node3D) -> bool: return mine.stats.damage == 30 and mine.armed),"Runtime mines use shared type stats and are armed")
 	var pop: Node3D = game.wildlife
 	check(pop.get_child_count() >= 2 and pop.get_child_count() <= 4 and pop.spawned_groups == [data.groups[0].id], "Only the eligible group spawns and respects population range")
 	var model_scale: float = pop.templates[data.species[0].id].scale.x
 	check(pop.get_children().all(func(fish: Node3D) -> bool: return fish.get_child(1).scale.x >= model_scale * 0.4 and fish.get_child(1).scale.x <= model_scale * 0.6), "Per-creature scale falls inside the authored range")
 	var creature: CharacterBody3D = pop.get_child(0)
+	var creature_start := creature.position
+	# The authored group may be dormant outside the menu/start camera range.
+	# Restore its physics body before exercising AI directly.
+	pop._set_awake(creature,true)
+	creature.set_physics_process(false); creature.set_process(false)
+	await physics_frame
 	creature.group_behaviour = "solitary"; creature.home = creature.position
 	game.pilot.global_position = creature.global_position + Vector3(0, 0, -3)
 	creature.response = "flee"; creature.direction = Vector3.BACK; creature._physics_process(0.1)
 	check(creature.direction.dot((game.pilot.global_position - creature.global_position).normalized()) < 0, "Fleeing turns away from the nearby submarine")
 	creature.response = "attack"; creature.direction = Vector3.FORWARD; creature._physics_process(0.1)
 	check(creature.direction.dot((game.pilot.global_position - creature.global_position).normalized()) > 0, "Aggressive creatures pursue a nearby submarine")
-	creature.response = "ignore"; creature.mobility = "crawling"; creature._physics_process(0.1)
-	var contact: Dictionary = pop.floor_contact(creature.global_position)
-	check(not contact.is_empty() and absf((creature.global_position - Vector3(contact.position)).dot(contact.normal) - creature.ground_clearance) < 0.01 and creature.basis.y.dot(contact.normal) > 0.999 and is_zero_approx(creature.direction.y), "Crawling wildlife stays grounded and aligns with the seabed")
+	creature.position = creature_start
+	creature.response = "ignore"; creature.mobility = "crawling"; creature.swim_speed = 0; creature._physics_process(0.1)
+	var contact: Dictionary = creature._crawler_contact(creature.global_position)
+	check(not contact.is_empty() and absf(creature.global_position.y - float(contact.height) - creature.ground_clearance / maxf(0.3,creature.ground_normal.y)) < 0.01 and creature.basis.y.dot(creature.ground_normal) > 0.999 and is_zero_approx(creature.direction.y), "Crawling wildlife stays grounded on its footprint support and aligns with the seabed")
 	game.set_process(false); game.set_physics_process(false); game.docking.set_physics_process(false)
 	var generation: int = pop.generation
 	game.docking.current = game.docking.ports[0]

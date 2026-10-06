@@ -46,13 +46,32 @@ func _run() -> void:
 		var angle: float = pilot.angles.x
 		pilot._update_animation(0.1)
 		check(pilot.propeller_speeds.x > 0 and pilot.propeller_speeds.x < 1 and not is_equal_approx(pilot.angles.x, angle), "Released propellers slow while continuing to rotate")
-		for frame in range(60): pilot._update_animation(1.0 / 60)
+		for frame in range(ceili(float(pilot.movement.settings.propeller_spin_down) * 60.0) + 1): pilot._update_animation(1.0 / 60)
 		check(pilot.propeller_speeds.is_zero_approx(), "Propellers decelerate to a complete stop")
 		pilot.bubbles.advance(2.0)
 		check(not pilot.bubbles.particles.is_empty() and pilot.bubbles.instances.visible_instance_count > 0, "Released bubbles remain alive while rising toward the surface")
 		check(pilot.bubbles.particles[0].position.y > old_position.y + 1.5 and absf(pilot.bubbles.particles[0].position.z - old_position.z) < 0.02, "Bubbles rise promptly with negligible horizontal travel")
 		pilot.bubbles.advance(20.0)
 		check(not pilot.bubbles.particles.is_empty(), "Deep bubbles survive well beyond the former short lifetime")
+		pilot.bubbles.clear()
+		pilot.movement.step(0.1,Basis.IDENTITY,1,0,0); pilot._update_animation(0.15)
+		pilot.bubbles.clear()
+		var original_tilt_speed: float = pilot.movement.settings.tilt_speed
+		pilot.movement.settings.tilt_speed = 10.0
+		pilot.movement.step(0.1,Basis.IDENTITY,1,1,0)
+		var side_angles := Vector2(pilot.angles.y,pilot.angles.z)
+		pilot._update_animation(0.1)
+		var expected_speed := 1.0 - 0.1 / float(pilot.movement.settings.propeller_spin_down)
+		check(not pilot.movement.pods_aligned and is_equal_approx(pilot.propeller_speeds.y,expected_speed) and is_equal_approx(pilot.propeller_speeds.z,expected_speed) and Vector2(pilot.angles.y,pilot.angles.z) != side_angles,"Side propellers use configured spin-down and continue rotating during aiming")
+		check(pilot.propeller_speeds.x > 0.0 and pilot.pod_rotation_power > 0.0,"Main propeller and pod rotation motor continue during aiming")
+		check(pilot.movement.left_power == 0.0 and pilot.movement.right_power == 0.0 and absf(pilot.movement.thrust_force.y) < 0.00001,"Coasting animation does not reintroduce angled side thrust")
+		for frame in range(ceili(float(pilot.movement.settings.propeller_spin_down) / 0.1) + 1):
+			pilot.movement.step(0.1,Basis.IDENTITY,0,1,0); pilot._update_animation(0.1)
+		check(not pilot.movement.pods_aligned and pilot.propeller_speeds.is_zero_approx(),"Coasting propellers reach a complete stop while slowly rotating pods remain unaligned")
+		for frame in range(100): pilot.movement.step(0.1,Basis.IDENTITY,0,1,0)
+		pilot.movement.settings.tilt_speed = original_tilt_speed
+		pilot.bubbles.clear(); pilot._update_animation(0.15)
+		check(pilot.movement.pods_aligned and pilot.propeller_speeds.y > 0.0 and pilot.propeller_speeds.z > 0.0,"Side propeller animation restarts once aiming completes")
 		pilot.bubbles.clear()
 		pilot.movement.tilt = PI / 2
 		pilot.movement.left_power = 1

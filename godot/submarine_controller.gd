@@ -162,6 +162,13 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	previous_velocity = state.linear_velocity
 	if impact_speed > 0.0: submarine_audio.call_deferred("impact", impact_speed)
 
+func receive_explosion(source: Vector3, damage: float, impulse: float) -> void:
+	if not active or not controls_enabled: return
+	var direction := global_position - source
+	if direction.length_squared() < 0.00001: direction = Vector3.UP
+	if impulse > 0.0: apply_central_impulse(direction.normalized() * impulse)
+	if impact_rumble != null: impact_rumble.damage(damage)
+
 func surface_clearance(orientation: Basis) -> float:
 	var highest := -INF
 	for part in collision_parts:
@@ -208,6 +215,8 @@ func _update_animation(delta: float) -> void:
 	var targets := Vector3(movement.main_power, movement.left_power, movement.right_power)
 	var stop_time := float(movement.settings.propeller_spin_down)
 	for i in range(3):
+		if i > 0 and not movement.pods_aligned:
+			targets[i] = 0.0
 		var slowing := absf(targets[i]) < absf(propeller_speeds[i]) or targets[i] * propeller_speeds[i] < 0.0
 		var response := stop_time if slowing else 0.15
 		propeller_speeds[i] = targets[i] if response <= 0.0 else move_toward(propeller_speeds[i], targets[i], delta / response)

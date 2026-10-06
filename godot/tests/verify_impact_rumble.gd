@@ -79,7 +79,23 @@ func _run() -> void:
 	audio.effect_players.impact_hit3.stream = null
 	audio.impact(3.0)
 	check(joy.calls.back().device == 7, "Rumble follows the remaining controller and works even without sound files")
+	var before_damage := joy.calls.size()
+	rumble.damage(30.0)
+	var damage_light: Dictionary = joy.calls.back()
+	rumble.damage(60.0)
+	var damage_hard: Dictionary = joy.calls.back()
+	check(joy.calls.size() == before_damage + 2 and damage_light.device == 7, "Damage rumbles the piloting controller")
+	check(damage_hard.strong > damage_light.strong and damage_hard.duration > damage_light.duration, "Greater damage produces stronger and longer rumble")
+	before_damage = joy.calls.size()
+	rumble.damage(0.0)
+	check(joy.calls.size() == before_damage, "Zero damage does not rumble")
+	audio.tuning.settings.impact_rumble_strength = 0.0
+	rumble.damage(30.0)
+	check(joy.calls.size() == before_damage, "Damage respects the rumble strength setting")
+	audio.tuning.settings.impact_rumble_strength = 0.65
 	joy.pads = []
+	rumble.damage(30.0)
+	check(joy.calls.size() == before_damage, "Damage is harmless with no controller")
 	rumble.stop()
 	check(rumble.device == -1, "Disconnecting a rumbling controller clears its state")
 	pilot.free()

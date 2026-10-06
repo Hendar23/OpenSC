@@ -23,8 +23,14 @@ float natural_exposure(vec3 point, vec2 thresholds) {
 float natural_visibility(vec3 point) {
 	return natural_exposure(point,vec2(0.05,0.4));
 }
+float distance_fog_amount(float distance_to_camera, vec3 settings) {
+	float progress = pow(clamp((distance_to_camera - settings.y) / max(settings.x - settings.y,0.1),0.0,1.0),settings.z);
+	// Ease both ends: distant contrast emerges gradually rather than reaching
+	// the visibility boundary with a nonzero slope and suddenly appearing.
+	return clamp(progress * progress * progress * (progress * (progress * 6.0 - 15.0) + 10.0),0.0,1.0);
+}
 float natural_fog_amount(float distance_to_camera) {
-	return pow(clamp((distance_to_camera - osc_natural_fog.y) / max(osc_natural_fog.x - osc_natural_fog.y,0.1),0.0,1.0),osc_natural_fog.z);
+	return distance_fog_amount(distance_to_camera,osc_natural_fog);
 }
 float natural_fog_visibility(vec3 point, vec3 camera) {
 	if (!osc_natural_enabled) return 1.0;

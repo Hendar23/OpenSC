@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "title": "Controls",
+  "groups": {
+    "Piloting": [
+      "thrust_forward",
+      "thrust_reverse",
+      "thrust_up",
+      "thrust_down",
+      "turn_left",
+      "turn_right",
+      "pitch_up",
+      "pitch_down",
+      "camera_toggle",
+      "dock_accept",
+      "dock_decline"
+    ],
+    "Weapons and equipment": [
+      "weapon_fire",
+      "weapon_previous",
+      "weapon_next",
+      "equipment_previous",
+      "equipment_next",
+      "equipment_toggle"
+    ],
+    "Map and menus": [
+      "map_toggle",
+      "main_menu",
+      "menu_accept",
+      "menu_cancel",
+      "menu_up",
+      "menu_down",
+      "menu_left",
+      "menu_right"
+    ],
+    "HUD and utilities": [
+      "hud_1",
+      "hud_2",
+      "hud_3",
+      "hud_4",
+      "hud_5",
+      "fps_toggle",
+      "screenshot"
+    ]
+  },
+  "labels": {
+    "thrust_forward": "Forward thrust",
+    "thrust_reverse": "Reverse thrust",
+    "thrust_up": "Ascend",
+    "thrust_down": "Descend",
+    "pitch_up": "Pitch up (nose up)",
+    "pitch_down": "Pitch down (nose down)",
+    "camera_toggle": "Switch camera",
+    "dock_accept": "Dock / undock",
+    "dock_decline": "Decline docking",
+    "weapon_fire": "Fire weapon",
+    "map_toggle": "Full map",
+    "menu_accept": "Menu confirm",
+    "menu_cancel": "Menu back",
+    "fps_toggle": "FPS counter",
+    "screenshot": "Take screenshot"
+  }
+}

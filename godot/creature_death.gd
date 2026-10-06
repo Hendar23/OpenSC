@@ -18,7 +18,7 @@ static func load_gore(folder: String) -> Array[Texture2D]:
 		if texture != null: frames.append(texture)
 	return frames
 
-func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, blood_frames: Array[Texture2D] = []) -> void:
+func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, blood_frames: Array[Texture2D] = [], flesh_texture: Texture2D = null) -> void:
 	name = "CreatureBurst"
 	chunk_fade_time = maxf(0,float(settings.chunk_lifetime))
 	lifetime = chunk_fade_time + 1.0
@@ -36,7 +36,11 @@ func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, bloo
 			add_child(sprite)
 			var direction := Vector3(random.randf_range(-1,1),random.randf_range(-1,1),random.randf_range(-1,1)).normalized()
 			gore.append({"node":sprite,"velocity":direction * random.randf_range(1.2,3.5),"phase":random.randf_range(0,0.2)})
-	for node in creature.meshes:
+	# Animation tracks only morph meshes; rigid bodies and articulated parts
+	# (including turtles and seahorses) must also become debris.
+	var visual_meshes: Array[MeshInstance3D] = []
+	_collect_meshes(creature.get_child(1),visual_meshes)
+	for node in visual_meshes:
 		var pose: Transform3D = global_transform.affine_inverse() * node.global_transform
 		for surface in range(node.mesh.get_surface_count()):
 			var source: Array = node.mesh.surface_get_arrays(surface)
@@ -79,7 +83,11 @@ func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, bloo
 				var outward := pivot.normalized() if pivot.length_squared() > 0.001 else Vector3(random.randf_range(-1,1),random.randf_range(-1,1),random.randf_range(-1,1)).normalized()
 				pieces.append({"node":part,"velocity":outward * random.randf_range(2.5,5.0),"spin":Vector3(random.randf_range(-6,6),random.randf_range(-6,6),random.randf_range(-6,6)),"material":material,"settled":false})
 	var natural := preload("res://natural_light.gd").new(); natural.attach(self)
-	for piece in pieces: piece.material = piece.node.get_active_material(0)
+	for piece in pieces:
+		piece.material = piece.node.get_active_material(0)
+		if flesh_texture != null and piece.material is ShaderMaterial:
+			piece.material.set_shader_parameter("backface_texture",flesh_texture)
+			piece.material.set_shader_parameter("has_backface_texture",true)
 	if bubble_texture != null:
 		bubbles = CPUParticles3D.new(); bubbles.amount = 24; bubbles.lifetime = 1.2; bubbles.one_shot = true; bubbles.explosiveness = 1.0; bubbles.direction = Vector3.UP; bubbles.spread = 180
 		bubbles.initial_velocity_min = 0.5; bubbles.initial_velocity_max = 2.0; bubbles.gravity = Vector3(0,1,0); bubbles.scale_amount_min = 0.04; bubbles.scale_amount_max = 0.11
@@ -88,6 +96,10 @@ func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, bloo
 		quad.material = material; bubbles.mesh = quad; add_child(bubbles); bubbles.emitting = true
 	if sound != null:
 		var audio := AudioStreamPlayer3D.new(); audio.stream = sound; audio.volume_db = -12; audio.pitch_scale = random.randf_range(0.9,1.1); audio.max_distance = 35; add_child(audio); audio.play()
+
+func _collect_meshes(node: Node, result: Array[MeshInstance3D]) -> void:
+	if node is MeshInstance3D and node.mesh != null: result.append(node)
+	for child in node.get_children(): _collect_meshes(child,result)
 
 func _process(delta: float) -> void:
 	age += delta

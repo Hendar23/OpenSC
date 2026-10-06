@@ -1,4 +1,5 @@
 extends CanvasLayer
+const Bindings = preload("res://input_bindings.gd")
 var fps_label: Label
 var last_screenshot := ""
 var screenshot_label: Label
@@ -37,11 +38,11 @@ func _process(delta: float) -> void:
 	if message_time <= 0: screenshot_label.hide()
 
 func _input(event: InputEvent) -> void:
-	if not event is InputEventKey or not event.pressed or event.echo: return
-	if event.is_action_pressed("fps_toggle"):
+	if event.is_echo(): return
+	if Bindings.pressed(event,"fps_toggle"):
 		fps_label.visible = not fps_label.visible
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("screenshot"):
+	elif Bindings.pressed(event,"screenshot"):
 		save_screenshot()
 		get_viewport().set_input_as_handled()
 

@@ -1,24 +1,16 @@
 extends Node
+const Bindings = preload("res://input_bindings.gd")
 
 const BMP = preload("res://legacy_bmp.gd")
 const Mods = preload("res://mod_registry.gd")
-const MENU_BACKGROUND = preload("res://game_assets/ui/main_menu.png")
+const TITLE_PATH := "res://game_assets/ui/title.png"
 const WEBSITE_URL := "https://github.com/Hendar23/OpenSC"
 const LegacyAudio = preload("res://legacy_audio.gd")
 const SoundTuning = preload("res://sound_tuning.gd")
 const MENU_SOUNDS := {"activate": "ACTIVATE", "over": "OVERBUTT", "off": "OFFBUTT"}
-const MENU_NEIGHBOURS := {
-	"new_game": {JOY_BUTTON_DPAD_DOWN: "load", JOY_BUTTON_DPAD_RIGHT: "controls"},
-	"load": {JOY_BUTTON_DPAD_UP: "new_game", JOY_BUTTON_DPAD_DOWN: "continue", JOY_BUTTON_DPAD_RIGHT: "audio"},
-	"continue": {JOY_BUTTON_DPAD_UP: "load", JOY_BUTTON_DPAD_DOWN: "website", JOY_BUTTON_DPAD_RIGHT: "graphics"},
-	"controls": {JOY_BUTTON_DPAD_LEFT: "new_game", JOY_BUTTON_DPAD_DOWN: "audio"},
-	"audio": {JOY_BUTTON_DPAD_UP: "controls", JOY_BUTTON_DPAD_DOWN: "graphics", JOY_BUTTON_DPAD_LEFT: "load"},
-	"graphics": {JOY_BUTTON_DPAD_UP: "audio", JOY_BUTTON_DPAD_DOWN: "website", JOY_BUTTON_DPAD_LEFT: "continue"},
-	"website": {JOY_BUTTON_DPAD_UP: "continue", JOY_BUTTON_DPAD_DOWN: "exit"},
-	"exit": {JOY_BUTTON_DPAD_UP: "website"}
-}
 signal new_game_requested
 signal load_requested
+signal mods_requested
 signal resume_requested
 signal toggle_menu_requested
 signal exit_requested
@@ -39,6 +31,10 @@ var sound_players := {}
 var audio_tuning := SoundTuning.new()
 var active_button: Button
 var assigning_focus := false
+var menu_config := {}
+var button_order: Array[String] = []
+var controls_menu: CanvasLayer
+var back_shortcut_busy: Callable
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -48,7 +44,9 @@ func _ready() -> void:
 	menu_layer = CanvasLayer.new(); menu_layer.layer = 11; add_child(menu_layer)
 	loading_layout = _screen(loading_layer)
 	menu_layout = _screen(menu_layer)
+	menu_layout.get_parent().color = Color(0.0,0.01,0.025,0.25)
 	loading_picture = _picture(loading_layout)
+	loading_picture.texture = ImageTexture.create_from_image(Image.load_from_file(TITLE_PATH))
 	menu_picture = _picture(menu_layout)
 	progress_bar = ProgressBar.new()
 	progress_bar.position = Vector2(140,14); progress_bar.size = Vector2(360,20)
@@ -68,34 +66,41 @@ func _ready() -> void:
 	loading_status.add_theme_font_size_override("font_size",12)
 	progress_bar.add_child(loading_status)
 	loading_status.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for entry in [
-		["new_game",Rect2(74,258,206,36)], ["load",Rect2(74,302,206,36)],
-		["continue",Rect2(74,345,206,36)], ["controls",Rect2(366,258,206,36)],
-		["audio",Rect2(366,302,206,36)], ["graphics",Rect2(366,345,206,36)],
-		["website",Rect2(218,391,206,36)], ["exit",Rect2(230,435,184,37)]
-	]:
-		var button := Button.new()
-		button.position = entry[1].position; button.size = entry[1].size
-		button.add_theme_stylebox_override("normal",StyleBoxEmpty.new())
-		button.add_theme_stylebox_override("disabled",StyleBoxEmpty.new())
-		var hover := StyleBoxFlat.new(); hover.bg_color = Color(0.65,0.85,1.0,0.12)
-		hover.set_corner_radius_all(18)
-		button.add_theme_stylebox_override("hover",hover)
-		button.add_theme_stylebox_override("pressed",hover)
-		var focus := hover.duplicate() as StyleBoxFlat
-		focus.border_color = Color(0.8,0.95,1.0,0.7); focus.set_border_width_all(1)
-		button.add_theme_stylebox_override("focus",focus)
-		button.set_meta("available",entry[0] in ["new_game","website","exit"])
+	_build_menu()
+	controls_menu = preload("res://controls_menu.gd").new(); add_child(controls_menu)
+	controls_menu.closed.connect(func() -> void: buttons.controls.grab_focus())
+	menu_layer.hide()
+	get_viewport().size_changed.connect(_layout)
+	_layout()
+
+func _build_menu() -> void:
+	menu_config = JSON.parse_string(FileAccess.get_file_as_string("res://game_assets/ui/main_menu.json"))
+	for candidate in Mods.candidates("ui.main"):
+		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(candidate.path))
+		if data is Dictionary and data.get("schema_version") == 1: menu_config.merge(data,true); break
+	var title: Array = menu_config.title_rect
+	menu_picture.position = Vector2(title[0],title[1]); menu_picture.size = Vector2(title[2],title[3])
+	menu_picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var rect: Array = menu_config.button_rect
+	for entry in menu_config.buttons:
+		var id := str(entry.get("id",""))
+		if id not in ["new_game","load","continue","controls","mods","audio","graphics","website","exit"] or buttons.has(id): continue
+		var button := Button.new(); button.text = str(entry.get("label",id))
+		button.position = Vector2(rect[0],rect[1] + button_order.size() * float(menu_config.button_spacing))
+		button.size = Vector2(rect[2],rect[3]); button.add_theme_font_size_override("font_size",14)
+		var normal := StyleBoxFlat.new(); normal.bg_color = Color(0.01,0.05,0.07,0.82)
+		normal.border_color = Color(0.24,0.55,0.6,0.7); normal.set_border_width_all(1); normal.set_corner_radius_all(5)
+		var hover := normal.duplicate() as StyleBoxFlat; hover.bg_color = Color(0.04,0.23,0.28,0.95)
+		button.add_theme_stylebox_override("normal",normal); button.add_theme_stylebox_override("hover",hover)
+		button.add_theme_stylebox_override("pressed",hover); button.add_theme_stylebox_override("focus",hover)
+		button.set_meta("available",id in ["new_game","controls","mods","website","exit"])
 		if not button.get_meta("available"): button.tooltip_text = "Not available yet"
-		menu_layout.add_child(button); buttons[entry[0]] = button
+		menu_layout.add_child(button); buttons[id] = button; button_order.append(id)
 		button.mouse_entered.connect(func() -> void: _enter_button(button))
 		button.mouse_exited.connect(func() -> void: _leave_button(button))
 		button.focus_entered.connect(func() -> void: _enter_button(button))
 		button.focus_exited.connect(func() -> void: _leave_button(button))
-		button.pressed.connect(_activate_button.bind(str(entry[0])))
-	menu_layer.hide()
-	get_viewport().size_changed.connect(_layout)
-	_layout()
+		button.pressed.connect(_activate_button.bind(id))
 
 func _screen(layer: CanvasLayer) -> Control:
 	var background := ColorRect.new(); background.color = Color.BLACK
@@ -121,7 +126,7 @@ func _layout() -> void:
 
 func load_art(folder: String) -> void:
 	loading_picture.texture = _texture(folder,"INTROTEX/LOADING.BMP","texture.menu_loading")
-	menu_picture.texture = _texture(folder,"INTROTEX/ENGLISH/MAIN.BMP","texture.menu_main",MENU_BACKGROUND)
+	menu_picture.texture = _texture(folder,"","texture.menu_title",ImageTexture.create_from_image(Image.load_from_file(TITLE_PATH)))
 	_load_menu_audio(folder)
 
 func _load_menu_audio(folder: String) -> void:
@@ -144,6 +149,7 @@ func _play_menu_sound(role: String) -> void:
 	var player: AudioStreamPlayer = sound_players.get(role)
 	if player == null or not player.is_inside_tree() or player.stream == null: return
 	var volume := float(audio_tuning.settings.master_volume)
+	if role == "activate": volume += linear_to_db(0.5)
 	player.volume_db = -80.0 if volume <= -60.0 else volume
 	player.play()
 	menu_sound_played.emit(role)
@@ -177,6 +183,8 @@ func _activate_button(id: String) -> void:
 		"new_game": new_game_requested.emit()
 		"continue": resume_requested.emit()
 		"load": load_requested.emit()
+		"mods": mods_requested.emit()
+		"controls": controls_menu.open_menu()
 		"website": OS.shell_open(WEBSITE_URL)
 		"exit": _exit_after_sound()
 
@@ -189,6 +197,7 @@ func _texture(folder: String, relative: String, id: String, built_in: Texture2D 
 	return ImageTexture.create_from_image(image) if image != null else null
 
 func show_loading() -> void:
+	if controls_menu != null: controls_menu.close_menu()
 	menu_layer.hide(); loading_layer.show()
 	active_button = null
 	progress_bar.value = 0.0; loading_status.text = "Loading…"
@@ -212,6 +221,7 @@ func show_menu(resume_available: bool) -> void:
 	buttons["continue"].set_meta("available",can_resume)
 	buttons["continue"].tooltip_text = "" if can_resume else "Start a new game first"
 	loading_layer.hide(); menu_layer.show()
+	for id in buttons: buttons[id].modulate.a = 1.0 if is_button_available(id) else 0.45
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	assigning_focus = true
 	buttons["continue" if can_resume else "new_game"].grab_focus()
@@ -219,26 +229,29 @@ func show_menu(resume_available: bool) -> void:
 	assigning_focus = false
 
 func hide_menu() -> void:
+	if controls_menu != null: controls_menu.close_menu()
 	menu_layer.hide()
 	active_button = null
 
 func _input(event: InputEvent) -> void:
-	if menu_layer.visible and event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_DPAD_UP,JOY_BUTTON_DPAD_DOWN,JOY_BUTTON_DPAD_LEFT,JOY_BUTTON_DPAD_RIGHT]:
-		get_viewport().set_input_as_handled()
+	if controls_menu != null and controls_menu.visible: return
+	if menu_layer.visible:
 		var selected := get_viewport().gui_get_focus_owner() as Button
-		for id in buttons:
-			if buttons[id] == selected:
-				var target: String = MENU_NEIGHBOURS[id].get(event.button_index,"")
-				if not target.is_empty(): buttons[target].grab_focus()
-				break
-		return
-	if menu_layer.visible and event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_A:
-		var selected := get_viewport().gui_get_focus_owner() as Button
-		# Consume A before GUI/gameplay input can activate the same press again.
-		get_viewport().set_input_as_handled()
-		if selected != null and selected in buttons.values() and not selected.disabled:
-			selected.pressed.emit()
-		return
-	if can_resume and not loading_layer.visible and event.is_action_pressed("main_menu"):
+		if Bindings.pressed(event,"menu_up") or Bindings.pressed(event,"menu_down"):
+			get_viewport().set_input_as_handled()
+			var index := 0
+			for i in button_order.size():
+				if buttons[button_order[i]] == selected: index = i; break
+			var step := 1 if Bindings.pressed(event,"menu_down") else -1
+			for i in button_order.size():
+				index = posmod(index + step,button_order.size())
+				if is_button_available(button_order[index]): buttons[button_order[index]].grab_focus(); break
+			return
+		if Bindings.pressed(event,"menu_accept"):
+			get_viewport().set_input_as_handled()
+			if selected != null and selected in buttons.values() and not selected.disabled: selected.pressed.emit()
+			return
+	if can_resume and not loading_layer.visible and Bindings.pressed(event,"main_menu"):
+		if back_shortcut_busy.is_valid() and back_shortcut_busy.call(event): return
 		toggle_menu_requested.emit()
 		get_viewport().set_input_as_handled()

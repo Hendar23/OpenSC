@@ -25,16 +25,8 @@ func _run() -> void:
 	menu.show_menu(false)
 	check(sounds.is_empty(),"Opening the menu does not invent a hover sound")
 	for route in [
-		["new_game",JOY_BUTTON_DPAD_DOWN,"load"], ["load",JOY_BUTTON_DPAD_DOWN,"continue"],
-		["continue",JOY_BUTTON_DPAD_DOWN,"website"], ["website",JOY_BUTTON_DPAD_DOWN,"exit"],
-		["exit",JOY_BUTTON_DPAD_UP,"website"], ["website",JOY_BUTTON_DPAD_UP,"continue"],
-		["continue",JOY_BUTTON_DPAD_UP,"load"], ["load",JOY_BUTTON_DPAD_UP,"new_game"],
-		["new_game",JOY_BUTTON_DPAD_RIGHT,"controls"], ["controls",JOY_BUTTON_DPAD_LEFT,"new_game"],
-		["load",JOY_BUTTON_DPAD_RIGHT,"audio"], ["audio",JOY_BUTTON_DPAD_LEFT,"load"],
-		["continue",JOY_BUTTON_DPAD_RIGHT,"graphics"], ["graphics",JOY_BUTTON_DPAD_LEFT,"continue"],
-		["controls",JOY_BUTTON_DPAD_DOWN,"audio"], ["audio",JOY_BUTTON_DPAD_DOWN,"graphics"],
-		["graphics",JOY_BUTTON_DPAD_UP,"audio"], ["audio",JOY_BUTTON_DPAD_UP,"controls"],
-		["new_game",JOY_BUTTON_DPAD_UP,"new_game"], ["exit",JOY_BUTTON_DPAD_DOWN,"exit"]
+		["new_game",JOY_BUTTON_DPAD_DOWN,"controls"], ["controls",JOY_BUTTON_DPAD_DOWN,"website"], ["website",JOY_BUTTON_DPAD_DOWN,"exit"],
+		["exit",JOY_BUTTON_DPAD_UP,"website"], ["website",JOY_BUTTON_DPAD_UP,"controls"], ["controls",JOY_BUTTON_DPAD_UP,"new_game"]
 	]:
 		menu.buttons[route[0]].grab_focus()
 		var direction := InputEventJoypadButton.new(); direction.pressed = true; direction.button_index = route[1]

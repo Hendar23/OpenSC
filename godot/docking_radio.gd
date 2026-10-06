@@ -9,6 +9,19 @@ static func portrait(folder: String, race: int) -> Texture2D:
 	elif race == 4: name = "RTFACTH.BMP"
 	return Assets._load_texture(folder, name.get_basename(), "", {})
 
+static func distorted_portrait(folder: String, race: int) -> Texture2D:
+	var name := "RTTRAD6"
+	if race == 2: name = "RTTECH6"
+	elif race == 4: name = "RTFACT6"
+	return Assets._load_texture(folder,name,"",{})
+
+static func static_frames(folder: String) -> Array[Texture2D]:
+	var frames: Array[Texture2D] = []
+	for name in ["RTBLURH","RTBLUR6"]:
+		var texture := Assets._load_texture(folder,name,"",{})
+		if texture != null: frames.append(texture)
+	return frames
+
 static func messages(folder: String) -> Dictionary:
 	var result := {}
 	var file := FileAccess.open(folder.path_join("DATA/ENGLISH/LANGUAGE.ENC"), FileAccess.READ)

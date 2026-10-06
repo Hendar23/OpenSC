@@ -1,4 +1,5 @@
 extends RefCounted
+const ObjectDefinitions = preload("res://object_definitions.gd")
 const Mods = preload("res://mod_registry.gd")
 const Assets = preload("res://clump_loader.gd")
 const Scenery = preload("res://scenery_loader.gd")
@@ -8,7 +9,10 @@ const GROUP_BEHAVIOURS := ["solitary", "shoaling", "schooling"]
 const RESPONSES := ["ignore", "flee", "defend", "attack"]
 const POPULATION_DEFAULTS := {"random_spawn": false, "groups_min": 3, "groups_max": 8, "count_min": 1, "count_max": 10, "spawn_chance": 100.0, "roam_radius": 10.0}
 static func empty() -> Dictionary:
-	return {"schema_version": 1, "seed": 8675309, "entities": {}, "species": [], "groups": []}
+	return {"schema_version": 1, "seed": 8675309, "entities": {}, "species": [], "groups": [], "object_types": [ObjectDefinitions.FLOATING_MINE.duplicate(true)], "object_groups": []}
+static func creature_health(species: Dictionary, catalogue: Dictionary) -> float:
+	var stats: Dictionary = catalogue.get("tables",{}).get("creature_stats",{}).get("records",{}).get(str(species.get("model","")).to_lower(),{})
+	return maxf(0.1,float(species.get("health",stats.get("health",10.0))))
 static func vector(values: Array) -> Vector3:
 	return Vector3(float(values[0]), float(values[1]), float(values[2]))
 static func array(point: Vector3) -> Array:
@@ -24,6 +28,12 @@ static func finite_array(value: Variant, length: int) -> bool:
 	return true
 static func valid(data: Variant) -> bool:
 	if not data is Dictionary or data.get("schema_version") != 1: return false
+	if not ObjectDefinitions.valid(data): return false
+	if data.has("menu_camera"):
+		if not data.menu_camera is Dictionary or not finite_array(data.menu_camera.get("transform"),12): return false
+		var menu_pose := decode(data.menu_camera.transform)
+		if not menu_pose.basis.is_equal_approx(menu_pose.basis.orthonormalized()) or menu_pose.basis.determinant() < 0.99: return false
+		if not finite_array([data.menu_camera.get("fov")],1) or float(data.menu_camera.fov) < 1.0 or float(data.menu_camera.fov) > 179.0: return false
 	if not data.get("entities") is Dictionary or not data.get("species") is Array or not data.get("groups") is Array: return false
 	if data.entities.size() > 5000 or data.species.size() > 256 or data.groups.size() > 256: return false
 	if not finite_array([data.get("seed", 8675309)], 1): return false
@@ -32,6 +42,7 @@ static func valid(data: Variant) -> bool:
 		if not species is Dictionary or str(species.get("id", "")).is_empty() or ids.has(species.id): return false
 		ids[species.id] = true
 		if species.has("random_spawn") and not species.random_spawn is bool: return false
+		if species.has("health") and (not finite_array([species.health],1) or float(species.health) <= 0.0): return false
 		for key in ["groups_min","groups_max","count_min","count_max","spawn_chance","roam_radius"]:
 			if not finite_array([species.get(key,POPULATION_DEFAULTS[key])],1): return false
 		for prefix in ["groups","count"]:
@@ -91,6 +102,7 @@ static func load_path(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path): return {}
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 	if not valid(data): Mods.note("Invalid map file; keeping the next map or original world: " + path); return {}
+	ObjectDefinitions.ensure(data)
 	return data
 static func load_active() -> Dictionary:
 	for entry in Mods.candidates("map.scen1"):
@@ -111,6 +123,8 @@ static func capture(world: Node3D) -> Dictionary:
 	for node in world.find_children("*", "Node3D", true, false):
 		if not node.has_meta("editor_model") and not node is OmniLight3D: continue
 		var key := str(world.get_path_to(node))
+		# Creature-attached lights (such as an angler's lure) are not map entities.
+		if not key.begins_with("Scenery/") and not key.begins_with("Added/"): continue
 		var record := {"name": str(node.get_meta("city_name", node.name)), "kind": "light" if node is OmniLight3D else "model", "model": str(node.get_meta("editor_model", "")), "transform": encode(node.global_transform), "deleted": false, "solid": node.has_node("SceneryCollision")}
 		if node.has_meta("city_id"): record.dock = {"city_id": int(node.get_meta("city_id")), "race_id": int(node.get_meta("race_id", 1))}
 		if node is PulseLight: record.merge(node.settings())

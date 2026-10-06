@@ -12,6 +12,8 @@ var embedded := false
 var content: MarginContainer
 
 func _ready() -> void:
+	# Main-menu gameplay is paused; this window must still receive GUI input.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	title = "Mods"
 	size = Vector2i(850, 600)
 	min_size = Vector2i(650, 450)
@@ -111,7 +113,13 @@ func open() -> void:
 	pending_order = Mods.order.duplicate()
 	pending_enabled = Mods.enabled.duplicate()
 	_build_rows()
-	if not embedded: popup_centered()
+	if not embedded:
+		popup_centered()
+		if not choices.is_empty(): choices.values()[0].grab_focus()
+
+func _input(event: InputEvent) -> void:
+	if not embedded and visible and preload("res://input_bindings.gd").pressed(event,"menu_cancel"):
+		hide(); get_viewport().set_input_as_handled()
 
 func _build_rows() -> void:
 	for child in rows.get_children(): child.free()
@@ -146,7 +154,7 @@ func _build_rows() -> void:
 				pending_order.remove_at(index)
 				pending_order.insert(target, id)
 				_build_rows()
-			)
+			,CONNECT_DEFERRED)
 			line.add_child(move)
 		var description := Label.new()
 		description.text = str(pack.description)

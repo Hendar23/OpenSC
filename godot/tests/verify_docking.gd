@@ -45,6 +45,22 @@ func _run() -> void:
 		check(stream.loop_mode == (AudioStreamWAV.LOOP_FORWARD if role == "sequence" else AudioStreamWAV.LOOP_DISABLED), "Only the docking background loops")
 	check(audio.players.values().all(func(p: AudioStreamPlayer) -> bool: return not p.playing), "Idle docking audio is silent")
 	check(controller.ports.size() == 6, "Six original city ports registered")
+	for port in controller.ports:
+		var city: Dictionary = game.gameplay_catalogue.tables.city_info.records[str(int(port.node.get_meta("city_id")))]
+		check(port.name == city.name and port.greeting_radius == 20.0 and not port.greeting.is_empty(),"Dock receives its original proper name and approach greeting")
+	var greeting_port: Dictionary = controller.ports[0]
+	controller.greeted_ports.clear()
+	game.pilot.global_position = greeting_port.entry + Vector3.RIGHT * 10
+	controller.update_approach()
+	check(controller.nearby.is_empty() and controller.message == greeting_port.greeting and controller.portrait_texture() == greeting_port.portrait,"Relay greeting and portrait appear before docking range")
+	controller._physics_process(9.0)
+	check(controller.message.is_empty(),"Relay greeting expires without repeating while remaining in range")
+	game.pilot.global_position = Vector3(120,120,120); controller.update_approach()
+	game.pilot.global_position = greeting_port.entry + Vector3.RIGHT * 10; controller.update_approach()
+	check(controller.message == greeting_port.greeting,"Leaving the area rearms the next approach greeting")
+	game.pilot.global_position = greeting_port.entry; controller.update_approach()
+	check(controller.message.contains("Do you want to dock?") and controller.message.begins_with(str(greeting_port.name)),"Named docking prompt takes priority over the relay greeting")
+	controller.greeting_remaining = 0; controller.greeted_ports.clear()
 	check(game.pilot.visual.scale.is_equal_approx(Vector3.ONE * 0.8) and game.pilot.get_node("HullCollision").shape is ConvexPolygonShape3D and game.pilot.collision_parts.size() >= 5, "Ship keeps its visual scale and uses separate fitted hull and pod shapes")
 	game.pilot.movement.settings.forward_speed = 4.6
 	check(is_equal_approx(controller.maximum_docking_speed(), 4.6 * 2.0 / 3.0), "Docking permission uses two-thirds of configured forward speed")
@@ -59,7 +75,7 @@ func _run() -> void:
 	game.pilot.velocity = Vector3.ZERO
 	game.pilot.global_position = controller.ports[0].entry + Vector3.RIGHT * 2.1
 	controller.update_approach()
-	check(controller.message.is_empty() and not controller.request_docking(), "Docking stays unavailable outside the configured radius")
+	check(controller.nearby.is_empty() and not controller.request_docking(), "Docking stays unavailable outside the configured radius even with a relay greeting")
 	game.pilot.global_position = controller.ports[0].entry + Vector3.RIGHT * 1.9
 	controller.update_approach()
 	check(controller.message.contains("(Y/N)"), "Docking appears close above the port")
@@ -135,10 +151,11 @@ func _run() -> void:
 		check(game.pilot.global_position.distance_to(port.entry) < 0.001 and game.pilot.global_position.y + game.pilot.surface_clearance(game.pilot.global_basis) < game.pilot.surface_height, "Departure ends above port and below water surface")
 	controller.request_docking()
 	advance(controller, Docking.Stage.DESCEND)
-	game._reset_submarine()
-	check(audio.players.values().all(func(p: AudioStreamPlayer) -> bool: return not p.playing), "Reset cancels all docking audio")
-	check(controller.stage == Docking.Stage.IDLE and game.pilot.active and game.pilot.visual.visible and game.pilot.collision_mask == 5, "Reset safely cancels docking")
-	check(is_zero_approx(controller.ports[-1].meshes[0].get_blend_shape_value(1)), "Reset closes the interrupted port")
+	controller.cancel()
+	game.pilot.reset_at(game.pilot.spawn)
+	check(audio.players.values().all(func(p: AudioStreamPlayer) -> bool: return not p.playing), "Cancelling docking stops all docking audio")
+	check(controller.stage == Docking.Stage.IDLE and game.pilot.active and game.pilot.visual.visible and game.pilot.collision_mask == 5, "Docking cancellation restores piloting")
+	check(is_zero_approx(controller.ports[-1].meshes[0].get_blend_shape_value(1)), "Docking cancellation closes the interrupted port")
 	game.pilot.global_position = controller.ports[0].entry
 	game.pilot.velocity = Vector3.ZERO
 	controller.update_approach()
@@ -148,7 +165,9 @@ func _run() -> void:
 	game._unhandled_input(decline)
 	controller.update_approach()
 	game._process(0.0)
-	check(controller.message.is_empty() and not game.docking_portrait.visible, "N dismisses radio prompt and portrait")
+	check(controller.message.is_empty() and game.docking_portrait.transition == "outro", "N dismisses the prompt and starts portrait signal loss")
+	game._process(0.3)
+	check(not game.docking_portrait.visible,"Portrait disappears once signal loss finishes")
 	game.pilot.global_position = Vector3(120, 120, 120)
 	controller.update_approach()
 	game.pilot.global_position = controller.ports[0].entry
@@ -163,14 +182,19 @@ func _run() -> void:
 	var upright: Basis = Docking.approach_basis(game.pilot.global_basis, game.pilot.global_position, controller.current.entry)
 	advance(controller, Docking.Stage.OPEN)
 	check(game.pilot.global_basis.is_equal_approx(upright), "Autopilot levels pitch and roll and faces the docking position after settling")
-	game._reset_submarine()
+	controller.cancel()
+	game.pilot.reset_at(game.pilot.spawn)
 	game.pilot.global_position = controller.ports[0].entry + Vector3(1.5, 0.0, 0.0)
 	game.pilot.velocity = Vector3(0.8, 0.0, 0.0)
 	game.pilot.rotation.y = PI * 0.75
 	check(controller.request_docking() and controller.stage == Docking.Stage.SETTLE, "Moving approach settles before alignment")
 	var old_velocity: Vector3 = game.pilot.velocity
+	# Isolate momentum settling from collisions with the editable map scenery.
+	var approach_mask: int = game.pilot.collision_mask
+	game.pilot.collision_mask = 0
 	controller._physics_process(1.0 / 60.0)
-	check((game.pilot.velocity - old_velocity).length() <= 4.0 / 60.0 + 0.0001, "Approach does not instantly erase momentum")
+	game.pilot.collision_mask = approach_mask
+	check((game.pilot.velocity - old_velocity).length() <= float(controller.transit_settings.side_thrust) * 2.0 / 60.0 + 0.0001, "Approach settles momentum at the configured thrust rate")
 	advance(controller, Docking.Stage.ALIGN)
 	var turn_position: Vector3 = game.pilot.global_position
 	var stationary_turn := true
@@ -222,7 +246,8 @@ func _run() -> void:
 	check(max_turn_speed <= deg_to_rad(float(game.pilot.movement.settings.turn_speed)) + 0.001, "Docking respects maximum turn rate")
 	check(max_turn_acceleration <= deg_to_rad(float(game.pilot.movement.settings.turn_acceleration)) + 0.001, "Docking respects turning acceleration")
 	var normal_descent_duration: float = controller.travel_profile.duration
-	game._reset_submarine()
+	controller.cancel()
+	game.pilot.reset_at(game.pilot.spawn)
 	game.pilot.movement.settings.vertical_speed = 0.5
 	game.pilot.movement.settings.side_thrust *= 0.1
 	game.pilot.global_position = controller.ports[0].entry
@@ -230,7 +255,8 @@ func _run() -> void:
 	check(controller.request_docking(), "Docking accepts slower movement settings")
 	advance(controller, Docking.Stage.DESCEND)
 	check(float(controller.travel_profile.duration) > normal_descent_duration * 2.0, "Reduced speed and thrust lengthen docking transit instead of forcing its duration")
-	game._reset_submarine()
+	controller.cancel()
+	game.pilot.reset_at(game.pilot.spawn)
 	game.pilot.global_position = controller.ports[0].entry
 	game.pilot.global_basis = Basis(Vector3.UP, 2.3)
 	game.pilot.movement.settings.turn_acceleration = 0.0
@@ -238,7 +264,8 @@ func _run() -> void:
 	check(controller.request_docking(), "Upright ship can dock at any heading even with turning disabled")
 	advance(controller, Docking.Stage.OPEN)
 	check(game.pilot.global_basis.is_equal_approx(Basis(Vector3.UP, 2.3)), "Docking with turning disabled preserves heading")
-	game._reset_submarine()
+	controller.cancel()
+	game.pilot.reset_at(game.pilot.spawn)
 	game.pilot.global_position = controller.ports[0].entry + Vector3.BACK * 1.5
 	game.pilot.global_basis = Basis.IDENTITY
 	game.pilot.velocity = Vector3.RIGHT * 0.8

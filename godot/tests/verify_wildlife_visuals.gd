@@ -88,6 +88,19 @@ func _run() -> void:
 				if first.get_pixel(x,y) != second.get_pixel(x,y): changed += 1
 		check(changed > 100,"Propeller wash visibly bends the rendered foliage")
 		print("Propeller wash changed pixels: ",changed)
+		# Hold the wash bend constant and stop ordinary sway. Moving pixels now
+		# come from the travelling wash ripples/torsion, not a changing lean.
+		game.plant_current.configure({"speed":0.0,"ripple":0.5,"twist":1.0})
+		for frame in range(4): await process_frame
+		await RenderingServer.frame_post_draw
+		first = viewport.get_texture().get_image()
+		await create_timer(0.5).timeout; await RenderingServer.frame_post_draw
+		second = viewport.get_texture().get_image(); second.save_png("res://tests/plant-wash-twist.png")
+		changed = 0
+		for y in range(400):
+			for x in range(400):
+				if first.get_pixel(x,y) != second.get_pixel(x,y): changed += 1
+		check(changed > 100,"Constant propeller wash produces travelling distortion with ordinary sway stopped")
 		viewport.queue_free()
 	game.queue_free(); await process_frame
 	print("Wildlife visuals: %d checks, %d failures" % [checks,failures])

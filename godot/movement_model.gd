@@ -32,6 +32,7 @@ var yaw_velocity: float:
 var thrust_force := Vector3.ZERO
 var thrust_torque := Vector3.ZERO
 var tilt := 0.0
+var pods_aligned := true
 var main_power := 0.0
 var left_power := 0.0
 var right_power := 0.0
@@ -40,6 +41,7 @@ func reset_motion() -> void:
 	velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
 	tilt = 0.0
+	pods_aligned = true
 	main_power = 0.0
 	left_power = 0.0
 	right_power = 0.0
@@ -51,7 +53,9 @@ func step(delta: float, basis: Basis, throttle: float, vertical: float, turn: fl
 	vertical = clampf(vertical, -1.0, 1.0)
 	turn = clampf(turn, -1.0, 1.0)
 	pitch = clampf(pitch, -1.0, 1.0)
-	tilt = move_toward(tilt, vertical * PI * 0.5, deg_to_rad(float(settings["tilt_speed"])) * delta)
+	var desired_tilt := vertical * PI * 0.5
+	tilt = move_toward(tilt, desired_tilt, deg_to_rad(float(settings["tilt_speed"])) * delta)
+	pods_aligned = is_equal_approx(tilt,desired_tilt)
 	main_power = throttle
 	# Vertical thrust remains available when the main propeller is idle.
 	var common := throttle if is_zero_approx(vertical) else maxf(absf(throttle), absf(vertical))
@@ -60,6 +64,10 @@ func step(delta: float, basis: Basis, throttle: float, vertical: float, turn: fl
 	var divisor := maxf(1.0, maxf(absf(left_power), absf(right_power)))
 	left_power /= divisor
 	right_power /= divisor
+	# The pod motors finish aiming before either side propeller applies thrust.
+	if not pods_aligned:
+		left_power = 0.0
+		right_power = 0.0
 	var pod_direction := Vector3(0.0, sin(tilt), -cos(tilt))
 	var left_force := pod_direction * left_power * float(settings.side_thrust)
 	var right_force := pod_direction * right_power * float(settings.side_thrust)
@@ -96,7 +104,7 @@ func step(delta: float, basis: Basis, throttle: float, vertical: float, turn: fl
 	var pitch_cap := deg_to_rad(float(settings.pitch_acceleration))
 	local_spin += pitch_axis * clampf(pitch_accel, -pitch_cap, pitch_cap) * delta
 	# Release roll assistance during deliberate rolling; restore upright on release.
-	if absf(turn * sin(tilt)) < 0.05:
+	if not pods_aligned or absf(turn * sin(tilt)) < 0.05:
 		var upright := (Vector3.UP - forward * forward.y).normalized()
 		var roll_error := -atan2(forward.dot(basis.y.cross(upright)), basis.y.dot(upright))
 		var restore := roll_error * float(settings.upright_strength) - local_spin.z * float(settings.upright_damping)

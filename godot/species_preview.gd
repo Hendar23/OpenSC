@@ -47,6 +47,15 @@ func show_model(id: String, folder: String) -> void:
 		distance = maxf(distance,maxf(absf(point.y) / tangent,absf(point.x) / (tangent * 280.0 / 220.0)) + point.z)
 	camera.position *= distance * 1.15
 	animation = CreatureAnimation.new(model)
+func show_object(definition: Dictionary, folder: String) -> void:
+	animation = null
+	if model != null: model.free(); model = null
+	pivot.rotation = Vector3.ZERO
+	model = preload("res://object_population.gd").appearance(definition,folder)
+	if model == null: return
+	pivot.add_child(model)
+	camera.position = Vector3(0,0,maxf(0.02,float(definition.size) * 1.4))
+	camera.look_at(Vector3.ZERO)
 func _process(delta: float) -> void:
 	if not is_visible_in_tree() or animation == null: return
 	time += delta * 0.5; animation.apply(time)

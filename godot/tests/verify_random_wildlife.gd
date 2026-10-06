@@ -29,10 +29,18 @@ func _run() -> void:
 		safe = safe and fish.position.y + fish.radius < game.pilot.surface_height and fish.collision_layer == 8 and (fish.collision_mask & 8) == 0
 	check(safe,"Creatures stay submerged and do not exclude other groups from their space")
 	print("Initial random wildlife: %d groups, %d active groups, %d creatures" % [pop.random_groups.size(),pop.spawned_groups.size(),pop.get_child_count()])
-	pop.session_seed = 444; pop.reroll(false)
+	var old_player_position: Vector3 = game.pilot.global_position
+	var old_camera_pose: Transform3D = game.camera.global_transform
+	var old_visibility: float = pop.visibility_range
+	game.pilot.global_position = Vector3(0,1000,0); game.camera.global_transform = Transform3D(Basis.IDENTITY,Vector3(0,1000,20)); pop.visibility_range = 10
+	check(pop._visible_spawn(Vector3(0,1000,18),game.pilot.global_position),"Spawn visibility is measured from the camera rather than the submarine")
+	check(is_equal_approx(pop._activation_margin(),24.0),"Activation prepares wildlife beyond the camera offset")
+	game.pilot.global_position = old_player_position; game.camera.global_transform = old_camera_pose; pop.visibility_range = old_visibility
+	# Keep the population comparison independent of exported visibility defaults.
+	pop.visibility_range = 18.0; pop.session_seed = 444; pop.reroll(false)
 	var visible_distance: float = pop.visibility_range
 	var nearby_count: int = pop.get_child_count()
-	check(pop.get_children().all(func(fish: Node3D) -> bool: return fish.global_position.distance_to(game.pilot.global_position) <= visible_distance + 4.01),"Only creatures within the small visible-range band are instantiated")
+	check(pop.get_children().all(func(fish: Node3D) -> bool: return fish.global_position.distance_to(game.pilot.global_position) <= visible_distance + pop._activation_margin() + 0.01),"Only creatures within the camera-aware visible-range band are instantiated")
 	pop.visibility_range = 66.0; pop.reroll(false)
 	var wide_count: int = pop.get_child_count()
 	pop.visibility_range = visible_distance; pop.reroll(false)
@@ -42,7 +50,7 @@ func _run() -> void:
 	pop.reroll(false); check(positions(pop) == signature,"A session retains its population between streaming updates")
 	pop.reroll(); check(positions(pop) != signature,"Docking generation reshuffles group locations")
 	var state: Dictionary = pop.random_groups[0]
-	for fish in state.members: fish.free()
+	for fish in pop.get_children(): fish.free()
 	state.members = []; state.attempted = false
 	pop.random_groups.clear(); pop.random_groups.append(state)
 	pop.view_camera = null
@@ -71,13 +79,18 @@ func _run() -> void:
 		for fish in state.members:
 			if fish.get_meta("wildlife_awake",true): fish._physics_process(1.0 / 60.0)
 		check(state.members.all(func(fish: Node3D) -> bool: return fish.group_members.all(func(peer: Node3D) -> bool: return is_instance_valid(peer))),"Active shoal members can update safely alongside dormant neighbours")
+	var old_members: Array = state.members.duplicate()
+	var old_seed: int = state.seed
 	game.pilot.global_position = home + Vector3(1000,0,0); pop._stream_update()
-	check(state.members.size() == retained_count and state.attempted and pop.active_count() == 0,"Far-away groups remain dormant and are excluded from the active population")
-	var returning: Node3D = state.members[0]
-	var retained_position := returning.global_position
-	game.pilot.global_position = retained_position + Vector3(pop.visibility_range + 3.0,0,0)
+	check(state.members.is_empty() and not state.attempted and pop.get_child_count() == 0 and old_members.all(func(fish) -> bool: return not is_instance_valid(fish)),"Leaving random groups frees their creature nodes rather than accumulating dormant bodies")
+	check(state.seed != old_seed,"Returning random groups use a fresh member roll")
+	game.pilot.global_position = home + Vector3(pop.visibility_range + 3.0,0,0)
 	pop._stream_update()
-	check(returning.visible and returning.collision_mask == 5 and returning.global_position == retained_position and state.members[0] == returning,"Returning to an unseen group wakes the same creature at its retained position")
+	check(not state.members.is_empty() and state.attempted and state.members.all(func(fish: Node3D) -> bool: return is_instance_valid(fish)),"Returning to an unseen random group creates fresh creatures before visibility")
+	for visit in range(12):
+		game.pilot.global_position = home + Vector3(1000,0,0); pop._stream_update()
+		game.pilot.global_position = home + Vector3(pop.visibility_range + 3.0,0,0); pop._stream_update()
+	check(pop.get_child_count() == state.members.size(),"Repeated visits do not accumulate old random wildlife")
 	for species in pop.document.species: species.random_spawn = false
 	var species: Dictionary = pop.document.species[0]
 	species.random_spawn = true; species.groups_min = 8; species.groups_max = 8

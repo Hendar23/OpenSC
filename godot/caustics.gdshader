@@ -39,8 +39,7 @@ void fragment() {
 	float fade = exp(-depth / max(osc_caustics_depth,0.1)) * smoothstep(0.0,0.35,osc_sun_direction.y);
 	fade *= natural_visibility(world_position);
 	// Fade the extra light into fog without adding the blue fog colour twice.
-	float fog = clamp((length(VERTEX) - osc_caustics_fog_start) / max(osc_caustics_visibility - osc_caustics_fog_start,0.1),0.0,1.0);
-	fade *= 1.0 - pow(fog,osc_caustics_fog_curve);
+	fade *= 1.0 - distance_fog_amount(length(VERTEX),vec3(osc_caustics_visibility,osc_caustics_fog_start,osc_caustics_fog_curve));
 	ALBEDO = vec3(0.88,1.0,0.93) * pattern * fade * osc_caustics_strength;
 	SPECULAR = 0.0;
 }

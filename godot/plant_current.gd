@@ -1,10 +1,11 @@
 extends RefCounted
-const DEFAULTS := {"enabled":true,"strength":0.12,"speed":0.3,"direction":0.0,"variation":0.35,"wash_strength":0.65,"wash_range":4.5,"wash_recovery":1.0}
+const DEFAULTS := {"enabled":true,"strength":0.12,"speed":0.3,"direction":0.0,"variation":0.35,"wavelength":1.5,"ripple":0.08,"twist":0.3,"wash_strength":0.65,"wash_range":4.5,"wash_recovery":1.0}
 var settings := DEFAULTS.duplicate()
 var materials: Array[ShaderMaterial] = []
 var plant_count := 0
 var patches: Array[Dictionary] = []
 var world: Node3D
+var flexible_meshes := {}
 
 func attach(parent_world: Node3D) -> void:
 	world = parent_world
@@ -22,6 +23,7 @@ func _collect(node: Node) -> void:
 
 func _prepare(node: Node) -> void:
 	if node is MeshInstance3D:
+		node.mesh = _flexible_mesh(node.mesh)
 		var bounds: AABB = node.mesh.get_aabb()
 		var patch_materials: Array[ShaderMaterial] = []
 		for surface in range(node.mesh.get_surface_count()):
@@ -35,6 +37,7 @@ func _prepare(node: Node) -> void:
 			material.set_shader_parameter("metallic_value",original.metallic)
 			material.set_shader_parameter("root_height",bounds.position.y)
 			material.set_shader_parameter("plant_height",bounds.size.y)
+			material.set_shader_parameter("root_center",bounds.get_center())
 			node.set_surface_override_material(surface,material)
 			# Include displaced tips in the renderer's visibility bounds.
 			node.extra_cull_margin = bounds.size.length() * 2.0
@@ -44,6 +47,39 @@ func _prepare(node: Node) -> void:
 		var sample := bounds.get_center(); sample.y = bounds.position.y + bounds.size.y * 0.65
 		patches.append({"point":node.global_transform * sample,"materials":patch_materials,"bend":Vector3.ZERO})
 	for child in node.get_children(): _prepare(child)
+
+func _flexible_mesh(source: Mesh) -> Mesh:
+	# Share a bounded, once-built subdivision between all instances. Old plant
+	# triangles need intermediate vertices for waves to curve through the leaves.
+	var id := source.get_instance_id()
+	if flexible_meshes.has(id): return flexible_meshes[id]
+	var mesh := ArrayMesh.new()
+	for surface in range(source.get_surface_count()):
+		var arrays := source.surface_get_arrays(surface)
+		var indices := PackedInt32Array()
+		if arrays[Mesh.ARRAY_INDEX] != null: indices = arrays[Mesh.ARRAY_INDEX]
+		if indices.is_empty():
+			for index in arrays[Mesh.ARRAY_VERTEX].size(): indices.append(index)
+		var levels := 2 if indices.size() <= 1500 else (1 if indices.size() <= 6000 else 0)
+		for level in range(levels):
+			var next := []; next.resize(Mesh.ARRAY_MAX)
+			for channel in [Mesh.ARRAY_VERTEX,Mesh.ARRAY_NORMAL,Mesh.ARRAY_TEX_UV,Mesh.ARRAY_COLOR]:
+				if arrays[channel] == null or arrays[channel].is_empty(): continue
+				var values: Variant = arrays[channel].duplicate(); values.clear()
+				for triangle in range(0,indices.size() - 2,3):
+					var a: Variant = arrays[channel][indices[triangle]]
+					var b: Variant = arrays[channel][indices[triangle + 1]]
+					var c: Variant = arrays[channel][indices[triangle + 2]]
+					var ab: Variant = (a + b) * 0.5; var bc: Variant = (b + c) * 0.5; var ca: Variant = (c + a) * 0.5
+					for value in [a,ab,ca,ab,b,bc,ca,bc,c,ab,bc,ca]:
+						values.append(value.normalized() if channel == Mesh.ARRAY_NORMAL else value)
+				next[channel] = values
+			arrays = next; indices = PackedInt32Array()
+			for index in arrays[Mesh.ARRAY_VERTEX].size(): indices.append(index)
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+		mesh.surface_set_material(surface,source.surface_get_material(surface))
+	flexible_meshes[id] = mesh
+	return mesh
 
 func configure(values: Dictionary) -> void:
 	settings.merge(values,true)

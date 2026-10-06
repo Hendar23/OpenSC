@@ -2,6 +2,8 @@ shader_type spatial;
 render_mode cull_disabled, ambient_light_disabled, fog_disabled;
 #include "res://natural_light.gdshaderinc"
 uniform sampler2D albedo_texture : source_color, filter_nearest, repeat_enable;
+uniform sampler2D backface_texture : source_color, filter_nearest, repeat_enable;
+uniform bool has_backface_texture = false;
 uniform sampler2D emission_texture : source_color, filter_nearest, repeat_enable;
 uniform sampler2D normal_texture : filter_linear_mipmap, repeat_enable;
 uniform sampler2D roughness_texture : filter_linear_mipmap, repeat_enable;
@@ -40,6 +42,7 @@ void fragment() {
 	vec4 color = albedo_color;
 	if (has_texture) color *= texture(albedo_texture,uv);
 	if (use_vertex_color) color *= COLOR;
+	if (has_backface_texture && !FRONT_FACING) color = texture(backface_texture,uv);
 	if (color.a < alpha_threshold) discard;
 	vec3 air_normal = normalize((INV_VIEW_MATRIX * vec4(NORMAL,0.0)).xyz);
 	if (dot(NORMAL,VIEW) < 0.0) air_normal = -air_normal;

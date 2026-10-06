@@ -1,4 +1,5 @@
 extends HBoxContainer
+const Bindings = preload("res://input_bindings.gd")
 const World = preload("res://world_loader.gd")
 const Scenery = preload("res://scenery_loader.gd")
 const Creatures = preload("res://creature_loader.gd")
@@ -12,6 +13,7 @@ var loaded := false
 var loading := false
 var dirty := false
 var document := {}
+var gameplay_catalogue := {}
 var save_path := Document.DEFAULT_PATH
 var undo_stack: Array[Dictionary] = []
 var redo_stack: Array[Dictionary] = []
@@ -30,6 +32,7 @@ var viewport: SubViewport
 var scene: Node3D
 var world: Node3D
 var camera: Camera3D
+var objects: Node3D
 var population: Node3D
 var markers: Node3D
 var selection_outline: MeshInstance3D
@@ -40,12 +43,17 @@ var fly := false
 var move_drag := false
 var drag_before := {}
 var drag_plane := Plane()
+var drag_vertical := false
+var drag_origin := Vector3.ZERO
+var drag_mouse := Vector2.ZERO
+var drag_units_per_pixel := 0.01
 var fly_speed := 20.0
 var yaw := 0.0
 var pitch := -0.15
 var export_dialog: FileDialog
 var models: Array[String] = []
 func _ready() -> void:
+	Bindings.install_editor()
 	add_theme_constant_override("separation", 12)
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var sidebar := VBoxContainer.new()
@@ -55,7 +63,7 @@ func _ready() -> void:
 	search.text_changed.connect(func(_value: String) -> void: _refresh_list())
 	sidebar.add_child(search)
 	category = OptionButton.new()
-	for name in ["All entities", "Scenery / plants", "Lights", "Wildlife groups", "Creature types"]: category.add_item(name)
+	for name in ["All entities", "Scenery / plants", "Lights", "Wildlife groups", "Creature types", "Object groups", "Object types"]: category.add_item(name)
 	category.item_selected.connect(func(_index: int) -> void: _refresh_list())
 	sidebar.add_child(category)
 	entity_list = ItemList.new(); entity_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -67,6 +75,8 @@ func _ready() -> void:
 	button(actions, "Add light", add_light)
 	button(actions, "Add group", add_group)
 	button(actions, "New species", add_species)
+	button(actions, "Add object group", add_object_group)
+	button(actions, "New object type", add_object_type)
 	button(actions, "Duplicate", duplicate_selection)
 	button(actions, "Delete", delete_selection)
 	button(actions, "Undo", undo)
@@ -77,6 +87,8 @@ func _ready() -> void:
 	var toolbar := HFlowContainer.new(); main.add_child(toolbar)
 	button(toolbar, "Frame selection (F)", frame_selection)
 	button(toolbar, "Snap to seabed", snap_to_floor)
+	button(toolbar, "Use current view for menu", capture_menu_camera)
+	button(toolbar, "View menu camera", view_menu_camera)
 	var preview := CheckButton.new(); preview.text = "Simulate wildlife"
 	preview.toggled.connect(func(on: bool) -> void:
 		simulating = on
@@ -105,7 +117,7 @@ func _ready() -> void:
 	status = Label.new(); status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; main.add_child(status)
 	status.text = "Open Map mode to load the world."
 	var help := Label.new()
-	help.text = "Right mouse + WASD: fly · Q/E: down/up · Shift: faster\nWheel: flight speed · Click: select · Shift-drag: move horizontally"
+	help.text = "Right mouse + WASD: fly · Q/E: down/up · Shift: faster\nWheel: flight speed · Click: select · Shift-drag: horizontal move · Ctrl+Shift-drag: vertical move"
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	help.add_theme_font_size_override("font_size", 12); main.add_child(help)
 	var inspector := VBoxContainer.new(); inspector.custom_minimum_size.x = 280; add_child(inspector)
@@ -123,9 +135,23 @@ func _ready() -> void:
 func button(parent: Node, text: String, action: Callable) -> Button:
 	var control := Button.new(); control.text = text; control.focus_mode = Control.FOCUS_NONE
 	control.pressed.connect(action); parent.add_child(control); return control
+func capture_menu_camera() -> void:
+	if not loaded: return
+	var before := document.duplicate(true)
+	document.menu_camera = {"transform":Document.encode(camera.transform),"fov":camera.fov}
+	_remember(before)
+	status.text = "Menu camera captured. Save map to keep this view."
+func view_menu_camera() -> void:
+	if not loaded: return
+	if not document.has("menu_camera"):
+		status.text = "No menu camera has been captured."
+		return
+	camera.transform = Document.decode(document.menu_camera.transform); camera.fov = float(document.menu_camera.fov)
+	yaw = camera.rotation.y; pitch = camera.rotation.x
 func open(game_folder: String) -> void:
 	if loading or loaded: return
 	loading = true; folder = game_folder
+	gameplay_catalogue = preload("res://original_game_data.gd").load_catalogue(folder)
 	world = await World.load_world(folder.path_join("DATA/SCEN1.BSP"), get_tree(), _progress)
 	if world == null: loading = false; status.text = "Could not load map."; return
 	scene.add_child(world)
@@ -148,6 +174,7 @@ func open(game_folder: String) -> void:
 		# Preserve original entries omitted from an override document for editing.
 		for key in base_entities:
 			if not document.entities.has(key): document.entities[key] = base_entities[key].duplicate(true)
+	preload("res://object_definitions.gd").ensure(document)
 	world.get_node("AmbientFish").free()
 	for file in DirAccess.get_files_at(folder.path_join("CLUMPS")):
 		if file.get_extension().to_lower() == "dff": models.append(file.get_basename())
@@ -188,7 +215,7 @@ func _reload() -> void:
 	if selection_outline != null: selection_outline.free()
 	for node in base_nodes.values(): node.free()
 	base_nodes.clear(); base_entities.clear(); models.clear(); undo_stack.clear(); redo_stack.clear()
-	world = null; markers = null; selection_outline = null; population = null
+	world = null; markers = null; selection_outline = null; population = null; objects = null
 	loaded = false; dirty = false; selected = ""; document = {}; save_path = Document.DEFAULT_PATH
 	entity_list.clear(); fields.clear()
 	for child in properties.get_children(): child.free()
@@ -204,10 +231,20 @@ func _sync() -> void:
 			if parent != null: parent.add_child(restored)
 	if world.has_node("Added"): world.get_node("Added").free()
 	Document.apply_entities(world, folder, document)
+	preload("res://original_game_data.gd").apply_city_names(world,gameplay_catalogue)
+	for key in document.entities:
+		var entity := world.get_node_or_null(NodePath(str(key)))
+		if entity != null and entity.has_meta("city_id"):
+			document.entities[key].name = str(entity.get_meta("city_name"))
 	if population != null: population.free()
 	population = Wildlife.new(); population.name = "AmbientFish"; world.add_child(population)
+	population.gameplay_catalogue = gameplay_catalogue
 	population.simulating = simulating; population.setup(world, folder, document)
+	if objects != null: objects.free()
+	objects = preload("res://object_population.gd").new(); objects.name = "MapObjects"; world.add_child(objects)
+	objects.setup(folder,document,false)
 	for child in markers.get_children(): child.free()
+	for group in document.get("object_groups",[]): _marker("object_group:" + group.id,Document.vector(group.position),Color(1.0,0.4,0.2))
 	for group in document.groups: _marker("group:" + group.id, Document.vector(group.position), Color(0.2, 1.0, 0.8))
 	for key in document.entities:
 		var entry: Dictionary = document.entities[key]
@@ -223,6 +260,7 @@ func _apply_visibility() -> void:
 		var plant := str(entry.get("model", "")).to_upper().get_basename().trim_prefix("MODEL.") in ["BUSH1", "BUSH2", "BUSH3", "BUSH4", "REED"]
 		node.visible = mode != 4 and not (mode == 1 and plant) and not (mode == 2 and entry.kind == "model")
 	if population != null: population.visible = mode not in [3, 4]
+	if objects != null: objects.visible = mode != 4
 	if markers != null:
 		for marker in markers.get_children(): marker.visible = mode != 4 and not (mode == 3 and str(marker.get_meta("entity_key")).begins_with("group:"))
 func _marker(key: String, point: Vector3, color: Color) -> void:
@@ -252,11 +290,22 @@ func _refresh_list() -> void:
 		for species in document.species:
 			if not query.is_empty() and not str(species.name).to_lower().contains(query): continue
 			list_keys.append("species:" + species.id); entity_list.add_item(str(species.name))
+	if category.selected in [0,5]:
+		for group in document.get("object_groups",[]):
+			if not query.is_empty() and not str(group.name).to_lower().contains(query): continue
+			list_keys.append("object_group:" + group.id); entity_list.add_item("Object group: " + str(group.name))
+	if category.selected == 6:
+		for entry in document.get("object_types",[]):
+			if not query.is_empty() and not str(entry.name).to_lower().contains(query): continue
+			list_keys.append("object_type:" + entry.id); entity_list.add_item(str(entry.name))
 	var index := list_keys.find(selected)
 	if index >= 0: entity_list.select(index)
 func record(key: String = "") -> Dictionary:
 	if key.is_empty(): key = selected
-	if key.begins_with("group:"):
+	if key.begins_with("object_group:") or key.begins_with("object_type:"):
+		for entry in document.get("object_groups" if key.begins_with("object_group:") else "object_types",[]):
+			if entry.id == key.get_slice(":",1): return entry
+	elif key.begins_with("group:"):
 		for group in document.groups:
 			if group.id == key.trim_prefix("group:"): return group
 	elif key.begins_with("species:"):
@@ -272,11 +321,37 @@ func select(key: String) -> void:
 	var entry := record()
 	if entry.is_empty(): return
 	text_field("name", "Name", str(entry.name))
-	if key.begins_with("species:"):
+	if key.begins_with("object_type:"):
+		species_preview = SpeciesPreview.new(); properties.add_child(species_preview)
+		species_preview.show_object(entry,folder)
+		choice("appearance","Appearance",["sprite","model"],entry.appearance,["Billboard image","3D model"])
+		text_field("texture","Image asset (texture ID / BMP name)",entry.texture)
+		text_field("mask","Original transparency mask",entry.mask)
+		choice("model","3D model",models,str(entry.model))
+		fields.appearance.item_selected.connect(func(_index: int) -> void: _update_object_preview())
+		fields.model.item_selected.connect(func(_index: int) -> void: _update_object_preview())
+		fields.texture.text_submitted.connect(func(_text: String) -> void: _update_object_preview())
+		number("size","Size (maximum diameter)",entry.size,0.01,1000,0.05)
+		number("health","Health",entry.health,0.01,100000,0.1)
+		number("damage","Explosion damage",entry.damage,0,100000,0.1)
+		number("explosion_radius","Explosion radius",entry.explosion_radius,0,1000,0.1)
+		number("blast_force","Blast impulse (N.s)",entry.get("blast_force",300.0),0,100000,10)
+		number("trigger_distance","Trigger distance from submarine centre (0 disables)",entry.trigger_distance,0,1000,0.1)
+	elif key.begins_with("object_group:"):
+		for i in range(3): number("position_" + str(i),"Position " + ["X","Y","Z"][i],entry.position[i],-50000,50000,0.1)
+		var ids: Array = document.object_types.map(func(item: Dictionary) -> String: return item.id)
+		var names: Array = document.object_types.map(func(item: Dictionary) -> String: return item.name)
+		choice("type","Object type",ids,entry.type,names)
+		number("count","Number in this group",entry.count,1,100,1)
+		number("radius","Group scatter radius",entry.radius,0,1000,0.1)
+		label("One object sits at the group centre; multiple objects scatter within the radius. Positions repeat from the map seed.")
+	elif key.begins_with("species:"):
 		species_preview = SpeciesPreview.new(); properties.add_child(species_preview)
 		species_preview.show_model(str(entry.model),folder)
 		choice("model", "3D model", models, str(entry.model))
-		fields.model.item_selected.connect(func(_index: int) -> void: species_preview.show_model(str(_value("model")),folder))
+		fields.model.item_selected.connect(func(_index: int) -> void: _update_species_model())
+		number("health", "Health", Document.creature_health(entry,gameplay_catalogue),0.1,100000,0.1)
+		fields.health.allow_greater = true
 		var random_spawn := CheckBox.new(); random_spawn.text = "Spawn randomly across the map"
 		random_spawn.button_pressed = entry.get("random_spawn",false); properties.add_child(random_spawn); fields.random_spawn = random_spawn
 		number("groups_min","Minimum groups",entry.get("groups_min",3),0,100,1)
@@ -350,6 +425,16 @@ func number(key: String, caption: String, value: float, low: float, high: float,
 	label(caption); var control := SpinBox.new(); control.min_value = low; control.max_value = high; control.step = step; control.value = value
 	control.set_meta("original_value", value); control.set_meta("initial_value", control.value)
 	properties.add_child(control); fields[key] = control
+func _update_object_preview() -> void:
+	var entry := record().duplicate(true)
+	for key in ["appearance","texture","mask","model","size"]: entry[key] = _value(key)
+	species_preview.show_object(entry,folder)
+func _update_species_model() -> void:
+	species_preview.show_model(str(_value("model")),folder)
+	if not record().has("health") and is_equal_approx(fields.health.value,fields.health.get_meta("initial_value")):
+		var value := Document.creature_health({"model":str(_value("model"))},gameplay_catalogue)
+		fields.health.value = value
+		fields.health.set_meta("original_value",value); fields.health.set_meta("initial_value",fields.health.value)
 func choice(key: String, caption: String, options: Array, value: String, display_names: Array = []) -> void:
 	label(caption); var control := OptionButton.new(); control.fit_to_longest_item = false
 	for index in range(options.size()):
@@ -370,7 +455,14 @@ func apply_properties() -> void:
 	if not loaded or record().is_empty(): return
 	var before := document.duplicate(true); var entry := record()
 	entry.name = _value("name")
-	if selected.begins_with("species:"):
+	if selected.begins_with("object_type:"):
+		for key in ["appearance","texture","mask","model","size","health","damage","explosion_radius","trigger_distance","blast_force"]: entry[key] = _value(key)
+	elif selected.begins_with("object_group:"):
+		entry.position = [_value("position_0"),_value("position_1"),_value("position_2")]
+		for key in ["type","count","radius"]: entry[key] = _value(key)
+	elif selected.begins_with("species:"):
+		# Viewing/applying other properties should preserve the imported default.
+		if entry.has("health") or not is_equal_approx(fields.health.value,fields.health.get_meta("initial_value")): entry.health = _value("health")
 		for key in Document.POPULATION_DEFAULTS: entry[key] = _value(key)
 		for key in ["model", "mobility", "group_behaviour", "response", "speed", "turn_speed", "pitch_limit", "detection", "startle_duration", "startle_speed_multiplier", "startle_turn_speed", "scale_min", "scale_max"]: entry[key] = _value(key)
 	else:
@@ -420,6 +512,18 @@ func add_group() -> void:
 	var species_id: String = selected.trim_prefix("species:") if selected.begins_with("species:") else str(document.species[0].id)
 	document.groups.append({"id": id, "name": "New wildlife group", "species": species_id, "position": Document.array(_new_position()), "count_min": 1, "count_max": 10, "radius": 10.0, "chance": 100.0})
 	_remember(before); category.select(3); _sync(); select("group:" + id)
+func add_object_type() -> void:
+	if not loaded: return
+	var before := document.duplicate(true); var entry := preload("res://object_definitions.gd").FLOATING_MINE.duplicate(true)
+	entry.id = _new_id(); entry.name = "New floating mine type"; document.object_types.append(entry)
+	_remember(before); category.select(6); select("object_type:" + entry.id)
+func add_object_group() -> void:
+	if not loaded or document.object_types.is_empty(): return
+	var before := document.duplicate(true); var id := _new_id()
+	var type_id: String = selected.trim_prefix("object_type:") if selected.begins_with("object_type:") else str(document.object_types[0].id)
+	if selected.begins_with("object_group:"): type_id = record().type
+	document.object_groups.append({"id":id,"name":"New mine group","type":type_id,"position":Document.array(_new_position()),"count":1,"radius":5.0})
+	_remember(before); category.select(5); _sync(); select("object_group:" + id)
 func add_model() -> void:
 	if not loaded: return
 	# Select a model in the list below, then add it; plants are convenient defaults.
@@ -442,7 +546,9 @@ func _add_entity(kind: String, model_id: String) -> void:
 func duplicate_selection() -> void:
 	if not loaded or record().is_empty(): return
 	var before := document.duplicate(true); var entry := record().duplicate(true); var id := _new_id(); entry.name += " copy"
-	if selected.begins_with("species:"): entry.id = id; document.species.append(entry); selected = "species:" + id
+	if selected.begins_with("object_type:"): entry.id = id; document.object_types.append(entry); selected = "object_type:" + id
+	elif selected.begins_with("object_group:"): entry.id = id; entry.position[0] += 2.0; document.object_groups.append(entry); selected = "object_group:" + id
+	elif selected.begins_with("species:"): entry.id = id; document.species.append(entry); selected = "species:" + id
 	elif selected.begins_with("group:"): entry.id = id; entry.position[0] += 2.0; document.groups.append(entry); selected = "group:" + id
 	elif entry.kind == "player": status.text = "The map has one player spawn."; return
 	else:
@@ -453,7 +559,11 @@ func delete_selection() -> void:
 	if not loaded or record().is_empty(): return
 	if selected == "player_spawn": status.text = "Move the player spawn instead of deleting it."; return
 	var before := document.duplicate(true)
-	if selected.begins_with("species:"):
+	if selected.begins_with("object_type:"):
+		if document.object_groups.any(func(group: Dictionary) -> bool: return group.type == record().id): status.text = "Remove or reassign this object type's groups first."; return
+		document.object_types.erase(record())
+	elif selected.begins_with("object_group:"): document.object_groups.erase(record())
+	elif selected.begins_with("species:"):
 		if document.groups.any(func(group: Dictionary) -> bool: return group.species == record().id): status.text = "Remove or reassign this creature's groups first."; return
 		document.species.erase(record())
 	elif selected.begins_with("group:"): document.groups.erase(record())
@@ -470,11 +580,11 @@ func randomise() -> void:
 func point(key: String = "") -> Vector3:
 	if key.is_empty(): key = selected
 	var entry := record(key)
-	if entry.is_empty() or key.begins_with("species:"): return Vector3(INF, INF, INF)
-	return Document.vector(entry.position) if key.begins_with("group:") else Document.decode(entry.transform).origin
+	if entry.is_empty() or key.begins_with("species:") or key.begins_with("object_type:"): return Vector3(INF, INF, INF)
+	return Document.vector(entry.position) if key.begins_with("group:") or key.begins_with("object_group:") else Document.decode(entry.transform).origin
 func _move(point_value: Vector3) -> void:
 	var entry := record()
-	if selected.begins_with("group:"): entry.position = Document.array(point_value)
+	if selected.begins_with("group:") or selected.begins_with("object_group:"): entry.position = Document.array(point_value)
 	else: var pose := Document.decode(entry.transform); pose.origin = point_value; entry.transform = Document.encode(pose)
 func snap_to_floor() -> void:
 	if not loaded or not point().is_finite(): return
@@ -511,21 +621,26 @@ func _view_input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
 				_pick(event.position)
-				if event.shift_pressed and point().is_finite(): move_drag = true; drag_before = document.duplicate(true); drag_plane = Plane(Vector3.UP, point().y)
+				if event.shift_pressed and point().is_finite():
+					move_drag = true; drag_before = document.duplicate(true); drag_origin = point(); drag_vertical = event.ctrl_pressed; drag_mouse = event.position
+					drag_units_per_pixel = 2.0 * camera.global_position.distance_to(drag_origin) * tan(deg_to_rad(camera.fov) * 0.5) / maxf(1.0,viewport.size.y)
+					drag_plane = Plane(Vector3.UP,drag_origin.y)
 			elif move_drag: move_drag = false; _remember(drag_before); _sync(); select(selected)
 	elif event is InputEventMouseMotion:
 		if fly:
 			yaw -= event.relative.x * 0.004; pitch = clampf(pitch - event.relative.y * 0.004, -1.5, 1.5); camera.rotation = Vector3(pitch, yaw, 0)
 		elif move_drag:
-			var intersection: Variant = drag_plane.intersects_ray(camera.project_ray_origin(event.position), camera.project_ray_normal(event.position))
+			var intersection: Variant = drag_origin + Vector3.UP * (drag_mouse.y - event.position.y) * drag_units_per_pixel if drag_vertical else drag_plane.intersects_ray(camera.project_ray_origin(event.position), camera.project_ray_normal(event.position))
 			if intersection != null:
-				_move(intersection); _update_outline()
+				var location: Vector3 = Vector3(drag_origin.x,intersection.y,drag_origin.z) if drag_vertical else Vector3(intersection.x,drag_origin.y,intersection.z)
+				_move(location); _update_outline()
 				var node := world.get_node_or_null(NodePath(selected)) as Node3D
-				if node != null: node.global_position = intersection
+				if node != null: node.global_position = location
 func _pick(mouse: Vector2) -> void:
 	var closest := ""; var score := 36.0
 	var keys: Array = document.entities.keys()
 	for group in document.groups: keys.append("group:" + group.id)
+	for group in document.get("object_groups",[]): keys.append("object_group:" + group.id)
 	for key in keys:
 		var entry := record(key)
 		if entry.get("deleted", false): continue
@@ -538,13 +653,13 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and not event.pressed:
 		if event.button_index == MOUSE_BUTTON_RIGHT: fly = false
 		if event.button_index == MOUSE_BUTTON_LEFT and move_drag: move_drag = false; _remember(drag_before); _sync(); select(selected)
-func _unhandled_key_input(event: InputEvent) -> void:
-	if not is_visible_in_tree() or not loaded or not event.pressed: return
-	if event.is_action_pressed("editor_frame"): frame_selection()
-	elif event.is_action_pressed("editor_undo"): undo()
-	elif event.is_action_pressed("editor_redo"): redo()
-	elif event.is_action_pressed("editor_save"): save_map()
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_visible_in_tree() or not loaded or not event.is_pressed(): return
+	if Bindings.pressed(event,"editor_frame"): frame_selection()
+	elif Bindings.pressed(event,"editor_undo"): undo()
+	elif Bindings.pressed(event,"editor_redo"): redo()
+	elif Bindings.pressed(event,"editor_save"): save_map()
 func _process(delta: float) -> void:
 	if not is_visible_in_tree() or not loaded or not fly: return
-	var input := Vector3(float(Input.is_action_pressed("turn_right")) - float(Input.is_action_pressed("turn_left")), float(Input.is_action_pressed("thrust_up")) - float(Input.is_action_pressed("thrust_down")), float(Input.is_action_pressed("thrust_reverse")) - float(Input.is_action_pressed("thrust_forward")))
-	camera.position += camera.basis * input.normalized() * fly_speed * (3.0 if Input.is_action_pressed("editor_fast") else 1.0) * delta
+	var input := Vector3(Bindings.strength("turn_right") - Bindings.strength("turn_left"), Bindings.strength("thrust_up") - Bindings.strength("thrust_down"), Bindings.strength("thrust_reverse") - Bindings.strength("thrust_forward"))
+	camera.position += camera.basis * input.normalized() * fly_speed * (3.0 if Bindings.strength("editor_fast") > 0.5 else 1.0) * delta

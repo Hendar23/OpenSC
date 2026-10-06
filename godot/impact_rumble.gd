@@ -17,6 +17,17 @@ func impact(speed: float) -> void:
 	remaining = lerpf(0.08, 0.22, severity)
 	joy_input.start_joy_vibration(device, strength * lerpf(0.2, 0.7, severity), strength * lerpf(0.15, 1.0, severity), remaining)
 
+func damage(amount: float, hull_strength: float = 100.0) -> void:
+	if amount <= 0.0 or not is_instance_valid(pilot) or not pilot.active: return
+	var strength := float(pilot.submarine_audio.tuning.settings.impact_rumble_strength)
+	var pads: Array = joy_input.get_connected_joypads()
+	if strength <= 0.0 or pads.is_empty(): return
+	var severity := clampf(amount / maxf(1.0,hull_strength),0.0,1.0)
+	var pad := int(pads[0])
+	if device >= 0 and device != pad: stop()
+	device = pad; remaining = lerpf(0.12,0.45,severity)
+	joy_input.start_joy_vibration(device,strength * lerpf(0.3,0.8,severity),strength * lerpf(0.4,1.0,severity),remaining)
+
 func _process(delta: float) -> void:
 	if device < 0: return
 	remaining -= delta

@@ -35,7 +35,7 @@
       },
       "kind": "model",
       "model": "AQUATRAZ",
-      "name": "Aquatraz 1",
+      "name": "Aquatraz",
       "solid": true,
       "transform": [
         0.739947438240051,
@@ -291,7 +291,7 @@
       },
       "kind": "model",
       "model": "DOCKING",
-      "name": "Trads 1",
+      "name": "Touka Reef",
       "solid": true,
       "transform": [
         0.999862134456635,
@@ -316,7 +316,7 @@
       },
       "kind": "model",
       "model": "DOCKING",
-      "name": "Techs 2",
+      "name": "Velcova Station",
       "solid": true,
       "transform": [
         0.0197862777858973,
@@ -341,7 +341,7 @@
       },
       "kind": "model",
       "model": "DOCKING",
-      "name": "Trads 3",
+      "name": "Beluga Basin",
       "solid": true,
       "transform": [
         0.00480316067114472,
@@ -366,7 +366,7 @@
       },
       "kind": "model",
       "model": "DOCKING",
-      "name": "Techs 4",
+      "name": "Tryton Institute",
       "solid": true,
       "transform": [
         -0.682271599769592,
@@ -391,7 +391,7 @@
       },
       "kind": "model",
       "model": "DOCKING",
-      "name": "Factory",
+      "name": "Refinery",
       "solid": true,
       "transform": [
         1.00001811981201,
@@ -8554,13 +8554,120 @@
         0.0,
         0.0,
         1.0,
-        317.928009033203,
-        154.90998840332,
-        253.740692138672
+        325.530609130859,
+        157.0,
+        256.264984130859
       ]
     }
   },
   "groups": [],
+  "menu_camera": {
+    "fov": 75.0,
+    "transform": [
+      0.858127236366272,
+      0.0,
+      -0.51343709230423,
+      -0.117058806121349,
+      0.973663330078125,
+      -0.195644900202751,
+      0.499914854764938,
+      0.227990552783012,
+      0.835527002811432,
+      302.916687011719,
+      160.397232055664,
+      227.478988647461
+    ]
+  },
+  "object_groups": [
+    {
+      "count": 10.0,
+      "id": "entity_260326431",
+      "name": "Aquatraz mines 1",
+      "position": [
+        335.930419921875,
+        157.180709838867,
+        188.578002929688
+      ],
+      "radius": 6.0,
+      "type": "floating_mine"
+    },
+    {
+      "count": 10.0,
+      "id": "entity_92552918",
+      "name": "Aquatraz mines 2",
+      "position": [
+        327.279602050781,
+        157.180709838867,
+        184.130493164063
+      ],
+      "radius": 6.0,
+      "type": "floating_mine"
+    },
+    {
+      "count": 10.0,
+      "id": "entity_109712683",
+      "name": "Aquatraz mines 4",
+      "position": [
+        345.004913330078,
+        158.991851806641,
+        200.971862792969
+      ],
+      "radius": 6.0,
+      "type": "floating_mine"
+    },
+    {
+      "count": 10.0,
+      "id": "entity_51561402",
+      "name": "Aquatraz mines 3",
+      "position": [
+        348.198028564453,
+        158.991851806641,
+        193.147277832031
+      ],
+      "radius": 6.0,
+      "type": "floating_mine"
+    },
+    {
+      "count": 10.0,
+      "id": "entity_73894838",
+      "name": "Aquatraz mines 5",
+      "position": [
+        335.268341064453,
+        158.991851806641,
+        198.69775390625
+      ],
+      "radius": 6.0,
+      "type": "floating_mine"
+    },
+    {
+      "count": 10.0,
+      "id": "entity_98777326",
+      "name": "Aquatraz mines 6",
+      "position": [
+        326.869476318359,
+        158.991851806641,
+        194.942504882813
+      ],
+      "radius": 6.0,
+      "type": "floating_mine"
+    }
+  ],
+  "object_types": [
+    {
+      "appearance": "sprite",
+      "blast_force": 600.0,
+      "damage": 30.0,
+      "explosion_radius": 3.2,
+      "health": 0.5,
+      "id": "floating_mine",
+      "mask": "MINEM",
+      "model": "MINE",
+      "name": "Floating Mine",
+      "size": 0.71,
+      "texture": "MINE",
+      "trigger_distance": 1.0
+    }
+  ],
   "schema_version": 1.0,
   "seed": 8675309.0,
   "species": [
@@ -8571,6 +8678,7 @@
       "group_behaviour": "shoaling",
       "groups_max": 24.0,
       "groups_min": 12.0,
+      "health": 5.0,
       "id": "angel",
       "mobility": "swimming",
       "model": "ANGEL",
@@ -8613,7 +8721,7 @@
       "turn_speed": 60.0
     },
     {
-      "count_max": 4.0,
+      "count_max": 3.0,
       "count_min": 1.0,
       "detection": 8.0,
       "group_behaviour": "shoaling",
@@ -8643,6 +8751,7 @@
       "group_behaviour": "shoaling",
       "groups_max": 24.0,
       "groups_min": 12.0,
+      "health": 2.0,
       "id": "silver",
       "mobility": "swimming",
       "model": "SILVER",
@@ -8667,6 +8776,7 @@
       "group_behaviour": "shoaling",
       "groups_max": 12.0,
       "groups_min": 6.0,
+      "health": 20.0,
       "id": "stingray",
       "mobility": "swimming",
       "model": "STINGRAY",
@@ -8713,8 +8823,9 @@
       "count_min": 1.0,
       "detection": 8.0,
       "group_behaviour": "shoaling",
-      "groups_max": 24.0,
-      "groups_min": 6.0,
+      "groups_max": 12.0,
+      "groups_min": 3.0,
+      "health": 15.0,
       "id": "angler",
       "mobility": "swimming",
       "model": "ANGLER",
@@ -8763,6 +8874,7 @@
       "group_behaviour": "solitary",
       "groups_max": 12.0,
       "groups_min": 6.0,
+      "health": 100.0,
       "id": "entity_239941389",
       "mobility": "swimming",
       "model": "TURTLE",
@@ -8771,7 +8883,7 @@
       "random_spawn": true,
       "response": "ignore",
       "roam_radius": 10.0,
-      "scale_max": 100.0,
+      "scale_max": 120.0,
       "scale_min": 80.0,
       "spawn_chance": 100.0,
       "speed": 0.5,
@@ -8811,6 +8923,7 @@
       "group_behaviour": "solitary",
       "groups_max": 24.0,
       "groups_min": 12.0,
+      "health": 20.0,
       "id": "entity_221936598",
       "mobility": "crawling",
       "model": "CRAB",

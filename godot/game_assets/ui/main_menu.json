@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "title_rect": [173, 40, 294, 114],
+  "button_rect": [216, 174, 208, 28],
+  "button_spacing": 31,
+  "camera_anchor": [317.928009033203, 154.90998840332, 253.740692138672],
+  "camera_offset": [12, 3, 18],
+  "look_offset": [0, 0, -3],
+  "buttons": [
+    {"id": "continue", "label": "Continue"},
+    {"id": "new_game", "label": "New Game"},
+    {"id": "load", "label": "Load Game"},
+    {"id": "controls", "label": "Controls"},
+    {"id": "mods", "label": "Mods"},
+    {"id": "audio", "label": "Audio"},
+    {"id": "graphics", "label": "Graphics"},
+    {"id": "website", "label": "Website"},
+    {"id": "exit", "label": "Exit"}
+  ]
+}

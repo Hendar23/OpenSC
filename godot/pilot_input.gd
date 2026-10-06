@@ -19,16 +19,9 @@ static func from_axes(left: Vector2, right: Vector2, reverse: float, forward: fl
 	return Vector4(trigger(forward) - trigger(reverse), -right.y, -left.x, left.y)
 
 static func read() -> Vector4:
-	preload("res://input_bindings.gd").install()
-	var result := Vector4(
-		float(Input.is_action_pressed("thrust_forward")) - float(Input.is_action_pressed("thrust_reverse")),
-		float(Input.is_action_pressed("thrust_up")) - float(Input.is_action_pressed("thrust_down")),
-		float(Input.is_action_pressed("turn_left")) - float(Input.is_action_pressed("turn_right")),
-		float(Input.is_action_pressed("pitch_up")) - float(Input.is_action_pressed("pitch_down")))
-	var pads := Input.get_connected_joypads()
-	if not pads.is_empty():
-		var pad := pads[0]
-		result += from_axes(Vector2(Input.get_joy_axis(pad, JOY_AXIS_LEFT_X), Input.get_joy_axis(pad, JOY_AXIS_LEFT_Y)),
-			Vector2(0.0, Input.get_joy_axis(pad, JOY_AXIS_RIGHT_Y)),
-			Input.get_joy_axis(pad, JOY_AXIS_TRIGGER_LEFT), Input.get_joy_axis(pad, JOY_AXIS_TRIGGER_RIGHT))
-	return Vector4(clampf(result.x, -1, 1), clampf(result.y, -1, 1), clampf(result.z, -1, 1), clampf(result.w, -1, 1))
+	var bindings = preload("res://input_bindings.gd")
+	bindings.install()
+	return Vector4(bindings.strength("thrust_forward") - bindings.strength("thrust_reverse"),
+		bindings.strength("thrust_up") - bindings.strength("thrust_down"),
+		bindings.strength("turn_left") - bindings.strength("turn_right"),
+		bindings.strength("pitch_up") - bindings.strength("pitch_down"))

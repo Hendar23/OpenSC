@@ -75,6 +75,7 @@ static func _import(folder: String, fingerprints: Dictionary) -> Dictionary:
 		var table_id: String = "object_types" if name == "objects" else name.to_lower()
 		result.tables["database." + table_id] = {"source":INPUTS[2] + ":" + name,"records":records}
 	# These are provisional OpenSC combat rules, not recovered executable code.
+	_import_city_radio(result,language)
 	result.tables["weapon_tuning"] = {"source":"OpenSC provisional combat defaults","records":{"zapper":preload("res://submarine_weapons.gd").DEFAULTS.duplicate()}}
 	var stats := {}
 	for record in result.tables.get("objects",{}).get("records",{}).values():
@@ -83,6 +84,42 @@ static func _import(folder: String, fingerprints: Dictionary) -> Dictionary:
 			stats[model] = {"health":float(record.shield),"source_object":record.id}
 	result.tables["creature_stats"] = {"source":"Original object shield values used as provisional creature health","records":stats}
 	return result
+
+static func _import_city_radio(catalogue: Dictionary, language: Dictionary) -> void:
+	var messages := {}
+	for line in str(language.get("MESSAGES.TXT","")).split("\n"):
+		var fields := line.split("\t")
+		if fields.size() >= 5: messages[fields[0].strip_edges()] = {"text":fields[4].strip_edges()}
+	catalogue.tables["radio_messages"] = {"source":"DATA/ENGLISH/LANGUAGE.ENC:MESSAGES.TXT","records":messages}
+	var places: Array[Dictionary] = []
+	for line in str(language.get("PLACES.TXT","")).split("\n"):
+		var fields := line.strip_edges().split("\t")
+		if fields.size() < 6: continue
+		places.append({"name":str(fields[1]).replace("_"," ").capitalize(),"radius":float(fields[5])})
+	var records := {}
+	# Relay groups follow language-message order; dock IDs follow SCEN1.DDB.
+	var codes := {1:1,2:7,3:4,4:10,5:13,6:16}
+	for row in catalogue.tables.get("database.cities",{}).get("records",{}).values():
+		var id := int(row.CityID)
+		if not codes.has(id): continue
+		var code: int = codes[id]
+		var greeting := str(messages.get("city%d" % code,{}).get("text",""))
+		for place in places:
+			if not greeting.to_lower().contains(str(place.name).to_lower()): continue
+			records[str(id)] = {"name":place.name,"legacy_name":str(row.CityName).strip_edges(),"greeting_radius":place.radius,"greeting_neutral":"city%d" % code,"greeting_hostile":"city%d" % (code + 1),"greeting_friendly":"city%d" % (code + 2)}
+			break
+	catalogue.tables["city_info"] = {"source":"Original city database, relay messages and place names","records":records}
+
+static func apply_city_names(world: Node, catalogue: Dictionary) -> void:
+	var records: Dictionary = catalogue.get("tables",{}).get("city_info",{}).get("records",{})
+	for node in world.find_children("*","Node3D",true,false):
+		if not node.has_meta("city_id"): continue
+		var record: Dictionary = records.get(str(int(node.get_meta("city_id"))),{})
+		if record.is_empty(): continue
+		var current := str(node.get_meta("city_name",""))
+		# Preserve explicitly authored map names, including custom added docks.
+		if current == str(record.get("legacy_name","")) or current.is_empty():
+			node.set_meta("city_name",str(record.name))
 
 static func read_archive(path: String) -> Dictionary:
 	var file := FileAccess.open(path,FileAccess.READ)
@@ -99,6 +136,8 @@ static func read_archive(path: String) -> Dictionary:
 		if size > bytes.size() or start > bytes.size() - size: return {}
 		var text := bytes.slice(start,start + size)
 		for byte in range(text.size()): text[byte] ^= 255
+		var terminator := text.find(0)
+		if terminator >= 0: text.resize(terminator)
 		result[name.to_upper()] = text.get_string_from_ascii().replace("\r","")
 	return result
 

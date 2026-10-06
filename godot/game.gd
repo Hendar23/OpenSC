@@ -1,4 +1,5 @@
 extends Node3D
+const Bindings = preload("res://input_bindings.gd")
 
 const Assets = preload("res://clump_loader.gd")
 const World = preload("res://world_loader.gd")
@@ -42,9 +43,10 @@ var plant_controls := {}
 @export var show_start_menu := false
 var front_end: Node
 var has_started_game := false
+var menu_backdrop: Node3D
 const DEFAULT_VISIBILITY := 35.0
-const MIN_VISIBILITY := 10.0
-const MAX_VISIBILITY := 250.0
+const MIN_VISIBILITY := 1.0
+const MAX_VISIBILITY := 2000.0
 
 var pilot: RigidBody3D
 var model: Node3D
@@ -70,6 +72,7 @@ var status_label: Label
 var telemetry: Label
 var tuning_panel: PanelContainer
 var sound_panel: PanelContainer
+var folder_prompt: ConfirmationDialog
 var folder_dialog: FileDialog
 var export_all_dialog: FileDialog
 var export_all_button: Button
@@ -99,8 +102,10 @@ var use_map_overrides := true
 var loading_preferences := false
 var docking: Node
 var docking_prompt: Label
-var docking_portrait: TextureRect
+const RadioPortrait = preload("res://radio_portrait.gd")
+var docking_portrait: RadioPortrait
 var mod_panel: Window
+var object_population: Node3D
 var wildlife: Node3D
 var wildlife_density_slider: HSlider
 var wildlife_density_label: Label
@@ -293,12 +298,12 @@ func _build_interface() -> void:
 	fog_slider = HSlider.new()
 	fog_slider.min_value = MIN_VISIBILITY
 	fog_slider.max_value = MAX_VISIBILITY
-	fog_slider.step = 1.0
+	fog_slider.step = 0.5
 	fog_slider.value = DEFAULT_VISIBILITY
 	fog_slider.focus_mode = Control.FOCUS_NONE
 	graphics_controls.add_child(fog_slider)
 	var hint := Label.new()
-	hint.text = "Shorter distance = denser fog. Saved on release."
+	hint.text = "Spread fade start and view distance apart for a longer, gentler fade."
 	hint.add_theme_font_size_override("font_size", 12)
 	graphics_controls.add_child(hint)
 	fog_slider.value_changed.connect(func(value: float) -> void:
@@ -322,11 +327,11 @@ func _build_interface() -> void:
 		)
 		presets.add_child(button)
 	fog_start_label = Label.new(); graphics_controls.add_child(fog_start_label)
-	fog_start_slider = HSlider.new(); fog_start_slider.min_value = 0.0; fog_start_slider.max_value = 30.0
+	fog_start_slider = HSlider.new(); fog_start_slider.min_value = 0.0; fog_start_slider.max_value = MAX_VISIBILITY - 0.5
 	fog_start_slider.step = 0.5; fog_start_slider.value = 5.0; fog_start_slider.focus_mode = Control.FOCUS_NONE
 	graphics_controls.add_child(fog_start_slider)
 	fog_curve_label = Label.new(); graphics_controls.add_child(fog_curve_label)
-	fog_curve_slider = HSlider.new(); fog_curve_slider.min_value = 0.5; fog_curve_slider.max_value = 4.0
+	fog_curve_slider = HSlider.new(); fog_curve_slider.min_value = 0.25; fog_curve_slider.max_value = 8.0
 	fog_curve_slider.step = 0.1; fog_curve_slider.value = 1.8; fog_curve_slider.focus_mode = Control.FOCUS_NONE
 	graphics_controls.add_child(fog_curve_slider)
 	for slider in [fog_start_slider, fog_curve_slider]:
@@ -353,9 +358,6 @@ func _build_interface() -> void:
 		if tuning_panel != null: tuning_panel._save()
 	)
 	graphics_tab.add_child(graphics_save)
-	var mods_tab := VBoxContainer.new()
-	mods_tab.name = "Mods"
-	developer_tabs.add_child(mods_tab)
 	var system := VBoxContainer.new()
 	system.name = "System"
 	system.add_theme_constant_override("separation", 12)
@@ -377,11 +379,6 @@ func _build_interface() -> void:
 	docking_radius_slider.value_changed.connect(func(_value: float) -> void: _update_docking_radius())
 	docking_radius_slider.drag_ended.connect(func(_changed: bool) -> void: _save_preferences())
 	_update_docking_radius()
-	var reset := Button.new()
-	reset.text = "Reset submarine (R)"
-	reset.focus_mode = Control.FOCUS_NONE
-	reset.pressed.connect(_reset_submarine)
-	system.add_child(reset)
 	var choose := Button.new()
 	choose.text = "Choose Sub Culture folder…"
 	choose.focus_mode = Control.FOCUS_NONE
@@ -390,25 +387,36 @@ func _build_interface() -> void:
 	)
 	system.add_child(choose)
 	folder_dialog = FileDialog.new()
+	folder_dialog.use_native_dialog = true
 	folder_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	folder_dialog.file_mode = FileDialog.FILE_MODE_OPEN_DIR
 	folder_dialog.title = "Choose your Sub Culture game folder"
 	folder_dialog.dir_selected.connect(_choose_game_folder)
 	add_child(folder_dialog)
+	folder_prompt = ConfirmationDialog.new()
+	folder_prompt.title = "Locate original Sub Culture files"
+	folder_prompt.ok_button_text = "Choose folder..."
+	folder_prompt.cancel_button_text = "Exit"
+	folder_prompt.confirmed.connect(func() -> void: folder_dialog.popup_centered(Vector2i(850,600)))
+	folder_prompt.canceled.connect(func() -> void: get_tree().quit())
+	folder_dialog.canceled.connect(func() -> void:
+		if game_folder.is_empty(): _prompt_game_folder("The original Sub Culture files are required to play. Choose the folder containing CLUMPS and DATA."))
+	add_child(folder_prompt)
 	mod_panel = ModPanel.new()
 	mod_panel.persist_preferences = remember_preferences
 	mod_panel.applied.connect(func() -> void: _start_game(game_folder))
 	add_child(mod_panel)
-	mod_panel.embed(mods_tab)
 	developer_tabs.tab_changed.connect(_developer_tab_changed)
 	get_viewport().size_changed.connect(_resize_developer_menu)
 	_resize_developer_menu()
 	front_end = FrontEnd.new(); add_child(front_end)
+	front_end.back_shortcut_busy = func(event: InputEvent) -> bool: return Bindings.pressed(event,"menu_cancel") and (map_open or developer_ui_visible or (dock_interface != null and dock_interface.visible))
 	loading_canvas = front_end.loading_layer
 	loading_label = front_end.loading_status
 	front_end.new_game_requested.connect(_begin_new_game)
 	front_end.resume_requested.connect(_resume_game)
 	front_end.load_requested.connect(func() -> void: front_end.menu_layer.hide(); dock_interface.open("load"))
+	front_end.mods_requested.connect(func() -> void: if not world_loading: mod_panel.open())
 	dock_interface = preload("res://dock_interface.gd").new(); add_child(dock_interface)
 	dock_interface.action_requested.connect(_dock_ui_action)
 	dock_interface.setup(game_folder,_dock_ui_model)
@@ -419,15 +427,23 @@ func _build_interface() -> void:
 	front_end.exit_requested.connect(func() -> void: get_tree().quit())
 
 func _bootstrap() -> void:
+	front_end.show_loading()
+	canvas.hide()
+	# Present the loading screen before importing or searching original data.
+	await get_tree().process_frame
 	var folder := Paths.find_game_folder()
 	if folder.is_empty():
-		_fail_startup("Choose the folder containing CLUMPS and DATA to begin.")
-		folder_dialog.popup_centered(Vector2i(850, 600))
-		startup_complete = true
+		_prompt_game_folder("OpenSubCulture needs your original Sub Culture files. Choose the game folder containing CLUMPS and DATA.")
 	else:
 		await _start_game(folder)
 		startup_complete = true
 		if show_start_menu and pilot_mode: _show_main_menu()
+
+func _prompt_game_folder(message: String) -> void:
+	front_end.show_loading()
+	front_end.loading_status.text = "Waiting for original Sub Culture files..."
+	folder_prompt.dialog_text = message
+	folder_prompt.popup_centered(Vector2i(520,180))
 
 func _show_main_menu() -> void:
 	_set_map_open(false)
@@ -438,22 +454,32 @@ func _show_main_menu() -> void:
 	front_end.buttons.load.set_meta("available",save_games.slots().any(func(slot: Dictionary) -> bool: return slot.valid))
 	front_end.buttons.load.tooltip_text = "" if front_end.is_button_available("load") else "No saved games yet"
 	front_end.show_menu(has_started_game)
+	if menu_backdrop != null:
+		menu_backdrop.open(); _update_daylight()
 	get_tree().paused = true
 
 func _choose_game_folder(folder: String) -> void:
+	if not Paths.valid_game_folder(folder):
+		if game_folder.is_empty(): _prompt_game_folder("That folder does not contain CLUMPS/SUB.DFF and DATA/SCEN1.BSP. Please choose the original Sub Culture game folder.")
+		else: status_label.text = "That folder does not contain CLUMPS/SUB.DFF and DATA/SCEN1.BSP."
+		return
 	await _start_game(folder)
+	startup_complete = true
 	if show_start_menu and not has_started_game and pilot_mode: _show_main_menu()
 
 func _resume_game() -> void:
 	if not has_started_game or world_loading: return
 	front_end.hide_menu()
+	if menu_backdrop != null: menu_backdrop.close()
 	if dock_interface != null: dock_interface.dismiss()
 	get_tree().paused = false
+	_update_daylight()
 	_update_mouse_pointer()
 
 func _begin_new_game() -> void:
 	if world_loading: return
 	front_end.hide_menu()
+	if menu_backdrop != null: menu_backdrop.close()
 	if dock_interface != null: dock_interface.dismiss()
 	get_tree().paused = false
 	if has_started_game:
@@ -468,6 +494,8 @@ func _begin_new_game() -> void:
 	_update_mouse_pointer()
 
 func _start_game(folder: String) -> void:
+	if menu_backdrop != null:
+		menu_backdrop.close(); menu_backdrop.free(); menu_backdrop = null
 	if dock_interface != null: dock_interface.dismiss(); dock_interface_active = false
 	_set_map_open(false)
 	if map_overlay != null:
@@ -477,16 +505,16 @@ func _start_game(folder: String) -> void:
 		_fail_startup("Could not find CLUMPS/SUB.DFF and DATA/SCEN1.BSP in that folder.")
 		return
 	world_loading = true
-	gameplay_catalogue = OriginalGameData.load_catalogue(folder)
-	for warning in gameplay_catalogue.warnings: Mods.note(warning)
 	front_end.load_art(folder)
 	front_end.show_loading()
 	await get_tree().process_frame
+	gameplay_catalogue = OriginalGameData.load_catalogue(folder)
+	for warning in gameplay_catalogue.warnings: Mods.note(warning)
 	export_all_button.disabled = true
 	export_all_dialog.hide()
 	pilot_mode = false
 	if docking_prompt != null: docking_prompt.hide()
-	if docking_portrait != null: docking_portrait.hide()
+	if docking_portrait != null: docking_portrait.reset_signal()
 	if docking != null:
 		docking.cancel()
 		docking.free()
@@ -526,6 +554,7 @@ func _start_game(folder: String) -> void:
 	var map_data := MapDocument.load_active() if use_map_overrides else {}
 	wildlife = null
 	if not map_data.is_empty(): MapDocument.apply_entities(world_root, folder, map_data)
+	OriginalGameData.apply_city_names(world_root,gameplay_catalogue)
 	plant_current.attach(world_root)
 	_add_water_surface()
 	await get_tree().physics_frame
@@ -534,11 +563,13 @@ func _start_game(folder: String) -> void:
 		await Creatures.populate(world_root, folder, get_tree(), _progress)
 		var stats: Dictionary = gameplay_catalogue.tables.creature_stats.records
 		var death_frames := preload("res://creature_death.gd").load_gore(folder)
+		var death_flesh := Assets._load_texture(folder,"BEEF2","",{})
 		for fish in world_root.get_node("AmbientFish").get_children():
 			fish.configure_health(float(stats.get(str(fish.get_meta("species","")).to_lower(),{}).get("health",10)))
 			fish.death_texture = Assets._load_texture(folder,"BUBBLE","BUBBLEM",{})
 			fish.death_sound = Weapons._sound(folder,"audio.creature.death","SPLAT")
 			fish.death_frames = death_frames
+			fish.death_flesh_texture = death_flesh
 	else:
 		wildlife = Wildlife.new()
 		wildlife.gameplay_catalogue = gameplay_catalogue
@@ -548,6 +579,9 @@ func _start_game(folder: String) -> void:
 		wildlife.view_camera = camera
 		wildlife.visibility_range = fog_visibility if fog_button.button_pressed else camera.far
 		wildlife.setup(world_root, folder, map_data,true)
+	object_population = preload("res://object_population.gd").new()
+	object_population.name = "MapObjects"; world_root.add_child(object_population)
+	object_population.setup(folder,map_data)
 	water_visuals.materials.clear()
 	water_visuals.attach(world_root)
 	if wildlife != null:
@@ -619,9 +653,12 @@ func _start_game(folder: String) -> void:
 	if docking != null: docking.free()
 	docking = Docking.new()
 	add_child(docking)
-	docking.setup(pilot, world_root, folder, camera)
+	docking.setup(pilot, world_root, folder, camera,gameplay_catalogue)
+	save_games.city_names.clear()
+	for port in docking.ports: save_games.city_names[int(port.node.get_meta("city_id"))] = str(port.name)
 	_update_docking_radius()
 	if wildlife != null: wildlife.player = pilot
+	object_population.player = pilot
 	docking.docked.connect(_reset_docked_wildlife)
 	if docking_prompt == null: _build_docking_prompt()
 	dock_interface.setup(folder,_dock_ui_model)
@@ -633,6 +670,8 @@ func _start_game(folder: String) -> void:
 	particles.material.set_shader_parameter("surface_height", pilot.surface_height)
 	particles._rebuild()
 	_update_water_environment()
+	menu_backdrop = preload("res://menu_backdrop.gd").new()
+	add_child(menu_backdrop); menu_backdrop.setup(self)
 	front_end.progress_bar.value = 95.0
 	if show_start_menu and DisplayServer.get_name() != "headless":
 		for frame in range(600):
@@ -676,7 +715,7 @@ func _build_docking_prompt() -> void:
 	docking_prompt.add_theme_constant_override("shadow_offset_y", 2)
 	docking_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(docking_prompt)
-	docking_portrait = TextureRect.new()
+	docking_portrait = preload("res://radio_portrait.gd").new()
 	docking_portrait.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	docking_portrait.offset_left = -116.0
 	docking_portrait.offset_right = -20.0
@@ -696,13 +735,13 @@ func _fail_startup(message: String) -> void:
 	status_label.text = message
 
 func _input(event: InputEvent) -> void:
-	if event.is_action_pressed("map_toggle") and pilot_mode and not world_loading and not get_tree().paused and not developer_ui_visible and docking.stage == Docking.Stage.IDLE:
+	if Bindings.pressed(event,"map_toggle") and pilot_mode and not world_loading and not get_tree().paused and not developer_ui_visible and docking.stage == Docking.Stage.IDLE:
 		_set_map_open(not map_open)
 		get_viewport().set_input_as_handled()
-	elif map_open and event.is_action_pressed("ui_cancel"):
+	elif map_open and Bindings.pressed(event,"menu_cancel"):
 		_set_map_open(false)
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("developer_toggle"):
+	elif Bindings.pressed(event,"developer_toggle"):
 		_set_map_open(false)
 		_toggle_developer_ui()
 		get_viewport().set_input_as_handled()
@@ -710,33 +749,32 @@ func _input(event: InputEvent) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not pilot_mode or world_loading or map_open or (dock_interface != null and dock_interface.visible): return
 	if not developer_ui_visible and docking.stage == Docking.Stage.IDLE:
-		if event.is_action_pressed("camera_toggle"):
+		if Bindings.pressed(event,"camera_toggle"):
 			_set_camera_mode(not first_person)
 			get_viewport().set_input_as_handled()
 			return
 	if not developer_ui_visible and cockpit_hud != null:
 		for index in range(5):
-			if event.is_action_pressed("hud_%d" % (index + 1)):
+			if Bindings.pressed(event,"hud_%d" % (index + 1)):
 				cockpit_hud.toggle(index)
 				hud_enabled[index] = cockpit_hud.enabled[index]
 				_save_preferences()
 				get_viewport().set_input_as_handled()
 				return
 	if not developer_ui_visible and equipment != null and docking.stage == Docking.Stage.IDLE:
-		if event.is_action_pressed("weapon_previous") and weapons != null: weapons.cycle(-1)
-		elif event.is_action_pressed("weapon_next") and weapons != null: weapons.cycle(1)
-		if event.is_action_pressed("equipment_previous"): equipment.cycle(-1)
-		elif event.is_action_pressed("equipment_next"): equipment.cycle(1)
-		elif event.is_action_pressed("equipment_toggle"):
-			if not event.is_action_pressed("dock_decline") or docking.nearby.is_empty(): equipment.toggle_selected()
-	if event.is_action_pressed("dock_accept"):
+		if Bindings.pressed(event,"weapon_previous") and weapons != null: weapons.cycle(-1)
+		elif Bindings.pressed(event,"weapon_next") and weapons != null: weapons.cycle(1)
+		if Bindings.pressed(event,"equipment_previous"): equipment.cycle(-1)
+		elif Bindings.pressed(event,"equipment_next"): equipment.cycle(1)
+		elif Bindings.pressed(event,"equipment_toggle"):
+			if not Bindings.pressed(event,"dock_decline") or docking.nearby.is_empty(): equipment.toggle_selected()
+	if Bindings.pressed(event,"dock_accept"):
 		_request_docking()
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("dock_decline"):
+	elif Bindings.pressed(event,"dock_decline"):
 		docking.decline_docking()
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("sub_reset"): _reset_submarine()
-	elif event.is_action_pressed("ui_cancel") and developer_ui_visible: _toggle_developer_ui()
+	elif Bindings.pressed(event,"menu_cancel") and developer_ui_visible: _toggle_developer_ui()
 	elif event is InputEventMouseButton and event.pressed:
 		if developer_ui_visible and developer_menu.get_global_rect().has_point(get_viewport().get_mouse_position()): return
 		var distance := float(pilot.movement.settings.camera_distance)
@@ -785,7 +823,6 @@ func _resize_developer_menu() -> void:
 func _developer_tab_changed(index: int) -> void:
 	_resize_developer_menu.call_deferred()
 	if sound_panel != null and developer_tabs.get_current_tab_control() != sound_panel: sound_panel.stop_preview()
-	if developer_tabs.get_tab_title(index) == "Mods" and not world_loading: mod_panel.open()
 
 func _select_developer_tab(tab_name: String) -> void:
 	for index in range(developer_tabs.get_tab_count()):
@@ -807,12 +844,6 @@ func _toggle_sound_tuning() -> void:
 	developer_ui_visible = true
 	canvas.visible = true
 	_select_developer_tab("Sound")
-
-func _reset_submarine() -> void:
-	if not pilot_mode or world_loading: return
-	if docking != null: docking.cancel()
-	pilot.reset_at(pilot.spawn)
-	_update_follow_camera(0.0, true)
 
 func _physics_process(_delta: float) -> void:
 	if pilot == null: return
@@ -855,8 +886,7 @@ func _process(delta: float) -> void:
 	if docking_prompt != null:
 		docking_prompt.text = docking.message
 		docking_prompt.visible = not docking.message.is_empty()
-		docking_portrait.texture = docking.portrait_texture()
-		docking_portrait.visible = docking_prompt.visible and docking_portrait.texture != null
+		docking_portrait.update_signal(docking.portrait_texture() if docking_prompt.visible else null,docking.distorted_portrait_texture(),docking.radio_static,delta)
 	if developer_ui_visible:
 		var state: RefCounted = pilot.movement
 		telemetry.text = "Speed: %.2f · Vertical: %.2f units/s\nPod tilt: %.1f° · Hull pitch: %.1f°\nDocking limit: %.2f units/s" % [state.velocity.length(), state.velocity.y, rad_to_deg(state.tilt), rad_to_deg(asin(clampf(-pilot.global_basis.z.y, -1.0, 1.0))), docking.maximum_docking_speed()]
@@ -894,19 +924,21 @@ func _request_docking() -> void:
 		if launching: camera.global_position = docking.cinematic_camera
 
 func _update_water_environment() -> void:
+	camera.far = fog_visibility if fog_button.button_pressed else 4000.0
+	if menu_backdrop != null: menu_backdrop.view.far = camera.far
 	if wildlife != null: wildlife.visibility_range = fog_visibility if fog_button.button_pressed else camera.far
 	water_environment.fog_enabled = fog_button.button_pressed
 	water_environment.fog_mode = Environment.FOG_MODE_DEPTH
 	water_environment.fog_density = 1.0
 	if fog_start_slider != null:
-		fog_start_slider.max_value = minf(30.0, fog_visibility - 1.0)
+		fog_start_slider.max_value = fog_visibility - 0.5
 		water_environment.fog_depth_begin = fog_start_slider.value
 		water_environment.fog_depth_curve = fog_curve_slider.value
-		fog_start_label.text = "Clear water near camera: %.1f units" % fog_start_slider.value
+		fog_start_label.text = "Fade start distance: %.1f units" % fog_start_slider.value
 		fog_curve_label.text = "Fog build-up curve: %.1f" % fog_curve_slider.value
 	water_environment.fog_depth_end = fog_visibility
 	water_environment.fog_sun_scatter = 0.0
-	fog_label.text = "Fog visibility distance: %.0f units" % fog_visibility
+	fog_label.text = "Absolute view distance: %.1f units" % fog_visibility
 	_update_daylight()
 
 func _build_daylight_controls() -> void:
@@ -950,18 +982,20 @@ func _build_natural_light_controls() -> void:
 		slider.drag_ended.connect(func(_changed: bool) -> void: _save_preferences())
 
 func _update_daylight() -> void:
-	day_night.apply(water_environment, sun, surface_material)
+	var lighting_cycle: RefCounted = menu_backdrop.daylight if menu_backdrop != null and menu_backdrop.active else day_night
+	lighting_cycle.apply(water_environment, sun, surface_material)
 	# Materials already own distance fog. Engine sky fog would recolour the
 	# sheltered background blue even after its cave exposure was applied.
 	water_environment.fog_sky_affect = 0.0
 	if fog_slider != null:
 		natural_light.lighting(water_environment,fog_visibility,fog_start_slider.value,fog_curve_slider.value)
-	if is_instance_valid(camera) and natural_light.image != null:
-		var exposure := natural_light.visibility(camera.global_position,true)
+	var lighting_camera: Camera3D = menu_backdrop.view if menu_backdrop != null and menu_backdrop.active else camera
+	if is_instance_valid(lighting_camera) and natural_light.image != null:
+		var exposure := natural_light.visibility(lighting_camera.global_position,true)
 		# Empty space behind cave geometry must match sheltered water, while
 		# the actual surface keeps its daylight material through cave exits.
 		water_environment.background_color = water_environment.background_color * exposure + Color(0.75,0.8,0.88) * float(natural_light.settings.cave_ambient) * (1.0 - exposure)
-	water_visuals.lighting(float(world_root.get_meta("surface_height")) if is_instance_valid(world_root) and world_root.has_meta("surface_height") else 0.0,day_night.sun_direction())
+	water_visuals.lighting(float(world_root.get_meta("surface_height")) if is_instance_valid(world_root) and world_root.has_meta("surface_height") else 0.0,lighting_cycle.sun_direction())
 	if fog_slider != null: water_visuals.fog(fog_visibility if fog_button.button_pressed else 1000000.0,fog_start_slider.value,fog_curve_slider.value)
 	if clock_label != null:
 		var minutes := int(day_night.hour * 60.0) % 1440
@@ -1012,7 +1046,7 @@ func _build_weapon_controls() -> void:
 	var scroll := ScrollContainer.new(); scroll.name = "Weapons"; scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; developer_tabs.add_child(scroll)
 	var tab := VBoxContainer.new(); tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL; scroll.add_child(tab)
 	var hint := Label.new(); hint.text = "Zapper · Hold controller X / Space to fire\nD-pad up/down selects mounted weapons. Unlimited firing."; hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; tab.add_child(hint)
-	for row in [["range","Zapper range",0.5,15.0,0.25],["damage_per_second","Zapper damage per second",0.0,50.0,0.5],["beam_width","Beam width",0.02,0.6,0.01],["animation_speed","Lightning animation speed",1.0,40.0,1.0],["volume_db","Zapper volume (dB)",-60.0,0.0,1.0],["gore_amount","Gore particles per death",0.0,100.0,1.0],["gore_settle_speed","Gore settling speed",0.1,5.0,0.1],["gore_lifetime","Gore lifetime (seconds)",0.2,10.0,0.1],["chunk_lifetime","Chunk lifetime before fading (seconds)",2.0,300.0,1.0]]:
+	for row in [["auto_aim_cone","Auto aim cone (degrees, full width; 0 = off)",0.0,120.0,1.0],["range","Zapper range",0.5,15.0,0.25],["damage_per_second","Zapper damage per second",0.0,50.0,0.5],["beam_width","Beam width",0.02,0.6,0.01],["animation_speed","Lightning animation speed",1.0,40.0,1.0],["volume_db","Zapper volume (dB)",-60.0,0.0,1.0],["gore_amount","Gore particles per death",0.0,100.0,1.0],["gore_settle_speed","Gore settling speed",0.1,5.0,0.1],["gore_lifetime","Gore lifetime (seconds)",0.2,10.0,0.1],["chunk_lifetime","Chunk lifetime before fading (seconds)",2.0,300.0,1.0]]:
 		var key: String = row[0]; var caption: String = row[1]
 		var label := Label.new(); tab.add_child(label)
 		var slider := HSlider.new(); slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]; slider.value = Weapons.DEFAULTS[key]; slider.focus_mode = Control.FOCUS_NONE; tab.add_child(slider); weapon_controls[key] = slider
@@ -1056,7 +1090,7 @@ func _build_plant_controls() -> void:
 	enabled.button_pressed = true; enabled.focus_mode = Control.FOCUS_NONE
 	graphics_controls.add_child(enabled); plant_controls.enabled = enabled
 	enabled.toggled.connect(func(on: bool) -> void: plant_current.configure({"enabled":on}); _save_preferences())
-	for row in [["strength","Plant sway strength",0.0,0.5,0.01],["speed","Plant sway speed",0.0,2.0,0.05],["direction","Plant current direction (degrees)",0.0,360.0,5.0],["variation","Plant sway variation",0.0,1.0,0.05],["wash_strength","Propeller wash strength",0.0,1.5,0.05],["wash_range","Propeller wash range",0.5,12.0,0.25],["wash_recovery","Plant wash recovery (seconds)",0.1,4.0,0.1]]:
+	for row in [["strength","Plant sway strength",0.0,0.5,0.01],["speed","Plant sway speed",0.0,2.0,0.05],["direction","Plant current direction (degrees)",0.0,360.0,5.0],["variation","Plant sway variation",0.0,1.0,0.05],["wavelength","Plant wave length (plant heights)",0.4,4.0,0.1],["ripple","Plant ripple strength",0.0,1.0,0.01],["twist","Plant twist strength",0.0,2.0,0.05],["wash_strength","Propeller wash strength",0.0,1.5,0.05],["wash_range","Propeller wash range",0.5,12.0,0.25],["wash_recovery","Plant wash recovery (seconds)",0.1,4.0,0.1]]:
 		var key: String = row[0]; var caption: String = row[1]
 		var label := Label.new(); graphics_controls.add_child(label)
 		var slider := HSlider.new(); slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]
@@ -1272,7 +1306,13 @@ func _add_water_surface() -> void:
 	world_root.add_child(surface)
 
 func _map_signature() -> String:
-	return JSON.stringify(MapDocument.load_active() if use_map_overrides else {}).sha256_text()
+	# Editable placements and type stats are not map identity. The underlying
+	# terrain remains the same when objects, wildlife or spawn points change.
+	return "terrain-v1:" + FileAccess.get_sha256(game_folder.path_join("DATA/SCEN1.BSP"))
+
+func _exploration_matches_map(signature: String) -> bool:
+	# This only controls restoration of map exploration, never save validity.
+	return signature == _map_signature()
 
 # UI reads a view of game state and submits named actions; layouts never
 # mutate docking, inventory or save data directly.
@@ -1317,7 +1357,6 @@ func _load_saved_game(slot: int) -> bool:
 	if loading_save or world_loading: return false
 	var data := save_games.read(slot)
 	if data.is_empty(): dock_interface.report(save_games.error); return false
-	if data.map_signature != _map_signature(): dock_interface.report("This save uses a different map. Restore that map before loading."); return false
 	var port_exists: bool = docking.ports.any(func(port: Dictionary) -> bool: return int(port.node.get_meta("city_id")) == int(data.dock.id))
 	if not port_exists: dock_interface.report("The saved dock is not present in this map."); return false
 	for item in data.equipment:
@@ -1356,10 +1395,12 @@ func _load_saved_game(slot: int) -> bool:
 	equipment.apply_settings()
 	for index in range(weapons.mounted.size()):
 		if weapons.mounted[index].id == data.get("weapon_selected",""): weapons.selected = index
-	var bytes := Marshalls.base64_to_raw(data.explored)
-	cockpit_hud.map_data.explored = Image.create_from_data(HUD.Map.RESOLUTION,HUD.Map.RESOLUTION,false,Image.FORMAT_L8,bytes)
-	cockpit_hud.map_data.exploration_texture.update(cockpit_hud.map_data.explored)
-	cockpit_hud.map_data.last_explored = Vector2(INF,INF)
+	if _exploration_matches_map(data.map_signature):
+		var bytes := Marshalls.base64_to_raw(data.explored)
+		cockpit_hud.map_data.explored = Image.create_from_data(HUD.Map.RESOLUTION,HUD.Map.RESOLUTION,false,Image.FORMAT_L8,bytes)
+		cockpit_hud.map_data.exploration_texture.update(cockpit_hud.map_data.explored)
+		cockpit_hud.map_data.last_explored = Vector2(INF,INF)
+	else: cockpit_hud.map_data.reset_exploration()
 	has_started_game = true; front_end.can_resume = true
 	dock_interface.open("home"); dock_interface_active = true
 	loading_save = false; _update_mouse_pointer(); return true
