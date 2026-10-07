@@ -27,7 +27,6 @@ Implemented so far
 - The suck-o-matic
   
 Still to do
-- Submarine hull/shield health, damage, destruction.
 - Complete dock services: trading, equipment purchases/upgrades\
 - Missions.
 - Remaining weapons, equipment and associated gameplay.
