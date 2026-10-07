@@ -22,6 +22,9 @@ Implemented so far
 - Editor tools for the map and entities.
 - Floating mines with explosions.
 - Mod support.
+- Sub damage and shield repair
+- Thorium crystals
+- The suck-o-matic
   
 Still to do
 - Submarine hull/shield health, damage, destruction.
