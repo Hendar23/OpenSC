@@ -1,4 +1,36 @@
 extends RigidBody3D
+signal health_changed(remaining: float, capacity: float)
+signal destroyed
+var max_health := 100.0
+var health := 100.0
+var dead := false
+var radiation_exposed := false
+
+func restore_health(capacity: float = 100.0, remaining: float = 100.0) -> void:
+	radiation_exposed = false
+	max_health = maxf(1.0,capacity)
+	health = clampf(remaining,0.0,max_health)
+	dead = health <= 0.0
+	health_changed.emit(health,max_health)
+
+func take_damage(amount: float, _source: Vector3 = Vector3.ZERO) -> void:
+	if dead or not active or not controls_enabled or not is_finite(amount) or amount <= 0.0: return
+	var loss := minf(health,amount)
+	health -= loss
+	if impact_rumble != null: impact_rumble.damage(loss,max_health)
+	health_changed.emit(health,max_health)
+	if health <= 0.0:
+		dead = true; controls_enabled = false; active = false
+		velocity = Vector3.ZERO; angular_velocity = Vector3.ZERO
+		collision_layer = 0; collision_mask = 0
+		if submarine_audio != null: submarine_audio.silence()
+		if bubbles != null: bubbles.clear()
+		if visual != null: visual.hide()
+		destroyed.emit()
+
+func receive_radiation(strength: float, delta: float) -> void:
+	radiation_exposed = active and controls_enabled and not dead and is_finite(strength) and strength > 0.0
+	if radiation_exposed and is_finite(delta) and delta > 0.0: take_damage(strength * delta)
 
 const Movement = preload("res://movement_model.gd")
 const Controls = preload("res://pilot_input.gd")
@@ -160,14 +192,21 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	movement.velocity = state.linear_velocity
 	movement.angular_velocity = state.angular_velocity
 	previous_velocity = state.linear_velocity
-	if impact_speed > 0.0: submarine_audio.call_deferred("impact", impact_speed)
+	if impact_speed > 0.0:
+		submarine_audio.call_deferred("impact", impact_speed)
+		apply_impact_damage.call_deferred(impact_speed)
+
+func apply_impact_damage(speed: float) -> void:
+	if not is_finite(speed): return
+	var excess := maxf(0.0,speed - float(movement.settings.impact_damage_threshold))
+	take_damage(excess * excess * float(movement.settings.impact_damage_scale))
 
 func receive_explosion(source: Vector3, damage: float, impulse: float) -> void:
 	if not active or not controls_enabled: return
 	var direction := global_position - source
 	if direction.length_squared() < 0.00001: direction = Vector3.UP
 	if impulse > 0.0: apply_central_impulse(direction.normalized() * impulse)
-	if impact_rumble != null: impact_rumble.damage(damage)
+	take_damage(damage,source)
 
 func surface_clearance(orientation: Basis) -> float:
 	var highest := -INF

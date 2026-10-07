@@ -23,7 +23,7 @@ func _run() -> void:
 	var weapon := Weapons.new(); pilot.add_child(weapon); weapon.setup(pilot,folder,camera,catalogue); weapon.set_physics_process(false)
 	check(weapon.frames.size() == 3 and weapon.frames.all(func(frame: Texture2D) -> bool: return frame != null) and weapon.icon != null,"Original lightning frames, masks and weapon HUD icon load")
 	check(weapon.audio.stream != null and weapon.audio.stream is AudioStreamWAV and weapon.audio.stream.loop_mode != AudioStreamWAV.LOOP_DISABLED,"Zapper sound has a prepared seamless loop")
-	check(weapon.audio.unit_size == 8.0 and weapon.audio.volume_db == weapon.settings.volume_db,"Zapper softens chase-camera attenuation without boosting cockpit gain")
+	check(weapon.audio is AudioStreamPlayer and weapon.audio.volume_db == weapon.settings.volume_db,"Player zapper uses constant volume independent of camera position")
 	var start: Vector3 = weapon.muzzle.get_node("Emitter").global_position
 	check(start.z < 0,"Emitter is mounted at the bow, ahead of the cockpit")
 	pilot.rotation = Vector3(0.3,0.8,0)

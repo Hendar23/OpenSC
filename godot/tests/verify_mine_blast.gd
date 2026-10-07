@@ -24,6 +24,7 @@ func run() -> void:
 	await physics_frame; await physics_frame
 	check(pilot.linear_velocity.x > 1.2 and absf(pilot.linear_velocity.z) < 0.01, "Blast pushes the real rigid body away with distance falloff")
 	check(joy.calls == 1, "Blast damage triggers controller feedback once")
+	check(is_equal_approx(pilot.health,70.0),"A 30-damage mine removes 30 percent of starting shield capacity")
 	var before := pilot.linear_velocity.x
 	population._exploded(Vector3(-10,0,0),30.0,2.0,300.0)
 	check(joy.calls == 1 and is_equal_approx(pilot.linear_velocity.x,before), "Outside the blast radius there is no force or rumble")
@@ -36,5 +37,18 @@ func run() -> void:
 	before = pilot.linear_velocity.x
 	population._exploded(pilot.position - Vector3.RIGHT,30.0,2.0,300.0)
 	check(joy.calls == 2 and is_equal_approx(pilot.linear_velocity.x,before), "Docking manoeuvres are not interrupted by explosions")
+	pilot.controls_enabled = true; pilot.restore_health()
+	for remaining in [65.0,30.0,0.0]:
+		var mine := preload("res://floating_mine.gd").new()
+		var definition: Dictionary = preload("res://object_definitions.gd").FLOATING_MINE.duplicate(true)
+		definition.damage = 35.0; definition.blast_force = 0.0
+		mine.setup(definition,Node3D.new(),null,true); population.add_child(mine)
+		mine.global_position = pilot.global_position
+		mine.exploded.connect(population._exploded.bind(0.0))
+		mine.detonate()
+		await process_frame; await process_frame
+		check(is_equal_approx(pilot.health,remaining),"An isolated 35-damage mine leaves %d shields" % int(remaining))
+		mine.free()
+	check(pilot.dead,"Three isolated 35-damage mines destroy a submarine with 100 shields")
 	pilot.free(); population.free()
 	print("Mine blast: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

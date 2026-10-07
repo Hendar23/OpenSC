@@ -17,6 +17,9 @@ static func apply(mount: Node3D, visual: Node3D, id: String, path: String = PATH
 	if not _vector_valid(position) or not _vector_valid(rotation): return
 	mount.position = Vector3(position[0],position[1],position[2])
 	mount.rotation_degrees = Vector3(rotation[0],rotation[1],rotation[2])
+	var size: Variant = values.get("scale",1.0)
+	if (size is float or size is int) and is_finite(float(size)) and float(size) > 0.0:
+		mount.scale = Vector3.ONE * float(size)
 static func _vector_valid(value: Variant) -> bool:
 	if not value is Array or value.size() != 3: return false
 	for component in value:
@@ -26,7 +29,7 @@ static func save(visual: Node3D, mounts: Dictionary, path: String = PATH) -> Err
 	var data := read(path); var values := {}
 	for id in mounts:
 		var mount: Node3D = mounts[id]
-		values[id] = {"position":[mount.position.x,mount.position.y,mount.position.z],"rotation_degrees":[mount.rotation_degrees.x,mount.rotation_degrees.y,mount.rotation_degrees.z]}
+		values[id] = {"position":[mount.position.x,mount.position.y,mount.position.z],"rotation_degrees":[mount.rotation_degrees.x,mount.rotation_degrees.y,mount.rotation_degrees.z],"scale":mount.scale.x}
 	data[profile(visual)] = values
 	var file := FileAccess.open(path,FileAccess.WRITE)
 	if file == null: return FileAccess.get_open_error()

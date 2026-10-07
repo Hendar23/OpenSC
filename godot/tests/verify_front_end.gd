@@ -61,6 +61,8 @@ func _run() -> void:
 	check(game.menu_backdrop.actors.all(func(actor: Dictionary) -> bool: return actor.node.collision_layer == 0 and actor.node.collision_mask == 5),"Menu actors cannot change gameplay collisions")
 	check(not game.front_end.is_button_available("continue") and game.front_end.is_button_available("load") == game.save_games.slots().any(func(slot: Dictionary) -> bool: return slot.valid) and game.front_end.is_button_available("controls") and not game.front_end.is_button_available("audio") and not game.front_end.is_button_available("graphics"),"Controls is available, unimplemented entries are inactive and Load reflects existing saves")
 	check(game.front_end.buttons.website.text == "Website" and game.front_end.menu_config.title_rect[2] == 294 and game.front_end.is_button_available("website") and game.front_end.WEBSITE_URL == "https://github.com/Hendar23/OpenSC","Smaller title and Website label retain the repository link")
+	check(game.front_end.buttons.options.visible and not game.front_end.buttons.controls.visible and not game.front_end.buttons.mods.visible and not game.front_end.buttons.graphics.visible and not game.front_end.buttons.audio.visible,"Main menu groups settings behind Options")
+	check(game.front_end.menu_picture.material is ShaderMaterial and game.front_end.menu_picture.material.get_shader_parameter("corner_radius") == 12.0,"Title card has rounded corners without changing the source artwork")
 	check(game._desired_mouse_mode() == Input.MOUSE_MODE_VISIBLE or Input.mouse_mode == Input.MOUSE_MODE_VISIBLE,"Main menu shows the pointer")
 	if DisplayServer.get_name() != "headless":
 		game.day_night.hour = 12.0; game._update_daylight()
@@ -76,6 +78,15 @@ func _run() -> void:
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/live-menu-submarine-preview.png")
 	var accept := InputEventJoypadButton.new(); accept.pressed = true; accept.button_index = JOY_BUTTON_A
+	game.front_end.buttons.options.grab_focus(); game.front_end._input(accept)
+	check(game.front_end.menu_page == "options" and game.front_end._visible_button_order() == ["controls","graphics","audio","mods","back"] and not game.front_end.buttons.new_game.visible,"Controller opens the four settings entries and Back")
+	var down := InputEventJoypadButton.new(); down.pressed = true; down.button_index = JOY_BUTTON_DPAD_DOWN
+	game.front_end._input(down)
+	check(root.gui_get_focus_owner() == game.front_end.buttons.mods,"Options navigation skips unavailable settings and hidden main-menu buttons")
+	if DisplayServer.get_name() != "headless":
+		for frame in range(4): await process_frame
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png("res://tests/options-menu-preview.png")
 	check(game.front_end.is_button_available("mods"),"Mods is available from the main menu")
 	game.front_end.buttons.mods.pressed.emit()
 	check(game.mod_panel.visible and not game.mod_panel.embedded,"Main-menu Mods opens the mod-management window")
@@ -87,11 +98,14 @@ func _run() -> void:
 	var mods_cancel := InputEventJoypadButton.new(); mods_cancel.pressed = true; mods_cancel.button_index = JOY_BUTTON_B
 	game.mod_panel._input(mods_cancel)
 	check(not game.mod_panel.visible,"Controller Back closes the Mods window")
+	check(game.front_end.menu_page == "options" and root.gui_get_focus_owner() == game.front_end.buttons.mods,"Closing Mods returns focus to its Options entry")
 	game.front_end.buttons.controls.pressed.emit()
 	check(game.front_end.controls_menu.visible and paused,"Controls opens over the paused main menu")
 	var cancel := InputEventJoypadButton.new(); cancel.pressed = true; cancel.button_index = JOY_BUTTON_B
 	Input.parse_input_event(cancel); await process_frame
 	check(not game.front_end.controls_menu.visible and root.gui_get_focus_owner() == game.front_end.buttons.controls,"Controller Back closes Controls and restores menu focus")
+	game.front_end._input(cancel)
+	check(game.front_end.menu_page == "main" and root.gui_get_focus_owner() == game.front_end.buttons.options and game.front_end.menu_layer.visible,"Back returns from Options to the main menu")
 	game.front_end.buttons.new_game.grab_focus()
 	game.day_night.hour = 0.0
 	Input.parse_input_event(accept)
@@ -155,8 +169,24 @@ func _run() -> void:
 		if not game.world_loading and not game.loading_canvas.visible: break
 		await process_frame
 	check(not game.world_loading and not paused and game.pilot.global_position.distance_to(game.pilot.spawn) < 0.1,"New Game from the menu resets the submarine to its spawn")
-	check(game.cockpit_hud.map_data != map and not game.cockpit_hud.map_data.is_explored(distant),"New Game clears exploration instead of continuing the old map")
+	check(game.world_root == original_world and game.cockpit_hud.map_data == map and not game.cockpit_hud.map_data.is_explored(distant),"New Game reuses the world and map renderer while clearing exploration")
 	check(absf(game.day_night.hour - 12.0) < 0.1 and game.day_night.daylight() > 0.99,"Restarting New Game resets the clock and lighting to daytime")
+	game._show_main_menu()
+	game.front_end.buttons.mods.pressed.emit()
+	game.mod_panel._apply()
+	check(game.mod_panel.apply_confirmation.visible and game.has_started_game and paused,"Applying mods requests confirmation without ending the current game")
+	game.mod_panel.apply_confirmation.hide()
+	game.mod_panel.apply_confirmation.confirmed.emit()
+	await process_frame
+	for frame in range(1800):
+		if not game.world_loading and game.front_end.menu_layer.visible: break
+		await process_frame
+	check(not game.world_loading and paused and game.front_end.menu_layer.visible and game.pilot_mode,"Confirmed mods reload finishes at the main menu without freezing")
+	check(not is_instance_valid(original_world),"Applying mods still rebuilds the world rather than retaining old assets")
+	check(not game.has_started_game and not game.front_end.can_resume and not game.front_end.is_button_available("continue"),"Applying mods ends the previous game and disables Continue")
+	game.front_end.buttons.new_game.pressed.emit()
+	await process_frame
+	check(game.has_started_game and not paused and not game.front_end.menu_layer.visible,"New Game is playable after applying mods")
 	print("Front end: %d checks, %d failures" % [checks,failures])
 	if failures:
 		paused = false; game.queue_free(); await process_frame; quit(1)

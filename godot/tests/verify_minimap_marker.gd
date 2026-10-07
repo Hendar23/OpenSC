@@ -2,6 +2,7 @@ extends SceneTree
 const Display = preload("res://hud_display.gd")
 const Map = preload("res://hud_map.gd")
 var failures := 0
+var checks := 6
 func _initialize() -> void: call_deferred("_run")
 func _run() -> void:
 	var view := SubViewport.new()
@@ -43,6 +44,31 @@ func _run() -> void:
 			if border.r < 0.95 or border.g < 0.20 or border.g > 0.30 or border.b > 0.10:
 				failures += 1
 				push_error("Blue map tint must preserve orange impassable borders")
+	map.markers = [{"position":Vector3(32,5,50),"name":"Touka Reef"}]
+	for full in [false,true]:
+		display.full_world = full
+		for discovered in [false,true,false]:
+			map.reset_exploration()
+			if discovered:
+				var cell := Vector2i(map.uv(map.markers[0].position) * (Map.RESOLUTION - 1))
+				map.explored.fill_rect(Rect2i(cell - Vector2i.ONE,Vector2i(3,3)),Color.WHITE)
+				map.exploration_texture.update(map.explored)
+			for frame in range(3): await process_frame
+			await RenderingServer.frame_post_draw
+			var image := view.get_texture().get_image()
+			var label_x := int(64.0 - 18.0 / display.map_span * 128.0 + 5.0)
+			var green_pixels := 0
+			for y in range(26,40):
+				for x in range(label_x,mini(label_x + 55,128)):
+					var pixel := image.get_pixel(x,y)
+					if pixel.g > 0.4 and pixel.g > pixel.r * 2 and pixel.g > pixel.b * 2: green_pixels += 1
+			checks += 1
+			if (green_pixels > 0) != discovered:
+				failures += 1; push_error("Discovered city names must render over fog, full=%s discovered=%s pixels=%d" % [full,discovered,green_pixels])
+	map.reveal_all()
+	checks += 1
+	if not map.is_explored(Vector3(0,0,0)) or not map.is_explored(Vector3(99,0,99)):
+		failures += 1; push_error("Reveal whole map must uncover both ends of the map")
 	pilot.rotation.y = PI / 2.0
 	pilot.reset_physics_interpolation()
 	await physics_frame
@@ -53,5 +79,5 @@ func _run() -> void:
 		push_error("Player marker must still follow heading: %s" % display.player_marker.rotation)
 	view.queue_free()
 	await process_frame
-	print("Minimap marker: 6 checks, %d failures" % failures)
+	print("Minimap marker: %d checks, %d failures" % [checks,failures])
 	quit(1 if failures else 0)

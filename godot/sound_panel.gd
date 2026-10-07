@@ -106,6 +106,7 @@ func setup(sound: Node, in_tabs: bool = false) -> void:
 	test_hit.focus_mode = Control.FOCUS_NONE
 	test_hit.pressed.connect(func() -> void: audio.impact(float(audio.pilot.movement.settings.forward_speed)))
 	rows.add_child(test_hit)
+	_row(rows, ["low_shield_volume", "Low shield warning volume", -60.0, 6.0, 1.0, "dB"])
 	var docking_heading := Label.new()
 	docking_heading.text = "Docking · DOCKING / DOCK / DOCKSHUT"
 	docking_heading.add_theme_font_size_override("font_size", 17)
@@ -145,7 +146,7 @@ func _row(parent: VBoxContainer, row: Array) -> void:
 	label.add_theme_font_size_override("font_size", 13)
 	labels[key] = label
 	parent.add_child(label)
-	var slider := HSlider.new()
+	var slider := HSlider.new(); slider.scrollable = false
 	slider.min_value = row[2]
 	slider.max_value = row[3]
 	slider.step = row[4]

@@ -3,6 +3,7 @@ extends RefCounted
 const IMAGE_EXTENSIONS := ["bmp", "ras", "png", "jpg", "jpeg", "webp"]
 const AUDIO_EXTENSIONS := ["wav", "raw", "mp3", "ogg"]
 const TEXT_EXTENSIONS := ["txt", "csv", "cfg", "conf"]
+const VIDEO_EXTENSIONS := ["smk", "ogv"]
 const Mods = preload("res://mod_registry.gd")
 
 static func index(folder: String) -> Dictionary:
@@ -28,6 +29,7 @@ static func _scan(folder: String, base: String, result: Dictionary, depth: int) 
 		elif extension in IMAGE_EXTENSIONS: kind = "image"
 		elif extension in AUDIO_EXTENSIONS and (extension != "raw" or "/WAVES" in folder.to_upper().replace("\\", "/")): kind = "audio"
 		elif extension in TEXT_EXTENSIONS: kind = "text"
+		elif extension in VIDEO_EXTENSIONS: kind = "video"
 		if kind.is_empty(): continue
 		var path := folder.path_join(filename)
 		var relative := path.trim_prefix(base + "/").trim_prefix(base + "\\").replace("\\", "/")

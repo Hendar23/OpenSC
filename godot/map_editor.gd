@@ -324,6 +324,7 @@ func select(key: String) -> void:
 	if key.begins_with("object_type:"):
 		species_preview = SpeciesPreview.new(); properties.add_child(species_preview)
 		species_preview.show_object(entry,folder)
+		choice("behavior","Object behavior",["mine","thorium"],entry.get("behavior","mine"),["Floating mine","Thorium crystal"])
 		choice("appearance","Appearance",["sprite","model"],entry.appearance,["Billboard image","3D model"])
 		text_field("texture","Image asset (texture ID / BMP name)",entry.texture)
 		text_field("mask","Original transparency mask",entry.mask)
@@ -333,10 +334,24 @@ func select(key: String) -> void:
 		fields.texture.text_submitted.connect(func(_text: String) -> void: _update_object_preview())
 		number("size","Size (maximum diameter)",entry.size,0.01,1000,0.05)
 		number("health","Health",entry.health,0.01,100000,0.1)
-		number("damage","Explosion damage",entry.damage,0,100000,0.1)
-		number("explosion_radius","Explosion radius",entry.explosion_radius,0,1000,0.1)
-		number("blast_force","Blast impulse (N.s)",entry.get("blast_force",300.0),0,100000,10)
-		number("trigger_distance","Trigger distance from submarine centre (0 disables)",entry.trigger_distance,0,1000,0.1)
+		if entry.get("behavior","mine") == "thorium":
+			number("mass","Crystal mass",entry.get("mass",2.0),0.01,1000,0.1)
+			number("shard_mass","Shard mass",entry.get("shard_mass",1.0),0.01,1000,0.1)
+			number("shard_scale_percent","Shard size (% of original model)",entry.get("shard_scale_percent",100.0),0.1,1000,1)
+			for index in range(1,4): choice("shard" + str(index),"Shard " + str(index) + " model",models,str(entry.get("shard" + str(index),"SHARD" + str(index))))
+			number("radiation_range","Radiation range",entry.get("radiation_range",1.5),0,100,0.1)
+			number("radiation_strength","Radiation damage (shield points/second)",entry.get("radiation_strength",5.0),0,1000,0.1)
+			number("glow_energy","Yellow light strength (0 disables)",entry.get("glow_energy",1.0),0,100,0.1)
+			number("glow_range","Glow light range",entry.get("glow_range",3.0),0,100,0.1)
+			number("glow_emission","Model glow strength (0 disables)",entry.get("glow_emission",0.25),0,100,0.05)
+			for channel in ["red","green","blue"]: number("glow_" + channel,"Glow " + channel,entry.get("glow_" + channel,Document.ObjectDefinitions.THORIUM["glow_" + channel]),0,1,0.01)
+			number("spawn_chance","Random drop chance per minute (%)",entry.get("spawn_chance",0.0),0,100,1)
+			number("maximum_population","Maximum crystal/shard population",entry.get("maximum_population",60),0,5000,1)
+		else:
+			number("damage","Explosion damage",entry.damage,0,100000,0.1)
+			number("explosion_radius","Explosion radius",entry.explosion_radius,0,1000,0.1)
+			number("blast_force","Blast impulse (N.s)",entry.get("blast_force",300.0),0,100000,10)
+			number("trigger_distance","Trigger distance from submarine centre (0 disables)",entry.trigger_distance,0,1000,0.1)
 	elif key.begins_with("object_group:"):
 		for i in range(3): number("position_" + str(i),"Position " + ["X","Y","Z"][i],entry.position[i],-50000,50000,0.1)
 		var ids: Array = document.object_types.map(func(item: Dictionary) -> String: return item.id)
@@ -348,6 +363,7 @@ func select(key: String) -> void:
 	elif key.begins_with("species:"):
 		species_preview = SpeciesPreview.new(); properties.add_child(species_preview)
 		species_preview.show_model(str(entry.model),folder)
+		species_preview.animation_speed = float(entry.get("animation_speed",1.0))
 		choice("model", "3D model", models, str(entry.model))
 		fields.model.item_selected.connect(func(_index: int) -> void: _update_species_model())
 		number("health", "Health", Document.creature_health(entry,gameplay_catalogue),0.1,100000,0.1)
@@ -364,6 +380,8 @@ func select(key: String) -> void:
 		choice("group_behaviour", "Group movement", Document.GROUP_BEHAVIOURS, entry.group_behaviour)
 		choice("response", "Response to submarine", Document.RESPONSES, entry.response)
 		number("speed", "Movement speed", entry.speed, 0.05, 30, 0.05)
+		number("animation_speed","Animation speed (×)",entry.get("animation_speed",1.0),0,10,0.1)
+		fields.animation_speed.value_changed.connect(func(value: float) -> void: species_preview.animation_speed = value)
 		number("turn_speed", "Maximum turn speed (°/s)", entry.get("turn_speed", 60.0), 1, 180, 1)
 		number("pitch_limit", "Maximum swim pitch (°)", entry.get("pitch_limit", 25.0), 0, 60, 1)
 		number("detection", "Detection distance", entry.detection, 0.1, 200, 0.1)
@@ -456,7 +474,11 @@ func apply_properties() -> void:
 	var before := document.duplicate(true); var entry := record()
 	entry.name = _value("name")
 	if selected.begins_with("object_type:"):
-		for key in ["appearance","texture","mask","model","size","health","damage","explosion_radius","trigger_distance","blast_force"]: entry[key] = _value(key)
+		for key in ["behavior","appearance","texture","mask","model","size","health","damage","explosion_radius","trigger_distance","blast_force","mass","shard_mass","shard_scale_percent","shard1","shard2","shard3","radiation_range","radiation_strength","glow_energy","glow_range","glow_emission","glow_red","glow_green","glow_blue","spawn_chance","maximum_population"]:
+			if fields.has(key): entry[key] = _value(key)
+		if entry.behavior == "thorium":
+			for key in Document.ObjectDefinitions.THORIUM:
+				if not entry.has(key): entry[key] = Document.ObjectDefinitions.THORIUM[key]
 	elif selected.begins_with("object_group:"):
 		entry.position = [_value("position_0"),_value("position_1"),_value("position_2")]
 		for key in ["type","count","radius"]: entry[key] = _value(key)
@@ -464,7 +486,7 @@ func apply_properties() -> void:
 		# Viewing/applying other properties should preserve the imported default.
 		if entry.has("health") or not is_equal_approx(fields.health.value,fields.health.get_meta("initial_value")): entry.health = _value("health")
 		for key in Document.POPULATION_DEFAULTS: entry[key] = _value(key)
-		for key in ["model", "mobility", "group_behaviour", "response", "speed", "turn_speed", "pitch_limit", "detection", "startle_duration", "startle_speed_multiplier", "startle_turn_speed", "scale_min", "scale_max"]: entry[key] = _value(key)
+		for key in ["model", "mobility", "group_behaviour", "response", "speed", "animation_speed", "turn_speed", "pitch_limit", "detection", "startle_duration", "startle_speed_multiplier", "startle_turn_speed", "scale_min", "scale_max"]: entry[key] = _value(key)
 	else:
 		var point := Vector3(float(_value("position_0")), float(_value("position_1")), float(_value("position_2")))
 		if selected.begins_with("group:"):

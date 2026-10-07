@@ -18,6 +18,8 @@ uniform vec4 albedo_color : source_color = vec4(1.0);
 uniform vec4 emission_color : source_color = vec4(0.0);
 uniform bool has_texture = false;
 uniform bool has_emission_texture = false;
+uniform bool self_illuminated = false;
+uniform float surface_emission_strength = 0.0;
 uniform bool use_vertex_color = false;
 uniform float roughness_value = 0.7;
 uniform float metallic_value = 0.0;
@@ -57,17 +59,20 @@ void fragment() {
 	if (has_metallic_texture) METALLIC *= dot(texture(metallic_texture,uv),metallic_channel);
 	vec3 glow = emission_color.rgb;
 	if (has_emission_texture) glow *= texture(emission_texture,uv).rgb;
+	if (self_illuminated) glow = color.rgb * surface_emission_strength;
 	EMISSION = (glow + color.rgb * natural_ambient(natural_factor)) * natural_transmission + natural_fog_colour(air_position,INV_VIEW_MATRIX[3].xyz) * fog;
 	// ALPHA_OUTPUT
 }
 void light() {
-	float source = LIGHT_IS_DIRECTIONAL ? natural_factor : 1.0;
-	DIFFUSE_LIGHT += max(dot(NORMAL,LIGHT),0.0) * ATTENUATION * LIGHT_COLOR * source / PI;
-	vec3 half_vector = normalize(LIGHT + VIEW);
-	float shine = pow(max(dot(NORMAL,half_vector),0.0),mix(128.0,8.0,ROUGHNESS));
-	// Godot's dielectric specular control maps to F0 = 0.16 * specular².
-	// Treating it directly as reflectance made the default 0.5 shine 12.5x
-	// brighter, even on rough fish and hull materials.
-	vec3 reflectance = mix(vec3(0.16 * specular_value * specular_value),ALBEDO / max(natural_transmission,0.001),METALLIC);
-	SPECULAR_LIGHT += shine * max(dot(NORMAL,LIGHT),0.0) * ATTENUATION * LIGHT_COLOR * source * reflectance * pow(1.0 - ROUGHNESS,2.0) * natural_transmission;
+	if (!self_illuminated) {
+		float source = LIGHT_IS_DIRECTIONAL ? natural_factor : 1.0;
+		DIFFUSE_LIGHT += max(dot(NORMAL,LIGHT),0.0) * ATTENUATION * LIGHT_COLOR * source / PI;
+		vec3 half_vector = normalize(LIGHT + VIEW);
+		float shine = pow(max(dot(NORMAL,half_vector),0.0),mix(128.0,8.0,ROUGHNESS));
+		// Godot's dielectric specular control maps to F0 = 0.16 * specular².
+		// Treating it directly as reflectance made the default 0.5 shine 12.5x
+		// brighter, even on rough fish and hull materials.
+		vec3 reflectance = mix(vec3(0.16 * specular_value * specular_value),ALBEDO / max(natural_transmission,0.001),METALLIC);
+		SPECULAR_LIGHT += shine * max(dot(NORMAL,LIGHT),0.0) * ATTENUATION * LIGHT_COLOR * source * reflectance * pow(1.0 - ROUGHNESS,2.0) * natural_transmission;
+	}
 }

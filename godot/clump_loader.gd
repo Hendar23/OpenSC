@@ -302,6 +302,7 @@ static func _load_texture(game_folder: String, texture_name: String, mask_name: 
 		Mods.note("%s: could not load texture %s; using the next replacement or original." % [replacement.name, texture_name])
 	var texture_path := game_folder.path_join("GAMETEX").path_join(texture_name.to_upper() + ".BMP")
 	var image := LegacyBMP.load_image(texture_path)
+	if image == null: image = LegacyBMP.load_image(game_folder.path_join("GAMETEX").path_join(texture_name.to_upper() + ".RAS"))
 	if image == null or image.is_empty():
 		push_warning("Could not load texture: " + texture_path)
 		cache[key] = null
@@ -310,6 +311,7 @@ static func _load_texture(game_folder: String, texture_name: String, mask_name: 
 	if not mask_name.is_empty():
 		var mask_path := game_folder.path_join("GAMETEX").path_join(mask_name.to_upper() + ".BMP")
 		var mask := LegacyBMP.load_image(mask_path)
+		if mask == null: mask = LegacyBMP.load_image(game_folder.path_join("GAMETEX").path_join(mask_name.to_upper() + ".RAS"))
 		for replacement in Mods.candidates("texture." + mask_name):
 			var candidate := _replacement_image(replacement.path)
 			if candidate != null and candidate.get_size() == image.get_size(): mask = candidate; break

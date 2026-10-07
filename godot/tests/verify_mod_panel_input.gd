@@ -51,7 +51,12 @@ func _run() -> void:
 	panel.open(); for frame in range(3): await process_frame
 	scroll.scroll_vertical = 0; await process_frame
 	await click(panel,panel.choices["input-test-0"])
-	await click(panel,button(panel,"Apply and reload"))
+	await click(panel,button(panel,"Apply"))
+	check(panel.apply_confirmation.visible and not applied and Mods.enabled.is_empty(),"Apply warns before changing mods or ending the game")
+	await click(panel.apply_confirmation,panel.apply_confirmation.get_cancel_button())
+	check(not panel.apply_confirmation.visible and panel.visible and not applied and Mods.enabled.is_empty(),"Confirmation Cancel keeps the mod menu and unapplied choices")
+	await click(panel,button(panel,"Apply"))
+	await click(panel.apply_confirmation,panel.apply_confirmation.get_ok_button())
 	check(applied and not panel.visible and "input-test-0" in Mods.enabled,"Apply commits selection and requests reload while paused")
 	panel.open(); for frame in range(3): await process_frame
 	await click(panel,button(panel,"Refresh installed mods"))

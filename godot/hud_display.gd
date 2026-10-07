@@ -10,12 +10,15 @@ var sub_icon: Texture2D
 var tilt_angle := 0.0
 var shield_blue: Texture2D
 var shield_orange: Texture2D
+var radiation_icon: Texture2D
+var radiation_clock := 0.0
 var screen := Rect2(0, 0, 128, 80)
 var screen_only := false
 var map_span := 70.0
 var full_world := false
 var fog_material: ShaderMaterial
 var player_marker: Polygon2D
+var city_markers: Control
 var casing_light := Color.WHITE
 var casing_panel: TextureRect
 
@@ -36,13 +39,17 @@ void fragment() {
     float revealed = texture(explored_mask, map_uv).r;
     if (any(lessThan(map_uv, vec2(0.0))) || any(greaterThan(map_uv, vec2(1.0)))) revealed = 0.0;
     bool orange = COLOR.r > COLOR.g * 1.7 && COLOR.r > COLOR.b * 2.0;
-    bool label = COLOR.g > COLOR.r * 2.0 && COLOR.g > COLOR.b * 2.0;
-    if (!orange && !label) COLOR.rgb *= vec3(0.45, 0.72, 1.0);
+    if (!orange) COLOR.rgb *= vec3(0.45, 0.72, 1.0);
     COLOR.rgb = mix(vec3(0.002, 0.005, 0.015), COLOR.rgb, revealed);
 }"""
 	fog_material = ShaderMaterial.new()
 	fog_material.shader = shader
 	material = fog_material
+	# Discovered names can extend onto unexplored terrain without being
+	# darkened by the terrain's fog shader.
+	city_markers = Control.new(); city_markers.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	city_markers.use_parent_material = false; add_child(city_markers)
+	city_markers.draw.connect(_draw_city_markers)
 	# The player's position stays visible even where terrain is unexplored.
 	# A separate canvas item keeps the map's fog shader off the orange arrow.
 	player_marker = Polygon2D.new()
@@ -62,6 +69,7 @@ void fragment() {
 		add_child(casing_panel)
 
 func _process(_delta: float) -> void:
+	radiation_clock += _delta
 	if casing_panel != null: casing_panel.modulate = casing_light
 	if kind == "map" and fog_material != null and map_data.exploration_texture != null:
 		var rect := Rect2(Vector2.ZERO,size) if screen_only else screen
@@ -79,6 +87,7 @@ func _process(_delta: float) -> void:
 		var forward := -pilot.get_global_transform_interpolated().basis.z
 		tilt_angle = asin(clampf(forward.y,-1.0,1.0))
 	queue_redraw()
+	if city_markers != null: city_markers.queue_redraw()
 
 func _draw() -> void:
 	if pilot == null: return
@@ -91,6 +100,11 @@ func _draw() -> void:
 		if not item.is_empty():
 			var icon: Texture2D = item.icons[0 if item.enabled else 1]
 			if icon != null: draw_texture_rect(icon, rect, false)
+			if item.id == "suckomat" and equipment.counter_digits.size() == 10:
+				var count: int = equipment.vacuum.storage.size()
+				for digit in range(2):
+					var texture: Texture2D = equipment.counter_digits[0 if digit == 0 else count]
+					if texture != null: draw_texture_rect(texture,Rect2(Vector2(9.5 + digit * 9,23.5),Vector2(8,10)),false)
 	elif kind == "tilt":
 		var centre := rect.get_center()
 		draw_circle(centre, minf(rect.size.x, rect.size.y) * 0.5, Color(0.005, 0.035, 0.04))
@@ -105,13 +119,29 @@ func _draw() -> void:
 		if not item.is_empty() and item.icon != null: draw_texture_rect(item.icon,rect,false)
 		else: draw_string(ThemeDB.fallback_font, rect.position + Vector2(17, 25), "—", HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 34, 16, Color(0.4, 0.7, 0.7))
 	elif kind == "shield":
-		# Status remains a placeholder until damage/armour systems exist.
-		draw_circle(rect.get_center(), minf(rect.size.x,rect.size.y) * 0.5, Color(0.01, 0.04, 0.05))
+		var centre := rect.get_center()
+		draw_circle(centre, minf(rect.size.x,rect.size.y) * 0.5, Color(0.01, 0.04, 0.05))
 		var gauge_scale := minf(rect.size.x,rect.size.y) / 62.0
 		var offsets := [Vector2(-11,-23),Vector2(-23,-11),Vector2(-23,11),Vector2(-11,23),Vector2(11,23),Vector2(23,11),Vector2(23,-11),Vector2(11,-23)]
 		for i in range(8):
-			var atlas: Texture2D = shield_orange if i == 0 else shield_blue
-			if atlas != null: draw_texture_rect_region(atlas, Rect2(rect.get_center() + (offsets[i] - Vector2(7,7.5)) * gauge_scale, Vector2(14,15) * gauge_scale), Rect2(0,i * 15,14,15))
+			var state := shield_segment_state(i)
+			if state == "empty": continue
+			var atlas: Texture2D = shield_orange if state == "orange" else shield_blue
+			if atlas != null: draw_texture_rect_region(atlas, Rect2(centre + (offsets[i] - Vector2(7,7.5)) * gauge_scale, Vector2(14,15) * gauge_scale), Rect2(0,i * 15,14,15))
+
+		if radiation_symbol_visible() and radiation_icon != null:
+			var icon_size := radiation_icon.get_size() * gauge_scale
+			draw_texture_rect(radiation_icon,Rect2(centre - icon_size * 0.5,icon_size),false)
+
+func radiation_symbol_visible() -> bool:
+	return pilot != null and bool(pilot.get("radiation_exposed")) and fmod(radiation_clock,0.5) < 0.25
+
+func shield_segment_state(index: int) -> String:
+	var ratio := clampf(float(pilot.health) / maxf(1.0,float(pilot.max_health)),0.0,1.0) if pilot != null else 1.0
+	if ratio <= 0.0: return "empty"
+	if ratio >= 1.0: return "blue"
+	var depleted := int(floor((1.0 - ratio) * 8.0))
+	return "empty" if index < depleted else "orange" if index == depleted else "blue"
 
 func _draw_map(rect: Rect2) -> void:
 	if map_data == null or map_data.texture == null: return
@@ -119,18 +149,24 @@ func _draw_map(rect: Rect2) -> void:
 	var span := Vector2(map_span, map_span * rect.size.y / rect.size.x)
 	var uv: Vector2 = map_data.uv(point)
 	var uv_size := Vector2(span.x / map_data.bounds.size.x, span.y / map_data.bounds.size.z)
-	var marker_scale := minf(rect.size.x / 124.0,2.5)
 	draw_texture_rect_region(map_data.texture, rect, Rect2((uv - uv_size * 0.5) * map_data.texture.get_size(), uv_size * map_data.texture.get_size()))
+
+func _draw_city_markers() -> void:
+	if pilot == null or map_data == null or map_data.texture == null: return
+	var rect := Rect2(Vector2.ZERO,size) if screen_only else screen
+	var point: Vector3 = _map_centre()
+	var span := Vector2(map_span,map_span * rect.size.y / rect.size.x)
+	var marker_scale := minf(rect.size.x / 124.0,2.5)
 	for marker in map_data.markers:
 		if not map_data.is_explored(marker.position): continue
 		var offset := Vector2(marker.position.x - point.x, marker.position.z - point.z) / span * rect.size
 		var position := rect.get_center() + offset
 		if rect.grow(-4 * marker_scale).has_point(position):
-			draw_circle(position, 2.5 * marker_scale, Color(0.15, 0.95, 0.2))
+			city_markers.draw_circle(position, 2.5 * marker_scale, Color(0.15, 0.95, 0.2))
 			var text_position := position + Vector2(4, -3) * marker_scale
 			var text_width := rect.end.x - text_position.x - 2.0
 			if text_width > 12.0:
-				draw_string(ThemeDB.fallback_font, text_position, str(marker.name).to_upper().left(18), HORIZONTAL_ALIGNMENT_LEFT, text_width, maxi(6, int(6 * marker_scale)), Color(0.15,0.85,0.2))
+				city_markers.draw_string(ThemeDB.fallback_font, text_position, str(marker.name).to_upper().left(18), HORIZONTAL_ALIGNMENT_LEFT, text_width, maxi(6, int(6 * marker_scale)), Color(0.15,0.85,0.2))
 
 func _map_centre() -> Vector3:
 	if full_world:

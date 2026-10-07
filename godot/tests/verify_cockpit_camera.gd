@@ -42,6 +42,13 @@ func _run() -> void:
 	if not game.startup_complete: quit(1); return
 	game.map_reveal_slider.value = 5.0
 	check(is_equal_approx(game.cockpit_hud.map_data.reveal_radius,5.0), "F1 reveal radius slider updates the map live")
+	var reveal_button: Button = game.graphics_controls.find_child("RevealWholeMap",true,false)
+	reveal_button.pressed.emit()
+	check(game.cockpit_hud.map_data.is_explored(game.cockpit_hud.map_data.bounds.position) and game.cockpit_hud.map_data.is_explored(game.cockpit_hud.map_data.bounds.end),"Dev button reveals the entire shared map")
+	check(game.cockpit_hud.map_data.markers.all(func(marker: Dictionary) -> bool: return game.cockpit_hud.map_data.is_explored(marker.position)),"Reveal whole map also discovers every city dock")
+	var reset_button: Button = reveal_button.get_parent().get_child(0)
+	reset_button.pressed.emit()
+	check(not game.cockpit_hud.map_data.is_explored(game.cockpit_hud.map_data.bounds.position),"Adjacent reset button clears whole-map reveal again")
 	var config_path := "res://tests/map-radius-export.cfg"
 	check(game._export_all_settings(config_path) == OK,"Reveal radius exports with all settings")
 	game.map_reveal_slider.value = 15.0

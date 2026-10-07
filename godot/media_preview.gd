@@ -35,12 +35,17 @@ var raw_channels: OptionButton
 var waveform: Control
 var seeking := false
 var text_view: TextEdit
+var video_preview: VBoxContainer
+var remember_preferences := true
 
 func _ready() -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_build_images()
 	_build_audio()
+	video_preview = preload("res://video_preview.gd").new()
+	video_preview.remember_preferences = remember_preferences
+	add_child(video_preview)
 	text_view = TextEdit.new()
 	text_view.editable = false
 	text_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -170,6 +175,7 @@ func _build_audio() -> void:
 	column.add_child(audio_seek)
 
 func clear() -> void:
+	if video_preview != null: video_preview.clear()
 	audio_source = null
 	if audio_player != null:
 		audio_player.stop()
@@ -177,7 +183,7 @@ func clear() -> void:
 		audio_player.stream_paused = false
 	image = null
 	if image_view != null: image_view.texture = null
-	for control in [image_panel, image_tools, audio_panel, text_view]:
+	for control in [image_panel, image_tools, audio_panel, text_view, video_preview]:
 		if control != null: control.visible = false
 	selected_path = ""
 	selected_kind = ""
@@ -205,6 +211,8 @@ func show_asset(path: String, kind: String) -> void:
 	elif kind == "audio":
 		if bytes > 67108864: _error("This audio file is too large to preview (limit: 64 MiB)."); return
 		_show_audio(path)
+	elif kind == "video":
+		video_preview.show(); video_preview.show_video(path)
 	elif kind == "text":
 		if bytes > 262144: _error("This text file is too large to preview (limit: 256 KiB)."); return
 		var data := FileAccess.get_file_as_bytes(path)
@@ -297,6 +305,7 @@ func _toggle_audio() -> void:
 		audio_play.text = "Pause"
 
 func _stop_audio() -> void:
+	if video_preview != null: video_preview.stop_playback()
 	audio_player.stop()
 	audio_player.stream_paused = false
 	audio_seek.set_value_no_signal(0)

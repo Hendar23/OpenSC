@@ -8,6 +8,7 @@ var camera: Camera3D
 var model: Node3D
 var animation: RefCounted
 var time := 0.0
+var animation_speed := 1.0
 var dragging := false
 func _ready() -> void:
 	custom_minimum_size = Vector2(0,220)
@@ -58,7 +59,7 @@ func show_object(definition: Dictionary, folder: String) -> void:
 	camera.look_at(Vector3.ZERO)
 func _process(delta: float) -> void:
 	if not is_visible_in_tree() or animation == null: return
-	time += delta * 0.5; animation.apply(time)
+	time += delta * 0.5 * animation_speed; animation.apply(time)
 func _preview_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 		camera.position *= 0.9 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.1

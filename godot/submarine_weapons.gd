@@ -13,7 +13,7 @@ var muzzle: Node3D
 var beam: MeshInstance3D
 var material: StandardMaterial3D
 var frames: Array[Texture2D] = []
-var audio: AudioStreamPlayer3D
+var audio: AudioStreamPlayer
 var icon: Texture2D
 var firing := false
 var elapsed := 0.0
@@ -60,10 +60,8 @@ func setup(player: Node3D, folder: String, view: Camera3D, catalogue: Dictionary
 		if texture != null: impact_frames.append(texture)
 	impact = Sprite3D.new(); impact.texture = Assets._load_texture(folder,"SPARK1","SPARK1M",cache); impact.billboard = BaseMaterial3D.BILLBOARD_ENABLED; impact.pixel_size = 0.004; impact.no_depth_test = false; impact.top_level = true; add_child(impact); impact.hide()
 	spark = OmniLight3D.new(); spark.top_level = true; spark.light_color = Color(0.55,0.7,1); spark.light_energy = 1; spark.omni_range = 1.5; add_child(spark); spark.hide()
-	audio = AudioStreamPlayer3D.new(); audio.stream = AudioLoop.prepare(_sound(folder,"audio.weapon.zapper","ELECTRIC"),true,35); audio.volume_db = settings.volume_db; audio.max_distance = 25; muzzle.add_child(audio)
-	# Keep the player's weapon audible from the chase camera without raising
-	# its cockpit volume. Spatial direction and distant attenuation remain.
-	audio.unit_size = 8.0
+	# Player weapon volume stays constant when the camera changes view or distance.
+	audio = AudioStreamPlayer.new(); audio.stream = AudioLoop.prepare(_sound(folder,"audio.weapon.zapper","ELECTRIC"),true,35); audio.volume_db = settings.volume_db; add_child(audio)
 	hit_blood = preload("res://creature_hit.gd").new(); add_child(hit_blood)
 
 static func _sound(folder: String, id: String, sample: String) -> AudioStream:
@@ -201,7 +199,7 @@ func _aim_direction(forward: Vector3) -> Vector3:
 	var aimed := forward
 	for entry in get_world_3d().direct_space_state.intersect_shape(query,128):
 		var target: Node3D = entry.collider
-		if not target.has_method("take_damage") or bool(target.get("dead")): continue
+		if not target.has_method("take_damage") or bool(target.get("dead")) or not bool(target.get_meta("weapon_target",true)): continue
 		var offset := target.global_position - beam_start
 		if offset.length_squared() < 0.00001 or offset.length() > settings.range: continue
 		var direction := offset.normalized()

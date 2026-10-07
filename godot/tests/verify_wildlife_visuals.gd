@@ -21,6 +21,7 @@ func _run() -> void:
 	var pop: Node3D = game.wildlife; pop.streaming = false
 	for species in pop.document.species: species.random_spawn = false
 	var species: Dictionary = pop.document.species.filter(func(entry: Dictionary) -> bool: return entry.model == "CRAB")[0]
+	species.animation_speed = 2.0
 	var random := RandomNumberGenerator.new(); random.seed = 1234
 	var home: Vector3 = pop._random_home(species,random)
 	pop.document.groups = [{"id":"crab_visual_test","species":species.id,"position":Document.array(home),"chance":100.0,"count_min":1,"count_max":1,"radius":0.2}]
@@ -28,11 +29,17 @@ func _run() -> void:
 	check(pop.get_child_count() == 1,"Piloting wildlife path creates the crab")
 	if pop.get_child_count() == 0: game.queue_free(); await process_frame; quit(1); return
 	var crab: Node3D = pop.get_child(0)
+	check(is_equal_approx(crab.animation_speed,2.0),"Species animation speed reaches the live crab")
 	crab.swim_speed = 0; crab.direction = Vector3.BACK; crab.goal = crab.position + Vector3.BACK * 10; crab.turn_timer = 100
 	game.camera.position = crab.global_position + Vector3(0,1.0,1.0); game.camera.look_at(crab.global_position)
 	var before: float = crab.animation_time
 	for frame in range(30): await physics_frame
 	check(crab.animation_time > before + 0.8 and crab.is_physics_processing() and crab.is_processing(),"Live piloting crab advances its walking animation")
+	crab.set_physics_process(false)
+	before = crab.animation_time
+	crab._physics_process(0.1)
+	check(is_equal_approx(crab.animation_time - before,0.2 * crab.walking_animation_rate),"Two-times animation speed doubles walking playback without changing movement speed")
+	crab.set_physics_process(true)
 	check(game.plant_current.plant_count > 0 and not game.plant_current.materials.is_empty(),"World plants receive sway materials")
 	game.plant_controls.strength.value = 0.3; game.plant_controls.speed.value = 0.6; game.plant_controls.direction.value = 90; game.plant_controls.variation.value = 0.7
 	check(game._view_settings().plants_strength == 0.3 and game._view_settings().plants_speed == 0.6 and game._view_settings().plants_direction == 90 and game._view_settings().plants_variation == 0.7,"Plant sliders are included in exported defaults")

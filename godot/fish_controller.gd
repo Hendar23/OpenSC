@@ -42,6 +42,7 @@ var crawl_stuck_time := 0.0
 var crawl_turn_sign := 1.0
 var crawl_probe_timer := 0.0
 var playback_rate := ANIMATION_SPEED
+var animation_speed := 1.0
 var visual_animation_enabled := true
 var offscreen_delta := 0.0
 var ground_initialized := false
@@ -333,7 +334,7 @@ func _physics_process(delta: float) -> void:
 	if mobility == "crawling": desired.y = 0.0; desired = desired.normalized()
 	if mobility == "crawling": desired = _crawler_steering(desired,delta)
 	_steer(desired, delta, maxf(turn_speed, startle_turn_speed) if startle_timer > 0.0 else turn_speed)
-	playback_rate = (walking_animation_rate if mobility == "crawling" else ANIMATION_SPEED) * (speed / maxf(swim_speed, 0.001) if escaping else 1.0)
+	playback_rate = animation_speed * (walking_animation_rate if mobility == "crawling" else ANIMATION_SPEED) * (speed / maxf(swim_speed, 0.001) if escaping else 1.0)
 	animation_time += delta * playback_rate
 	if animation != null and visual_animation_enabled: animation.apply(animation_time)
 	velocity = direction * speed

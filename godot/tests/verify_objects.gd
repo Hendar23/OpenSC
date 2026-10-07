@@ -1,6 +1,7 @@
 extends SceneTree
 const Document = preload("res://map_document.gd")
 const Population = preload("res://object_population.gd")
+const Thorium = preload("res://thorium_body.gd")
 const Mods = preload("res://mod_registry.gd")
 const Editor = preload("res://asset_editor.gd")
 class DamageBody extends StaticBody3D:
@@ -83,6 +84,13 @@ func run() -> void:
 		for tick in range(5): await process_frame
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/object-types-preview.png")
+	map.document.object_types.append(preload("res://object_definitions.gd").THORIUM.duplicate(true))
+	map.select("object_type:thorium")
+	check(map.fields.has("spawn_chance") and map.fields.has("maximum_population") and map.fields.has("shard1") and map.fields.has("radiation_range") and map.fields.has("glow_energy"),"Thorium editor exposes random drops, shards, radiation and glow settings")
+	map.fields.spawn_chance.value = 75; map.fields.maximum_population.value = 90; map.apply_properties()
+	check(map.record().spawn_chance == 75 and map.record().maximum_population == 90,"Thorium settings apply and survive preview rebuild")
+	map.add_object_group(); map.fields.count.value = 2; map.apply_properties()
+	check(map.objects.get_children().filter(func(body: Node) -> bool: return body is Thorium).size() == 2,"Editor renders manually placed frozen crystals")
 	var folder: String = map.folder
 	editor.queue_free(); await process_frame
 	var world := Node3D.new(); root.add_child(world)

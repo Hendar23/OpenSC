@@ -11,7 +11,7 @@ func read(slot: int) -> Dictionary:
 	if slot < 0 or slot >= SLOT_COUNT: error = "Invalid save slot."; return {}
 	var file := FileAccess.open(path(slot),FileAccess.READ)
 	if file == null: error = "No saved game in this slot."; return {}
-	if file.get_length() > 4000000: error = "Save file is too large."; return {}
+	if file.get_length() > 16000000: error = "Save file is too large."; return {}
 	var parser := JSON.new()
 	if parser.parse(file.get_as_text()) != OK: error = "This save is damaged."; return {}
 	var data: Variant = parser.data
@@ -31,6 +31,7 @@ static func valid(data: Variant) -> bool:
 		if not id is String: return false
 	if not data.get("explored") is String: return false
 	if not data.get("equipment_selected","") is String or not data.get("weapon_selected","") is String: return false
+	if data.has("objects") and not preload("res://object_population.gd").valid_snapshot(data.objects): return false
 	var bytes := Marshalls.base64_to_raw(data.explored)
 	return bytes.size() == preload("res://hud_map.gd").RESOLUTION * preload("res://hud_map.gd").RESOLUTION
 func write(slot: int, snapshot: Dictionary) -> Error:

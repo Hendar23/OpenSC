@@ -14,6 +14,13 @@ func _run() -> void:
 	check(base.tables.city_info.records.size() == 6,"All six city names are recovered from original place and relay data")
 	check(base.tables.city_info.records["1"].name == "Touka Reef" and base.tables.city_info.records["2"].name == "Velcova Station" and base.tables.city_info.records["3"].name == "Beluga Basin" and base.tables.city_info.records["4"].name == "Tryton Institute" and base.tables.city_info.records["5"].name == "Aquatraz" and base.tables.city_info.records["6"].name == "Refinery","Original dock IDs map to the correct named places")
 	check(base.tables.radio_messages.records.city1.text.contains("TOUKA REEF") and base.tables.city_info.records["1"].greeting_radius == 20.0,"Relay greeting text and approach radius are imported")
+	var descriptions: Dictionary = base.tables.city_descriptions.records
+	check(descriptions.size() == 72,"All six cities, four story stages and three standings have original dock descriptions")
+	check(descriptions["touka1.neutral"].text.begins_with("Welcome to Touka Reef, the cultural centre of the Bohine.") and descriptions["touka1.neutral"].text.contains("\n\nProcha activity"),"Touka opening welcome and paragraph spacing match the reference")
+	check(descriptions["touka2.bad"].text.contains("Your reputation precedes you") and descriptions["touka2.good"].text.contains("terrorist infiltration units"),"Reputation-specific paragraphs retain the correct city and standing")
+	check(descriptions["refinery1.neutral"] == descriptions["refinery4.good"] and descriptions["aquatraz1.neutral"] == descriptions["aquatraz3.bad"],"Shared city stage and standing aliases resolve to the same paragraph")
+	for city in base.tables.city_info.records.values():
+		check(preload("res://legacy_bmp.gd").load_image(folder.path_join(city.title_bitmap)) != null,"Original title bitmap exists for " + city.name)
 	check(base.warnings.is_empty(),"All original archives and full database decode without warnings")
 	check(base.tables.equipment.records.size() == 30,"Original equipment catalogue has thirty records")
 	check(base.tables.economy_cities.records.size() == 5 and base.tables.economy_commodities.records.size() == 95,"Economy contains five cities and nineteen commodities per city")
@@ -29,6 +36,7 @@ func _run() -> void:
 	var rows := Data.csv_rows("id,text,number\nthing,\"comma, and \"\"quotes\"\"\",4\n")
 	check(rows[1][1] == 'comma, and "quotes"' and rows[1][2] == "4","CSV quoting and escaped quotes decode")
 	var changed := base.duplicate(true)
+	check(Data.apply_patch(changed,{"schema_version":1,"tables":{"city_descriptions":{"records":{"touka1.neutral":{"text":"Modded welcome"}}}}}).is_empty() and changed.tables.city_descriptions.records["touka1.neutral"].text == "Modded welcome","Mods can replace original dock welcome text through gameplay data")
 	var patch := {"schema_version":1,"tables":{"equipment":{"records":{"lights":{"Maximum":2},"new_tool":{"id":"new_tool","Type":"tool"},"map":null}}}}
 	check(Data.apply_patch(changed,patch).is_empty(),"Mods can change, add and remove individual records")
 	check(changed.tables.equipment.records.lights.Maximum == 2 and changed.tables.equipment.records.lights["Sq Pic"] == "sqlights" and not changed.tables.equipment.records.has("map"),"Partial override preserves unmodified fields")

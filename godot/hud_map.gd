@@ -9,7 +9,7 @@ var scenery_baked := false
 var surface_height := INF
 var passage_clearance := 1.1
 var blocked_samples := PackedByteArray()
-const PASSAGE_MARGIN := 0.15
+const PASSAGE_MARGIN := 0.30
 const REVEAL_RADIUS := 10.0
 var reveal_radius := REVEAL_RADIUS:
 	set(value):
@@ -70,6 +70,13 @@ func _visible_from(observer: Vector3, x: int, y: int) -> bool:
 func reset_exploration() -> void:
 	if explored == null: return
 	explored.fill(Color.BLACK)
+	exploration_texture.update(explored)
+	last_explored = Vector2(INF,INF)
+	last_explored_height = INF
+
+func reveal_all() -> void:
+	if explored == null: return
+	explored.fill(Color.WHITE)
 	exploration_texture.update(explored)
 	last_explored = Vector2(INF,INF)
 	last_explored_height = INF

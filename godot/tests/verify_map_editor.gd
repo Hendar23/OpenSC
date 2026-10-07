@@ -40,6 +40,10 @@ func _run() -> void:
 	map.add_species(); var species_key: String = map.selected
 	check(map.species_preview != null and map.species_preview.model != null,"Creature properties show the selected model")
 	check(map.fields.has("health") and is_equal_approx(map.fields.health.value,Document.creature_health(map.record(),map.gameplay_catalogue)),"Creature editor displays the same health default used by gameplay")
+	map.fields.animation_speed.value = 2.5
+	check(is_equal_approx(map.species_preview.animation_speed,2.5),"Animation speed updates the creature preview")
+	map.apply_properties()
+	check(is_equal_approx(map.record().animation_speed,2.5) and Document.valid(map.document),"Animation speed is saved in valid species settings")
 	var turtle_index: int = map.models.find("TURTLE")
 	map.fields.model.select(turtle_index); map.fields.model.item_selected.emit(turtle_index)
 	check(str(map.species_preview.model.get_meta("asset_source")).ends_with("TURTLE.DFF"),"Changing the model updates the preview before applying")

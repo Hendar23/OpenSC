@@ -135,6 +135,7 @@ func _build_interface() -> void:
 	category.add_item("Images / BMP")
 	category.add_item("Audio / WAV / RAW / music")
 	category.add_item("Text / configuration")
+	category.add_item("Cutscenes / video")
 	category.focus_mode = Control.FOCUS_NONE
 	category.item_selected.connect(func(_index: int) -> void: _filter_assets())
 	sidebar.add_child(category)
@@ -152,7 +153,7 @@ func _build_interface() -> void:
 	asset_list.item_activated.connect(_activate_asset)
 	sidebar.add_child(asset_list)
 	var footer := Label.new()
-	footer.text = "Double-click a sound to play it\nOriginal game files are read directly."
+	footer.text = "Double-click audio or video to play it\nOriginal game files are read directly."
 	footer.add_theme_font_size_override("font_size", 12)
 	sidebar.add_child(footer)
 	var main := VBoxContainer.new()
@@ -183,6 +184,7 @@ func _build_interface() -> void:
 	preview.gui_input.connect(_preview_input)
 	main.add_child(preview)
 	media = Media.new()
+	media.remember_preferences = remember_preferences
 	main.add_child(media)
 	media.visible = false
 	media.summary_changed.connect(func() -> void:
@@ -258,7 +260,7 @@ func _build_interface() -> void:
 	asset_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	asset_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	asset_dialog.title = "Open an asset for preview"
-	asset_dialog.filters = PackedStringArray(["*.bmp,*.ras,*.png,*.jpg,*.jpeg,*.webp ; Images", "*.wav,*.raw,*.mp3,*.ogg ; Audio", "*.dff,*.glb ; 3D assets", "*.txt,*.csv,*.cfg,*.conf ; Text"])
+	asset_dialog.filters = PackedStringArray(["*.bmp,*.ras,*.png,*.jpg,*.jpeg,*.webp ; Images", "*.wav,*.raw,*.mp3,*.ogg ; Audio", "*.dff,*.glb ; 3D assets", "*.txt,*.csv,*.cfg,*.conf ; Text", "*.smk,*.ogv ; Cutscenes"])
 	asset_dialog.file_selected.connect(_open_asset_file)
 	add_child(asset_dialog)
 	mod_panel = ModPanel.new()
@@ -295,7 +297,7 @@ func _show_mounts() -> void:
 
 func _open_asset_file(path: String) -> void:
 	var extension := path.get_extension().to_lower()
-	var kind := "model" if extension in ["dff", "glb"] else "image" if extension in Catalog.IMAGE_EXTENSIONS else "audio" if extension in Catalog.AUDIO_EXTENSIONS else "text" if extension in Catalog.TEXT_EXTENSIONS else ""
+	var kind := "model" if extension in ["dff", "glb"] else "image" if extension in Catalog.IMAGE_EXTENSIONS else "audio" if extension in Catalog.AUDIO_EXTENSIONS else "text" if extension in Catalog.TEXT_EXTENSIONS else "video" if extension in Catalog.VIDEO_EXTENSIONS else ""
 	if kind.is_empty(): status.text = "That file format is not supported for preview."; return
 	var key := path
 	catalog[key] = {"path": path, "relative": path, "folder": "Opened files", "kind": kind}
@@ -306,7 +308,7 @@ func _open_asset_file(path: String) -> void:
 	selected_name = key
 	search.text = ""
 	folder_filter.select(0)
-	category.select(0 if kind == "model" else 3 if kind == "image" else 4 if kind == "audio" else 5)
+	category.select(0 if kind == "model" else 3 if kind == "image" else 4 if kind == "audio" else 6 if kind == "video" else 5)
 	_filter_assets()
 
 func _load_folder(folder: String) -> void:
@@ -349,7 +351,7 @@ func _filter_assets() -> void:
 		if not query.is_empty() and not str(entry.relative).to_upper().contains(query): continue
 		if category.selected == 0 and entry.kind != "model": continue
 		if category.selected == 1 and (entry.kind != "model" or not is_plant(name)): continue
-		if category.selected >= 3 and entry.kind != ["image", "audio", "text"][category.selected - 3]: continue
+		if category.selected >= 3 and entry.kind != ["image", "audio", "text", "video"][category.selected - 3]: continue
 		if folder_filter.selected > 0 and entry.folder != folder_names[folder_filter.selected]: continue
 		filtered_names.append(name)
 		asset_list.add_item(name)
@@ -371,6 +373,10 @@ static func is_plant(name: String) -> bool:
 func _activate_asset(index: int) -> void:
 	if index < 0 or index >= filtered_names.size(): return
 	var name: String = filtered_names[index]
+	if catalog[name].kind == "video":
+		if selected_name != name: _select_asset(index)
+		media.video_preview.toggle_playback()
+		return
 	if catalog[name].kind != "audio": return
 	if selected_name != name: _select_asset(index)
 	media._stop_audio()

@@ -1,5 +1,6 @@
 extends SceneTree
 const Game = preload("res://game.gd")
+const Thorium = preload("res://thorium_body.gd")
 var failures := 0
 var checks := 0
 func check(ok: bool, text: String) -> void:
@@ -25,9 +26,26 @@ func run() -> void:
 	game.pilot.global_position = port.inside; game.pilot.active = false; game.pilot.freeze = true
 	game.docking._transition(game.Docking.Stage.DOCKED)
 	game.day_night.hour = 18.25; game.equipment.mounted[0].enabled = true
+	check(game._dock_ui_model().status.hull_strength == 100 and game._dock_ui_model().status.shields == 100,"Dock status starts with the original hull and shield ratings")
+	game.pilot.restore_health(100,70); game.player_progress.status.credits = 321
+	game.player_progress.standing[str(port.race)] = "good"
+	game.player_progress.campaign_stage = 2
 	game.cockpit_hud.map_data.explored.fill(Color.BLACK)
 	game.cockpit_hud.map_data.explored.set_pixel(100,101,Color.WHITE)
+	var authored_count: int = game.object_population.snapshot().size()
+	game.equipment.vacuum.storage.assign(["ore","ore","ore"])
+	game.dock_interface_active = false
+	game._process(0.0)
+	check(game.player_progress.cargo.get("ore",0) == 3 and game.equipment.vacuum.storage.is_empty(),"Entering dock transfers Suck-O-Matic storage into cargo")
+	var crystal_stats := preload("res://object_definitions.gd").THORIUM.duplicate(true)
+	var intact: RigidBody3D = game.object_population._create_thorium(crystal_stats,0,Transform3D(Basis.IDENTITY,port.entry + Vector3.UP))
+	intact.freeze = true; intact.linear_velocity = Vector3(0.2,-0.3,0.1)
+	var broken: RigidBody3D = game.object_population._create_thorium(crystal_stats,0,Transform3D(Basis.IDENTITY,port.entry + Vector3.RIGHT * 2))
+	game.object_population._shatter(broken)
+	for body in game.object_population.get_children():
+		if body is Thorium: body.freeze = true
 	var snapshot: Dictionary = game._save_snapshot("Test dock")
+	check(snapshot.objects.size() == authored_count + 4,"Dock save includes one crystal and three shards")
 	var map_document: Dictionary = preload("res://map_document.gd").load_active()
 	var transitional_signature := JSON.stringify(map_document).sha256_text()
 	check(not game._exploration_matches_map(transitional_signature),"Legacy placement hashes cannot identify explored terrain")
@@ -63,6 +81,9 @@ func run() -> void:
 	var corrupt := FileAccess.open(game.save_games.path(6),FileAccess.WRITE); corrupt.store_string("broken"); corrupt.close()
 	check(not game.save_games.slots()[6].valid,"Corrupt slot cannot be loaded")
 	game.dock_interface.open("home"); await capture("home")
+	check(game.dock_interface.layout.get_node_or_null("CityTitle") != null and game.dock_interface.layout.get_node_or_null("CityWelcome") != null,"Dock uses the original city title and scrollable original welcome")
+	var status_panel: Node = game.dock_interface.layout.get_node("SubStatus")
+	check(status_panel.get_child(15).text == "70" and status_panel.get_child(19).text == "321","Status shows current shields and credits rather than static placeholder text")
 	game.dock_interface.button_nodes[1].grab_focus()
 	var accept := InputEventJoypadButton.new(); accept.button_index = JOY_BUTTON_A; accept.pressed = true
 	game.dock_interface._input(accept)
@@ -79,10 +100,29 @@ func run() -> void:
 		game.dock_interface.open(page); await capture(page)
 	game.day_night.hour = 7; game.equipment.mounted[0].enabled = false
 	game.cockpit_hud.map_data.explored.fill(Color.WHITE)
+	var loaded_world := game.world_root
+	var loaded_sub: Node3D = game.pilot.visual
+	var loaded_map: RefCounted = game.cockpit_hud.map_data
+	var mine := preload("res://floating_mine.gd").new()
+	mine.setup(preload("res://object_definitions.gd").FLOATING_MINE,Node3D.new(),null,false)
+	game.object_population.add_child(mine)
+	mine.dead = true; mine.health = 0.0; mine.hide(); mine.collision_layer = 0
+	var debris := preload("res://creature_death.gd").new(); game.world_root.add_child(debris)
+	game.pilot.velocity = Vector3(1,2,3)
 	var restored: bool = await game._load_saved_game(0)
+	var restored_objects: Array = game.object_population.snapshot()
+	check(restored_objects.size() == snapshot.objects.size(),"Loading a docked game restores crystals and shards")
+	for index in range(mini(4,restored_objects.size())):
+		check(preload("res://map_document.gd").decode(restored_objects[index].pose).is_equal_approx(preload("res://map_document.gd").decode(snapshot.objects[index].pose)),"Saved Thorium position restored %d" % index)
 	check(restored,"Saved game reloads")
+	check(game.world_root == loaded_world and game.pilot.visual == loaded_sub and game.cockpit_hud.map_data == loaded_map and not game.loading_canvas.visible,"Save loads reuse the existing world, submarine and map renderer without a loading screen")
+	check(not is_instance_valid(debris) and not mine.dead and mine.health == mine.stats.health and mine.visible and mine.collision_layer == 8,"Save loading clears debris and restores detonated mines")
+	check(game.pilot.velocity == Vector3.ZERO and not game.pilot.pending_reset,"Save loading clears motion without a pending spawn teleport")
 	check(game.docking.stage == game.Docking.Stage.DOCKED and game.docking.current.name == port.name,"Returns to saved dock")
 	check(is_equal_approx(game.day_night.hour,18.25),"Restores time of day")
+	check(game.player_progress.status.shields == 70 and game.player_progress.status.credits == 321 and game.player_progress.campaign_stage == 2 and game._dock_ui_model().standing == "Friendly","Restores submarine status, reputation and story stage")
+	check(game.pilot.health == 70 and game.pilot.max_health == 100 and not game.pilot.dead,"Loaded dock status also restores real submarine shields")
+	check(game.player_progress.cargo.get("ore",0) == 3 and game.equipment.vacuum.storage.is_empty(),"Collected cargo survives dock save/load")
 	check(game.equipment.mounted[0].enabled,"Restores headlight state")
 	check(game.cockpit_hud.map_data.explored.get_pixel(100,101).r > 0.99 and game.cockpit_hud.map_data.explored.get_pixel(99,101).r < 0.01,"Restores explored fog mask")
 	check(game.dock_interface.visible and not game.pilot.visual.visible,"Dock UI displayed with docked sub hidden")
@@ -111,21 +151,31 @@ func run() -> void:
 	game.docking.set_physics_process(false)
 	game._process(0)
 	check(game.camera.global_position.is_equal_approx(launch_camera) and not game.first_person,"Launch preserves outside camera even after cockpit mode")
-	check((-game.camera.global_basis.z).y > -0.01,"Launch view frames the exit instead of looking down through the lid")
+	var launch_target := game.pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.35
+	check((-game.camera.global_basis.z).dot((launch_target - launch_camera).normalized()) > 0.999,"Launch camera points at the docked submarine rather than the exit")
 	await capture("launch-camera")
 	for frame in range(2000):
 		if game.docking.stage == game.Docking.Stage.IDLE: break
 		game.docking._physics_process(0.1)
+		if game.docking.stage == game.Docking.Stage.ASCEND:
+			game._process(0)
+			var target := game.pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.35
+			check(game.camera.global_position.is_equal_approx(launch_camera) and (-game.camera.global_basis.z).dot((target - launch_camera).normalized()) > 0.999,"Fixed launch camera tracks the submarine during ascent")
 	check(game.docking.stage == game.Docking.Stage.IDLE and game.pilot.active,"Loaded save can finish undocking")
 	# Read real legacy saves, but only write copies into the isolated test folder.
 	var actual_saves := preload("res://save_games.gd").new()
 	for slot in [0,6]:
 		var actual := actual_saves.read(slot)
 		if actual.is_empty(): continue
-		check(not game._exploration_matches_map(actual.map_signature),"Legacy slot %d starts with fresh exploration" % slot)
+		if not str(actual.map_signature).begins_with("terrain-v1:"):
+			check(not game._exploration_matches_map(actual.map_signature),"Legacy slot %d starts with fresh exploration" % slot)
 		game.save_games.write(2,actual)
 		check(await game._load_saved_game(2),"Loads a fixture copy of user's legacy slot %d" % slot)
 	for slot in [0,1,2,6]: DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.path(slot)))
+	game._begin_new_game()
+	check(game.player_progress.status.shields == 100 and game.player_progress.status.credits == 0 and game.player_progress.standing.is_empty(),"New game resets status and reputation")
+	var legacy_progress: Dictionary = game.PlayerProgress.restore({})
+	check(legacy_progress.status.hull_strength == 100 and legacy_progress.campaign_stage == 1,"Old saves without status receive starting values")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.folder))
 	paused = false; game.queue_free(); await process_frame
 	print("Dock save/load: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

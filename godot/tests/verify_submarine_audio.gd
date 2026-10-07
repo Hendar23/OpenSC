@@ -24,6 +24,21 @@ func _run() -> void:
 	pilot.submarine_audio.setup(pilot, folder)
 	pilot.set_process(false)
 	var sound: Node = pilot.submarine_audio
+	check(sound.shield_warning.stream != null and sound.shield_warning.stream.loop_mode == AudioStreamWAV.LOOP_FORWARD,"Original LOSHIELD sample repeats")
+	pilot.active = true; pilot.freeze = true
+	pilot.restore_health(100,30); sound.update(0)
+	check(not sound.shield_warning.playing,"Warning is silent at exactly 30 percent")
+	pilot.restore_health(100,29); sound.update(0)
+	check(sound.shield_warning.playing,"Warning starts below 30 percent")
+	pilot.visual.hide(); sound.update(0)
+	check(sound.shield_warning.playing,"Camera visibility cannot silence low shield warning")
+	pilot.visual.show(); pilot.restore_health(200,60); sound.update(0)
+	check(not sound.shield_warning.playing,"Warning uses percentage of shield capacity")
+	pilot.restore_health(100,20); sound.update(0); pilot.active = false; sound.update(0)
+	check(not sound.shield_warning.playing,"Docked or inactive submarine stops warning")
+	pilot.active = true; pilot.restore_health(100,0); sound.update(0)
+	check(not sound.shield_warning.playing,"Destroyed submarine stops warning")
+	pilot.restore_health(); pilot.active = false
 	sound.update(0.1)
 	check(sound.players.values().all(func(p: AudioStreamPlayer) -> bool: return not p.playing), "Stopped propulsion is silent")
 	pilot.pod_rotation_power = 1.0

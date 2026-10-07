@@ -9,7 +9,7 @@ const GROUP_BEHAVIOURS := ["solitary", "shoaling", "schooling"]
 const RESPONSES := ["ignore", "flee", "defend", "attack"]
 const POPULATION_DEFAULTS := {"random_spawn": false, "groups_min": 3, "groups_max": 8, "count_min": 1, "count_max": 10, "spawn_chance": 100.0, "roam_radius": 10.0}
 static func empty() -> Dictionary:
-	return {"schema_version": 1, "seed": 8675309, "entities": {}, "species": [], "groups": [], "object_types": [ObjectDefinitions.FLOATING_MINE.duplicate(true)], "object_groups": []}
+	return {"schema_version": 1, "seed": 8675309, "entities": {}, "species": [], "groups": [], "object_types": [ObjectDefinitions.FLOATING_MINE.duplicate(true), ObjectDefinitions.THORIUM.duplicate(true)], "object_groups": []}
 static func creature_health(species: Dictionary, catalogue: Dictionary) -> float:
 	var stats: Dictionary = catalogue.get("tables",{}).get("creature_stats",{}).get("records",{}).get(str(species.get("model","")).to_lower(),{})
 	return maxf(0.1,float(species.get("health",stats.get("health",10.0))))
@@ -56,6 +56,7 @@ static func valid(data: Variant) -> bool:
 		for key in ["speed", "detection", "scale_min", "scale_max"]:
 			if not finite_array([species.get(key)], 1) or float(species[key]) <= 0.0: return false
 		if float(species.scale_max) < float(species.scale_min) or float(species.scale_max) > 500.0: return false
+		if not finite_array([species.get("animation_speed",1.0)],1) or float(species.get("animation_speed",1.0)) < 0.0 or float(species.get("animation_speed",1.0)) > 10.0: return false
 		if not finite_array([species.get("turn_speed", 60.0), species.get("pitch_limit", 25.0)], 2): return false
 		if float(species.get("turn_speed", 60.0)) <= 0.0 or float(species.get("turn_speed", 60.0)) > 180.0 or float(species.get("pitch_limit", 25.0)) < 0.0 or float(species.get("pitch_limit", 25.0)) > 60.0: return false
 		if not finite_array([species.get("startle_duration", 0.3), species.get("startle_speed_multiplier", 2.8), species.get("startle_turn_speed", 720.0)], 3): return false

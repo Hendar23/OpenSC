@@ -167,6 +167,7 @@ func _spawn_fish_group(candidate: Dictionary, group: int) -> void:
 		fish.roam_radius = float(species.get("roam_radius",10.0))
 		fish.swim_speed = float(species.get("speed",1.3)) * random.randf_range(0.9,1.1)
 		fish.turn_speed = float(species.get("turn_speed",60))
+		fish.animation_speed = float(species.get("animation_speed",1.0))
 		fish.pitch_limit = float(species.get("pitch_limit",25))
 		fish.group_behaviour = str(species.get("group_behaviour","schooling"))
 		fish.response = str(species.get("response","ignore"))

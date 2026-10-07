@@ -8,6 +8,7 @@ const LegacyAudio = preload("res://legacy_audio.gd")
 const Tuning = preload("res://sound_tuning.gd")
 const SAMPLES := {"main_propeller": "PROP3", "side_pods": "PROP4", "pod_rotation": "PROP1"}
 const ONE_SHOTS := {"impact_hit1": "HIT1", "impact_hit3": "HIT3", "impact_creaking": "CREAKING"}
+var shield_warning: AudioStreamPlayer
 var effect_players := {}
 var pending_creaks: Array[Dictionary] = []
 var impact_cooldown := 0.0
@@ -51,6 +52,9 @@ func setup(body: RigidBody3D, folder: String) -> void:
 		player.max_polyphony = 3
 		add_child(player)
 		effect_players[role] = player
+	shield_warning = AudioStreamPlayer.new(); shield_warning.name = "LowShieldWarning"
+	shield_warning.stream = AudioLoop.prepare(load_sound(folder,"low_shield"),true)
+	add_child(shield_warning)
 
 func rebuild_loops() -> void:
 	applied_blend = float(tuning.settings.loop_blend_ms)
@@ -72,7 +76,7 @@ static func load_sound(folder: String, role: String) -> AudioStream:
 			stream.set_meta("asset_mod", replacement.name)
 			return stream
 		Mods.note("%s: could not load submarine audio %s; using the next replacement or original." % [replacement.name, role])
-	var sample: String = SAMPLES.get(role, ONE_SHOTS.get(role, ""))
+	var sample: String = SAMPLES.get(role, ONE_SHOTS.get(role, "LOSHIELD" if role == "low_shield" else ""))
 	return _read_stream(folder.path_join("WAVES/" + sample + ".RAW")) if not sample.is_empty() else null
 
 static func _read_stream(path: String) -> AudioStream:
@@ -86,7 +90,8 @@ static func _read_stream(path: String) -> AudioStream:
 	stream.set_meta("asset_source", path)
 	return stream
 
-func silence() -> void:
+func silence(stop_warning: bool = true) -> void:
+	if stop_warning and is_instance_valid(shield_warning): shield_warning.stop()
 	levels = Vector3.ZERO
 	pending_creaks.clear()
 	impact_cooldown = 0.0
@@ -133,12 +138,23 @@ func _update_effects(delta: float) -> void:
 		var gain := float(tuning.settings.creaking_volume if role == "impact_creaking" else tuning.settings.impact_volume)
 		player.volume_db = -80.0 if gain <= -60.0 or float(tuning.settings.master_volume) <= -60.0 or not solo_role.is_empty() else float(tuning.settings.master_volume) + gain + linear_to_db(float(player.get_meta("effect_level", 1.0)))
 
+func _update_shield_warning() -> void:
+	if not is_instance_valid(shield_warning): return
+	var low: bool = is_instance_valid(pilot) and pilot.active and not pilot.dead and not preview and solo_role.is_empty() and pilot.health > 0.0 and pilot.health / maxf(1.0,pilot.max_health) < 0.3
+	var volume := float(tuning.settings.master_volume)
+	var gain := float(tuning.settings.low_shield_volume)
+	shield_warning.volume_db = -80.0 if volume <= -60.0 or gain <= -60.0 else volume + gain
+	if low and shield_warning.stream != null:
+		if not shield_warning.playing: shield_warning.play()
+	elif shield_warning.playing: shield_warning.stop()
+
 func update(delta: float) -> void:
+	_update_shield_warning()
 	if not is_instance_valid(pilot) or not is_instance_valid(pilot.visual):
-		silence()
+		silence(false)
 		return
 	if not pilot.visual.is_visible_in_tree():
-		silence()
+		silence(false)
 		return
 	_update_effects(delta)
 	var speeds: Vector3 = pilot.propeller_speeds.abs()

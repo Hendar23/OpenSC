@@ -18,7 +18,7 @@ static func load_gore(folder: String) -> Array[Texture2D]:
 		if texture != null: frames.append(texture)
 	return frames
 
-func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, blood_frames: Array[Texture2D] = [], flesh_texture: Texture2D = null) -> void:
+func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, blood_frames: Array[Texture2D] = [], flesh_texture: Texture2D = null, visual_source: Node3D = null, additional_sources: Array[Node3D] = []) -> void:
 	name = "CreatureBurst"
 	chunk_fade_time = maxf(0,float(settings.chunk_lifetime))
 	lifetime = chunk_fade_time + 1.0
@@ -39,7 +39,8 @@ func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, bloo
 	# Animation tracks only morph meshes; rigid bodies and articulated parts
 	# (including turtles and seahorses) must also become debris.
 	var visual_meshes: Array[MeshInstance3D] = []
-	_collect_meshes(creature.get_child(1),visual_meshes)
+	_collect_meshes(visual_source if visual_source != null else creature.get_child(1),visual_meshes)
+	for source in additional_sources: _collect_meshes(source,visual_meshes)
 	for node in visual_meshes:
 		var pose: Transform3D = global_transform.affine_inverse() * node.global_transform
 		for surface in range(node.mesh.get_surface_count()):

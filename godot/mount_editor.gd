@@ -11,6 +11,7 @@ var pilot: Node3D
 var mounts := {}
 var selector: OptionButton
 var controls: Array[SpinBox] = []
+var size_control: SpinBox
 var status: Label
 var label: Label
 var updating := false
@@ -26,14 +27,18 @@ var weapons: Node3D
 func _ready() -> void:
 	var sidebar := VBoxContainer.new(); sidebar.custom_minimum_size.x = 320; add_child(sidebar)
 	label = Label.new(); label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; sidebar.add_child(label)
-	selector = OptionButton.new(); selector.add_item("Deep-Sea Lights"); selector.add_item("Zapper"); sidebar.add_child(selector)
-	selector.item_selected.connect(func(index: int) -> void: selected = ["deep_sea_lights","zapper"][index]; _sync())
+	selector = OptionButton.new(); selector.add_item("Deep-Sea Lights"); selector.add_item("Zapper"); selector.add_item("Suck-O-Matic"); sidebar.add_child(selector)
+	selector.item_selected.connect(func(index: int) -> void: selected = ["deep_sea_lights","zapper","suckomat"][index]; _sync())
 	for caption in ["Position X (right)","Position Y (up)","Position Z (back)","Rotation X (degrees)","Rotation Y (degrees)","Rotation Z (degrees)"]:
 		var row := HBoxContainer.new(); sidebar.add_child(row)
 		var text := Label.new(); text.text = caption; text.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(text)
 		var field := SpinBox.new(); field.min_value = -180 if controls.size() >= 3 else -10; field.max_value = 180 if controls.size() >= 3 else 10
 		field.step = 0.5 if controls.size() >= 3 else 0.005; field.custom_minimum_size.x = 115; row.add_child(field); controls.append(field)
 		field.value_changed.connect(func(_value: float) -> void: _edit())
+	var size_row := HBoxContainer.new(); sidebar.add_child(size_row)
+	var size_label := Label.new(); size_label.text = "Model size (%)"; size_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; size_row.add_child(size_label)
+	size_control = SpinBox.new(); size_control.min_value = 1; size_control.max_value = 1000; size_control.step = 1; size_control.value = 100; size_control.custom_minimum_size.x = 115
+	size_row.add_child(size_control); size_control.value_changed.connect(func(_value: float) -> void: _edit())
 	var actions := HBoxContainer.new(); sidebar.add_child(actions)
 	var reset := Button.new(); reset.text = "Reset selected"; actions.add_child(reset)
 	reset.pressed.connect(func() -> void:
@@ -61,7 +66,8 @@ func open(folder: String) -> void:
 	visual.scale *= Pilot.VISUAL_SCALE; visual.rotation.y = PI; pilot.add_child(visual); pilot.visual = visual
 	equipment = Equipment.new(); pilot.add_child(equipment); equipment.setup(pilot,folder); equipment.set_process(false)
 	weapons = Weapons.new(); pilot.add_child(weapons); weapons.setup(pilot,folder,camera,{}); weapons.set_physics_process(false)
-	mounts.deep_sea_lights = equipment.mounted[0].mount; mounts.zapper = weapons.muzzle
+	for item in equipment.mounted: mounts[item.id] = item.mount
+	mounts.zapper = weapons.muzzle
 	var box := Equipment._bounds(Equipment._meshes(visual,Transform3D.IDENTITY))
 	target = box.get_center(); distance = maxf(0.6,box.size.length() * 1.5)
 	label.text = "Submarine mounts\n" + Mounts.profile(visual)
@@ -73,6 +79,7 @@ func _sync() -> void:
 	updating = true
 	var mount: Node3D = mounts[selected]
 	for index in range(3): controls[index].value = mount.position[index]; controls[index + 3].value = mount.rotation_degrees[index]
+	size_control.value = mount.scale.x * 100.0
 	updating = false
 
 func _edit() -> void:
@@ -80,6 +87,7 @@ func _edit() -> void:
 	var mount: Node3D = mounts[selected]
 	mount.position = Vector3(controls[0].value,controls[1].value,controls[2].value)
 	mount.rotation_degrees = Vector3(controls[3].value,controls[4].value,controls[5].value)
+	mount.scale = Vector3.ONE * size_control.value / 100.0
 	status.text = "Preview updated. Save mounts to keep changes."
 
 func _save() -> void:

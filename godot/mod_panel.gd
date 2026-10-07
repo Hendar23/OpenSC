@@ -10,6 +10,7 @@ var pending_order: Array[String] = []
 var pending_enabled: Array[String] = []
 var embedded := false
 var content: MarginContainer
+var apply_confirmation: ConfirmationDialog
 
 func _ready() -> void:
 	# Main-menu gameplay is paused; this window must still receive GUI input.
@@ -35,7 +36,7 @@ func _ready() -> void:
 	heading.add_theme_font_size_override("font_size", 20)
 	column.add_child(heading)
 	var hint := Label.new()
-	hint.text = "Put a mod folder containing mod.json into Mods. Apply reloads the world."
+	hint.text = "Put a mod folder containing mod.json into Mods."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(hint)
 	var refresh := Button.new()
@@ -55,13 +56,20 @@ func _ready() -> void:
 	var buttons := HBoxContainer.new()
 	column.add_child(buttons)
 	var apply := Button.new()
-	apply.text = "Apply and reload"
+	apply.text = "Apply"
 	apply.pressed.connect(_apply)
 	buttons.add_child(apply)
 	var cancel := Button.new()
 	cancel.text = "Cancel"
 	cancel.pressed.connect(func() -> void: open() if embedded else hide())
 	buttons.add_child(cancel)
+	apply_confirmation = ConfirmationDialog.new()
+	apply_confirmation.title = "Apply mods?"
+	apply_confirmation.dialog_text = "Applying these changes will end the current game.\nAny unsaved progress will be lost."
+	apply_confirmation.ok_button_text = "OK"
+	apply_confirmation.cancel_button_text = "Cancel"
+	apply_confirmation.confirmed.connect(_commit_apply,CONNECT_DEFERRED)
+	add_child(apply_confirmation)
 	visible = false
 
 func _control_theme() -> Theme:
@@ -164,7 +172,7 @@ func _build_rows() -> void:
 	_update_info()
 
 func _update_info() -> void:
-	info.text = "No mods installed." if Mods.packs.is_empty() else "Original assets remain the fallback. Disabling all mods restores the base game."
+	info.text = "No mods installed." if Mods.packs.is_empty() else ""
 	var notes: Array[String] = []
 	var sources := {}
 	for id in pending_order:
@@ -181,6 +189,13 @@ func _update_info() -> void:
 	info.tooltip_text = "\n".join(notes)
 
 func _apply() -> void:
+	if embedded:
+		_commit_apply()
+	else:
+		apply_confirmation.popup_centered(Vector2i(480,160))
+		apply_confirmation.get_cancel_button().grab_focus()
+
+func _commit_apply() -> void:
 	var result := Mods.apply(pending_enabled, pending_order, persist_preferences)
 	if result != OK:
 		info.text = "Could not save mod selection: " + error_string(result)

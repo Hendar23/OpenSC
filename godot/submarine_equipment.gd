@@ -7,6 +7,9 @@ const DEFAULTS := {"light_energy": 3.0, "light_range": 18.0, "light_angle": 45.0
 var settings := DEFAULTS.duplicate()
 var mounted: Array[Dictionary] = []
 var selected := 0
+var cycle_audio: AudioStreamPlayer
+var vacuum: Node3D
+var counter_digits: Array[Texture2D] = []
 var pilot: Node3D
 var lamp: SpotLight3D
 var bulb_materials: Array[StandardMaterial3D] = []
@@ -50,6 +53,8 @@ func setup(player: Node3D, folder: String) -> void:
 		if image == null: image = Images.load_image(folder.path_join("GAMETEX/" + file + ".RAS"))
 		icons.append(ImageTexture.create_from_image(image) if image != null else null)
 	mounted.append({"id": "deep_sea_lights", "name": "Deep-Sea Lights", "enabled": false, "mount": mount, "icons": icons})
+	_setup_cycle_audio(folder)
+	_setup_vacuum(player,folder)
 	apply_settings()
 
 static func _meshes(node: Node3D, parent_pose: Transform3D, hull_only: bool = false) -> Array[Dictionary]:
@@ -115,7 +120,16 @@ func _prepare_bulb(housing: Node3D) -> void:
 			node.material_override = material
 			bulb_materials.append(material)
 func cycle(direction: int) -> void:
-	if not mounted.is_empty(): selected = posmod(selected + direction, mounted.size())
+	if mounted.is_empty(): return
+	var previous := selected
+	selected = posmod(selected + direction, mounted.size())
+	if selected != previous: _play_cycle_sound()
+
+func _play_cycle_sound() -> void:
+	if cycle_audio != null and cycle_audio.stream != null:
+		var volume := float(pilot.submarine_audio.tuning.settings.master_volume) if pilot != null and pilot.submarine_audio != null else 0.0
+		cycle_audio.volume_db = -80.0 if volume <= -60.0 else volume
+		cycle_audio.play()
 
 func toggle_selected() -> void:
 	if mounted.is_empty(): return
@@ -126,6 +140,9 @@ func current() -> Dictionary:
 	return {} if mounted.is_empty() else mounted[selected]
 
 func apply_settings() -> void:
+	if vacuum != null:
+		for item in mounted:
+			if item.id == "suckomat": vacuum.enabled = item.enabled
 	if lamp == null: return
 	lamp.light_energy = settings.light_energy
 	lamp.spot_range = settings.light_range
@@ -140,3 +157,38 @@ func apply_settings() -> void:
 
 func _process(_delta: float) -> void:
 	if pilot != null and pilot.visual != null: visible = pilot.visual.visible
+
+func _setup_vacuum(player: Node3D, folder: String) -> void:
+	var mount := Node3D.new(); mount.name = "SuckOMaticMount"; add_child(mount)
+	var housing := Assets.load_clump(folder.path_join("CLUMPS/PICKUP.DFF"))
+	var box := AABB(Vector3(-0.05,-0.1,-0.05),Vector3(0.1,0.1,0.1))
+	if housing != null:
+		housing.rotation.y = PI; housing.scale *= player.VISUAL_SCALE; mount.add_child(housing)
+		var meshes := _meshes(housing,Transform3D.IDENTITY)
+		if not meshes.is_empty(): box = _bounds(meshes)
+	var hull := _bounds(_meshes(player.visual,Transform3D.IDENTITY,true))
+	mount.position = Vector3(hull.get_center().x,hull.position.y - box.end.y + 0.002,hull.get_center().z)
+	var socket := player.visual.find_child("EquipmentMount_SuckOMatic",true,false) as Node3D
+	if socket != null: mount.transform = player.global_transform.affine_inverse() * socket.global_transform; mount.basis = mount.basis.orthonormalized()
+	preload("res://submarine_mounts.gd").apply(mount,player.visual,"suckomat")
+	vacuum = preload("res://suck_o_matic.gd").new(); mount.add_child(vacuum)
+	vacuum.position = Vector3(box.get_center().x,box.position.y,box.get_center().z); vacuum.setup(player,folder)
+	vacuum.item_collected.connect(func(_item: String) -> void: _play_cycle_sound())
+	var icons: Array[Texture2D] = []
+	var cache := {}
+	for file in ["PICKUP1","PICKUP2","PICKUP3"]: icons.append(Assets._load_texture(folder,file,"",cache))
+	mounted.append({"id":"suckomat","name":"Suck-O-Matic","enabled":false,"mount":mount,"icons":icons})
+	for index in range(10):
+		var image := Images.load_image(folder.path_join("GAMETEX/NUMBER%d.RAS" % index))
+		counter_digits.append(ImageTexture.create_from_image(image) if image != null else null)
+
+func _setup_cycle_audio(folder: String) -> void:
+	cycle_audio = AudioStreamPlayer.new(); cycle_audio.name = "EquipmentCycleSound"
+	for replacement in Mods.candidates("audio.equipment.cycle"):
+		cycle_audio.stream = preload("res://legacy_audio.gd").load_file(replacement.path)
+		if cycle_audio.stream != null: break
+	if cycle_audio.stream == null:
+		var path := folder.path_join("WAVES/SUBCYCLE.WAV")
+		if not FileAccess.file_exists(path): path = folder.path_join("WAVES/SUBCYCLE.RAW")
+		cycle_audio.stream = preload("res://legacy_audio.gd").load_file(path)
+	add_child(cycle_audio)

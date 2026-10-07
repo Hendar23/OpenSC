@@ -21,6 +21,10 @@ func _initialize() -> void:
 	check(map._blocked(19,20), "A point beside a wall is blocked when the sub's footprint overlaps it")
 	map.height_samples[centre] = 8.8
 	check(map._blocked(20,20), "A barely adequate vertical gap retains its border with safe passage margin")
+	map.height_samples[centre] = 8.7
+	check(map._blocked(20,20), "The lower wall threshold closes marginal gaps previously shown as navigable")
+	map.height_samples[centre] = 8.5
+	check(not map._blocked(20,20), "Clearance above the stricter threshold still leaves usable passages open")
 	map.height_samples[centre] = 8.0
 	check(not map._blocked(20,20), "A passage with comfortable clearance remains open")
 	map.height_samples[centre] = -INF

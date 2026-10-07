@@ -10,7 +10,7 @@ const DEFINITIONS := [
 	{"id": "equipment", "frame": "TOOLS", "mask": "MTOOLS", "size": Vector2(130,94), "screen": Rect2(42,18,68,48)},
 	{"id": "map", "frame": "MAPROV", "mask": "MMAPROV", "size": Vector2(176,122), "screen": Rect2(24,18,128,82)},
 	{"id": "weapon", "frame": "WEAPON", "mask": "MWEAPON", "size": Vector2(123,90), "screen": Rect2(19,18,64,48)},
-	{"id": "shield", "frame": "ATTITUDE", "mask": "MATTITUD", "size": Vector2(94,100), "screen": Rect2(17,37,48,48)}
+	{"id": "shield", "frame": "ATTITUDE", "mask": "MATTITUD", "size": Vector2(94,100), "screen": Rect2(17,37.5,48,48)}
 ]
 var enabled: Array[bool] = [true,true,true,true,true]
 var instruments: Array[Control] = []
@@ -112,6 +112,7 @@ func setup(player: Node3D, mounted_equipment: Node3D, world: Node3D, folder: Str
 		display.sub_icon = tilt_icon
 		display.shield_blue = Assets._load_texture(folder, "HBSEG", "HSEGMASK", cache)
 		display.shield_orange = Assets._load_texture(folder, "HOSEG", "HSEGMASK", cache)
+		display.radiation_icon = Assets._load_texture(folder, "RADIO", "RADIOM", cache)
 		display.screen = definition.screen
 		display.size = definition.size
 		display.mouse_filter = Control.MOUSE_FILTER_IGNORE

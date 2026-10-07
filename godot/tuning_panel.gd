@@ -25,6 +25,8 @@ const ROWS := [
 	["upright_damping", "Ballast damping", 0.0, 12.0, 0.1, ""],
 	["camera_distance", "Camera distance", FollowCamera.MIN_DISTANCE, FollowCamera.MAX_DISTANCE, 0.05, "units"],
 	["propeller_spin_down", "Propeller spin-down time", 0.0, 3.0, 0.05, "s"],
+	["impact_damage_threshold", "Impact damage minimum speed", 0.0, 10.0, 0.05, "units/s"],
+	["impact_damage_scale", "Impact damage multiplier", 0.0, 20.0, 0.1, ""],
 	["bubble_rate", "Bubbles per propeller at full speed", 0.0, 80.0, 1.0, "/s"]
 ]
 var movement: RefCounted

@@ -20,6 +20,8 @@ const DayNight = preload("res://day_night_cycle.gd")
 const HUD = preload("res://cockpit_hud.gd")
 const Equipment = preload("res://submarine_equipment.gd")
 const Weapons = preload("res://submarine_weapons.gd")
+const SessionDebris = preload("res://creature_death.gd")
+const SessionExplosion = preload("res://mine_explosion.gd")
 var weapons: Node3D
 var weapon_controls := {}
 var weapon_overrides := {}
@@ -27,6 +29,11 @@ var save_games := preload("res://save_games.gd").new()
 var dock_interface: CanvasLayer
 var dock_interface_active := false
 var loading_save := false
+const PlayerProgress = preload("res://player_progress.gd")
+var player_progress := PlayerProgress.restore()
+var submarine_explosion_frames: Array[Texture2D] = []
+var submarine_explosion_sound: AudioStream
+var submarine_bubble_texture: Texture2D
 const FrontEnd = preload("res://front_end.gd")
 const CaptureOverlay = preload("res://capture_overlay.gd")
 const PlantCurrent = preload("res://plant_current.gd")
@@ -52,6 +59,7 @@ var pilot: RigidBody3D
 var model: Node3D
 var world_root: Node3D
 var camera: Camera3D
+var loaded_world_assets := ""
 var water_environment: Environment
 var sun: DirectionalLight3D
 var surface_material: ShaderMaterial
@@ -225,7 +233,7 @@ func _build_interface() -> void:
 	graphics_controls.add_theme_constant_override("separation", 12)
 	graphics_scroll.add_child(graphics_controls)
 	wildlife_density_label = Label.new(); graphics_controls.add_child(wildlife_density_label)
-	wildlife_density_slider = HSlider.new()
+	wildlife_density_slider = HSlider.new(); wildlife_density_slider.scrollable = false
 	wildlife_density_slider.min_value = 0; wildlife_density_slider.max_value = 300
 	wildlife_density_slider.step = 5; wildlife_density_slider.value = 100
 	wildlife_density_slider.focus_mode = Control.FOCUS_NONE
@@ -235,7 +243,7 @@ func _build_interface() -> void:
 	_update_wildlife_density()
 	hud_scale_label = Label.new()
 	graphics_controls.add_child(hud_scale_label)
-	hud_scale_slider = HSlider.new()
+	hud_scale_slider = HSlider.new(); hud_scale_slider.scrollable = false
 	hud_scale_slider.min_value = 25.0
 	hud_scale_slider.max_value = 150.0
 	hud_scale_slider.step = 1.0
@@ -247,7 +255,7 @@ func _build_interface() -> void:
 	_update_hud_scale()
 	hud_map_zoom_label = Label.new()
 	graphics_controls.add_child(hud_map_zoom_label)
-	hud_map_zoom_slider = HSlider.new()
+	hud_map_zoom_slider = HSlider.new(); hud_map_zoom_slider.scrollable = false
 	hud_map_zoom_slider.min_value = 0.5
 	hud_map_zoom_slider.max_value = 4.0
 	hud_map_zoom_slider.step = 0.1
@@ -258,7 +266,7 @@ func _build_interface() -> void:
 	hud_map_zoom_slider.drag_ended.connect(func(_changed: bool) -> void: _save_preferences())
 	crt_reflection_label = Label.new()
 	graphics_controls.add_child(crt_reflection_label)
-	crt_reflection_slider = HSlider.new()
+	crt_reflection_slider = HSlider.new(); crt_reflection_slider.scrollable = false
 	crt_reflection_slider.min_value = 0.0
 	crt_reflection_slider.max_value = 100.0
 	crt_reflection_slider.step = 1.0
@@ -270,7 +278,7 @@ func _build_interface() -> void:
 	_update_hud_scale()
 	map_reveal_label = Label.new()
 	graphics_controls.add_child(map_reveal_label)
-	map_reveal_slider = HSlider.new()
+	map_reveal_slider = HSlider.new(); map_reveal_slider.scrollable = false
 	map_reveal_slider.min_value = 2.0
 	map_reveal_slider.max_value = 30.0
 	map_reveal_slider.step = 0.5
@@ -280,13 +288,22 @@ func _build_interface() -> void:
 	map_reveal_slider.value_changed.connect(func(_value: float) -> void: _update_hud_scale())
 	map_reveal_slider.drag_ended.connect(func(_changed: bool) -> void: _save_preferences())
 	var reset_map := Button.new()
-	reset_map.text = "Reset minimap exploration"
+	reset_map.text = "Reset fog of war"
 	reset_map.tooltip_text = "Clear discovered areas to test the current reveal radius. Smaller radii keep previous discoveries."
 	reset_map.focus_mode = Control.FOCUS_NONE
 	reset_map.pressed.connect(func() -> void:
 		if cockpit_hud != null: cockpit_hud.map_data.reset_exploration()
 	)
-	graphics_controls.add_child(reset_map)
+	var map_actions := HBoxContainer.new(); graphics_controls.add_child(map_actions)
+	reset_map.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	map_actions.add_child(reset_map)
+	var reveal_map := Button.new(); reveal_map.name = "RevealWholeMap"
+	reveal_map.text = "Reveal whole map"; reveal_map.focus_mode = Control.FOCUS_NONE
+	reveal_map.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reveal_map.pressed.connect(func() -> void:
+		if cockpit_hud != null: cockpit_hud.map_data.reveal_all()
+	)
+	map_actions.add_child(reveal_map)
 	_update_hud_scale()
 	fog_button = CheckButton.new()
 	fog_button.text = "Underwater fog"
@@ -295,7 +312,7 @@ func _build_interface() -> void:
 	graphics_controls.add_child(fog_button)
 	fog_label = Label.new()
 	graphics_controls.add_child(fog_label)
-	fog_slider = HSlider.new()
+	fog_slider = HSlider.new(); fog_slider.scrollable = false
 	fog_slider.min_value = MIN_VISIBILITY
 	fog_slider.max_value = MAX_VISIBILITY
 	fog_slider.step = 0.5
@@ -327,11 +344,11 @@ func _build_interface() -> void:
 		)
 		presets.add_child(button)
 	fog_start_label = Label.new(); graphics_controls.add_child(fog_start_label)
-	fog_start_slider = HSlider.new(); fog_start_slider.min_value = 0.0; fog_start_slider.max_value = MAX_VISIBILITY - 0.5
+	fog_start_slider = HSlider.new(); fog_start_slider.scrollable = false; fog_start_slider.min_value = 0.0; fog_start_slider.max_value = MAX_VISIBILITY - 0.5
 	fog_start_slider.step = 0.5; fog_start_slider.value = 5.0; fog_start_slider.focus_mode = Control.FOCUS_NONE
 	graphics_controls.add_child(fog_start_slider)
 	fog_curve_label = Label.new(); graphics_controls.add_child(fog_curve_label)
-	fog_curve_slider = HSlider.new(); fog_curve_slider.min_value = 0.25; fog_curve_slider.max_value = 8.0
+	fog_curve_slider = HSlider.new(); fog_curve_slider.scrollable = false; fog_curve_slider.min_value = 0.25; fog_curve_slider.max_value = 8.0
 	fog_curve_slider.step = 0.1; fog_curve_slider.value = 1.8; fog_curve_slider.focus_mode = Control.FOCUS_NONE
 	graphics_controls.add_child(fog_curve_slider)
 	for slider in [fog_start_slider, fog_curve_slider]:
@@ -367,9 +384,16 @@ func _build_interface() -> void:
 	system.add_child(status_label)
 	telemetry = Label.new()
 	system.add_child(telemetry)
+	var credits_button := Button.new(); credits_button.name = "GiveTestingCredits"
+	credits_button.text = "Give player 100,000 credits"; credits_button.focus_mode = Control.FOCUS_NONE
+	credits_button.pressed.connect(func() -> void:
+		player_progress.status.credits += 100000
+		if dock_interface != null and dock_interface.visible: dock_interface.rebuild()
+	)
+	system.add_child(credits_button)
 	docking_radius_label = Label.new()
 	system.add_child(docking_radius_label)
-	docking_radius_slider = HSlider.new()
+	docking_radius_slider = HSlider.new(); docking_radius_slider.scrollable = false
 	docking_radius_slider.min_value = 0.5
 	docking_radius_slider.max_value = 10.0
 	docking_radius_slider.step = 0.1
@@ -404,7 +428,7 @@ func _build_interface() -> void:
 	add_child(folder_prompt)
 	mod_panel = ModPanel.new()
 	mod_panel.persist_preferences = remember_preferences
-	mod_panel.applied.connect(func() -> void: _start_game(game_folder))
+	mod_panel.applied.connect(_apply_mods)
 	add_child(mod_panel)
 	developer_tabs.tab_changed.connect(_developer_tab_changed)
 	get_viewport().size_changed.connect(_resize_developer_menu)
@@ -417,6 +441,7 @@ func _build_interface() -> void:
 	front_end.resume_requested.connect(_resume_game)
 	front_end.load_requested.connect(func() -> void: front_end.menu_layer.hide(); dock_interface.open("load"))
 	front_end.mods_requested.connect(func() -> void: if not world_loading: mod_panel.open())
+	mod_panel.visibility_changed.connect(func() -> void: if not mod_panel.visible: front_end.restore_button_focus("mods"))
 	dock_interface = preload("res://dock_interface.gd").new(); add_child(dock_interface)
 	dock_interface.action_requested.connect(_dock_ui_action)
 	dock_interface.setup(game_folder,_dock_ui_model)
@@ -453,7 +478,7 @@ func _show_main_menu() -> void:
 	dock_interface.dismiss()
 	front_end.buttons.load.set_meta("available",save_games.slots().any(func(slot: Dictionary) -> bool: return slot.valid))
 	front_end.buttons.load.tooltip_text = "" if front_end.is_button_available("load") else "No saved games yet"
-	front_end.show_menu(has_started_game)
+	front_end.show_menu(has_started_game and (pilot == null or not pilot.dead))
 	if menu_backdrop != null:
 		menu_backdrop.open(); _update_daylight()
 	get_tree().paused = true
@@ -468,7 +493,7 @@ func _choose_game_folder(folder: String) -> void:
 	if show_start_menu and not has_started_game and pilot_mode: _show_main_menu()
 
 func _resume_game() -> void:
-	if not has_started_game or world_loading: return
+	if not has_started_game or world_loading or pilot.dead: return
 	front_end.hide_menu()
 	if menu_backdrop != null: menu_backdrop.close()
 	if dock_interface != null: dock_interface.dismiss()
@@ -476,22 +501,84 @@ func _resume_game() -> void:
 	_update_daylight()
 	_update_mouse_pointer()
 
+func _apply_mods() -> void:
+	if world_loading: return
+	front_end.hide_menu()
+	has_started_game = false
+	front_end.can_resume = false
+	# Loading awaits physics frames, which cannot advance in the paused menu.
+	get_tree().paused = false
+	_set_camera_mode(false)
+	await _start_game(game_folder)
+	if pilot_mode: _show_main_menu()
+
 func _begin_new_game() -> void:
 	if world_loading: return
 	front_end.hide_menu()
 	if menu_backdrop != null: menu_backdrop.close()
 	if dock_interface != null: dock_interface.dismiss()
 	get_tree().paused = false
-	if has_started_game:
-		_set_camera_mode(false)
+	if not _can_reuse_world():
 		await _start_game(game_folder)
 	if not pilot_mode: return
+	_reset_loaded_world()
 	day_night.hour = 12.0
+	player_progress = PlayerProgress.restore()
 	_update_daylight()
 	has_started_game = true
 	front_end.can_resume = true
 	cockpit_hud.map_data.reset_exploration()
 	_update_mouse_pointer()
+
+func _world_asset_key() -> String:
+	return JSON.stringify([game_folder,Mods.layers,Mods.movement])
+
+func _can_reuse_world() -> bool:
+	return pilot_mode and is_instance_valid(world_root) and loaded_world_assets == _world_asset_key()
+
+func _reset_loaded_world() -> void:
+	if menu_backdrop != null: menu_backdrop.close()
+	dock_interface.dismiss(); dock_interface_active = false
+	_set_map_open(false)
+	docking.cancel()
+	docking.nearby = {}; docking.declined_port = null; docking.message = ""
+	docking.greeted_ports.clear(); docking.greeting_port = {}; docking.greeting_remaining = 0.0
+	if docking_portrait != null: docking_portrait.reset_signal()
+	if docked_screen != null: docked_screen.hide()
+	weapons.update_fire(false,0); weapons.selected = 0; weapons.elapsed = 0.0
+	for particle in weapons.hit_blood.particles: particle.node.free()
+	weapons.hit_blood.particles.clear()
+	for patch in plant_current.patches:
+		patch.bend = Vector3.ZERO
+		for material in patch.materials: material.set_shader_parameter("propeller_bend",Vector3.ZERO)
+	_clear_session_effects(world_root)
+	pilot.restore_health(); pilot.collision_layer = 2
+	pilot.collision_mask = 5; pilot.active = true; pilot.controls_enabled = true
+	weapons.show()
+	pilot.visual.show()
+	pilot.reset_at(world_root.get_meta("player_spawn",world_root.get_meta("bounds").get_center()))
+	pilot._update_animation(0)
+	equipment.vacuum.reset()
+	equipment.selected = 0
+	for item in equipment.mounted:
+		item.enabled = false
+		item.mount.transform = item.mount.get_meta("default_mount")
+		preload("res://submarine_mounts.gd").apply(item.mount,pilot.visual,item.id)
+	weapons.muzzle.transform = weapons.muzzle.get_meta("default_mount")
+	preload("res://submarine_mounts.gd").apply(weapons.muzzle,pilot.visual,"zapper")
+	equipment.apply_settings()
+	if wildlife != null: wildlife.reroll()
+	else: _reset_provisional_wildlife()
+	object_population.reset_population()
+	cockpit_hud.map_data.reset_exploration()
+	camera_was_frozen = false
+	_set_camera_mode(false)
+
+func _clear_session_effects(node: Node) -> void:
+	for child in node.get_children():
+		if child is SessionDebris or child is SessionExplosion:
+			child.free()
+		else: _clear_session_effects(child)
 
 func _start_game(folder: String) -> void:
 	if menu_backdrop != null:
@@ -595,6 +682,8 @@ func _start_game(folder: String) -> void:
 		pilot.name = "PlayerSubmarine"
 		pilot.remember_settings = remember_preferences
 		add_child(pilot)
+		pilot.health_changed.connect(_submarine_health_changed)
+		pilot.destroyed.connect(_submarine_destroyed)
 	else: pilot.movement.load_settings(remember_preferences)
 	var selected_tab: StringName = developer_tabs.get_current_tab_control().name if tuning_panel != null and developer_tabs.get_current_tab_control() != null else &"Movement"
 	for child in bubble_controls.get_children(): child.free()
@@ -618,6 +707,7 @@ func _start_game(folder: String) -> void:
 	equipment = Equipment.new()
 	pilot.add_child(equipment)
 	equipment.setup(pilot, folder)
+	equipment.vacuum.population = object_population
 	# Keep lights and equipment working while excluding the sub geometry
 	# from the cockpit camera. Visibility still belongs to docking.
 	for node in pilot.find_children("*","MeshInstance3D",true,false): node.layers = SUB_RENDER_LAYER
@@ -639,7 +729,10 @@ func _start_game(folder: String) -> void:
 	for index in range(5):
 		cockpit_hud.set_enabled(index,hud_enabled[index],false)
 	pilot.reset_physics_interpolation()
-	pilot.bubbles.configure(Assets._load_texture(folder, "BUBBLE", "BUBBLEM", {}))
+	submarine_bubble_texture = Assets._load_texture(folder,"BUBBLE","BUBBLEM",{})
+	pilot.bubbles.configure(submarine_bubble_texture)
+	submarine_explosion_frames = SessionExplosion.load_frames(folder)
+	submarine_explosion_sound = Weapons._sound(folder,"audio.submarine.explosion","EXPLODE1")
 	pilot.submarine_audio.setup(pilot, folder)
 	front_end.audio_tuning = pilot.submarine_audio.tuning
 	if sound_panel != null: sound_panel.free()
@@ -649,6 +742,7 @@ func _start_game(folder: String) -> void:
 	developer_tabs.move_child(sound_panel, 1)
 	sound_panel.setup(pilot.submarine_audio, true)
 	_select_developer_tab(str(selected_tab))
+	pilot.restore_health(); pilot.collision_layer = 2; pilot.collision_mask = 5
 	pilot.active = true
 	if docking != null: docking.free()
 	docking = Docking.new()
@@ -664,6 +758,7 @@ func _start_game(folder: String) -> void:
 	dock_interface.setup(folder,_dock_ui_model)
 	pilot_mode = true
 	world_loading = false
+	loaded_world_assets = _world_asset_key()
 	export_all_button.disabled = false
 	status_label.text = str(world_root.get_meta("scenery_summary", "Piloting ready."))
 	_update_follow_camera(0.0, true)
@@ -748,6 +843,7 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not pilot_mode or world_loading or map_open or (dock_interface != null and dock_interface.visible): return
+	if pilot.dead: return
 	if not developer_ui_visible and docking.stage == Docking.Stage.IDLE:
 		if Bindings.pressed(event,"camera_toggle"):
 			_set_camera_mode(not first_person)
@@ -853,7 +949,7 @@ func _physics_process(_delta: float) -> void:
 		over_ui = over_ui or tuning_panel.get_global_rect().has_point(pointer)
 	if developer_ui_visible and sound_panel != null and sound_panel.visible:
 		over_ui = over_ui or sound_panel.get_global_rect().has_point(pointer)
-	pilot.controls_enabled = pilot_mode and not map_open and not world_loading and not developer_ui_visible and not over_ui and not folder_dialog.visible and not export_all_dialog.visible and not mod_panel.visible and not tuning_panel.export_dialog.visible and (sound_panel == null or not sound_panel.export_dialog.visible) and (docking == null or docking.stage == Docking.Stage.IDLE)
+	pilot.controls_enabled = pilot_mode and not pilot.dead and not map_open and not world_loading and not developer_ui_visible and not over_ui and not folder_dialog.visible and not export_all_dialog.visible and not mod_panel.visible and not tuning_panel.export_dialog.visible and (sound_panel == null or not sound_panel.export_dialog.visible) and (docking == null or docking.stage == Docking.Stage.IDLE)
 
 func _process(delta: float) -> void:
 	_update_mouse_pointer()
@@ -866,6 +962,7 @@ func _process(delta: float) -> void:
 		docked_screen.visible = docking.stage == Docking.Stage.DOCKED
 		if docked_screen.visible and not front_end.menu_layer.visible:
 			if not dock_interface_active:
+				equipment.vacuum.transfer_to(player_progress.cargo)
 				dock_interface.open("home"); dock_interface_active = true
 			elif not dock_interface.visible: dock_interface.show()
 		elif docking.stage != Docking.Stage.DOCKED and dock_interface_active:
@@ -873,9 +970,6 @@ func _process(delta: float) -> void:
 	if docking != null and docking.camera_frozen():
 		camera.global_position = docking.cinematic_camera
 		var target := pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.35
-		if docking.stage in [Docking.Stage.EXIT_OPEN,Docking.Stage.ASCEND]:
-			# Frame the launch opening instead of aiming down through its lid.
-			target.y = maxf(target.y,float(docking.current.entry.y) + 0.35)
 		if camera.global_position.distance_to(target) > 0.01: camera.look_at(target, Vector3.UP)
 		camera_was_frozen = true
 	else:
@@ -910,12 +1004,14 @@ func _update_follow_camera(delta: float, snap: bool = false) -> void:
 	if next.distance_to(target) > 0.01: camera.look_at(target, Vector3.UP)
 
 func _set_camera_mode(cockpit: bool) -> void:
+	if pilot.dead: cockpit = false
 	first_person = cockpit
 	if cockpit: camera.cull_mask &= ~SUB_RENDER_LAYER
 	else: camera.cull_mask |= SUB_RENDER_LAYER
 	_update_follow_camera(0.0,true)
 
 func _request_docking() -> void:
+	if pilot.dead: return
 	var launching: bool = docking.stage == Docking.Stage.DOCKED
 	if docking.request_docking():
 		if first_person:
@@ -1145,6 +1241,7 @@ func _reset_provisional_wildlife() -> void:
 	var random := RandomNumberGenerator.new()
 	random.seed = 8675309 + int(world_root.get_meta("wildlife_generation")) * 104729
 	for fish in population.get_children():
+		fish.health = fish.max_health
 		if fish.dead:
 			fish.dead = false; fish.health = fish.max_health; fish.visible = true; fish.collision_layer = 8; fish.collision_mask = 5
 			fish.get_child(0).set_deferred("disabled",false); fish.set_physics_process(true); fish.set_process(true)
@@ -1330,19 +1427,35 @@ func _dock_ui_model() -> Dictionary:
 	for item in gameplay_catalogue.get("tables",{}).get("economy_commodities",{}).get("records",{}).values():
 		var name := str(item.get("name",""))
 		if not name.is_empty() and not goods.has(name): goods.append(name)
-	return {"city":port.get("name","Dock"),"race":port.get("race",1),"equipment":items,"weapons":arms,"shop_items":shop,"commodities":goods,"slots":save_games.slots(),"submarine":pilot.visual if pilot != null else null}
+	var city_id := str(int(port.node.get_meta("city_id"))) if port.get("node") != null else ""
+	var city: Dictionary = gameplay_catalogue.get("tables",{}).get("city_info",{}).get("records",{}).get(city_id,{})
+	var standing: String = player_progress.standing.get(str(port.get("race",1)),"neutral")
+	var description_id := "%s%d.%s" % [city.get("description_key",""),player_progress.campaign_stage,standing]
+	var description: String = gameplay_catalogue.get("tables",{}).get("city_descriptions",{}).get("records",{}).get(description_id,{}).get("text","")
+	return {"city":port.get("name","Dock"),"city_id":city_id,"title_bitmap":city.get("title_bitmap",""),"welcome":description,"standing":{"bad":"Hostile","neutral":"Neutral","good":"Friendly"}.get(standing,"Neutral"),"mission":player_progress.mission,"status":player_progress.status.duplicate(),"race":port.get("race",1),"equipment":items,"weapons":arms,"shop_items":shop,"repair_offer":preload("res://equipment_shop.gd").shield_repair(gameplay_catalogue,city_id,player_progress.campaign_stage),"hold":player_progress.hold.duplicate(),"commodities":goods,"cargo":player_progress.cargo.duplicate(),"slots":save_games.slots(),"submarine":pilot.visual if pilot != null else null}
 
 func _save_snapshot(name: String) -> Dictionary:
+	player_progress.suckomat = equipment.vacuum.storage.duplicate()
 	var items: Array = []
 	for item in equipment.mounted: items.append({"id":item.id,"enabled":item.enabled})
 	var arms: Array = []
 	for item in weapons.mounted: arms.append(item.id)
 	var explored := cockpit_hud.map_data.explored.duplicate() as Image
 	explored.convert(Image.FORMAT_L8)
-	return {"version":save_games.VERSION,"name":name.left(64),"saved_at":Time.get_datetime_string_from_system(),"dock":{"id":int(docking.current.node.get_meta("city_id")),"name":docking.current.name},"pose":MapDocument.encode(pilot.global_transform),"hour":day_night.hour,"equipment":items,"weapons":arms,"equipment_selected":equipment.current().get("id",""),"weapon_selected":weapons.current().get("id",""),"explored":Marshalls.raw_to_base64(explored.get_data()),"map_signature":_map_signature(),"mods":Mods.active_ids(),"progress":{}}
+	return {"version":save_games.VERSION,"name":name.left(64),"saved_at":Time.get_datetime_string_from_system(),"dock":{"id":int(docking.current.node.get_meta("city_id")),"name":docking.current.name},"pose":MapDocument.encode(pilot.global_transform),"hour":day_night.hour,"equipment":items,"weapons":arms,"equipment_selected":equipment.current().get("id",""),"weapon_selected":weapons.current().get("id",""),"explored":Marshalls.raw_to_base64(explored.get_data()),"map_signature":_map_signature(),"mods":Mods.active_ids(),"progress":player_progress.duplicate(true),"objects":object_population.snapshot()}
 
 func _dock_ui_action(action: String, payload: Dictionary) -> void:
 	match action:
+		"buy_repair","use_repair","sell_repair":
+			if docking.stage != Docking.Stage.DOCKED: return
+			var offer: Dictionary = _dock_ui_model().repair_offer
+			if action == "buy_repair": dock_interface.report(preload("res://equipment_shop.gd").buy(player_progress,offer))
+			elif action == "use_repair": dock_interface.report(preload("res://equipment_shop.gd").consume_repair(player_progress,pilot))
+			elif int(player_progress.hold.get("shield",0)) > 0 and int(offer.sell_price) > 0:
+				player_progress.hold.shield -= 1
+				if player_progress.hold.shield == 0: player_progress.hold.erase("shield")
+				player_progress.status.credits += int(offer.sell_price)
+				dock_interface.report("Shield Repair sold.")
 		"launch":
 			if docking.stage == Docking.Stage.DOCKED:
 				dock_interface.dismiss(); dock_interface_active = false; _request_docking()
@@ -1366,8 +1479,9 @@ func _load_saved_game(slot: int) -> bool:
 	loading_save = true
 	front_end.hide_menu(); dock_interface.dismiss(); get_tree().paused = false
 	_set_camera_mode(false)
-	await _start_game(game_folder)
+	if not _can_reuse_world(): await _start_game(game_folder)
 	if not pilot_mode: loading_save = false; return false
+	_reset_loaded_world()
 	var port: Dictionary = {}
 	for candidate in docking.ports:
 		if int(candidate.node.get_meta("city_id")) == int(data.dock.id): port = candidate; break
@@ -1377,6 +1491,7 @@ func _load_saved_game(slot: int) -> bool:
 	pilot.active = false; pilot.controls_enabled = false; pilot.collision_mask = 0
 	pilot.global_transform = MapDocument.decode(data.pose); pilot.global_position = port.inside
 	pilot.velocity = Vector3.ZERO; pilot.angular_velocity = Vector3.ZERO
+	pilot.pending_reset = false
 	pilot.visual.visible = false; pilot.reset_physics_interpolation()
 	# A restored save has no approach-camera position to reuse. Place it at
 	# launch height, behind/right of the upright sub, above the dock's roof.
@@ -1402,5 +1517,28 @@ func _load_saved_game(slot: int) -> bool:
 		cockpit_hud.map_data.last_explored = Vector2(INF,INF)
 	else: cockpit_hud.map_data.reset_exploration()
 	has_started_game = true; front_end.can_resume = true
+	if data.has("objects"): object_population.restore_snapshot(data.objects)
+	player_progress = PlayerProgress.restore(data.get("progress",{}))
+	equipment.vacuum.storage.assign(player_progress.suckomat)
+	equipment.vacuum.transfer_to(player_progress.cargo)
+	var capacity := float(player_progress.status.hull_strength)
+	pilot.restore_health(capacity,capacity * float(player_progress.status.shields) / 100.0)
 	dock_interface.open("home"); dock_interface_active = true
 	loading_save = false; _update_mouse_pointer(); return true
+
+func _submarine_health_changed(remaining: float, capacity: float) -> void:
+	player_progress.status.hull_strength = int(round(capacity))
+	player_progress.status.shields = int(round(remaining / capacity * 100.0))
+
+func _submarine_destroyed() -> void:
+	_set_map_open(false)
+	weapons.update_fire(false,0)
+	var wreck := preload("res://submarine_death.gd").new(); world_root.add_child(wreck)
+	wreck.global_position = pilot.global_position
+	var mounts: Array[Node3D] = [weapons.muzzle]
+	for item in equipment.mounted: mounts.append(item.mount)
+	wreck.setup_submarine(pilot,submarine_bubble_texture,mounts)
+	var burst := SessionExplosion.new(); world_root.add_child(burst); burst.global_position = pilot.global_position
+	burst.setup(submarine_explosion_frames,maxf(1.0,pilot.collision_height() * 3.0),submarine_explosion_sound)
+	weapons.hide(); equipment.hide()
+	_set_camera_mode(false)

@@ -76,6 +76,7 @@ static func _import(folder: String, fingerprints: Dictionary) -> Dictionary:
 		result.tables["database." + table_id] = {"source":INPUTS[2] + ":" + name,"records":records}
 	# These are provisional OpenSC combat rules, not recovered executable code.
 	_import_city_radio(result,language)
+	_import_city_descriptions(result,language)
 	result.tables["weapon_tuning"] = {"source":"OpenSC provisional combat defaults","records":{"zapper":preload("res://submarine_weapons.gd").DEFAULTS.duplicate()}}
 	var stats := {}
 	for record in result.tables.get("objects",{}).get("records",{}).values():
@@ -120,6 +121,34 @@ static func apply_city_names(world: Node, catalogue: Dictionary) -> void:
 		# Preserve explicitly authored map names, including custom added docks.
 		if current == str(record.get("legacy_name","")) or current.is_empty():
 			node.set_meta("city_name",str(record.name))
+
+static func _import_city_descriptions(catalogue: Dictionary, language: Dictionary) -> void:
+	var records := {}
+	var cities: Array[String] = []
+	var standings: Array[String] = []
+	var lines: Array[String] = []
+	for raw in (str(language.get("CITY.TXT","")) + "\n#end").split("\n"):
+		var line := raw.strip_edges()
+		if line.is_empty() or line.to_lower().begins_with("#rem"): continue
+		if line.begins_with("#") or line.begins_with("@"):
+			if not lines.is_empty():
+				var spaces := RegEx.new(); spaces.compile("\\s+")
+				var text := spaces.sub(" ".join(lines)," ",true).replace(" <p> ","\n").replace("<p> ","\n").strip_edges()
+				# Consecutive paragraph markers retain the original blank lines.
+				text = text.replace("<p>","\n").replace("\n ","\n")
+				for city in cities:
+					for standing in standings: records[city + "." + standing] = {"text":text}
+				lines.clear(); standings.clear()
+				if line.begins_with("#"): cities.clear()
+			if line.begins_with("#"): cities.append(line.substr(1).to_lower())
+			else: standings.append(line.substr(1).to_lower())
+		else: lines.append(line)
+	catalogue.tables["city_descriptions"] = {"source":"DATA/ENGLISH/LANGUAGE.ENC:CITY.TXT","records":records}
+	var names := {"1":["touka","N-TOU"],"2":["velcova","N-VEL"],"3":["beluga","N-BEL"],"4":["tryton","N-TRY"],"5":["aquatraz","N-AQU"],"6":["refinery","N-REF"]}
+	for id in names:
+		if not catalogue.tables.city_info.records.has(id): continue
+		catalogue.tables.city_info.records[id]["description_key"] = names[id][0]
+		catalogue.tables.city_info.records[id]["title_bitmap"] = "INTROTEX/" + names[id][1] + ".BMP"
 
 static func read_archive(path: String) -> Dictionary:
 	var file := FileAccess.open(path,FileAccess.READ)

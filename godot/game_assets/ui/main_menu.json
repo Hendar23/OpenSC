@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "title_rect": [173, 40, 294, 114],
+  "title_corner_radius": 12,
   "button_rect": [216, 174, 208, 28],
   "button_spacing": 31,
   "camera_anchor": [317.928009033203, 154.90998840332, 253.740692138672],
@@ -10,11 +11,13 @@
     {"id": "continue", "label": "Continue"},
     {"id": "new_game", "label": "New Game"},
     {"id": "load", "label": "Load Game"},
+    {"id": "options", "label": "Options"},
     {"id": "controls", "label": "Controls"},
-    {"id": "mods", "label": "Mods"},
-    {"id": "audio", "label": "Audio"},
     {"id": "graphics", "label": "Graphics"},
+    {"id": "audio", "label": "Audio"},
+    {"id": "mods", "label": "Mods"},
     {"id": "website", "label": "Website"},
-    {"id": "exit", "label": "Exit"}
+    {"id": "exit", "label": "Exit"},
+    {"id": "back", "label": "Back"}
   ]
 }

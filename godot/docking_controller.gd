@@ -285,6 +285,9 @@ func _travel_limits(direction: Vector3) -> Vector2:
 	return Vector2(speed, maxf(0.0001, acceleration))
 
 func _physics_process(delta: float) -> void:
+	if bool(pilot.get("dead")):
+		nearby = {}; message = ""; greeting_remaining = 0.0
+		return
 	if stage == Stage.IDLE:
 		greeting_remaining = maxf(0.0,greeting_remaining - delta)
 		update_approach()

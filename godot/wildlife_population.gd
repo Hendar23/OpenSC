@@ -224,6 +224,7 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 		fish.roam_radius = float(group.radius)
 		fish.swim_speed = float(species.speed) * random.randf_range(0.9, 1.1)
 		fish.turn_speed = float(species.get("turn_speed", 60.0))
+		fish.animation_speed = float(species.get("animation_speed",1.0))
 		fish.pitch_limit = float(species.get("pitch_limit", 25.0))
 		fish.startle_duration = float(species.get("startle_duration", 0.3))
 		fish.startle_speed_multiplier = float(species.get("startle_speed_multiplier", 2.8))
