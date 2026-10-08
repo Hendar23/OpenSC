@@ -153,6 +153,12 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 		patches += 1
 		progress.call("Restoring plant patches: %d / 10" % patches)
 		await tree.process_frame
+	for row in tables.get("Objects", []):
+		if int(row.get("MissionID",0)) != 2 or int(row.get("ObjectID",-1)) != 8: continue
+		var point := preload("res://drop_off_point.gd").new()
+		point.name = "DropOff_%d" % int(row.index); scenery.add_child(point)
+		point.transform = Transform3D(Basis.IDENTITY,placement(row,offset).origin)
+		point.configure(0.5,int(row.get("param1",0)))
 	for row in tables.get("Cities", []):
 		if _place_prop(scenery, row, str(row.get("clump", "")), offset, folder, cache, true): props += 1
 	for row in tables.get("Objects", []):

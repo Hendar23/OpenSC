@@ -12,6 +12,7 @@
       "pitch_up",
       "pitch_down",
       "camera_toggle",
+      "bottom_camera_toggle",
       "dock_accept",
       "dock_decline"
     ],
@@ -51,6 +52,7 @@
     "pitch_up": "Pitch up (nose up)",
     "pitch_down": "Pitch down (nose down)",
     "camera_toggle": "Switch camera",
+    "bottom_camera_toggle": "Bottom camera / minimap",
     "dock_accept": "Dock / undock",
     "dock_decline": "Decline docking",
     "weapon_fire": "Fire weapon",

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "clownfish",
+  "name": "Clownfish",
+  "version": "1.0",
+  "description": "Example Mod - Adds clownfish to the game. A reskin of the jackfish. Made in MSPaint by Hendar23 ",
+  "assets": {
+    "model.clownfish": {
+      "file": "models/clownfish.dff"
+    },
+    "texture.jnew1": {
+      "file": "textures/clownfish.png"
+    },
+    "data.wildlife": {
+      "file": "wildlife.json"
+    }
+  }
+}

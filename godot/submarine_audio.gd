@@ -25,6 +25,7 @@ var applied_blend := -1.0
 
 func setup(body: RigidBody3D, folder: String) -> void:
 	pilot = body
+	add_to_group("submarine_sound")
 	for child in get_children(): child.free()
 	players.clear()
 	effect_players.clear()
@@ -140,7 +141,7 @@ func _update_effects(delta: float) -> void:
 
 func _update_shield_warning() -> void:
 	if not is_instance_valid(shield_warning): return
-	var low: bool = is_instance_valid(pilot) and pilot.active and not pilot.dead and not preview and solo_role.is_empty() and pilot.health > 0.0 and pilot.health / maxf(1.0,pilot.max_health) < 0.3
+	var low: bool = is_instance_valid(pilot) and (pilot.active or pilot.docking_in_progress) and not pilot.dead and not preview and solo_role.is_empty() and pilot.health > 0.0 and pilot.health / maxf(1.0,pilot.max_health) < 0.3
 	var volume := float(tuning.settings.master_volume)
 	var gain := float(tuning.settings.low_shield_volume)
 	shield_warning.volume_db = -80.0 if volume <= -60.0 or gain <= -60.0 else volume + gain

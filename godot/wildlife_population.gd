@@ -25,6 +25,36 @@ var death_texture: Texture2D
 var death_sound: AudioStream
 var death_frames: Array[Texture2D] = []
 var death_flesh_texture: Texture2D
+var zapper_frames: Array[Texture2D] = []
+var zapper_sound: AudioStream
+var creature_cells := {}
+var cells_frame := -1
+const CELL_SIZE := 8.0
+func nearby_creatures(point: Vector3, distance: float) -> Array[Node3D]:
+	# One shared spatial index per perception tick, rather than a full scan per fish.
+	var tick := int(Time.get_ticks_msec() / 200)
+	if tick != cells_frame:
+		cells_frame = tick; creature_cells.clear()
+		for child in get_children():
+			if child.dead or not child.get_meta("wildlife_awake",true) or not child.is_physics_processing(): continue
+			var cell := Vector3i((child.global_position / CELL_SIZE).floor())
+			if not creature_cells.has(cell): creature_cells[cell] = []
+			creature_cells[cell].append(child)
+	var result: Array[Node3D] = []
+	var low := Vector3i(((point - Vector3.ONE * distance) / CELL_SIZE).floor())
+	var high := Vector3i(((point + Vector3.ONE * distance) / CELL_SIZE).floor())
+	# Iterate occupied cells when a mod chooses an exceptionally large detection range.
+	var cells: Array = []
+	if (high.x - low.x + 1) * (high.y - low.y + 1) * (high.z - low.z + 1) <= creature_cells.size():
+		for x in range(low.x,high.x + 1):
+			for y in range(low.y,high.y + 1):
+				for z in range(low.z,high.z + 1): cells.append(Vector3i(x,y,z))
+	else: cells = creature_cells.keys()
+	for cell in cells:
+		if cell.x < low.x or cell.x > high.x or cell.y < low.y or cell.y > high.y or cell.z < low.z or cell.z > high.z: continue
+		for body in creature_cells.get(cell,[]):
+			if is_instance_valid(body) and point.distance_squared_to(body.global_position) <= distance * distance: result.append(body)
+	return result
 func setup(parent_world: Node3D, game_folder: String, data: Dictionary, stream_near_player: bool = false) -> void:
 	world = parent_world
 	folder = game_folder
@@ -34,6 +64,11 @@ func setup(parent_world: Node3D, game_folder: String, data: Dictionary, stream_n
 	death_sound = preload("res://submarine_weapons.gd")._sound(folder,"audio.creature.death","SPLAT")
 	death_frames = preload("res://creature_death.gd").load_gore(folder)
 	death_flesh_texture = preload("res://clump_loader.gd")._load_texture(folder,"BEEF2","",{})
+	var zapper_cache := {}
+	for index in range(1,4):
+		var frame := preload("res://clump_loader.gd")._load_texture(folder,"ZAPPER%d" % index,"ZAPPER%dM" % index,zapper_cache)
+		if frame != null: zapper_frames.append(frame)
+	zapper_sound = preload("res://audio_loop.gd").prepare(preload("res://submarine_weapons.gd")._sound(folder,"audio.weapon.zapper","ELECTRIC"),true,35)
 	if session_seed < 0:
 		var session := RandomNumberGenerator.new()
 		if streaming: session.randomize(); session_seed = session.randi()
@@ -59,6 +94,7 @@ func reroll(advance: bool = true) -> void:
 	if advance: generation += 1
 	for child in get_children(): child.free()
 	spawned_groups.clear()
+	creature_cells.clear(); cells_frame = -1
 	random_groups.clear()
 	var random := RandomNumberGenerator.new()
 	random.seed = session_seed + generation * 104729
@@ -166,13 +202,14 @@ func _set_awake(fish: Node3D, awake: bool) -> void:
 	if fish.dead: return
 	if bool(fish.get_meta("wildlife_awake",true)) == awake: return
 	fish.set_meta("wildlife_awake",awake)
+	if not awake and fish.combat != null: fish.combat._stop_weapon()
 	# Disable the whole dormant subtree, including any mod-provided animation
 	# players or scripts, rather than only the creature controller callbacks.
 	fish.process_mode = Node.PROCESS_MODE_INHERIT if awake else Node.PROCESS_MODE_DISABLED
 	fish.visible = awake
 	fish.set_physics_process(awake and simulating)
 	fish.set_process(awake and simulating)
-	fish.collision_mask = 5 if awake else 0
+	fish.collision_mask = 7 if awake else 0
 	var collider := fish.get_child(0) as CollisionShape3D
 	if collider != null: collider.set_deferred("disabled",not awake)
 	if awake: fish.reset_physics_interpolation()
@@ -234,6 +271,7 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 		fish.detection_distance = float(species.detection)
 		fish.mobility = species.mobility
 		fish.configure_health(Document.creature_health(species,gameplay_catalogue))
+		fish.configure_combat(species)
 		fish.death_texture = death_texture; fish.death_sound = death_sound; fish.death_frames = death_frames
 		fish.death_flesh_texture = death_flesh_texture
 		if fish.mobility == "crawling": fish.configure_crawler(box.size * size)
@@ -266,6 +304,7 @@ func set_simulating(on: bool) -> void:
 	var viewer := view_camera.global_position if is_instance_valid(view_camera) else center
 	var planes: Array = view_camera.get_frustum() if is_instance_valid(view_camera) else []
 	for child in get_children():
+		if not on and child.combat != null: child.combat._stop_weapon()
 		if streaming: _update_activity(child,viewer,planes)
 		else:
 			var running: bool = on and not child.dead and bool(child.get_meta("wildlife_awake",true))

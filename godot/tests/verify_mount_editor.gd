@@ -10,7 +10,7 @@ func _run() -> void:
 	editor._show_mounts(); await process_frame
 	var panel: Control = editor.mount_editor
 	check(panel.visible and not editor.asset_interface.visible and not editor.map_editor.visible,"Mounts has a dedicated editor mode")
-	check(panel.mounts.size() == 3 and panel.mounts.has("suckomat") and panel.pilot.visual != null,"Preview loads the active sub with equipment and weapon mounts")
+	check(panel.mounts.size() == 4 and panel.mounts.has("magnet") and panel.mounts.has("suckomat") and panel.pilot.visual != null,"Preview loads the active sub with equipment and weapon mounts")
 	panel.selected = "zapper"; panel.selector.select(1); panel._sync()
 	var mount: Node3D = panel.mounts.zapper
 	var default_pose: Transform3D = mount.get_meta("default_mount")

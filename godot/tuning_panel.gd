@@ -1,6 +1,7 @@
 extends PanelContainer
 
 signal dismissed
+signal settings_changed
 const Movement = preload("res://movement_model.gd")
 const FollowCamera = preload("res://follow_camera.gd")
 const ROWS := [
@@ -25,8 +26,8 @@ const ROWS := [
 	["upright_damping", "Ballast damping", 0.0, 12.0, 0.1, ""],
 	["camera_distance", "Camera distance", FollowCamera.MIN_DISTANCE, FollowCamera.MAX_DISTANCE, 0.05, "units"],
 	["propeller_spin_down", "Propeller spin-down time", 0.0, 3.0, 0.05, "s"],
-	["impact_damage_threshold", "Impact damage minimum speed", 0.0, 10.0, 0.05, "units/s"],
-	["impact_damage_scale", "Impact damage multiplier", 0.0, 20.0, 0.1, ""],
+	["impact_damage_threshold", "Collision damage minimum speed", 0.0, 10.0, 0.05, "units/s"],
+	["impact_damage_scale", "Collision damage multiplier", 0.0, 20.0, 0.1, ""],
 	["bubble_rate", "Bubbles per propeller at full speed", 0.0, 80.0, 1.0, "/s"]
 ]
 var movement: RefCounted
@@ -79,7 +80,7 @@ func setup(state: RefCounted, in_tabs: bool = false, graphics_rows: VBoxContaine
 		label.add_theme_font_size_override("font_size", 13)
 		row_parent.add_child(label)
 		labels[key] = label
-		var slider := HSlider.new()
+		var slider := HSlider.new(); slider.scrollable = false
 		slider.min_value = float(row[2])
 		slider.max_value = float(row[3])
 		slider.step = float(row[4])
@@ -91,22 +92,21 @@ func setup(state: RefCounted, in_tabs: bool = false, graphics_rows: VBoxContaine
 		slider.value_changed.connect(func(value: float) -> void:
 			movement.settings[key] = value
 			_update_label(row, value)
+			settings_changed.emit()
 		)
 	var buttons := HBoxContainer.new()
 	column.add_child(buttons)
-	for caption in ["Save settings", "Reset defaults", "Export settings"]:
+	for caption in ["Export settings"]:
 		var button := Button.new()
 		button.text = caption
 		button.focus_mode = Control.FOCUS_NONE
 		buttons.add_child(button)
-		if caption == "Save settings": button.pressed.connect(_save)
-		elif caption == "Reset defaults": button.pressed.connect(_reset)
-		else: button.pressed.connect(func() -> void: export_dialog.popup_centered(Vector2i(800, 550)))
+		button.pressed.connect(func() -> void: export_dialog.popup_centered(Vector2i(800, 550)))
 	message = Label.new()
 	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	message.custom_minimum_size.y = 36
 	message.add_theme_font_size_override("font_size", 12)
-	message.text = "Save remembers settings next launch. Export lets you share the values."
+	message.text = "Changes are saved automatically."
 	column.add_child(message)
 	export_dialog = FileDialog.new()
 	export_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -132,20 +132,10 @@ func _update_label(row: Array, value: float) -> void:
 	var label: Label = labels[str(row[0])]
 	label.text = "%s: %.2f %s" % [row[1], value, row[5]]
 
-func _save() -> void:
-	var result: Error = movement.save_settings()
-	message.text = "Settings saved for next launch." if result == OK else "Could not save: " + error_string(result)
-
 func set_camera_distance(value: float) -> void:
 	var distance := clampf(value, FollowCamera.MIN_DISTANCE, FollowCamera.MAX_DISTANCE)
 	movement.settings.camera_distance = distance
 	sliders.camera_distance.set_value_no_signal(distance)
 	for row in ROWS:
 		if row[0] == "camera_distance": _update_label(row, distance); break
-
-func _reset() -> void:
-	movement.settings = movement.defaults.duplicate()
-	for row in ROWS:
-		var slider: HSlider = sliders[str(row[0])]
-		slider.value = float(movement.settings[str(row[0])])
-	message.text = "Defaults restored. Save to keep them."
+	settings_changed.emit()

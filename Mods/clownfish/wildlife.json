@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "species": [
+    {
+      "count_max": 6.0,
+      "count_min": 3.0,
+      "detection": 7.0,
+      "group_behaviour": "schooling",
+      "groups_max": 24.0,
+      "groups_min": 12.0,
+      "id": "clownfish",
+      "mobility": "swimming",
+      "model": "clownfish",
+      "name": "Clownfish",
+      "pitch_limit": 25.0,
+      "random_spawn": true,
+      "response": "flee",
+      "roam_radius": 10.0,
+      "scale_max": 100.0,
+      "scale_min": 70.0,
+      "spawn_chance": 100.0,
+      "speed": 1.3,
+      "startle_duration": 0.3,
+      "startle_speed_multiplier": 5.0,
+      "startle_turn_speed": 720.0,
+      "turn_speed": 60.0,
+      "health": 10.0
+    }
+  ]
+}

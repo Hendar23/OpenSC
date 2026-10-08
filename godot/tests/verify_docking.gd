@@ -34,6 +34,7 @@ func _run() -> void:
 	game.set_physics_process(false)
 	game.pilot.set_physics_process(false)
 	game.pilot.freeze = true
+	var flight_collision_mask: int = game.pilot.collision_mask
 	var controller: Node = game.docking
 	controller.set_physics_process(false)
 	var audio: Node = controller.audio
@@ -147,14 +148,14 @@ func _run() -> void:
 		advance(controller, Docking.Stage.IDLE)
 		check(game.pilot.global_basis.is_equal_approx(Basis(Vector3.UP, heading)), "Undocking retains the compass heading")
 		check(not audio.players.sequence.playing and not audio.players.doors.playing and audio.players.door_stop.playing and finishes.size() == finish_count + 4, "Departure completion stops loops and plays the final DOCKSHUT once")
-		check(game.pilot.active and game.pilot.collision_mask == 5 and game.pilot.velocity.is_zero_approx(), "Departure restores piloting and collision without stale velocity")
+		check(game.pilot.active and game.pilot.collision_mask == flight_collision_mask and game.pilot.velocity.is_zero_approx(), "Departure restores piloting and collision without stale velocity")
 		check(game.pilot.global_position.distance_to(port.entry) < 0.001 and game.pilot.global_position.y + game.pilot.surface_clearance(game.pilot.global_basis) < game.pilot.surface_height, "Departure ends above port and below water surface")
 	controller.request_docking()
 	advance(controller, Docking.Stage.DESCEND)
 	controller.cancel()
 	game.pilot.reset_at(game.pilot.spawn)
 	check(audio.players.values().all(func(p: AudioStreamPlayer) -> bool: return not p.playing), "Cancelling docking stops all docking audio")
-	check(controller.stage == Docking.Stage.IDLE and game.pilot.active and game.pilot.visual.visible and game.pilot.collision_mask == 5, "Docking cancellation restores piloting")
+	check(controller.stage == Docking.Stage.IDLE and game.pilot.active and game.pilot.visual.visible and game.pilot.collision_mask == flight_collision_mask, "Docking cancellation restores piloting")
 	check(is_zero_approx(controller.ports[-1].meshes[0].get_blend_shape_value(1)), "Docking cancellation closes the interrupted port")
 	game.pilot.global_position = controller.ports[0].entry
 	game.pilot.velocity = Vector3.ZERO

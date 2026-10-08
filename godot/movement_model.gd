@@ -32,6 +32,7 @@ var yaw_velocity: float:
 	set(value): angular_velocity.y = value
 var thrust_force := Vector3.ZERO
 var thrust_torque := Vector3.ZERO
+var cargo_mass := 0.0
 var tilt := 0.0
 var pods_aligned := true
 var main_power := 0.0
@@ -76,7 +77,7 @@ func step(delta: float, basis: Basis, throttle: float, vertical: float, turn: fl
 	thrust_force = basis * (main_force + left_force + right_force)
 	# Forces at separate pod mounts naturally produce yaw, roll, or both.
 	thrust_torque = basis * (Vector3(-POD_ARM, 0, 0).cross(left_force) + Vector3(POD_ARM, 0, 0).cross(right_force))
-	var body_mass := maxf(1.0, float(settings.mass))
+	var body_mass := maxf(1.0, float(settings.mass) + cargo_mass)
 	var local := basis.inverse() * velocity
 	var resistance := float(settings.water_resistance)
 	# Directional linear and speed-dependent water drag. Mass changes the response.
@@ -91,7 +92,7 @@ func step(delta: float, basis: Basis, throttle: float, vertical: float, turn: fl
 	velocity.y = clampf(velocity.y, -float(settings.vertical_speed), float(settings.vertical_speed))
 	var local_spin := basis.inverse() * angular_velocity
 	local_spin *= exp(-float(settings.turn_drag) * delta)
-	var inertia := 0.4 * body_mass * 0.675 * 0.675
+	var inertia := rotational_inertia()
 	var torque_accel := basis.inverse() * thrust_torque / inertia
 	var turn_accel := deg_to_rad(float(settings.turn_acceleration))
 	if torque_accel.length() > turn_accel: torque_accel = torque_accel.normalized() * turn_accel
@@ -119,28 +120,26 @@ func step(delta: float, basis: Basis, throttle: float, vertical: float, turn: fl
 	local_spin.z = steering.y
 	angular_velocity = basis * local_spin
 
+func rotational_inertia() -> float:
+	return 0.4 * maxf(1.0,float(settings.mass) + cargo_mass) * 0.675 * 0.675
+
 func load_settings(persist_update: bool = true, path: String = "user://submarine_tuning.cfg", source: String = "res://submarine_tuning.cfg") -> void:
+	if path == "user://submarine_tuning.cfg" and source == "res://submarine_tuning.cfg":
+		source = preload("res://current_settings.gd").path("submarine_tuning.cfg")
+		path = source
 	defaults = DEFAULTS.duplicate()
 	var exported := ConfigFile.new()
-	if exported.load(source) == OK:
-		_apply_values(exported, defaults)
-	# A partial preset inherits untouched values from the player's base tuning.
-	# Each enabled-mod combination then saves to its own profile.
-	if not Mods.active_ids().is_empty() and path == "user://submarine_tuning.cfg":
-		var base := ConfigFile.new()
-		var source_hash := JSON.stringify(defaults).sha256_text()
-		if base.load("user://submarine_tuning.cfg") == OK and base.get_value("defaults", "source_hash", "") == source_hash:
-			_apply_values(base, defaults)
+	if exported.load(source) == OK: _apply_values(exported,defaults)
 	var patch := ConfigFile.new()
 	patch.set_value("movement", "physics_version", 2)
 	for key in Mods.movement: patch.set_value("movement", key, Mods.movement[key])
 	_apply_values(patch, defaults)
-	persistence_path = Mods.movement_profile() if path == "user://submarine_tuning.cfg" else path
-	# Hash effective values, so re-exporting an unchanged file preserves later tuning.
+	persistence_path = path
+	# Record the effective defaults for exported profiles; saved choices take precedence.
 	defaults_hash = JSON.stringify(defaults).sha256_text()
 	var config := ConfigFile.new()
 	settings = defaults.duplicate()
-	if config.load(persistence_path) == OK and config.get_value("defaults", "source_hash", "") == defaults_hash:
+	if config.load(persistence_path) == OK:
 		_apply_values(config, settings)
 	elif persist_update:
 		var result := save_settings(persistence_path)
@@ -163,4 +162,5 @@ func save_settings(path: String = "") -> Error:
 	for key in settings:
 		config.set_value("movement", key, settings[key])
 	config.set_value("defaults", "source_hash", defaults_hash)
+	config.set_value("settings", "unified", true)
 	return config.save(path)

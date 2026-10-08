@@ -31,7 +31,12 @@ func run() -> void:
 		body.setup(preload("res://object_definitions.gd").THORIUM,visual,1,10,true); body.freeze = true
 		body.global_position = equipment.vacuum.global_position + Vector3(0,-0.1,0)
 	equipment.vacuum._physics_process(0.016)
-	check(collected.size() == 5 and equipment.cycle_audio.playing,"Each captured item triggers SUBCYCLE")
+	check(collected.size() == 1 and equipment.cycle_audio.playing,"Captured item triggers SUBCYCLE")
+	check(not equipment.vacuum.enabled and not equipment.mounted[1].enabled and not equipment.vacuum.audio.playing,"One pickup switches off suction, HUD state and vacuum sound")
+	equipment.vacuum._physics_process(0.016)
+	check(collected.size() == 1,"Remaining items require another activation")
+	for pickup in range(4):
+		equipment.toggle_selected(); equipment.vacuum._physics_process(0.016)
 	check(equipment.vacuum.storage.size() == 5,"Captures at most five shards")
 	check(population.get_child(5).dead == false,"Sixth item stays in world")
 	var cargo := {}; equipment.vacuum.transfer_to(cargo); equipment.vacuum.transfer_to(cargo)
@@ -42,7 +47,18 @@ func run() -> void:
 	check(crystal.pickup_item().is_empty(),"Whole crystals cannot be vacuumed"); crystal.free()
 	var remaining: RigidBody3D = population.get_child(0)
 	remaining.global_position = equipment.vacuum.global_position + Vector3(0,-1,0); remaining.freeze = false
-	equipment.vacuum.enabled = true
+	equipment.settings.som_radius = 0.1; equipment.settings.som_range = 0.5
+	equipment.apply_settings(); equipment.toggle_selected()
+	equipment.vacuum._physics_process(0.016)
+	check(remaining.linear_velocity == Vector3.ZERO and equipment.vacuum.storage.is_empty(),"Item outside configured depth is not drawn in")
+	remaining.global_position = equipment.vacuum.global_position + Vector3(0.2,-0.1,0)
+	equipment.vacuum._physics_process(0.016)
+	check(equipment.vacuum.storage.is_empty(),"Item outside narrow suction radius is not captured")
+	equipment.settings.som_radius = 0.25; equipment.settings.som_range = 2.0
+	equipment.settings.som_pull_speed = 3.0; equipment.settings.som_pull_strength = 12.0
+	equipment.apply_settings()
+	check(equipment.vacuum.pull_speed == 3.0 and equipment.vacuum.pull_strength == 12.0,"Live equipment settings tune suction forces")
+	remaining.global_position = equipment.vacuum.global_position + Vector3(0,-1,0)
 	for tick in range(120): await physics_frame
 	check(equipment.vacuum.storage.size() == 1,"Shard is physically pulled up into intake")
 	var saved := preload("res://player_progress.gd").restore({"cargo":cargo,"suckomat":["ore"]})

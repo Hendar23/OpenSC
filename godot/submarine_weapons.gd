@@ -21,6 +21,7 @@ var beam_start := Vector3.ZERO
 var beam_end := Vector3.ZERO
 var selected := 0
 var mounted: Array[Dictionary] = []
+var available: Array[Dictionary] = []
 var impact_frames: Array[Texture2D] = []
 var impact: Sprite3D
 var spark: OmniLight3D
@@ -50,6 +51,7 @@ func setup(player: Node3D, folder: String, view: Camera3D, catalogue: Dictionary
 	for index in range(1,4): frames.append(Assets._load_texture(folder,"ZAPPER%d" % index,"ZAPPER%dM" % index,cache))
 	icon = _icon(folder,catalogue)
 	mounted.append({"id":"zapper","name":"Zapper","icon":icon})
+	available.assign(mounted)
 	beam = MeshInstance3D.new(); beam.name = "ZapperBeam"; beam.top_level = true; beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	beam.mesh = ArrayMesh.new()
 	material = StandardMaterial3D.new(); material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED; material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD; material.cull_mode = BaseMaterial3D.CULL_DISABLED; material.no_depth_test = false
@@ -211,3 +213,11 @@ func _aim_direction(forward: Vector3) -> Vector3:
 		if hit.get("collider") != target: continue
 		best_dot = alignment; aimed = direction
 	return aimed
+
+func set_installed(ids: Array) -> void:
+	mounted.clear()
+	for item in available:
+		if item.id in ids: mounted.append(item)
+	selected = 0
+	muzzle.visible = not mounted.is_empty()
+	if mounted.is_empty(): update_fire(false,0)

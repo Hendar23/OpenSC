@@ -18,7 +18,7 @@ func run() -> void:
 	var data := Document.empty()
 	data.object_groups = [{"id":"crystals","name":"Crystals","type":"thorium","position":[0,2,0],"count":1,"radius":0}]
 	var legacy := Document.empty(); legacy.object_types = [Definitions.FLOATING_MINE.duplicate(true)]; Definitions.ensure(legacy)
-	check(legacy.object_types.size() == 2 and Document.valid(legacy),"Old maps gain a placeable Thorium type without mission placements")
+	check(legacy.object_types.size() == 5 and Document.valid(legacy) and legacy.object_groups.is_empty(),"Old maps gain Thorium and metal object types without mission placements")
 	check(Document.valid(data),"Thorium stats and manually placed group validate")
 	var bad := data.duplicate(true); bad.object_types[1].spawn_chance = 101
 	check(not Document.valid(bad),"Invalid spawn probability rejected")

@@ -37,7 +37,16 @@ func run() -> void:
 	pilot.velocity = Vector3.UP * 3
 	for frame in range(60): await physics_frame
 	check(pilot.health == 100,"The water surface causes no collision damage")
+	water.free(); pilot.restore_health(); pilot.reset_at(Vector3.ZERO)
+	var fish := preload("res://fish_controller.gd").new()
+	fish.setup(Node3D.new(),Vector3(2,0,0),AABB(Vector3.ONE * -100,Vector3.ONE * 200),100,0.06,42)
+	root.add_child(fish); fish.swim_speed = 0
+	pilot.velocity = Vector3.RIGHT * 4
+	for frame in range(90): await physics_frame
+	check(pilot.health == 100 and fish.health == fish.max_health,"Real submarine/wildlife contacts cause no damage to either body")
+	check(fish.position.x > 2.1,"Submarine contact pushes the creature aside")
+	fish.free()
 	pilot.apply_impact_damage(100)
 	check(pilot.dead,"Fatal impact uses submarine destruction")
-	pilot.free(); water.free()
+	pilot.free()
 	print("Impact damage: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

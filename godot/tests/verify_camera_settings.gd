@@ -42,7 +42,7 @@ func _run() -> void:
 	source.save(source_path)
 	var movement := Movement.new()
 	movement.load_settings(true, saved_path, source_path)
-	check(is_equal_approx(movement.settings.turn_speed, 144.0), "New exported defaults replace stale saved settings")
+	check(is_equal_approx(movement.settings.turn_speed, 10.0), "Saved preferences take precedence over new shipped defaults")
 	check(is_equal_approx(movement.settings.camera_distance, 0.9), "Older exports without camera distance use closer default")
 	movement.settings.turn_speed = 120.0
 	movement.settings.camera_distance = 2.75
@@ -56,7 +56,7 @@ func _run() -> void:
 	source.set_value("movement", "turn_speed", 130.0)
 	source.save(source_path)
 	movement.load_settings(true, saved_path, source_path)
-	check(is_equal_approx(movement.settings.turn_speed, 130.0), "Changing default file applies fresh values once")
+	check(is_equal_approx(movement.settings.turn_speed, 120.0), "Changing the default file preserves saved choices")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(saved_path))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(source_path))
 	print("Camera/settings verification: %d checks, %d failures" % [checks, failures])

@@ -32,7 +32,15 @@ var selected_hold := ""
 var selected_sale := ""
 var sale_list: ItemList
 var hold_list: ItemList
+var shop_offer_id := "shield"
+var slot_buttons: Array[Button] = []
+var selection_dot: Texture2D
+var empty_dot: Texture2D
+var mount_dot: Control
 var info_dialog: AcceptDialog
+class DialogInput extends Node:
+	var handler: Callable
+	func _input(event: InputEvent) -> void: handler.call(event)
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS; layer = 20
 	var backdrop := ColorRect.new(); backdrop.color = Color.BLACK; add_child(backdrop); backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -40,10 +48,15 @@ func _ready() -> void:
 	name_dialog = ConfirmationDialog.new(); name_dialog.title = "Name saved game"; add_child(name_dialog)
 	name_field = LineEdit.new(); name_field.max_length = 64; name_field.custom_minimum_size = Vector2(360,38); name_dialog.add_child(name_field)
 	name_dialog.confirmed.connect(_confirm_name)
+	var naming_input := DialogInput.new(); naming_input.handler = func(event: InputEvent) -> void: _dialog_input(name_dialog,event)
+	name_dialog.add_child(naming_input)
 	name_field.text_submitted.connect(func(_text: String) -> void: name_dialog.hide(); _confirm_name())
 	overwrite_dialog = ConfirmationDialog.new(); overwrite_dialog.dialog_text = "Replace the saved game in this slot?"; add_child(overwrite_dialog)
 	overwrite_dialog.confirmed.connect(func() -> void: action_requested.emit("save_slot",{"slot":pending_slot,"name":pending_name}))
 	info_dialog = AcceptDialog.new(); info_dialog.title = "Shield Repair"; add_child(info_dialog)
+	var overwrite_input := DialogInput.new(); overwrite_input.handler = func(event: InputEvent) -> void: _dialog_input(overwrite_dialog,event)
+	overwrite_dialog.add_child(overwrite_input)
+	name_dialog.canceled.connect(_restore_slot_focus); overwrite_dialog.canceled.connect(_restore_slot_focus)
 	get_viewport().size_changed.connect(_resize); _resize(); hide()
 func setup(original_folder: String, state: Callable) -> void:
 	folder = original_folder; model = state
@@ -79,7 +92,7 @@ func label(text: String, area: Rect2, font_size: int = 13, centre: bool = false)
 	layout.add_child(node); node.position = area.position; node.size = area.size; node.clip_text = true; return node
 func button(action: String, area: Rect2, text: String = "", payload: Dictionary = {}) -> Button:
 	var node := Button.new(); node.position = area.position; node.size = area.size; node.text = text
-	node.name = action
+	node.name = action + "_" + str(payload.slot) if action == "choose_slot" else action
 	node.add_theme_font_size_override("font_size",12); node.add_theme_color_override("font_color",text_colour)
 	node.add_theme_stylebox_override("normal",StyleBoxEmpty.new())
 	var focus := StyleBoxFlat.new(); focus.bg_color = Color(1,1,1,0.1); focus.border_color = text_colour; focus.set_border_width_all(1)
@@ -88,7 +101,9 @@ func button(action: String, area: Rect2, text: String = "", payload: Dictionary 
 	node.pressed.connect(func() -> void:
 		if action in pages: open(action)
 		elif action == "choose_slot": _choose_slot(int(payload.slot))
-		elif action == "repair_info": _repair_info()
+		elif action == "repair_info": shop_offer_id = selected_hold if payload.get("side","") == "hold" else selected_sale; _repair_info()
+		elif action in ["buy_equipment","sell_equipment"]: action_requested.emit(action,{"item":selected_sale if action == "buy_equipment" else selected_hold})
+		elif action == "equipment_slot": action_requested.emit(action,{"slot":payload.slot,"item":selected_hold})
 		else: action_requested.emit(action,payload))
 	return node
 func open(next_page: String = "home") -> void:
@@ -132,12 +147,12 @@ func rebuild(new_page: bool = false) -> void:
 			_status(data,rect(pages.home.status))
 		"equipment":
 			_equipment_shop(data)
-			_sub_preview(data.get("submarine"))
+
 		"goods":
 			label("\n".join(PackedStringArray(data.get("commodities",[]).slice(0,16))),Rect2(25,58,190,310),12)
 			label("Trade preview\n\nBuying and selling\nnot available yet",Rect2(251,98,188,195),13,true)
 			var cargo_lines := PackedStringArray()
-			for id in data.get("cargo",{}): cargo_lines.append("%s x%d" % ["Thorium" if id == "ore" else str(id),data.cargo[id]])
+			for id in data.get("cargo",{}): cargo_lines.append("%s x%d" % ["Thorium" if id == "ore" else str(id).capitalize(),data.cargo[id]])
 			label("Cargo hold\n\n" + ("Empty" if cargo_lines.is_empty() else "\n".join(cargo_lines)),Rect2(509,56,104,322),13)
 		"missions":
 			label("Available missions\n\nNo missions available yet.",Rect2(24,24,325,160),16)
@@ -153,8 +168,12 @@ func rebuild(new_page: bool = false) -> void:
 				node.tooltip_text = "%s — %s" % [slot.city,slot.saved_at]
 				node.disabled = page == "load" and not slot.valid
 			label(status,Rect2(190,350,310,56),12,true)
+	var slot_controls: Array[Button] = []
+	if page in ["save","load"]: slot_controls = _wire_slot_focus()
 	var restored := layout.get_node_or_null(NodePath(focus_name)) as Control if not focus_name.is_empty() else null
 	if restored != null: restored.grab_focus()
+	elif page in ["save","load"]:
+		(slot_controls[0] if not slot_controls.is_empty() else button_nodes[0]).grab_focus()
 	elif page == "equipment" and sale_list != null: sale_list.grab_focus()
 	elif not button_nodes.is_empty(): button_nodes[0].grab_focus()
 
@@ -167,68 +186,132 @@ func _welcome(text: String, area: Rect2) -> void:
 	body.add_theme_font_size_override("font_size",13); body.add_theme_color_override("font_color",text_colour)
 	scroll.add_child(body)
 
+
 func _equipment_shop(data: Dictionary) -> void:
-	var offer: Dictionary = data.get("repair_offer",{})
-	if offer.is_empty(): return
+	var offers: Dictionary = data.get("offers",{"shield":data.get("repair_offer",{})})
 	var settings: Dictionary = pages.equipment
-	var owned := int(data.get("hold",{}).get("shield",0))
-	if owned == 0: selected_hold = ""
+	if int(data.get("hold",{}).get(selected_hold,0)) == 0: selected_hold = ""
 	sale_list = _item_list("ForSale",rect(settings.sale))
-	if offer.get("available",false):
-		sale_list.add_item(str(offer.name))
-		if selected_sale == "shield": sale_list.select(0)
-	else: selected_sale = ""
-	sale_list.item_selected.connect(func(_index: int) -> void: selected_sale = "shield"; _update_shop_selection(data))
-	label("Cost %d" % int(offer.price) if offer.get("available",false) else "",rect(settings.cost),12,true)
-	var buy := button("buy_repair",rect(settings.buy)); buy.name = "BuyShieldRepair"
-	buy.disabled = selected_sale != "shield" or int(data.status.credits) < int(offer.price)
-	var sale_info := button("repair_info",rect(settings.sale_info)); sale_info.name = "SaleInfo"; sale_info.disabled = selected_sale != "shield"
-	var hold_area := rect(settings.hold)
-	var mounted := PackedStringArray(data.get("equipment",[]) + data.get("weapons",[]))
-	hold_list = _item_list("Hold",hold_area)
-	for item_name in mounted:
-		hold_list.add_item(item_name); hold_list.set_item_selectable(hold_list.item_count - 1,false)
-	if owned > 0:
-		hold_list.add_item("%s ×%d" % [offer.name,owned])
-		hold_list.set_item_metadata(hold_list.item_count - 1,"shield")
-		if selected_hold == "shield": hold_list.select(hold_list.item_count - 1)
-	hold_list.item_selected.connect(func(index: int) -> void:
-		selected_hold = str(hold_list.get_item_metadata(index)); _update_shop_selection(data))
-	label("SellPrice %d" % int(offer.sell_price) if owned > 0 else "",rect(settings.sell_price),12,true)
-	var info := button("repair_info",rect(settings.hold_info)); info.name = "HoldInfo"; info.disabled = selected_hold != "shield"
-	var sell := button("sell_repair",rect(settings.sell)); sell.name = "SellShieldRepair"; sell.disabled = selected_hold != "shield" or int(offer.sell_price) <= 0
+	for id in offers:
+		if not offers[id].get("available",false): continue
+		sale_list.add_item(str(offers[id].name)); sale_list.set_item_metadata(sale_list.item_count - 1,id)
+		if id == selected_sale: sale_list.select(sale_list.item_count - 1)
+	sale_list.item_selected.connect(func(index: int) -> void: selected_sale = str(sale_list.get_item_metadata(index)); _update_shop_selection(data))
+	var cost := label("",rect(settings.cost),12,true); cost.name = "PurchasePrice"
+	var buy := button("buy_equipment",rect(settings.buy)); buy.name = "BuyShieldRepair"
+	var sale_info := button("repair_info",rect(settings.sale_info),"",{"side":"sale"}); sale_info.name = "SaleInfo"
+	hold_list = _item_list("Hold",rect(settings.hold))
+	for id in data.get("hold",{}):
+		var count := int(data.hold[id])
+		if count <= 0: continue
+		hold_list.add_item(str(offers.get(id,{}).get("name",id)) + (" ×%d" % count if count > 1 else ""))
+		hold_list.set_item_metadata(hold_list.item_count - 1,id)
+		if id == selected_hold: hold_list.select(hold_list.item_count - 1)
+	hold_list.item_selected.connect(func(index: int) -> void: selected_hold = str(hold_list.get_item_metadata(index)); _update_shop_selection(data))
+	var price := label("",rect(settings.sell_price),12,true); price.name = "ResalePrice"
+	var info := button("repair_info",rect(settings.hold_info),"",{"side":"hold"}); info.name = "HoldInfo"
+	var sell := button("sell_equipment",rect(settings.sell)); sell.name = "SellShieldRepair"
 	_status(data,rect(settings.status),true)
-	label(status,rect(settings.message),11,true)
-	var use := button("use_repair",rect(settings.preview)); use.name = "UseShieldRepair"
-	use.disabled = selected_hold != "shield"
-	use.tooltip_text = "Use Shield Repair" if selected_hold == "shield" else "Select Shield Repair from the hold"
+	label(status,Rect2(210,184,230,13),10,true)
+	# The original two-view submarine illustration shares the slot highlight.
+	var picture := TextureRect.new(); picture.texture = texture("texture.ui_equipment_sub","INTROTEX/2SUB.BMP")
+	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var area := rect(settings.preview); picture.position = area.position; picture.size = area.size; layout.add_child(picture)
+	mount_dot = Panel.new(); mount_dot.name = "MountPosition"
+	var dot := StyleBoxFlat.new(); dot.bg_color = Color.YELLOW; dot.set_corner_radius_all(4)
+	mount_dot.add_theme_stylebox_override("panel",dot); mount_dot.size = Vector2(7,7); mount_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE; layout.add_child(mount_dot)
+	var use := button("use_repair",area); use.name = "UseShieldRepair"
+	slot_buttons.clear()
+	var installed: Dictionary = data.get("installed",{})
+	# Original grid: weapon, lights and underside tool positions.
+	for index in range(10):
+		var slot: int = {0:9,1:5,7:3}.get(index,0)
+		var id: String = installed.get(slot,"") if slot != 0 else ""
+		var square := Rect2(210 + (index % 5) * 47,197 + (index / 5) * 39,46,38)
+		var slot_button := button("equipment_slot",square,"EMPTY" if id.is_empty() else "",{"slot":slot})
+		slot_button.name = "EquipmentSlot%d" % index; slot_button.set_meta("slot",slot)
+		slot_button.tooltip_text = str(offers.get(id,{}).get("name","Empty"))
+		if not id.is_empty():
+			var icon := TextureRect.new(); icon.texture = texture("texture.ui_equipment_square_" + id,str(offers[id].square_bitmap))
+			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			slot_button.add_child(icon); icon.offset_left = 2; icon.offset_top = 2; icon.offset_right = -2; icon.offset_bottom = -2
+		elif slot != 0: slot_button.text = "EMPTY"
+		slot_buttons.append(slot_button)
+		slot_button.focus_entered.connect(func() -> void: _mount_highlight(slot))
+		slot_button.mouse_entered.connect(func() -> void: _mount_highlight(slot))
+		var blank := StyleBoxFlat.new(); blank.bg_color = Color(0.07,0.025,0.015) if id.is_empty() else Color(0.1,0.55,0.58)
+		blank.set_corner_radius_all(4); slot_button.add_theme_stylebox_override("normal",blank)
+	for index in range(10):
+		var node := slot_buttons[index]
+		node.focus_neighbor_left = node.get_path_to(slot_buttons[index - 1] if index % 5 else sale_list)
+		node.focus_neighbor_right = node.get_path_to(slot_buttons[index + 1] if index % 5 < 4 else hold_list)
+		node.focus_neighbor_top = node.get_path_to(slot_buttons[index - 5] if index >= 5 else node)
+		node.focus_neighbor_bottom = node.get_path_to(slot_buttons[index + 5] if index < 5 else button_nodes[0])
+	sale_list.focus_neighbor_bottom = sale_list.get_path_to(buy); hold_list.focus_neighbor_bottom = hold_list.get_path_to(sell)
+	sale_list.focus_neighbor_right = sale_list.get_path_to(slot_buttons[0]); hold_list.focus_neighbor_left = hold_list.get_path_to(slot_buttons[4])
+	_update_shop_selection(data)
+
+func _mount_highlight(slot: int) -> void:
+	if mount_dot == null: return
+	mount_dot.visible = slot in [3,5,9]
+	var area := rect(pages.equipment.preview)
+	var points := {9:Vector2(0.82,0.4),5:Vector2(0.77,0.25),3:Vector2(0.83,0.74)}
+	mount_dot.position = area.position + area.size * points.get(slot,Vector2.ZERO) - Vector2(3.5,3.5)
 
 func _item_list(node_name: String, area: Rect2) -> ItemList:
 	var list := ItemList.new(); list.name = node_name; list.position = area.position; list.size = area.size
-	list.allow_reselect = true; list.add_theme_font_size_override("font_size",11)
+	list.allow_reselect = true; list.fixed_icon_size = Vector2i(8,8); list.add_theme_font_size_override("font_size",11)
 	list.add_theme_constant_override("v_separation",4)
-	list.add_theme_color_override("font_color",text_colour); list.add_theme_color_override("font_selected_color",text_colour)
+	list.add_theme_color_override("font_color",text_colour); list.add_theme_color_override("font_selected_color",Color.WHITE)
 	list.add_theme_stylebox_override("panel",StyleBoxEmpty.new()); list.add_theme_stylebox_override("focus",StyleBoxEmpty.new())
-	var selected := StyleBoxFlat.new(); selected.bg_color = Color(text_colour,0.15)
+	var selected := StyleBoxFlat.new(); selected.bg_color = Color.TRANSPARENT
 	list.add_theme_stylebox_override("selected",selected); list.add_theme_stylebox_override("selected_focus",selected)
 	layout.add_child(list); return list
 
+
 func _update_shop_selection(data: Dictionary) -> void:
-	layout.get_node("BuyShieldRepair").disabled = selected_sale != "shield" or int(data.status.credits) < int(data.repair_offer.price)
-	layout.get_node("SaleInfo").disabled = selected_sale != "shield"
-	layout.get_node("HoldInfo").disabled = selected_hold != "shield"
-	layout.get_node("SellShieldRepair").disabled = selected_hold != "shield" or int(data.repair_offer.sell_price) <= 0
+	var offers: Dictionary = data.get("offers",{"shield":data.get("repair_offer",{})})
+	var sale: Dictionary = offers.get(selected_sale,{})
+	var held: Dictionary = offers.get(selected_hold,{})
+	var count := int(data.get("hold",{}).get(selected_sale,0)) + int(selected_sale in data.get("installed",{}).values())
+	layout.get_node("BuyShieldRepair").disabled = sale.is_empty() or not sale.get("available",false) or int(data.status.credits) < int(sale.get("price",0)) or (selected_sale != "shield" and count >= int(sale.get("maximum",1)))
+	layout.get_node("SaleInfo").disabled = sale.is_empty()
+	layout.get_node("HoldInfo").disabled = held.is_empty()
+	layout.get_node("SellShieldRepair").disabled = held.is_empty() or int(held.get("sell_price",0)) <= 0
 	layout.get_node("UseShieldRepair").disabled = selected_hold != "shield"
+	layout.get_node("PurchasePrice").text = "Cost %d" % int(sale.price) if not sale.is_empty() else ""
+	layout.get_node("ResalePrice").text = "SellPrice %d" % int(held.sell_price) if not held.is_empty() else ""
+	if selection_dot == null:
+		var image := Image.create(8,8,false,Image.FORMAT_RGBA8); image.fill(Color.TRANSPARENT)
+		empty_dot = ImageTexture.create_from_image(image)
+		for y in range(8):
+			for x in range(8):
+				if Vector2(x - 3.5,y - 3.5).length() <= 3.5: image.set_pixel(x,y,Color.YELLOW)
+		selection_dot = ImageTexture.create_from_image(image)
+	for list in [sale_list,hold_list]:
+		for index in range(list.item_count):
+			var id := str(list.get_item_metadata(index))
+			var offer: Dictionary = offers.get(id,{})
+			var number := int(data.get("hold",{}).get(id,0))
+			var chosen := selected_sale == id if list == sale_list else selected_hold == id
+			list.set_item_icon(index,selection_dot if chosen else empty_dot)
+			list.set_item_text(index,str(offer.get("name",id)) + (" ×%d" % number if list == hold_list and number > 1 else ""))
+	var slot: int = held.get("slot",0)
+	for node in slot_buttons:
+		var normal: StyleBoxFlat = node.get_theme_stylebox("normal")
+		normal.border_color = Color.YELLOW; normal.set_border_width_all(2 if slot != 0 and node.get_meta("slot") == slot else 0)
+	_mount_highlight(slot)
 
 func _repair_info() -> void:
 	var data: Dictionary = model.call() if model.is_valid() else {}
-	var offer: Dictionary = data.get("repair_offer",{})
+	var offer: Dictionary = data.get("offers",{}).get(shop_offer_id,data.get("repair_offer",{}))
 	info_dialog.title = str(offer.get("name","Shield Repair"))
 	info_dialog.dialog_text = ""
 	for child in info_dialog.get_children():
 		if child.name == "RepairInfo": info_dialog.remove_child(child); child.queue_free()
 	var content := VBoxContainer.new(); content.name = "RepairInfo"; content.custom_minimum_size = Vector2(400,200); info_dialog.add_child(content)
-	var artwork := texture("texture.ui_equipment_info_shield",str(offer.get("info_bitmap","INTROTEX/WSHIELDS.BMP")))
+	var artwork := texture("texture.ui_equipment_info_" + shop_offer_id,str(offer.get("info_bitmap","INTROTEX/WSHIELDS.BMP")))
 	if artwork != null:
 		var image := TextureRect.new(); image.texture = artwork; image.custom_minimum_size.y = 120
 		image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; content.add_child(image)
@@ -256,30 +339,11 @@ func _status(data: Dictionary, area: Rect2, compact: bool = false) -> void:
 			node.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			if side == 1: node.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			panel.add_child(node)
-func _sub_preview(source: Node3D) -> void:
-	if source == null: return
-	preview = SubViewport.new(); preview.own_world_3d = true; preview.size = Vector2i(440,240); preview.render_target_update_mode = SubViewport.UPDATE_ALWAYS; layout.add_child(preview)
-	var bounds := AABB(); var first := true
-	for mesh in source.find_children("*","MeshInstance3D",true,false):
-		var copy := MeshInstance3D.new(); copy.mesh = mesh.mesh; copy.transform = source.global_transform.affine_inverse() * mesh.global_transform
-		for index in range(mesh.mesh.get_surface_count()): copy.set_surface_override_material(index,preload("res://hud_map.gd")._map_material(mesh.get_active_material(index)))
-		preview.add_child(copy)
-		var box: AABB = copy.transform * copy.mesh.get_aabb()
-		bounds = box if first else bounds.merge(box); first = false
-	var environment := WorldEnvironment.new(); environment.environment = Environment.new(); environment.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; environment.environment.ambient_light_color = Color.WHITE; environment.environment.ambient_light_energy = 0.7; preview.add_child(environment)
-	environment.environment.background_mode = Environment.BG_COLOR; environment.environment.background_color = Color.BLACK
-	var sun := DirectionalLight3D.new(); sun.rotation_degrees = Vector3(-40,-30,0); preview.add_child(sun)
-	var camera := Camera3D.new(); preview.add_child(camera); camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = maxf(bounds.size.length() * 1.05,0.1); camera.position = bounds.get_center() + Vector3(1,0.65,1).normalized() * maxf(bounds.size.length() * 3,1)
-	camera.look_at(bounds.get_center()); camera.current = true
-	var image := TextureRect.new(); image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; image.texture = preview.get_texture()
-	var area := rect(pages.equipment.preview); image.position = area.position; image.size = area.size
-	image.mouse_filter = Control.MOUSE_FILTER_IGNORE; layout.add_child(image)
 func _choose_slot(slot: int) -> void:
 	if page == "load": action_requested.emit("load_slot",{"slot":slot}); return
 	pending_slot = slot
 	var data: Dictionary = model.call(); var record: Dictionary = data.slots[slot]
-	name_field.text = record.name if record.valid else loaded_city
+	name_field.text = record.name if record.valid else (loaded_city if not loaded_city.is_empty() else "Saved game")
 	name_dialog.popup_centered(Vector2i(390,120)); name_field.grab_focus(); name_field.select_all()
 func _confirm_name() -> void:
 	pending_name = name_field.text.strip_edges().left(64)
@@ -291,7 +355,24 @@ func report(message: String) -> void:
 	status = message; rebuild()
 func _input(event: InputEvent) -> void:
 	if not visible or name_dialog.visible or overwrite_dialog.visible or info_dialog.visible: return
-	if get_viewport().gui_get_focus_owner() is ItemList and not Bindings.pressed(event,"menu_cancel"): return
+	var item_list := get_viewport().gui_get_focus_owner() as ItemList
+	if item_list != null and not Bindings.pressed(event,"menu_cancel"):
+		for direction in [["menu_left",SIDE_LEFT],["menu_right",SIDE_RIGHT]]:
+			if Bindings.pressed(event,direction[0]):
+				var next := item_list.find_valid_focus_neighbor(direction[1])
+				if next != null: next.grab_focus()
+				get_viewport().set_input_as_handled(); return
+		for direction in [["menu_up",-1],["menu_down",1]]:
+			if not Bindings.pressed(event,direction[0]): continue
+			var chosen := item_list.get_selected_items()
+			var index: int = chosen[0] + int(direction[1]) if not chosen.is_empty() else 0
+			if index >= 0 and index < item_list.item_count:
+				item_list.select(index); item_list.ensure_current_is_visible(); item_list.item_selected.emit(index)
+			else:
+				var next := item_list.find_valid_focus_neighbor(SIDE_TOP if direction[1] < 0 else SIDE_BOTTOM)
+				if next != null: next.grab_focus()
+			get_viewport().set_input_as_handled(); return
+		return
 	if Bindings.pressed(event,"menu_cancel"):
 		if page == "load": action_requested.emit("close",{})
 		elif page != "home": open("home")
@@ -312,3 +393,40 @@ func _input(event: InputEvent) -> void:
 
 func dismiss() -> void:
 	name_dialog.hide(); overwrite_dialog.hide(); info_dialog.hide(); hide()
+
+func _wire_slot_focus() -> Array[Button]:
+	var slots: Array[Button] = []
+	for node in button_nodes:
+		if node.name.begins_with("choose_slot") and not node.disabled: slots.append(node)
+	var done: Button = button_nodes[0]
+	for index in range(slots.size()):
+		slots[index].focus_neighbor_top = slots[index].get_path_to(slots[index - 1] if index > 0 else done)
+		slots[index].focus_neighbor_bottom = slots[index].get_path_to(slots[index + 1] if index + 1 < slots.size() else done)
+	if not slots.is_empty():
+		done.focus_neighbor_bottom = done.get_path_to(slots[0]); done.focus_neighbor_top = done.get_path_to(slots[-1])
+	return slots
+
+func _restore_slot_focus() -> void:
+	for node in button_nodes:
+		if node.name == "choose_slot_" + str(pending_slot) and not node.disabled:
+			node.grab_focus(); return
+	for node in button_nodes:
+		if node.name.begins_with("choose_slot") and not node.disabled:
+			node.grab_focus(); return
+
+func _dialog_input(dialog: ConfirmationDialog, event: InputEvent) -> void:
+	if not dialog.visible: return
+	if Bindings.pressed(event,"menu_cancel"):
+		dialog.hide(); _restore_slot_focus(); dialog.get_viewport().set_input_as_handled()
+	elif Bindings.pressed(event,"menu_accept"):
+		var focus := dialog.get_viewport().gui_get_focus_owner()
+		if focus == dialog.get_cancel_button(): dialog.hide(); _restore_slot_focus()
+		else: dialog.hide(); dialog.confirmed.emit()
+		dialog.get_viewport().set_input_as_handled()
+	else:
+		for direction in [["menu_left",SIDE_LEFT],["menu_right",SIDE_RIGHT],["menu_up",SIDE_TOP],["menu_down",SIDE_BOTTOM]]:
+			if not Bindings.pressed(event,direction[0]): continue
+			var focus := dialog.get_viewport().gui_get_focus_owner()
+			var next: Control = focus.find_valid_focus_neighbor(direction[1]) if focus != null else dialog.get_ok_button()
+			if next != null: next.grab_focus()
+			dialog.get_viewport().set_input_as_handled(); break

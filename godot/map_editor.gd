@@ -77,6 +77,7 @@ func _ready() -> void:
 	button(actions, "New species", add_species)
 	button(actions, "Add object group", add_object_group)
 	button(actions, "New object type", add_object_type)
+	button(actions, "Add drop-off point", func() -> void: if loaded: _add_entity("dropoff", ""))
 	button(actions, "Duplicate", duplicate_selection)
 	button(actions, "Delete", delete_selection)
 	button(actions, "Undo", undo)
@@ -160,7 +161,7 @@ func open(game_folder: String) -> void:
 	await Scenery.populate(world, folder, get_tree(), _progress)
 	await get_tree().physics_frame
 	await Creatures.populate(world, folder, get_tree(), _progress)
-	var baseline := Document.capture(world)
+	var baseline := Document.capture(world,gameplay_catalogue)
 	base_entities = baseline.entities.duplicate(true)
 	for key in base_entities:
 		if key != "player_spawn": base_nodes[key] = world.get_node(NodePath(key)).duplicate()
@@ -248,7 +249,7 @@ func _sync() -> void:
 	for group in document.groups: _marker("group:" + group.id, Document.vector(group.position), Color(0.2, 1.0, 0.8))
 	for key in document.entities:
 		var entry: Dictionary = document.entities[key]
-		if not entry.get("deleted", false) and entry.kind in ["light", "player"]: _marker(key, Document.decode(entry.transform).origin, Color(0.65, 0.8, 1.0))
+		if not entry.get("deleted", false) and entry.kind in ["light", "player", "dropoff"]: _marker(key, Document.decode(entry.transform).origin, Color(0.65, 0.8, 1.0))
 	_update_outline()
 func _apply_visibility() -> void:
 	if world == null: return
@@ -277,7 +278,7 @@ func _refresh_list() -> void:
 		if entry.get("deleted", false): continue
 		if category.selected == 1 and entry.kind != "model": continue
 		if category.selected == 2 and entry.kind != "light": continue
-		if category.selected >= 3: continue
+		if category.selected >= 3 and not (category.selected == 5 and entry.kind == "dropoff"): continue
 		if not query.is_empty() and not (str(entry.name) + " " + str(key) + " " + str(entry.get("model", ""))).to_lower().contains(query): continue
 		list_keys.append(key)
 		entity_list.add_item((str(entry.model) + " · " if str(entry.name).begins_with("Plant_") else "") + str(entry.name))
@@ -324,7 +325,17 @@ func select(key: String) -> void:
 	if key.begins_with("object_type:"):
 		species_preview = SpeciesPreview.new(); properties.add_child(species_preview)
 		species_preview.show_object(entry,folder)
-		choice("behavior","Object behavior",["mine","thorium"],entry.get("behavior","mine"),["Floating mine","Thorium crystal"])
+		choice("behavior","Object behavior",["mine","thorium","salvage"],entry.get("behavior","mine"),["Floating mine","Thorium crystal","Metal salvage"])
+		var compatible := CheckBox.new(); compatible.text = "Magnet compatible"; compatible.button_pressed = bool(entry.get("magnet_compatible",entry.get("behavior","") == "salvage"))
+		properties.add_child(compatible); fields.magnet_compatible = compatible
+		var commodity_ids: Array = [""]; var commodity_names: Array = ["None"]
+		for commodity in gameplay_catalogue.get("tables",{}).get("commodity_text",{}).get("records",{}).values():
+			commodity_ids.append(str(commodity.id).to_lower()); commodity_names.append(str(commodity.get("Display name",commodity.id)))
+		var delivery := Document.ObjectDefinitions.delivery_defaults(entry)
+		var commodity_id := str(entry.get("delivery_commodity",delivery.commodity))
+		if not commodity_ids.has(commodity_id): commodity_ids.append(commodity_id); commodity_names.append(commodity_id)
+		choice("delivery_commodity","Drop-off commodity",commodity_ids,commodity_id,commodity_names)
+		number("delivery_quantity","Commodity units per delivered object",entry.get("delivery_quantity",delivery.quantity),0,999999,1)
 		choice("appearance","Appearance",["sprite","model"],entry.appearance,["Billboard image","3D model"])
 		text_field("texture","Image asset (texture ID / BMP name)",entry.texture)
 		text_field("mask","Original transparency mask",entry.mask)
@@ -333,7 +344,7 @@ func select(key: String) -> void:
 		fields.model.item_selected.connect(func(_index: int) -> void: _update_object_preview())
 		fields.texture.text_submitted.connect(func(_text: String) -> void: _update_object_preview())
 		number("size","Size (maximum diameter)",entry.size,0.01,1000,0.05)
-		number("health","Health",entry.health,0.01,100000,0.1)
+		if entry.get("behavior","mine") != "salvage": number("health","Health",entry.health,0.01,100000,0.1)
 		if entry.get("behavior","mine") == "thorium":
 			number("mass","Crystal mass",entry.get("mass",2.0),0.01,1000,0.1)
 			number("shard_mass","Shard mass",entry.get("shard_mass",1.0),0.01,1000,0.1)
@@ -347,6 +358,10 @@ func select(key: String) -> void:
 			for channel in ["red","green","blue"]: number("glow_" + channel,"Glow " + channel,entry.get("glow_" + channel,Document.ObjectDefinitions.THORIUM["glow_" + channel]),0,1,0.01)
 			number("spawn_chance","Random drop chance per minute (%)",entry.get("spawn_chance",0.0),0,100,1)
 			number("maximum_population","Maximum crystal/shard population",entry.get("maximum_population",60),0,5000,1)
+		elif entry.get("behavior","mine") == "salvage":
+			number("mass","Object mass",entry.get("mass",2.0),0.01,1000,0.1)
+			number("spawn_chance","Random drop chance per minute (%)",entry.get("spawn_chance",100.0),0,100,1)
+			number("maximum_population","Maximum population of this type",entry.get("maximum_population",20),0,5000,1)
 		else:
 			number("damage","Explosion damage",entry.damage,0,100000,0.1)
 			number("explosion_radius","Explosion radius",entry.explosion_radius,0,1000,0.1)
@@ -379,6 +394,15 @@ func select(key: String) -> void:
 		choice("mobility", "Mobility", ["swimming", "crawling"], entry.mobility)
 		choice("group_behaviour", "Group movement", Document.GROUP_BEHAVIOURS, entry.group_behaviour)
 		choice("response", "Response to submarine", Document.RESPONSES, entry.response)
+		var combat := Document.creature_combat(entry)
+		choice("food_role","Wildlife role",Document.FOOD_ROLES,combat.food_role)
+		var armed := CheckBox.new(); armed.text = "Has zapper"; armed.button_pressed = combat.has_zapper
+		properties.add_child(armed); fields.has_zapper = armed
+		number("bite_damage","Bite damage",combat.bite_damage,0,10000,0.5)
+		number("attack_interval","Time between bites (s)",combat.attack_interval,0.05,60,0.05)
+		number("bite_range","Bite reach beyond body",combat.bite_range,0,100,0.05)
+		number("zapper_range","Zapper range",combat.zapper_range,0,200,0.1)
+		number("zapper_damage","Zapper damage per second",combat.zapper_damage,0,10000,0.5)
 		number("speed", "Movement speed", entry.speed, 0.05, 30, 0.05)
 		number("animation_speed","Animation speed (×)",entry.get("animation_speed",1.0),0,10,0.1)
 		fields.animation_speed.value_changed.connect(func(value: float) -> void: species_preview.animation_speed = value)
@@ -416,6 +440,8 @@ func select(key: String) -> void:
 				else: choice("model", "3D model", models, str(entry.model))
 				for i in range(3): number("rotation_" + str(i), "Rotation " + ["X", "Y", "Z"][i] + " (°)", rad_to_deg(pose.basis.get_euler()[i]), -360, 360, 1)
 				for i in range(3): number("scale_" + str(i), "Scale " + ["X", "Y", "Z"][i], pose.basis.get_scale()[i], 0.01, 100, 0.01)
+			elif entry.kind == "dropoff":
+				number("radius", "Detection radius", entry.radius, 0.01, 1000, 0.01)
 			elif entry.kind == "light":
 				number("energy", "Light energy", entry.get("energy", 1), 0, 16, 0.1)
 				number("range", "Light range", entry.get("range", 5), 0.1, 1000, 0.1)
@@ -474,11 +500,16 @@ func apply_properties() -> void:
 	var before := document.duplicate(true); var entry := record()
 	entry.name = _value("name")
 	if selected.begins_with("object_type:"):
-		for key in ["behavior","appearance","texture","mask","model","size","health","damage","explosion_radius","trigger_distance","blast_force","mass","shard_mass","shard_scale_percent","shard1","shard2","shard3","radiation_range","radiation_strength","glow_energy","glow_range","glow_emission","glow_red","glow_green","glow_blue","spawn_chance","maximum_population"]:
+		for key in ["delivery_commodity","delivery_quantity"]:
+			if fields.has(key): entry[key] = _value(key)
+		for key in ["behavior","magnet_compatible","appearance","texture","mask","model","size","health","damage","explosion_radius","trigger_distance","blast_force","mass","shard_mass","shard_scale_percent","shard1","shard2","shard3","radiation_range","radiation_strength","glow_energy","glow_range","glow_emission","glow_red","glow_green","glow_blue","spawn_chance","maximum_population"]:
 			if fields.has(key): entry[key] = _value(key)
 		if entry.behavior == "thorium":
 			for key in Document.ObjectDefinitions.THORIUM:
 				if not entry.has(key): entry[key] = Document.ObjectDefinitions.THORIUM[key]
+		if entry.behavior == "salvage":
+			for key in Document.ObjectDefinitions.SALVAGE:
+				if not entry.has(key): entry[key] = Document.ObjectDefinitions.SALVAGE[key]
 	elif selected.begins_with("object_group:"):
 		entry.position = [_value("position_0"),_value("position_1"),_value("position_2")]
 		for key in ["type","count","radius"]: entry[key] = _value(key)
@@ -486,6 +517,8 @@ func apply_properties() -> void:
 		# Viewing/applying other properties should preserve the imported default.
 		if entry.has("health") or not is_equal_approx(fields.health.value,fields.health.get_meta("initial_value")): entry.health = _value("health")
 		for key in Document.POPULATION_DEFAULTS: entry[key] = _value(key)
+		entry.food_role = _value("food_role"); entry.has_zapper = fields.has_zapper.button_pressed
+		for combat_key in Document.COMBAT_DEFAULTS: entry[combat_key] = _value(combat_key)
 		for key in ["model", "mobility", "group_behaviour", "response", "speed", "animation_speed", "turn_speed", "pitch_limit", "detection", "startle_duration", "startle_speed_multiplier", "startle_turn_speed", "scale_min", "scale_max"]: entry[key] = _value(key)
 	else:
 		var point := Vector3(float(_value("position_0")), float(_value("position_1")), float(_value("position_2")))
@@ -506,6 +539,7 @@ func apply_properties() -> void:
 				for key in ["rotation_0", "rotation_1", "rotation_2", "scale_0", "scale_1", "scale_2"]:
 					if not is_equal_approx(fields[key].value, fields[key].get_meta("initial_value")): changed = true
 				if changed: pose.basis = Basis.from_euler(euler) * Basis.from_scale(scale_value)
+			if entry.kind == "dropoff": entry.radius = _value("radius")
 			if entry.kind == "light":
 				for key in ["energy", "range", "light_mode", "pulse_period", "flare_size", "flash_on_time", "flash_off_time"]: entry[key] = _value(key)
 				entry.pulse_minimum = float(_value("pulse_minimum")) / 100.0
@@ -544,7 +578,10 @@ func add_object_group() -> void:
 	var before := document.duplicate(true); var id := _new_id()
 	var type_id: String = selected.trim_prefix("object_type:") if selected.begins_with("object_type:") else str(document.object_types[0].id)
 	if selected.begins_with("object_group:"): type_id = record().type
-	document.object_groups.append({"id":id,"name":"New mine group","type":type_id,"position":Document.array(_new_position()),"count":1,"radius":5.0})
+	var type_name := "object"
+	for entry in document.object_types:
+		if entry.id == type_id: type_name = str(entry.name).to_lower(); break
+	document.object_groups.append({"id":id,"name":"New %s group" % type_name,"type":type_id,"position":Document.array(_new_position()),"count":1,"radius":5.0})
 	_remember(before); category.select(5); _sync(); select("object_group:" + id)
 func add_model() -> void:
 	if not loaded: return
@@ -564,7 +601,8 @@ func _add_entity(kind: String, model_id: String) -> void:
 		pose.basis = template.basis; template.free()
 	var before := document.duplicate(true); var key := "Added/" + _new_id()
 	document.entities[key] = {"name": "New light" if kind == "light" else model_id, "kind": kind, "model": model_id, "transform": Document.encode(pose), "solid": kind == "model", "deleted": false, "energy": 1.0, "range": 8.0}
-	_remember(before); category.select(0); _sync(); select(key)
+	if kind == "dropoff": document.entities[key].merge({"name":"New drop-off point","radius":0.5,"city_id":0})
+	_remember(before); category.select(5 if kind == "dropoff" else 0); _sync(); select(key)
 func duplicate_selection() -> void:
 	if not loaded or record().is_empty(): return
 	var before := document.duplicate(true); var entry := record().duplicate(true); var id := _new_id(); entry.name += " copy"

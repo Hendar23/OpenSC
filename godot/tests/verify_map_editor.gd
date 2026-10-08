@@ -24,6 +24,19 @@ func _run() -> void:
 	check(Document.valid(map.document), "Seeded editor document validates")
 	check(map.entity_list.item_count > 380, "Unfiltered entity list is populated")
 	check(not map.population.simulating, "Wildlife stays still while editing")
+	var drops: Array = map.document.entities.keys().filter(func(id: String) -> bool: return map.document.entities[id].kind == "dropoff")
+	check(drops.size() == 5, "Five original city drop-off points are imported")
+	var drop_key: String = drops[0]; map.category.select(5); map._refresh_list(); map.select(drop_key)
+	check(map.list_keys.has(drop_key) and map.fields.has("radius") and not map.fields.has("model"), "Objects list exposes detection position and size without duplicating the existing pad model")
+	var drop_origin: Vector3 = map.point()
+	map.fields.radius.value = 1.25; map.fields.position_1.value += 0.5; map.apply_properties()
+	var drop_node: Area3D = map.world.get_node(NodePath(drop_key))
+	check(is_equal_approx(drop_node.radius,1.25) and absf(drop_node.position.y - drop_origin.y - 0.5) < 0.06, "Editor applies detection size and vertical position")
+	check(drop_node.collision_layer == 0 and not drop_node.monitoring, "Delivery zones do not physically block movement")
+	var drop_path := "res://tests/dropoff-roundtrip.json"
+	check(Document.save(map.document,drop_path) == OK and is_equal_approx(Document.load_path(drop_path).entities[drop_key].radius,1.25), "Drop-off properties survive saving and loading")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(drop_path))
+	map.undo(); map.category.select(0); map._refresh_list()
 	var key := ""
 	for candidate in map.document.entities:
 		if map.document.entities[candidate].kind == "model" and not map.base_nodes[candidate].has_meta("city_id"): key = candidate; break
@@ -41,9 +54,13 @@ func _run() -> void:
 	check(map.species_preview != null and map.species_preview.model != null,"Creature properties show the selected model")
 	check(map.fields.has("health") and is_equal_approx(map.fields.health.value,Document.creature_health(map.record(),map.gameplay_catalogue)),"Creature editor displays the same health default used by gameplay")
 	map.fields.animation_speed.value = 2.5
+	map.fields.food_role.select(Document.FOOD_ROLES.find("predator")); map.fields.has_zapper.button_pressed = true
+	map.fields.bite_damage.value = 7; map.fields.attack_interval.value = 0.5
+	map.fields.zapper_range.value = 6; map.fields.zapper_damage.value = 12
 	check(is_equal_approx(map.species_preview.animation_speed,2.5),"Animation speed updates the creature preview")
 	map.apply_properties()
 	check(is_equal_approx(map.record().animation_speed,2.5) and Document.valid(map.document),"Animation speed is saved in valid species settings")
+	check(map.record().food_role == "predator" and map.record().has_zapper and map.record().bite_damage == 7 and map.record().attack_interval == 0.5 and map.record().zapper_range == 6 and map.record().zapper_damage == 12,"Editor stores configurable wildlife role, bites and optional zapper")
 	var turtle_index: int = map.models.find("TURTLE")
 	map.fields.model.select(turtle_index); map.fields.model.item_selected.emit(turtle_index)
 	check(str(map.species_preview.model.get_meta("asset_source")).ends_with("TURTLE.DFF"),"Changing the model updates the preview before applying")
@@ -75,6 +92,7 @@ func _run() -> void:
 	check(Document.save(map.document, path) == OK, "Map saves to JSON")
 	var restored := Document.load_path(path)
 	check(not restored.is_empty() and restored.species[-1].health == 45.0,"Creature health survives saving and loading the map")
+	check(restored.species[-1].food_role == "predator" and restored.species[-1].has_zapper and restored.species[-1].zapper_damage == 12,"Combat settings survive saving and loading")
 	check(not restored.is_empty() and restored.entities.size() == map.document.entities.size() and restored.groups.size() == map.document.groups.size() and restored.species[-1].name == "Turtle" and Document.decode(restored.entities[key].transform).is_equal_approx(Document.decode(map.document.entities[key].transform)), "Map properties survive a JSON round trip")
 	var invalid: Dictionary = map.document.duplicate(true)
 	invalid.species[0].health = 0.0
@@ -98,6 +116,15 @@ func _run() -> void:
 		for frame in range(5): await process_frame
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/species-population-preview.png")
+	map.select("object_type:coin")
+	check(map.fields.has("delivery_commodity") and map.fields.has("delivery_quantity") and map.fields.delivery_quantity.value == 3,"Object editor exposes delivery commodity and units")
+	for index in range(map.fields.delivery_commodity.item_count):
+		if map.fields.delivery_commodity.get_item_metadata(index) == "metal": map.fields.delivery_commodity.select(index); break
+	map.fields.delivery_quantity.value = 7; map.apply_properties()
+	check(map.record().delivery_commodity == "metal" and map.record().delivery_quantity == 7,"Editor can change the coin's commodity and delivery quantity")
+	Document.save(map.document,path)
+	var delivery_document := Document.load_path(path)
+	check(delivery_document.object_types.any(func(type: Dictionary) -> bool: return type.id == "coin" and type.delivery_commodity == "metal" and type.delivery_quantity == 7),"Delivery properties survive a map export and reload")
 	editor.queue_free(); await process_frame
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	print("Map editor verification: %d checks, %d failures" % [checks, failures])

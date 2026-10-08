@@ -10,7 +10,8 @@ func check(ok: bool, message: String) -> void:
 	if not ok: failures += 1; push_error(message)
 func key(code: int) -> void:
 	var event := InputEventKey.new(); event.keycode = code; event.pressed = true
-	get_root().get_child(0)._unhandled_input(event)
+	for node in root.get_children():
+		if node is Game: node._unhandled_input(event); return
 func advance_slide(hud: CanvasLayer,index: int,seconds: float) -> void:
 	# Step a known interval: initial GPU uploads can otherwise stall a frame
 	# long enough to skip the intermediate position under test.
@@ -68,7 +69,7 @@ func _run() -> void:
 	check(hud.map_data.markers.size() == game.docking.ports.size(), "Minimap marks all live dock locations")
 	check(hud.map_data.uv(hud.map_data.bounds.position).is_equal_approx(Vector2.ZERO) and hud.map_data.uv(hud.map_data.bounds.end).is_equal_approx(Vector2.ONE), "World and minimap coordinates agree at both bounds")
 	var equipment: Node3D = game.equipment
-	check(equipment.mounted.size() == 1 and equipment.current().id == "deep_sea_lights", "Deep-Sea Lights are starting modular equipment")
+	check(equipment.mounted.size() == 2 and equipment.current().id == "deep_sea_lights" and equipment.mounted[1].id == "suckomat", "Deep-Sea Lights and Suck-O-Matic are starting modular equipment")
 	check(equipment.current().icons[0] != null and equipment.current().icons[1] != null and equipment.get_node("DeepSeaLightsMount").get_child_count() == 2, "Original model and both equipment sprites load")
 	var mount: Node3D = equipment.get_node("DeepSeaLightsMount")
 	var hull_bounds: AABB = equipment._bounds(equipment._meshes(game.pilot.visual,Transform3D.IDENTITY,true))
@@ -77,7 +78,7 @@ func _run() -> void:
 	check(not equipment.bulb_materials.is_empty() and not equipment.bulb_materials[0].emission_enabled, "Original recessed lens is separate and unlit when switched off")
 	check(not equipment.lamp.visible, "Lights start switched off")
 	equipment.cycle(1); equipment.cycle(-1)
-	check(equipment.selected == 0, "Equipment selection wraps safely with one mounted item")
+	check(equipment.selected == 0, "Equipment selection returns safely to the original item")
 	key(KEY_L)
 	check(equipment.current().enabled and equipment.lamp.visible, "Keyboard toggles real headlights")
 	check(equipment.bulb_materials[0].emission_enabled and equipment.bulb_materials[0].albedo_color == Color.WHITE, "Switching on makes the bulb white and emissive")
@@ -181,7 +182,7 @@ func _run() -> void:
 	var ids: Array[String] = ["test-3d-map-instrument"]
 	check(Mods.apply(ids, ids, false) == OK and Mods.candidates("hud.map").size() == 1, "Optional 3D instrument registers through normal mods")
 	hud.free()
-	game.cockpit_hud = HUD.new(); root.get_child(0).add_child(game.cockpit_hud)
+	game.cockpit_hud = HUD.new(); game.add_child(game.cockpit_hud)
 	game.cockpit_hud.setup(game.pilot, equipment, game.world_root, game.game_folder)
 	game.cockpit_hud.setup_lighting(game.water_environment,game.sun)
 	hud = game.cockpit_hud

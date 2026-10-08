@@ -2,6 +2,7 @@ extends Node3D
 ## Organic burst with short-lived gore and sinking, persistent model fragments.
 static var settings := {"gore_amount":20,"gore_settle_speed":1.0,"gore_lifetime":2.0,"chunk_lifetime":60.0}
 var pieces: Array[Dictionary] = []
+var explosion_audio: AudioStreamPlayer3D
 var age := 0.0
 var lifetime := 61.0
 var bubbles: CPUParticles3D
@@ -96,13 +97,14 @@ func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, bloo
 		var material := preload("res://natural_light.gd").billboard_material(bubble_texture)
 		quad.material = material; bubbles.mesh = quad; add_child(bubbles); bubbles.emitting = true
 	if sound != null:
-		var audio := AudioStreamPlayer3D.new(); audio.stream = sound; audio.volume_db = -12; audio.pitch_scale = random.randf_range(0.9,1.1); audio.max_distance = 35; add_child(audio); audio.play()
+		explosion_audio = AudioStreamPlayer3D.new(); explosion_audio.stream = sound; explosion_audio.pitch_scale = random.randf_range(0.9,1.1); explosion_audio.max_distance = 35; add_child(explosion_audio); preload("res://explosion_audio.gd").apply(explosion_audio,0.0,"wildlife_splat_volume"); explosion_audio.play()
 
 func _collect_meshes(node: Node, result: Array[MeshInstance3D]) -> void:
 	if node is MeshInstance3D and node.mesh != null: result.append(node)
 	for child in node.get_children(): _collect_meshes(child,result)
 
 func _process(delta: float) -> void:
+	preload("res://explosion_audio.gd").apply(explosion_audio,0.0,"wildlife_splat_volume")
 	age += delta
 	for particle in gore:
 		particle.velocity *= exp(-1.8 * delta * gore_settle_speed); particle.velocity.y -= delta * 0.15 * gore_settle_speed

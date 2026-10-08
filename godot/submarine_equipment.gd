@@ -3,11 +3,13 @@ extends Node3D
 const Assets = preload("res://clump_loader.gd")
 const Images = preload("res://legacy_bmp.gd")
 const Mods = preload("res://mod_registry.gd")
-const DEFAULTS := {"light_energy": 3.0, "light_range": 18.0, "light_angle": 45.0, "light_down_angle": 45.0}
+const DEFAULTS := {"light_energy": 3.0, "light_range": 18.0, "light_angle": 45.0, "light_down_angle": 45.0, "som_range": 2.0, "som_radius": 0.25, "som_pull_speed": 2.0, "som_pull_strength": 8.0, "som_capture_distance": 0.15, "som_volume_db": -16.0, "magnet_length":0.3, "magnet_speed":0.8, "magnet_water_drag":4.0, "magnet_cargo_weight":25.0, "magnet_pitch_influence":0.25, "magnet_volume_db":-16.0}
 var settings := DEFAULTS.duplicate()
 var mounted: Array[Dictionary] = []
+var available: Array[Dictionary] = []
 var selected := 0
 var cycle_audio: AudioStreamPlayer
+var magnet: Node3D
 var vacuum: Node3D
 var counter_digits: Array[Texture2D] = []
 var pilot: Node3D
@@ -55,6 +57,8 @@ func setup(player: Node3D, folder: String) -> void:
 	mounted.append({"id": "deep_sea_lights", "name": "Deep-Sea Lights", "enabled": false, "mount": mount, "icons": icons})
 	_setup_cycle_audio(folder)
 	_setup_vacuum(player,folder)
+	available.assign(mounted)
+	_setup_magnet(player,folder)
 	apply_settings()
 
 static func _meshes(node: Node3D, parent_pose: Transform3D, hull_only: bool = false) -> Array[Dictionary]:
@@ -140,7 +144,20 @@ func current() -> Dictionary:
 	return {} if mounted.is_empty() else mounted[selected]
 
 func apply_settings() -> void:
+	for item in available: item.mount.visible = item in mounted
+	if magnet != null:
+		magnet.chain_length = settings.magnet_length; magnet.speed = settings.magnet_speed; magnet.volume_db = settings.magnet_volume_db
+		magnet.water_drag = settings.magnet_water_drag; magnet.cargo_weight = settings.magnet_cargo_weight
+		magnet.pitch_influence = settings.magnet_pitch_influence
+		magnet.set_enabled(mounted.any(func(item: Dictionary) -> bool: return item.id == "magnet" and item.enabled))
 	if vacuum != null:
+		vacuum.enabled = false
+		vacuum.range_metres = settings.som_range
+		vacuum.intake_radius = settings.som_radius
+		vacuum.pull_speed = settings.som_pull_speed
+		vacuum.pull_strength = settings.som_pull_strength
+		vacuum.capture_distance = settings.som_capture_distance
+		vacuum.volume_db = settings.som_volume_db
 		for item in mounted:
 			if item.id == "suckomat": vacuum.enabled = item.enabled
 	if lamp == null: return
@@ -148,7 +165,7 @@ func apply_settings() -> void:
 	lamp.spot_range = settings.light_range
 	lamp.spot_angle = settings.light_angle
 	lamp.rotation_degrees.x = -settings.light_down_angle
-	lamp.visible = not mounted.is_empty() and mounted[0].enabled
+	lamp.visible = mounted.any(func(item: Dictionary) -> bool: return item.id == "deep_sea_lights" and item.enabled)
 	for material in bulb_materials:
 		material.albedo_color = Color.WHITE if lamp.visible else Color(0.12,0.15,0.16)
 		material.emission_enabled = lamp.visible
@@ -173,7 +190,11 @@ func _setup_vacuum(player: Node3D, folder: String) -> void:
 	preload("res://submarine_mounts.gd").apply(mount,player.visual,"suckomat")
 	vacuum = preload("res://suck_o_matic.gd").new(); mount.add_child(vacuum)
 	vacuum.position = Vector3(box.get_center().x,box.position.y,box.get_center().z); vacuum.setup(player,folder)
-	vacuum.item_collected.connect(func(_item: String) -> void: _play_cycle_sound())
+	vacuum.item_collected.connect(func(_item: String) -> void:
+		for item in mounted:
+			if item.id == "suckomat": item.enabled = false
+		_play_cycle_sound()
+	)
 	var icons: Array[Texture2D] = []
 	var cache := {}
 	for file in ["PICKUP1","PICKUP2","PICKUP3"]: icons.append(Assets._load_texture(folder,file,"",cache))
@@ -192,3 +213,39 @@ func _setup_cycle_audio(folder: String) -> void:
 		if not FileAccess.file_exists(path): path = folder.path_join("WAVES/SUBCYCLE.RAW")
 		cycle_audio.stream = preload("res://legacy_audio.gd").load_file(path)
 	add_child(cycle_audio)
+
+func set_installed(ids: Array) -> void:
+	var selected_id: String = current().get("id","")
+	for item in available:
+		if item.id not in ids: item.enabled = false
+	mounted.clear()
+	for id in ids:
+		for item in available:
+			if item.id == id: mounted.append(item); break
+	selected = 0
+	for index in range(mounted.size()):
+		if mounted[index].id == selected_id: selected = index
+	apply_settings()
+
+func _setup_magnet(player: Node3D, folder: String) -> void:
+	var mount := Node3D.new(); mount.name = "MagnetMount"; add_child(mount)
+	mount.transform = available[1].mount.transform
+	var housing := Assets.load_clump(folder.path_join("CLUMPS/MAGNET.DFF"))
+	if housing != null:
+		housing.rotation.y = PI; housing.scale *= player.VISUAL_SCALE; mount.add_child(housing)
+	preload("res://submarine_mounts.gd").apply(mount,player.visual,"magnet")
+	var icons: Array[Texture2D] = []
+	for file in ["GRAPPLE1","GRAPPLE2","GRAPPLE3"]:
+		var image: Image
+		for replacement in Mods.candidates("texture." + file):
+			image = Assets._replacement_image(replacement.path)
+			if image != null: break
+		if image == null: image = Images.load_image(folder.path_join("GAMETEX/" + file + ".RAS"))
+		icons.append(ImageTexture.create_from_image(image) if image != null else null)
+	available.append({"id":"magnet","name":"Magnet","enabled":false,"mount":mount,"icons":icons})
+	magnet = preload("res://submarine_magnet.gd").new(); mount.add_child(magnet); magnet.setup(player,housing,folder)
+	magnet.state_changed.connect(func(on: bool) -> void:
+		for item in available:
+			if item.id == "magnet": item.enabled = on
+	)
+	mount.hide()

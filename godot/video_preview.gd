@@ -25,7 +25,7 @@ func _ready() -> void:
 	_button(transport,"Stop",stop_playback)
 	_button(transport,"Choose FFmpeg…",func() -> void: picker.popup_centered(Vector2i(850,600)))
 	var label := Label.new(); label.text = "Volume"; transport.add_child(label)
-	volume = HSlider.new(); volume.min_value = 0; volume.max_value = 1; volume.step = 0.01; volume.value = 0.5; volume.custom_minimum_size.x = 140
+	volume = HSlider.new(); volume.scrollable = false; volume.min_value = 0; volume.max_value = 1; volume.step = 0.01; volume.value = 0.5; volume.custom_minimum_size.x = 140
 	volume.value_changed.connect(func(value: float) -> void: player.volume = value)
 	transport.add_child(volume)
 	player = VideoStreamPlayer.new(); player.expand = true; player.volume = 0.5; player.size_flags_vertical = Control.SIZE_EXPAND_FILL; add_child(player)

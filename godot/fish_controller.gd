@@ -60,6 +60,21 @@ var death_texture: Texture2D
 var death_sound: AudioStream
 var death_frames: Array[Texture2D] = []
 var death_flesh_texture: Texture2D
+var combat: Node3D
+var pushed_velocity := Vector3.ZERO
+var last_push_frame := -1
+func configure_combat(species: Dictionary) -> void:
+	combat = preload("res://wildlife_combat.gd").new()
+	combat.configure(self,species); add_child(combat)
+
+func receive_sub_push(sub_velocity: Vector3, sub_radius: float) -> void:
+	if dead or not get_meta("wildlife_awake",true): return
+	if last_push_frame == Engine.get_physics_frames(): return
+	last_push_frame = Engine.get_physics_frames()
+	# Relative volume lets small bodies yield readily while larger ones obstruct the hull.
+	var yield_factor := clampf(pow(maxf(0.05,sub_radius),3) / (pow(maxf(0.05,sub_radius),3) + pow(radius,3)),0.05,0.95)
+	pushed_velocity = sub_velocity * yield_factor
+	if is_inside_tree(): move_and_collide(pushed_velocity * get_physics_process_delta_time())
 
 func configure_health(value: float) -> void:
 	max_health = maxf(0.1,value); health = max_health
@@ -70,6 +85,7 @@ func take_damage(amount: float, _source: Vector3 = Vector3.ZERO) -> void:
 	if response == "defend": defense_timer = 3.0
 	if health > 0: return
 	dead = true; collision_layer = 0; collision_mask = 0
+	if combat != null: combat._stop_weapon()
 	(get_child(0) as CollisionShape3D).set_deferred("disabled",true)
 	set_physics_process(false); set_process(false)
 	var holder: Node = population.world if population != null else get_parent()
@@ -194,8 +210,8 @@ func setup(visual: Node3D, point: Vector3, world_bounds: AABB, surface: float, b
 	rng.seed = seed_value
 	swim_speed = rng.randf_range(0.8, 1.6)
 	animation_time = rng.randf_range(0.0, 8.0)
-	collision_layer = 8 # Weapon queries only; creature/sub collision masks exclude it.
-	collision_mask = 5
+	collision_layer = 8
+	collision_mask = 7 # Terrain, submarine and ceiling; fish can share water.
 	motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
 	var shape := SphereShape3D.new()
 	shape.radius = radius
@@ -304,6 +320,15 @@ func _physics_process(delta: float) -> void:
 	startle_cooldown = maxf(0.0, startle_cooldown - delta)
 	var speed := swim_speed
 	var escaping := false
+	var engaged := false
+	if combat != null:
+		combat.perceive(delta)
+		if combat.alive(combat.threat):
+			desired = (global_position - combat.threat.global_position).normalized()
+			speed *= 1.6; escaping = true
+		elif combat.alive(combat.target):
+			desired = (combat.target.global_position - global_position).normalized()
+			speed *= 1.3; engaged = true
 	if population != null and is_instance_valid(population.player):
 		var offset: Vector3 = population.player.global_position - global_position
 		if response == "defend" and offset.length() < radius + 0.8: defense_timer = 3.0
@@ -323,12 +348,14 @@ func _physics_process(delta: float) -> void:
 		else:
 			fleeing = false; startle_timer = 0.0
 		if offset.length() < detection_distance:
-			if response == "attack" or (response == "defend" and defense_timer > 0.0): desired = offset.normalized(); speed *= 1.3
+			if (response == "attack" or (response == "defend" and defense_timer > 0.0)) and not bool(population.player.get("dead")) and bool(population.player.get("active")) and bool(population.player.get("controls_enabled")):
+				desired = offset.normalized(); speed = swim_speed * 1.3; engaged = true
+				if combat != null: combat.target = population.player
 	else:
 		fleeing = false; startle_timer = 0.0
 	# A frightened fish can leave its usual roaming area instead of turning
 	# straight back toward the submarine at the group's boundary.
-	if not escaping and position.distance_to(home) > roam_radius: desired = (home - position).normalized()
+	if not escaping and not engaged and position.distance_to(home) > roam_radius: desired = (home - position).normalized()
 	avoidance_timer = maxf(0.0, avoidance_timer - delta)
 	if avoidance_timer > 0.0: desired = avoidance
 	if mobility == "crawling": desired.y = 0.0; desired = desired.normalized()
@@ -337,7 +364,8 @@ func _physics_process(delta: float) -> void:
 	playback_rate = animation_speed * (walking_animation_rate if mobility == "crawling" else ANIMATION_SPEED) * (speed / maxf(swim_speed, 0.001) if escaping else 1.0)
 	animation_time += delta * playback_rate
 	if animation != null and visual_animation_enabled: animation.apply(animation_time)
-	velocity = direction * speed
+	velocity = direction * speed + pushed_velocity
+	pushed_velocity = pushed_velocity.move_toward(Vector3.ZERO,delta * 8.0)
 	if mobility == "crawling": _move_crawler(delta,speed)
 	else: move_and_slide()
 	if mobility != "crawling" and get_slide_collision_count() > 0:
@@ -349,6 +377,9 @@ func _physics_process(delta: float) -> void:
 	# The collider enforces the surface; this clamp also covers oversized steps.
 	position.y = minf(position.y, surface_height - radius - safe_margin)
 	_update_orientation()
+	if combat != null:
+		if escaping: combat._stop_weapon()
+		else: combat.attack(delta)
 
 func _steer(desired: Vector3, delta: float, rate: float = -1.0) -> void:
 	if direction.length_squared() < 0.01: direction = Vector3.FORWARD

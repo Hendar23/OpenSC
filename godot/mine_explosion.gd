@@ -3,6 +3,7 @@ const Assets = preload("res://clump_loader.gd")
 var frames: Array[Texture2D] = []
 var sprite: Sprite3D
 var material: ShaderMaterial
+var audio: AudioStreamPlayer3D
 var age := 0.0
 const FRAME_RATE := 24.0
 static func load_frames(folder: String, cache: Dictionary = {}) -> Array[Texture2D]:
@@ -23,8 +24,9 @@ func setup(animation: Array[Texture2D], diameter: float, sound: AudioStream) -> 
 	var light := OmniLight3D.new(); light.light_color = Color(1,0.65,0.2); light.light_energy = 3.0; light.omni_range = maxf(1.0,diameter * 1.5); add_child(light)
 	var tween := create_tween(); tween.tween_property(light,"light_energy",0.0,0.5)
 	if sound != null:
-		var audio := AudioStreamPlayer3D.new(); audio.stream = sound; audio.max_distance = 60; add_child(audio); audio.play()
+		audio = AudioStreamPlayer3D.new(); audio.stream = sound; audio.max_distance = 60; add_child(audio); preload("res://explosion_audio.gd").apply(audio); audio.play()
 func _process(delta: float) -> void:
+	preload("res://explosion_audio.gd").apply(audio)
 	age += delta
 	if sprite != null:
 		var index := int(age * FRAME_RATE)

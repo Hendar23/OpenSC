@@ -21,6 +21,13 @@ var player_marker: Polygon2D
 var city_markers: Control
 var casing_light := Color.WHITE
 var casing_panel: TextureRect
+var camera_feed: Texture2D
+func set_camera_feed(texture: Texture2D) -> void:
+	camera_feed = texture
+	material = null if texture != null else fog_material
+	if player_marker != null: player_marker.visible = texture == null
+	if city_markers != null: city_markers.visible = texture == null
+	queue_redraw()
 
 func _ready() -> void:
 	if kind != "map": return
@@ -71,7 +78,7 @@ void fragment() {
 func _process(_delta: float) -> void:
 	radiation_clock += _delta
 	if casing_panel != null: casing_panel.modulate = casing_light
-	if kind == "map" and fog_material != null and map_data.exploration_texture != null:
+	if kind == "map" and camera_feed == null and fog_material != null and map_data.exploration_texture != null:
 		var rect := Rect2(Vector2.ZERO,size) if screen_only else screen
 		var point: Vector3 = _map_centre()
 		fog_material.set_shader_parameter("explored_mask",map_data.exploration_texture)
@@ -94,11 +101,14 @@ func _draw() -> void:
 	if frame != null and not screen_only and kind != "map": draw_texture_rect(frame, Rect2(Vector2.ZERO,size), false,casing_light)
 	var rect := Rect2(Vector2.ZERO, size) if screen_only else screen
 	if kind == "map":
-		_draw_map(rect)
+		if camera_feed != null: draw_texture_rect(camera_feed,rect,false)
+		else: _draw_map(rect)
 	elif kind == "equipment":
 		var item: Dictionary = equipment.current()
 		if not item.is_empty():
-			var icon: Texture2D = item.icons[0 if item.enabled else 1]
+			var icon_index := 0 if item.enabled else 1
+			if item.id == "magnet": icon_index = 2 if is_instance_valid(equipment.magnet.target) else (1 if item.enabled else 0)
+			var icon: Texture2D = item.icons[icon_index]
 			if icon != null: draw_texture_rect(icon, rect, false)
 			if item.id == "suckomat" and equipment.counter_digits.size() == 10:
 				var count: int = equipment.vacuum.storage.size()

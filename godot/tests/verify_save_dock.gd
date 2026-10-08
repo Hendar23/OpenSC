@@ -154,6 +154,15 @@ func run() -> void:
 	var launch_target := game.pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.35
 	check((-game.camera.global_basis.z).dot((launch_target - launch_camera).normalized()) > 0.999,"Launch camera points at the docked submarine rather than the exit")
 	await capture("launch-camera")
+	game.docking._physics_process(1.19)
+	game._process(0)
+	await capture("launch-open-pods")
+	check(game.pilot.physics_interpolation_mode == Node.PHYSICS_INTERPOLATION_MODE_OFF,"The entire frozen submarine renders directly during a saved launch")
+	for role in ["left_pod","right_pod"]:
+		var parts: Dictionary = game.pilot.visual.get_meta("submarine_parts",{"left_pod":"Hull/RightPod","right_pod":"Hull/LeftPod"})
+		var pod: Node3D = game.pilot.visual.get_node(NodePath(str(parts[role])))
+		check(pod.physics_interpolation_mode == Node.PHYSICS_INTERPOLATION_MODE_OFF,"Frozen launch renders the current " + role + " pose without stale interpolation")
+		check(pod.is_visible_in_tree() and pod.get_global_transform_interpolated().origin.is_equal_approx(pod.global_position),"Saved launch reveals and synchronizes " + role + " before ascent")
 	for frame in range(2000):
 		if game.docking.stage == game.Docking.Stage.IDLE: break
 		game.docking._physics_process(0.1)
@@ -162,15 +171,21 @@ func run() -> void:
 			var target := game.pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.35
 			check(game.camera.global_position.is_equal_approx(launch_camera) and (-game.camera.global_basis.z).dot((target - launch_camera).normalized()) > 0.999,"Fixed launch camera tracks the submarine during ascent")
 	check(game.docking.stage == game.Docking.Stage.IDLE and game.pilot.active,"Loaded save can finish undocking")
+	check(game.pilot.physics_interpolation_mode == Node.PHYSICS_INTERPOLATION_MODE_ON,"Finishing launch restores interpolation for normal piloting")
 	# Read real legacy saves, but only write copies into the isolated test folder.
 	var actual_saves := preload("res://save_games.gd").new()
-	for slot in [0,6]:
+	for slot in range(actual_saves.SLOT_COUNT):
 		var actual := actual_saves.read(slot)
 		if actual.is_empty(): continue
 		if not str(actual.map_signature).begins_with("terrain-v1:"):
 			check(not game._exploration_matches_map(actual.map_signature),"Legacy slot %d starts with fresh exploration" % slot)
 		game.save_games.write(2,actual)
 		check(await game._load_saved_game(2),"Loads a fixture copy of user's legacy slot %d" % slot)
+		game._dock_ui_action("launch",{})
+		game.docking.set_physics_process(false)
+		game.docking._physics_process(1.199)
+		for part in game.pilot.visual.find_children("*","Node3D",true,false):
+			check(part.get_global_transform_interpolated().is_equal_approx(part.global_transform),"Saved slot %d launches with the current display position and angle for %s" % [slot,part.name])
 	for slot in [0,1,2,6]: DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.path(slot)))
 	game._begin_new_game()
 	check(game.player_progress.status.shields == 100 and game.player_progress.status.credits == 0 and game.player_progress.standing.is_empty(),"New game resets status and reputation")

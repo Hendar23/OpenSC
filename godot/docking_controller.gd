@@ -16,7 +16,7 @@ var ports: Array[Dictionary] = []
 var nearby: Dictionary = {}
 var current: Dictionary = {}
 var elapsed := 0.0
-var saved_collision_mask := 5
+var saved_collision_mask := 13
 var message := ""
 var cinematic_camera := Vector3.ZERO
 var radio_messages := {}
@@ -161,7 +161,7 @@ func request_docking() -> bool:
 	if stage == Stage.DOCKED:
 		_prepare_transit_settings()
 		# Reveal behind the closed hatch before it starts opening.
-		pilot.visual.visible = true
+		pilot.reveal_visual()
 		_transition(Stage.EXIT_OPEN)
 		return true
 	if stage != Stage.IDLE: return false
@@ -210,6 +210,7 @@ func camera_frozen() -> bool:
 func _transition(next_stage: Stage) -> void:
 	var previous := stage
 	stage = next_stage
+	pilot.docking_in_progress = stage not in [Stage.IDLE,Stage.DOCKED]
 	elapsed = 0.0
 	if audio != null:
 		var door_stages := [Stage.OPEN, Stage.CLOSE, Stage.EXIT_OPEN, Stage.EXIT_CLOSE]
@@ -332,7 +333,7 @@ func _physics_process(delta: float) -> void:
 			docked.emit()
 		Stage.EXIT_OPEN:
 			current.collision.collision_layer = 0
-			pilot.visual.visible = true
+			pilot.reveal_visual()
 			_transition(Stage.ASCEND)
 		Stage.ASCEND: _transition(Stage.EXIT_CLOSE)
 		Stage.EXIT_CLOSE:
@@ -388,9 +389,10 @@ func _set_open(amount: float) -> void:
 			instance.set_blend_shape_value(pose - 1, (1.0 - weight if pose == first else 0.0) + (weight if pose == next else 0.0))
 
 func _restore_pilot() -> void:
+	pilot.docking_in_progress = false
 	pilot.collision_mask = saved_collision_mask
 	pilot.active = true
-	pilot.visual.visible = true
+	pilot.reveal_visual()
 	pilot.velocity = Vector3.ZERO
 	pilot.angular_velocity = Vector3.ZERO
 	pilot.movement.reset_motion()

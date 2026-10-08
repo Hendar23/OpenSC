@@ -1,7 +1,7 @@
 extends RefCounted
 const Mods = preload("res://mod_registry.gd")
 const DEFAULTS := {
-	"master_volume": 0.0, "low_shield_volume": 0.0, "volume_response": 0.18, "pitch_response": 0.2, "loop_blend_ms": 15.0,
+	"master_volume": 0.0, "low_shield_volume": 0.0, "explosion_volume": -10.0, "wildlife_zapper_volume": -16.0, "wildlife_splat_volume": -22.0, "volume_response": 0.18, "pitch_response": 0.2, "loop_blend_ms": 15.0,
 	"main_propeller_volume": -10.0, "main_propeller_pitch_min": 0.45, "main_propeller_pitch_max": 1.35, "main_propeller_speed_pitch": 0.65,
 	"side_pods_volume": -15.0, "side_pods_pitch_min": 0.45, "side_pods_pitch_max": 1.0, "side_pods_speed_pitch": 0.25,
 	"pod_rotation_volume": -27.0, "pod_rotation_pitch_min": 1.0, "pod_rotation_pitch_max": 1.0, "pod_rotation_speed_pitch": 0.0,
@@ -15,16 +15,16 @@ var persistence_path := "user://submarine_sound.cfg"
 var defaults_hash := ""
 
 func load_settings(remember: bool = true, path: String = "", source: String = "res://submarine_audio.cfg") -> void:
+	if source == "res://submarine_audio.cfg" and path.is_empty(): source = preload("res://current_settings.gd").path("submarine_audio.cfg")
 	defaults = DEFAULTS.duplicate()
 	var config := ConfigFile.new()
 	if config.load(source) == OK: _apply(config, defaults)
 	defaults_hash = JSON.stringify(defaults).sha256_text()
 	persistence_path = path
 	if path.is_empty():
-		var ids := Mods.active_ids()
-		persistence_path = "user://submarine_sound.cfg" if ids.is_empty() else "user://sound-mod-%s.cfg" % JSON.stringify(ids).sha256_text().substr(0, 16)
+		persistence_path = source
 	settings = defaults.duplicate()
-	if remember and config.load(persistence_path) == OK and config.get_value("defaults", "source_hash", "") == defaults_hash:
+	if remember and config.load(persistence_path) == OK:
 		_apply(config, settings)
 
 static func _apply(config: ConfigFile, values: Dictionary) -> void:
@@ -45,4 +45,5 @@ func save_settings(path: String = "") -> Error:
 	var config := ConfigFile.new()
 	for key in settings: config.set_value("sound", key, settings[key])
 	config.set_value("defaults", "source_hash", defaults_hash)
+	config.set_value("settings", "unified", true)
 	return config.save(persistence_path if path.is_empty() else path)

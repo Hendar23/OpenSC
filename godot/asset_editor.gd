@@ -232,7 +232,7 @@ func _build_interface() -> void:
 	animation_speed_label = Label.new()
 	animation_speed_label.custom_minimum_size.x = 105
 	animation_bar.add_child(animation_speed_label)
-	animation_speed = HSlider.new()
+	animation_speed = HSlider.new(); animation_speed.scrollable = false
 	animation_speed.min_value = 0.1
 	animation_speed.max_value = 3.0
 	animation_speed.step = 0.1

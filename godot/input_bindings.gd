@@ -54,6 +54,7 @@ static func defaults() -> Dictionary:
 		elif AXES.has(action): second = {"kind":"axis","axis":AXES[action][0],"sign":AXES[action][1]}
 		result[action] = [key,second]
 	result.map_toggle[1] = {"kind":"button","button":JOY_BUTTON_Y,"modifier":JOY_BUTTON_LEFT_SHOULDER}
+	result.bottom_camera_toggle = [null,{"kind":"button","button":JOY_BUTTON_Y,"modifier":JOY_BUTTON_RIGHT_SHOULDER}]
 	return result
 static func install() -> void:
 	if installed: return
@@ -79,6 +80,7 @@ static func load_settings(path: String = CONFIG_PATH) -> void:
 	var config := ConfigFile.new()
 	if config.load(path) != OK: return
 	for action in bindings:
+		if not config.has_section_key("bindings",action): continue
 		var slots: Variant = config.get_value("bindings",action,null)
 		if slots is Array and slots.size() == 2 and valid(slots[0]) and valid(slots[1]): bindings[action] = slots.duplicate(true)
 static func save_settings(path: String = CONFIG_PATH) -> Error:

@@ -11,6 +11,10 @@ var pending_enabled: Array[String] = []
 var embedded := false
 var content: MarginContainer
 var apply_confirmation: ConfirmationDialog
+var scroll: ScrollContainer
+var refresh_button: Button
+var apply_button: Button
+var cancel_button: Button
 
 func _ready() -> void:
 	# Main-menu gameplay is paused; this window must still receive GUI input.
@@ -40,10 +44,11 @@ func _ready() -> void:
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(hint)
 	var refresh := Button.new()
+	refresh_button = refresh
 	refresh.text = "Refresh installed mods"
 	refresh.pressed.connect(func() -> void: Mods.refresh(); open())
 	column.add_child(refresh)
-	var scroll := ScrollContainer.new()
+	scroll = ScrollContainer.new(); scroll.follow_focus = true
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(scroll)
 	rows = VBoxContainer.new()
@@ -56,10 +61,12 @@ func _ready() -> void:
 	var buttons := HBoxContainer.new()
 	column.add_child(buttons)
 	var apply := Button.new()
+	apply_button = apply
 	apply.text = "Apply"
 	apply.pressed.connect(_apply)
 	buttons.add_child(apply)
 	var cancel := Button.new()
+	cancel_button = cancel
 	cancel.text = "Cancel"
 	cancel.pressed.connect(func() -> void: open() if embedded else hide())
 	buttons.add_child(cancel)
@@ -126,10 +133,23 @@ func open() -> void:
 		if not choices.is_empty(): choices.values()[0].grab_focus()
 
 func _input(event: InputEvent) -> void:
-	if not embedded and visible and preload("res://input_bindings.gd").pressed(event,"menu_cancel"):
-		hide(); get_viewport().set_input_as_handled()
+	if embedded or not visible or apply_confirmation.visible: return
+	var bindings = preload("res://input_bindings.gd")
+	if bindings.pressed(event,"menu_cancel"):
+		hide(); get_viewport().set_input_as_handled(); return
+	for direction in [["menu_up",SIDE_TOP],["menu_down",SIDE_BOTTOM],["menu_left",SIDE_LEFT],["menu_right",SIDE_RIGHT]]:
+		if not bindings.pressed(event,direction[0]): continue
+		var focused := get_viewport().gui_get_focus_owner() as Control
+		if focused != null:
+			var next := focused.find_valid_focus_neighbor(direction[1])
+			if next != null: next.grab_focus()
+		get_viewport().set_input_as_handled(); return
 
 func _build_rows() -> void:
+	var focused := get_viewport().gui_get_focus_owner()
+	var focused_id: String = str(focused.get_meta("mod_id","")) if focused != null else ""
+	var focused_column: int = int(focused.get_meta("mod_column",0)) if focused != null else 0
+	var lines: Array[Array] = []
 	for child in rows.get_children(): child.free()
 	choices.clear()
 	for id in pending_order:
@@ -153,6 +173,7 @@ func _build_rows() -> void:
 		)
 		line.add_child(enabled)
 		choices[id] = enabled
+		var controls: Array = [enabled]
 		for direction in [-1, 1]:
 			var move := Button.new()
 			move.text = "Earlier" if direction == -1 else "Later"
@@ -164,12 +185,40 @@ func _build_rows() -> void:
 				_build_rows()
 			,CONNECT_DEFERRED)
 			line.add_child(move)
+			controls.append(move)
+		for index in range(controls.size()):
+			var control: Control = controls[index]
+			control.set_meta("mod_id",id); control.set_meta("mod_column",index)
+			control.focus_entered.connect(func() -> void: scroll.ensure_control_visible(control))
+			if str(id) == focused_id and index == focused_column: control.grab_focus()
+		lines.append(controls)
 		var description := Label.new()
 		description.text = str(pack.description)
 		if not pack.errors.is_empty(): description.text += "\n" + "\n".join(pack.errors)
 		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		item.add_child(description)
+	_wire_focus(lines)
 	_update_info()
+
+func _wire_focus(lines: Array[Array]) -> void:
+	for column in range(3):
+		var chain: Array[Control] = [refresh_button]
+		for line in lines:
+			var control: BaseButton = line[column]
+			if not control.disabled: chain.append(control)
+		chain.append(apply_button if column < 2 else cancel_button)
+		for index in range(1,chain.size() - 1):
+			chain[index].focus_neighbor_top = chain[index].get_path_to(chain[index - 1])
+			chain[index].focus_neighbor_bottom = chain[index].get_path_to(chain[index + 1])
+		if column == 0:
+			refresh_button.focus_neighbor_bottom = refresh_button.get_path_to(chain[1])
+			apply_button.focus_neighbor_top = apply_button.get_path_to(chain[-2])
+		if column == 2: cancel_button.focus_neighbor_top = cancel_button.get_path_to(chain[-2])
+	for line in lines:
+		for column in range(3):
+			var control: Control = line[column]
+			control.focus_neighbor_left = control.get_path_to(line[maxi(0,column - 1)])
+			control.focus_neighbor_right = control.get_path_to(line[mini(2,column + 1)])
 
 func _update_info() -> void:
 	info.text = "No mods installed." if Mods.packs.is_empty() else ""

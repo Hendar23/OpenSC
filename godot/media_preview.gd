@@ -65,7 +65,7 @@ func _build_images() -> void:
 	add_child(image_tools)
 	button(image_tools, "Fit image", func() -> void: fit_image = true; _update_image_size())
 	button(image_tools, "100%", func() -> void: fit_image = false; image_zoom.value = 1.0; _update_image_size())
-	image_zoom = HSlider.new()
+	image_zoom = HSlider.new(); image_zoom.scrollable = false
 	image_zoom.min_value = 0.05
 	image_zoom.max_value = 8.0
 	image_zoom.step = 0.05
@@ -156,7 +156,7 @@ func _build_audio() -> void:
 	var volume_label := Label.new()
 	volume_label.text = "Volume"
 	transport.add_child(volume_label)
-	audio_volume = HSlider.new()
+	audio_volume = HSlider.new(); audio_volume.scrollable = false
 	audio_volume.min_value = 0.0
 	audio_volume.max_value = 1.0
 	audio_volume.step = 0.01
@@ -164,7 +164,7 @@ func _build_audio() -> void:
 	audio_volume.custom_minimum_size.x = 120
 	audio_volume.value_changed.connect(func(value: float) -> void: audio_player.volume_db = linear_to_db(maxf(0.00001, value)))
 	transport.add_child(audio_volume)
-	audio_seek = HSlider.new()
+	audio_seek = HSlider.new(); audio_seek.scrollable = false
 	audio_seek.step = 0.01
 	audio_seek.drag_started.connect(func() -> void: seeking = true)
 	audio_seek.drag_ended.connect(func(changed: bool) -> void:

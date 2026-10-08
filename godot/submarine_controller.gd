@@ -5,6 +5,7 @@ var max_health := 100.0
 var health := 100.0
 var dead := false
 var radiation_exposed := false
+var docking_in_progress := false
 
 func restore_health(capacity: float = 100.0, remaining: float = 100.0) -> void:
 	radiation_exposed = false
@@ -49,6 +50,8 @@ var active := false:
 	set(value):
 		active = value
 		freeze = not value
+		physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON if value else Node.PHYSICS_INTERPOLATION_MODE_OFF
+		if is_inside_tree(): reset_physics_interpolation()
 		if not value and impact_rumble != null: impact_rumble.stop()
 var controls_enabled := true
 var visual: Node3D
@@ -73,7 +76,7 @@ var previous_velocity := Vector3.ZERO
 var collision_parts: Array[Dictionary] = []
 
 func _ready() -> void:
-	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON if active else Node.PHYSICS_INTERPOLATION_MODE_OFF
 	custom_integrator = true
 	gravity_scale = 0.0
 	can_sleep = false
@@ -81,7 +84,7 @@ func _ready() -> void:
 	max_contacts_reported = 16
 	freeze = not active
 	collision_layer = 2
-	collision_mask = 5
+	collision_mask = 13
 	_build_collision(HullCollision.fallback())
 	movement.load_settings(remember_settings)
 	mass = float(movement.settings.mass)
@@ -151,9 +154,49 @@ func reset_at(point: Vector3) -> void:
 
 func _physics_process(delta: float) -> void:
 	if not active: return
-	mass = maxf(1.0, float(movement.settings.mass))
+	mass = maxf(1.0, float(movement.settings.mass) + movement.cargo_mass)
 	_update_animation(delta)
 	_sync_pod_collisions()
+
+func set_towed_mass(value: float) -> void:
+	movement.cargo_mass = maxf(0.0,value)
+	mass = maxf(1.0,float(movement.settings.mass) + movement.cargo_mass)
+
+func receive_towing_impulse(impulse: Vector3, attachment_offset: Vector3, pitch_influence: float = 1.0) -> void:
+	apply_central_impulse(impulse)
+	# Steering uses the prototype's rotational inertia, rather than the tiny
+	# imported hull's inertia. Towing must use the same scale for balanced pitch.
+	var spin := attachment_offset.cross(impulse) / movement.rotational_inertia()
+	var pitch_axis := (-global_basis.z).cross(Vector3.UP).normalized()
+	spin += pitch_axis * spin.dot(pitch_axis) * (pitch_influence - 1.0)
+	angular_velocity += spin
+
+func reveal_visual() -> void:
+	if visual == null: return
+	refresh_visual_pose()
+	visual.show()
+
+func reset_visual_history() -> void:
+	if visual == null: return
+	# Re-enter the world to discard descendant display caches from the previous
+	# dock. Resetting the hull alone leaves unchanged pod meshes in that history.
+	var index := visual.get_index()
+	remove_child(visual)
+	add_child(visual)
+	move_child(visual,index)
+	refresh_visual_pose()
+
+func refresh_visual_pose() -> void:
+	if visual == null: return
+	_update_animation(0.0)
+	_sync_visual_rendering()
+
+func _sync_visual_rendering() -> void:
+	force_update_transform()
+	visual.force_update_transform()
+	for part in visual.find_children("*","Node3D",true,false):
+		part.force_update_transform()
+	reset_physics_interpolation()
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	if not active: return
@@ -220,6 +263,9 @@ func _contact_impact(state: PhysicsDirectBodyState3D) -> float:
 	var strongest := 0.0
 	for index in range(state.get_contact_count()):
 		var body := state.get_contact_collider_object(index) as CollisionObject3D
+		if body != null and body.has_method("receive_sub_push"):
+			body.call_deferred("receive_sub_push",previous_velocity if previous_velocity.length_squared() > state.linear_velocity.length_squared() else state.linear_velocity,collision_height() * 0.5)
+			continue
 		# The water ceiling still blocks motion, but is not a solid hull impact.
 		if body != null and body.collision_layer & 4 != 0 and body.collision_layer & 1 == 0: continue
 		var collider := state.get_contact_collider_id(index)
@@ -247,6 +293,9 @@ func _update_animation(delta: float) -> void:
 		if not parts.has(role): continue
 		var pod := visual.get_node_or_null(NodePath(str(parts[role]))) as Node3D
 		if pod == null: continue
+		# Frozen docking poses must render directly: their child transforms
+		# otherwise retain interpolation history from before the dock teleport.
+		pod.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_INHERIT if active else Node.PHYSICS_INTERPOLATION_MODE_OFF
 		var rest: Basis = pod.get_meta("rest_basis", pod.basis)
 		var pose := pod.transform
 		pose.basis = rest * Basis(Vector3.RIGHT, movement.tilt * float(visual.get_meta("pod_tilt_sign", -1.0)))
@@ -266,6 +315,7 @@ func _update_animation(delta: float) -> void:
 		if not parts.has(roles[i]): continue
 		var propeller := visual.get_node_or_null(NodePath(str(parts[roles[i]]))) as Node3D
 		if propeller == null: continue
+		propeller.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_INHERIT if active else Node.PHYSICS_INTERPOLATION_MODE_OFF
 		var rest: Basis = propeller.get_meta("rest_basis", propeller.basis)
 		var pose := propeller.transform
 		pose.basis = rest * Basis(Vector3.BACK, angles[i])

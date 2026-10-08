@@ -41,3 +41,8 @@ __pycache__/
 .env.*
 !.env.example
 export_credentials.cfg
+
+/Mods/custom-jackfish/models/
+/Mods/custom-jackfish/textures/
+/Mods/clownfish/models/
+/Mods/clownfish/textures/

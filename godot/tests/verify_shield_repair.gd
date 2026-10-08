@@ -39,7 +39,7 @@ func run() -> void:
 	check(root.gui_get_focus_owner() == game.dock_interface.layout.get_node("BuyShieldRepair"),"Buying keeps focus on Buy rather than Done")
 	game.dock_interface.layout.get_node("BuyShieldRepair").pressed.emit()
 	check(game.player_progress.hold.get("shield",0) == 2 and game.dock_interface.hold_list.get_item_text(game.dock_interface.hold_list.item_count - 1).ends_with("×2"),"Multiple kits stack with a quantity in the hold")
-	check(game.dock_interface.hold_list.item_count == game.equipment.mounted.size() + game.weapons.mounted.size() + 1,"Hold has separate non-overlapping item rows")
+	check(game.dock_interface.hold_list.item_count == 1,"Hold has separate non-overlapping item rows")
 	check(game.dock_interface.layout.get_node("UseShieldRepair").disabled,"Repair must be selected before clicking the sub")
 	game.dock_interface.hold_list.select(game.dock_interface.hold_list.item_count - 1)
 	game.dock_interface.hold_list.item_selected.emit(game.dock_interface.hold_list.item_count - 1)

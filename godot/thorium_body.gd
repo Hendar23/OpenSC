@@ -25,6 +25,7 @@ func setup(definition: Dictionary, visual: Node3D, fragment: int, water: float, 
 	add_child(visual)
 	_setup_glow(visual)
 	set_meta("weapon_target",shard == 0)
+	set_meta("metal_tow_target",bool(stats.get("magnet_compatible",false)))
 	var points := PackedVector3Array()
 	for entry in preload("res://submarine_equipment.gd")._meshes(visual,Transform3D.IDENTITY):
 		for surface in range(entry.mesh.get_surface_count()):
@@ -44,7 +45,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		state.linear_velocity *= exp(-0.4 * state.step)
 		state.angular_velocity *= exp(-0.6 * state.step)
 func take_damage(amount: float, _source: Vector3 = Vector3.ZERO) -> void:
-	if dead or shard != 0 or not enabled or amount <= 0.0: return
+	if dead or shard != 0 or not enabled or amount <= 0.0 or has_meta("delivery_city"): return
 	health = maxf(0.0,health - amount)
 	if health == 0.0:
 		dead = true; shattered.emit(self)

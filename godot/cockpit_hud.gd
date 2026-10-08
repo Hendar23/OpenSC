@@ -36,6 +36,9 @@ var sunlight: DirectionalLight3D
 var lighting_elapsed := 1.0
 var sunlight_visible := true
 var natural_light: RefCounted
+var bottom_camera_enabled := false
+var bottom_view: SubViewport
+var bottom_camera: Camera3D
 var crt_reflection_strength := 0.25:
 	set(value):
 		crt_reflection_strength = clampf(value,0.0,1.0)
@@ -123,7 +126,37 @@ func setup(player: Node3D, mounted_equipment: Node3D, world: Node3D, folder: Str
 		holder.add_child(instrument)
 		instruments.append(instrument)
 	get_viewport().size_changed.connect(_layout)
+	_setup_bottom_camera(world)
+	visibility_changed.connect(_refresh_views)
 	_layout()
+
+func _setup_bottom_camera(world: Node3D) -> void:
+	bottom_view = SubViewport.new(); bottom_view.name = "BottomCameraFeed"
+	bottom_view.size = Vector2i(384,246)
+	bottom_view.world_3d = world.get_world_3d()
+	bottom_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	bottom_view.handle_input_locally = false
+	add_child(bottom_view)
+	bottom_camera = Camera3D.new(); bottom_camera.name = "BottomCamera"
+	bottom_camera.near = 0.01; bottom_camera.fov = 65
+	bottom_camera.cull_mask &= ~2 # Keep the hull and mounted tools out of the intake view.
+	bottom_view.add_child(bottom_camera); bottom_camera.current = true
+	_update_bottom_camera()
+
+func set_bottom_camera_enabled(on: bool) -> void:
+	bottom_camera_enabled = on
+	displays[2].set_camera_feed(bottom_view.get_texture() if on else null)
+	_update_bottom_camera(); _refresh_views()
+
+func _update_bottom_camera() -> void:
+	if bottom_camera == null or not is_instance_valid(pilot) or not is_instance_valid(equipment): return
+	var intake: Node3D = equipment.vacuum
+	var pose: Transform3D = intake.get_global_transform_interpolated()
+	var axes := pose.basis.orthonormalized()
+	# Down is intake-local -Y; the nose of the sub remains at the top of the picture.
+	bottom_camera.global_transform = Transform3D(Basis.looking_at(-axes.y,-axes.z),pose.origin)
+	var main_camera := get_viewport().get_camera_3d()
+	if main_camera != null: bottom_camera.far = main_camera.far
 
 func toggle(index: int) -> void:
 	if index < 0 or index >= enabled.size(): return
@@ -167,6 +200,8 @@ func _layout() -> void:
 		x += DEFINITIONS[i].size.x + 6.0
 
 func _refresh_views() -> void:
+	if bottom_view != null:
+		bottom_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if bottom_camera_enabled and visible and enabled[2] and instruments[2].visible and is_instance_valid(pilot) and not pilot.dead else SubViewport.UPDATE_DISABLED
 	for i in range(displays.size()): displays[i].set_process(visible and instruments[i].visible)
 	for view in model_views:
 		view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if visible and view.get_parent().visible else SubViewport.UPDATE_DISABLED
@@ -175,6 +210,7 @@ func _refresh_views() -> void:
 
 func _process(delta: float) -> void:
 	_refresh_views()
+	if bottom_view != null and bottom_view.render_target_update_mode != SubViewport.UPDATE_DISABLED: _update_bottom_camera()
 	_update_instrument_lighting(delta)
 	if pilot != null:
 		map_data.explore(pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.05)

@@ -8,7 +8,11 @@ var enabled := false
 var storage: Array[String] = []
 var audio: AudioStreamPlayer
 var range_metres := 2.0
-var intake_radius := 0.8
+var intake_radius := 0.25
+var pull_speed := 2.0
+var pull_strength := 8.0
+var capture_distance := 0.15
+var volume_db := -16.0
 
 func setup(player: Node3D, folder: String) -> void:
 	pilot = player
@@ -28,7 +32,7 @@ func transfer_to(cargo: Dictionary) -> void:
 func _physics_process(_delta: float) -> void:
 	var running: bool = enabled and pilot != null and pilot.active and pilot.controls_enabled and not pilot.dead
 	if audio != null:
-		if pilot != null and pilot.submarine_audio != null: audio.volume_db = -16 + float(pilot.submarine_audio.tuning.settings.master_volume)
+		if pilot != null and pilot.submarine_audio != null: audio.volume_db = volume_db + float(pilot.submarine_audio.tuning.settings.master_volume)
 		if running and audio.stream != null and not audio.playing: audio.play()
 		elif not running and audio.playing: audio.stop()
 	if not running or population == null or storage.size() >= CAPACITY: return
@@ -40,14 +44,16 @@ func _physics_process(_delta: float) -> void:
 		if offset.y > 0.15 or offset.y < -range_metres or Vector2(offset.x,offset.z).length() > intake_radius: continue
 		var query := PhysicsRayQueryParameters3D.create(global_position,body.global_position,1,[pilot.get_rid(),body.get_rid()])
 		if not get_world_3d().direct_space_state.intersect_ray(query).is_empty(): continue
-		if offset.length() < 0.22:
+		if offset.length() < capture_distance:
 			storage.append(item); body.dead = true; body.collision_layer = 0; body.hide(); body.queue_free()
+			enabled = false
+			if audio != null: audio.stop()
 			item_collected.emit(item)
-			if storage.size() >= CAPACITY: break
+			break
 		else:
 			var direction: Vector3 = global_position - body.global_position
-			var desired: Vector3 = direction.normalized() * minf(2.0,direction.length() * 4.0)
-			body.apply_central_force((desired - body.linear_velocity) * body.mass * 8.0)
+			var desired: Vector3 = direction.normalized() * minf(pull_speed,direction.length() * 4.0)
+			body.apply_central_force((desired - body.linear_velocity) * body.mass * pull_strength)
 
 func _sound(folder: String) -> AudioStream:
 	for replacement in preload("res://mod_registry.gd").candidates("audio.equipment.suckomat"):

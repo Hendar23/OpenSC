@@ -1,5 +1,6 @@
 extends PanelContainer
 signal dismissed
+signal settings_changed
 var audio: Node
 var sliders := {}
 var labels := {}
@@ -51,7 +52,7 @@ func setup(sound: Node, in_tabs: bool = false) -> void:
 	var load_label := Label.new()
 	load_label.text = "Preview load / simulated speed"
 	column.add_child(load_label)
-	var load_slider := HSlider.new()
+	var load_slider := HSlider.new(); load_slider.scrollable = false
 	load_slider.min_value = 0.0
 	load_slider.max_value = 1.0
 	load_slider.step = 0.01
@@ -106,6 +107,9 @@ func setup(sound: Node, in_tabs: bool = false) -> void:
 	test_hit.focus_mode = Control.FOCUS_NONE
 	test_hit.pressed.connect(func() -> void: audio.impact(float(audio.pilot.movement.settings.forward_speed)))
 	rows.add_child(test_hit)
+	_row(rows, ["explosion_volume", "Explosion volume", -60.0, 6.0, 1.0, "dB"])
+	_row(rows, ["wildlife_zapper_volume", "Fish zapper volume", -60.0, 6.0, 1.0, "dB"])
+	_row(rows, ["wildlife_splat_volume", "Wildlife splat volume", -60.0, 6.0, 1.0, "dB"])
 	_row(rows, ["low_shield_volume", "Low shield warning volume", -60.0, 6.0, 1.0, "dB"])
 	var docking_heading := Label.new()
 	docking_heading.text = "Docking · DOCKING / DOCK / DOCKSHUT"
@@ -116,16 +120,14 @@ func setup(sound: Node, in_tabs: bool = false) -> void:
 	_row(rows, ["dock_shut_volume", "Door finish volume", -60.0, 6.0, 1.0, "dB"])
 	var buttons := HBoxContainer.new()
 	column.add_child(buttons)
-	for caption in ["Save", "Reset defaults", "Export"]:
+	for caption in ["Export"]:
 		var button := Button.new()
 		button.text = caption
 		button.focus_mode = Control.FOCUS_NONE
 		buttons.add_child(button)
-		if caption == "Save": button.pressed.connect(func() -> void: message.text = "Sound settings saved." if audio.tuning.save_settings() == OK else "Could not save sound settings.")
-		elif caption == "Reset defaults": button.pressed.connect(_reset)
-		else: button.pressed.connect(func() -> void: export_dialog.popup_centered(Vector2i(800, 550)))
+		button.pressed.connect(func() -> void: export_dialog.popup_centered(Vector2i(800, 550)))
 	message = Label.new()
-	message.text = "Save remembers this mix. Export can become new defaults."
+	message.text = "Changes are saved automatically."
 	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	message.add_theme_font_size_override("font_size", 12)
 	column.add_child(message)
@@ -159,6 +161,7 @@ func _row(parent: VBoxContainer, row: Array) -> void:
 	slider.value_changed.connect(func(value: float) -> void:
 		audio.tuning.settings[key] = value
 		update_label.call(value)
+		settings_changed.emit()
 	)
 	# Rebuild once on release rather than restarting loops every drag tick.
 	if key == "loop_blend_ms": slider.drag_ended.connect(func(_changed: bool) -> void: audio.rebuild_loops())
@@ -171,8 +174,3 @@ func stop_preview() -> void:
 	audio.preview = false
 	audio.solo_role = ""
 	all_button.button_pressed = true
-func _reset() -> void:
-	audio.tuning.settings = audio.tuning.defaults.duplicate()
-	for key in sliders: sliders[key].value = audio.tuning.settings[key]
-	audio.rebuild_loops()
-	message.text = "Defaults restored. Save to keep this mix."

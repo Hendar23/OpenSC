@@ -3,8 +3,14 @@ extends RefCounted
 const DEFAULT_STATUS := {"hull_strength":100,"top_speed":100,"shields":100,"radiation_shield":0,"credits":0}
 
 static func restore(saved: Variant = {}) -> Dictionary:
-	var result := {"campaign_stage":1,"mission":"None","standing":{},"status":DEFAULT_STATUS.duplicate(),"hold":{},"cargo":{},"suckomat":[]}
+	var result := {"campaign_stage":1,"mission":"None","standing":{},"status":DEFAULT_STATUS.duplicate(),"hold":{},"cargo":{},"suckomat":[],"pending_deliveries":{}}
 	if not saved is Dictionary: return result
+	if saved.get("pending_deliveries") is Dictionary:
+		for city in saved.pending_deliveries:
+			var goods: Variant = saved.pending_deliveries[city]
+			if not goods is Dictionary: continue
+			var validated: Dictionary = restore({"cargo":goods}).cargo
+			if not validated.is_empty(): result.pending_deliveries[str(city)] = validated
 	var stage: Variant = saved.get("campaign_stage",1)
 	if (stage is int or stage is float) and is_finite(float(stage)): result.campaign_stage = clampi(int(stage),1,4)
 	if saved.get("mission") is String: result.mission = saved.mission.left(128)
@@ -30,3 +36,9 @@ static func restore(saved: Variant = {}) -> Dictionary:
 		for item in saved.suckomat:
 			if item is String and not item.is_empty() and result.suckomat.size() < 5: result.suckomat.append(item)
 	return result
+static func collect_deliveries(progress: Dictionary, city_id: int) -> void:
+	var pending: Dictionary = progress.get("pending_deliveries",{})
+	var key := str(city_id)
+	for commodity in pending.get(key,{}):
+		progress.cargo[commodity] = int(progress.cargo.get(commodity,0)) + int(pending[key][commodity])
+	pending.erase(key)

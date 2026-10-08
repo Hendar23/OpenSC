@@ -69,6 +69,17 @@ func _ready() -> void:
 	progress_bar.add_child(loading_status)
 	loading_status.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_menu()
+	var version_label := Label.new(); version_label.name = "VersionLabel"
+	version_label.text = "OpenSC v%s" % ProjectSettings.get_setting("application/config/version","")
+	version_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	version_label.add_theme_font_size_override("font_size",14)
+	version_label.add_theme_color_override("font_color",Color(0.65,0.8,0.82))
+	version_label.add_theme_color_override("font_shadow_color",Color.BLACK)
+	version_label.add_theme_constant_override("shadow_offset_x",1); version_label.add_theme_constant_override("shadow_offset_y",1)
+	menu_layout.get_parent().add_child(version_label)
+	version_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	version_label.offset_left = 12; version_label.offset_right = 240
+	version_label.offset_top = -30; version_label.offset_bottom = -10
 	controls_menu = preload("res://controls_menu.gd").new(); add_child(controls_menu)
 	controls_menu.closed.connect(func() -> void: restore_button_focus("controls"))
 	menu_layer.hide()

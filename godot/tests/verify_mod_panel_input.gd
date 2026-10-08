@@ -42,6 +42,24 @@ func _run() -> void:
 	check(panel.pending_order[1] == "input-test-0","Priority button changes order while paused")
 	for frame in range(3): await process_frame
 	var scroll: ScrollContainer = panel.rows.get_parent()
+	preload("res://input_bindings.gd").install()
+	preload("res://input_bindings.gd").bindings = preload("res://input_bindings.gd").defaults()
+	preload("res://input_bindings.gd").apply_all()
+	panel.choices[panel.pending_order[0]].grab_focus()
+	for index in range(14):
+		var down := InputEventKey.new(); down.keycode = KEY_DOWN; down.physical_keycode = KEY_DOWN; down.pressed = true
+		panel.push_input(down,true); down.pressed = false; panel.push_input(down,true)
+		await process_frame
+	check(panel.gui_get_focus_owner() == panel.choices[panel.pending_order[-1]],"Down traverses all mods before reaching the footer")
+	check(scroll.scroll_vertical > 0,"Focus navigation scrolls offscreen mods into view")
+	var last_down := InputEventKey.new(); last_down.keycode = KEY_DOWN; last_down.physical_keycode = KEY_DOWN; last_down.pressed = true
+	panel.push_input(last_down,true); last_down.pressed = false; panel.push_input(last_down,true); await process_frame
+	check(panel.gui_get_focus_owner() == button(panel,"Apply"),"Only Down from the final mod reaches Apply")
+	panel.choices[panel.pending_order[0]].grab_focus()
+	for index in range(14):
+		var pad_down := InputEventJoypadButton.new(); pad_down.button_index = JOY_BUTTON_DPAD_DOWN; pad_down.pressed = true
+		panel.push_input(pad_down,true); pad_down.pressed = false; panel.push_input(pad_down,true); await process_frame
+	check(panel.gui_get_focus_owner() == panel.choices[panel.pending_order[-1]],"Controller D-pad also traverses the full mod list")
 	var wheel := InputEventMouseButton.new(); wheel.position = scroll.get_global_rect().get_center(); wheel.button_index = MOUSE_BUTTON_WHEEL_DOWN; wheel.pressed = true
 	wheel.position += Vector2(panel.position); root.push_input(wheel,true)
 	wheel.pressed = false; root.push_input(wheel,true); await process_frame

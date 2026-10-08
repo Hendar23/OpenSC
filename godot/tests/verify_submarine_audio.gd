@@ -36,6 +36,10 @@ func _run() -> void:
 	check(not sound.shield_warning.playing,"Warning uses percentage of shield capacity")
 	pilot.restore_health(100,20); sound.update(0); pilot.active = false; sound.update(0)
 	check(not sound.shield_warning.playing,"Docked or inactive submarine stops warning")
+	pilot.docking_in_progress = true; sound.update(0)
+	check(sound.shield_warning.playing,"Low shield warning continues during scripted docking")
+	pilot.docking_in_progress = false; sound.update(0)
+	check(not sound.shield_warning.playing,"Warning stops once docking completes")
 	pilot.active = true; pilot.restore_health(100,0); sound.update(0)
 	check(not sound.shield_warning.playing,"Destroyed submarine stops warning")
 	pilot.restore_health(); pilot.active = false
