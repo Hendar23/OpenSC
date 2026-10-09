@@ -41,6 +41,17 @@ func run() -> void:
 	check(prey.combat.threat == predator,"Prey detects predators using its detection distance")
 	neutral.combat.scan_timer = 0; neutral.combat.perceive(0.01)
 	check(neutral.combat.target == null and neutral.combat.threat == null,"Neutral wildlife ignores predators")
+	check(prey.flee_range == 4.0 and predator.attack_range == 8.0,"Legacy detection becomes half-distance fleeing and unchanged attack detection")
+	prey.position.z = -6; population.cells_frame = -1
+	predator.combat.scan_timer = 0; predator.combat.perceive(0.01)
+	prey.combat.scan_timer = 0; prey.combat.perceive(0.01)
+	check(predator.combat.target == prey and prey.combat.threat == null,"Predator can detect prey beyond the prey's shorter flee range")
+	prey.flee_range = 7; predator.attack_range = 3
+	prey.combat.scan_timer = 0; prey.combat.perceive(0.01)
+	predator.combat.scan_timer = 0; predator.combat.perceive(0.01)
+	check(prey.combat.threat == predator and predator.combat.target == null,"Flee and attack detection ranges are independently adjustable")
+	prey.flee_range = 4; predator.attack_range = 8; prey.position.z = -0.45; population.cells_frame = -1
+	predator.combat.scan_timer = 0; predator.combat.perceive(0.01)
 	predator.direction = Vector3.FORWARD; predator.combat.bite_timer = 0
 	var before: float = prey.health
 	predator.combat.attack(0.1)

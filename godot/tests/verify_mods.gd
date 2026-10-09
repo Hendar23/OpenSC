@@ -30,8 +30,8 @@ func bound_textures(model: Node3D) -> Array[Texture2D]:
 	for node in model.find_children("*", "MeshInstance3D", true, false):
 		for surface in node.mesh.get_surface_count():
 			var material: Material = node.get_active_material(surface)
-			if material is BaseMaterial3D and material.albedo_texture != null and material.albedo_texture.has_meta("asset_mod"):
-				result.append(material.albedo_texture)
+			var texture: Texture2D = material.albedo_texture if material is BaseMaterial3D else material.get_shader_parameter("albedo_texture") if material is ShaderMaterial else null
+			if texture != null and texture.has_meta("asset_mod"): result.append(texture)
 	return result
 func _run() -> void:
 	var folder := Paths.find_game_folder()
@@ -48,7 +48,23 @@ func _run() -> void:
 		image.save_png(ProjectSettings.globalize_path(path))
 		temporary_files.append(path)
 	var glb_path := fixture_root.path_join("second/submarine.glb")
-	DirAccess.copy_absolute(ProjectSettings.globalize_path("res://../Mods/example-glb-submarine/models/submarine.glb"), ProjectSettings.globalize_path(glb_path))
+	# Generate isolated fixtures; installed example mods may legitimately be removed.
+	var source := Assets._load_legacy(folder.path_join("CLUMPS/SUB.DFF"),PackedStringArray(["Hull","RearPropeller","LeftPod","RightPod","RightPropeller","LeftPropeller"]))
+	if source == null: push_error("Original submarine unavailable for mod fixture"); quit(1); return
+	var document := GLTFDocument.new(); var state := GLTFState.new()
+	var built := document.append_from_scene(source,state)
+	if built == OK: built = document.write_to_filesystem(state,ProjectSettings.globalize_path(glb_path))
+	source.free()
+	if built != OK: push_error("Could not build GLB mod fixture"); quit(1); return
+	var imported := Modern.load_model(ProjectSettings.globalize_path(glb_path),{"forward_axis":"+Z"})
+	var fixture_parts := {}
+	for entry in [["left_pod","RightPod"],["right_pod","LeftPod"],["main_propeller","RearPropeller"],["left_propeller","RightPropeller"],["right_propeller","LeftPropeller"]]:
+		var part := imported.find_child(entry[1],true,false)
+		if part != null: fixture_parts[entry[0]] = str(imported.get_path_to(part))
+	imported.free()
+	var fixture_manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(fixture_root.path_join("second/mod.json")))
+	fixture_manifest.assets["model.sub"].parts = fixture_parts
+	write(fixture_root.path_join("second/mod.json"),JSON.stringify(fixture_manifest))
 	temporary_files.append(glb_path)
 	var preference := "res://tests/mod-preferences-test.cfg"
 	Mods.initialize(false, fixture_root, preference)
@@ -83,7 +99,7 @@ func _run() -> void:
 	modded.load_settings(false)
 	check(modded.settings.mass == 180 and modded.settings.forward_speed == 8, "Movement model uses enabled partial presets")
 	check(is_equal_approx(modded.settings.turn_drag, base_settings.turn_drag), "Unspecified movement values inherit base tuning")
-	check(modded.persistence_path != base_path and modded.persistence_path.begins_with("user://movement-mod-"), "Modded tuning has a separate saved profile")
+	check(modded.persistence_path == base_path and not modded.mod_section.is_empty(), "Mod adjustments share the current settings file without replacing base tuning")
 	var base_bytes := FileAccess.get_file_as_bytes(base_path) if FileAccess.file_exists(base_path) else PackedByteArray()
 	var export_path := "res://tests/mod-movement-test.cfg"
 	modded.save_settings(export_path)
@@ -112,8 +128,8 @@ func _run() -> void:
 	var original := Assets.load_submarine(folder.path_join("CLUMPS/SUB.DFF"))
 	check(original != null and not original.get_meta("modern_model", false), "Disabling mods restores original model")
 	if original != null: original.free()
-	Mods.initialize(false)
-	Mods.apply(["example.glb-submarine", "example.png-texture", "example.heavier-movement"], Mods.order, false)
+	Mods.initialize(false,fixture_root,preference)
+	Mods.apply(["first", "second"], ["first","second"], false)
 	var game := Game.new()
 	game.remember_preferences = false
 	root.add_child(game)
@@ -123,7 +139,7 @@ func _run() -> void:
 	check(game.startup_complete and game.pilot != null, "Game launches with GLB, PNG and movement examples enabled")
 	if game.pilot != null:
 		check(game.pilot.visual.get_meta("modern_model", false) and game.pilot.visual.get_meta("submarine_parts", {}).size() == 5, "Modern submarine supplies all moving-part attachments")
-		var current_png := Image.load_from_file(ProjectSettings.globalize_path("res://../Mods/example-png-texture/textures/sub1.png"))
+		var current_png := Image.load_from_file(ProjectSettings.globalize_path(fixture_root.path_join("second/skin.png")))
 		current_png.convert(Image.FORMAT_RGBA8)
 		var current_textures := bound_textures(game.pilot.visual)
 		check(current_textures.size() == 3 and current_textures.all(func(t: Texture2D) -> bool:
@@ -131,7 +147,7 @@ func _run() -> void:
 			image.convert(Image.FORMAT_RGBA8)
 			return image.get_data() == current_png.get_data()
 		), "Actual game hull uses the user's current PNG with both example mods enabled")
-		check(game.pilot.movement.settings.mass == 125 and game.docking.ports.size() == 6, "Movement preset and docking remain functional with modern model")
+		check(game.pilot.movement.settings.mass == 180 and game.docking.ports.size() == 6, "Movement preset and docking remain functional with modern model")
 		var parts: Dictionary = game.pilot.visual.get_meta("submarine_parts")
 		var pod: Node3D = game.pilot.visual.get_node(parts.left_pod)
 		var rest := pod.basis
@@ -139,9 +155,9 @@ func _run() -> void:
 		game.pilot._update_animation(0.1)
 		check(not pod.basis.is_equal_approx(rest), "GLB side pods animate through mapped attachment points")
 		game.front_end.buttons.mods.pressed.emit()
-		check(game.mod_panel.visible and not game.mod_panel.embedded and game.mod_panel.choices.has("example.glb-submarine") and game.mod_panel.choices.has("test.remastered-submarine"), "Main-menu Mods lists installed examples and remastered submarine")
+		check(game.mod_panel.visible and not game.mod_panel.embedded and game.mod_panel.choices.has("first") and game.mod_panel.choices.has("second"), "Main-menu Mods lists the isolated installed packs")
 		for checkbox in game.mod_panel.choices.values(): checkbox.button_pressed = false
-		game.mod_panel._apply()
+		game.mod_panel._commit_apply()
 		for frame in range(1200):
 			if not game.world_loading: break
 			await physics_frame

@@ -1,6 +1,6 @@
 extends VBoxContainer
 
-const CONFIG := "user://media_preview.cfg"
+const Storage = preload("res://player_storage.gd")
 var remember_preferences := true
 var cache_directory := "user://video_previews"
 var decoder := ""
@@ -18,7 +18,7 @@ func _ready() -> void:
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	if remember_preferences:
 		var config := ConfigFile.new()
-		if config.load(CONFIG) == OK: decoder = str(config.get_value("video","ffmpeg",""))
+		if config.load(Storage.preferences_path()) == OK: decoder = str(config.get_value("video","ffmpeg",""))
 	info = Label.new(); info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; add_child(info)
 	var transport := HBoxContainer.new(); add_child(transport)
 	play_button = _button(transport,"Play",toggle_playback)
@@ -44,7 +44,10 @@ func _button(parent: Node, caption: String, callback: Callable) -> Button:
 func set_decoder(path: String) -> void:
 	decoder = path
 	if remember_preferences:
-		var config := ConfigFile.new(); config.set_value("video","ffmpeg",path); config.save(CONFIG)
+		var preferences := Storage.preferences_path()
+		Storage.ensure_parent(preferences)
+		var config := ConfigFile.new(); config.load(preferences)
+		config.set_value("video","ffmpeg",path); config.save(preferences)
 	if not selected_path.is_empty(): show_video(selected_path)
 
 static func smacker_info(path: String) -> Dictionary:

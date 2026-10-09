@@ -25,7 +25,8 @@ func setup(definition: Dictionary, visual: Node3D, fragment: int, water: float, 
 	add_child(visual)
 	_setup_glow(visual)
 	set_meta("weapon_target",shard == 0)
-	set_meta("metal_tow_target",bool(stats.get("magnet_compatible",false)))
+	set_meta("metal_tow_target",shard == 0 and bool(stats.get("magnet_compatible",false)))
+	set_meta("grapple_tow_target",shard == 0 and bool(stats.get("grapple_compatible",true)))
 	var points := PackedVector3Array()
 	for entry in preload("res://submarine_equipment.gd")._meshes(visual,Transform3D.IDENTITY):
 		for surface in range(entry.mesh.get_surface_count()):

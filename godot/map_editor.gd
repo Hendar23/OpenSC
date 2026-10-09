@@ -165,7 +165,8 @@ func open(game_folder: String) -> void:
 	base_entities = baseline.entities.duplicate(true)
 	for key in base_entities:
 		if key != "player_spawn": base_nodes[key] = world.get_node(NodePath(key)).duplicate()
-	document = Document.load_active()
+	# Mod-added species belong to their pack, not the editable map document.
+	document = Document.load_active(false)
 	if document.is_empty():
 		document = baseline
 		_seed_species()
@@ -182,7 +183,9 @@ func open(game_folder: String) -> void:
 	for pack in Mods.packs:
 		if not pack.valid or str(pack.id) not in Mods.enabled: continue
 		for id in pack.assets:
-			if id.begins_with("model.") and not models.has(id): models.append(id)
+			if id.begins_with("model."):
+				var model_id := str(id).trim_prefix("model.")
+				if not models.has(model_id): models.append(model_id)
 	models.sort()
 	markers = Node3D.new(); markers.name = "EditorMarkers"; scene.add_child(markers)
 	selection_outline = MeshInstance3D.new(); scene.add_child(selection_outline)
@@ -197,7 +200,7 @@ func open(game_folder: String) -> void:
 func _progress(message: String) -> void: status.text = message
 func _seed_species() -> void:
 	for id in Creatures.SPECIES:
-		document.species.append({"id": id.to_lower(), "name": id.capitalize(), "model": id, "mobility": "swimming", "group_behaviour": "shoaling", "response": "flee", "speed": 1.3, "detection": 8.0, "scale_min": 100.0, "scale_max": 100.0})
+		document.species.append({"id": id.to_lower(), "name": id.capitalize(), "model": id, "mobility": "swimming", "group_behaviour": "shoaling", "response": "flee", "speed": 1.3, "attack_range": 8.0, "flee_range": 4.0, "scale_min": 100.0, "scale_max": 100.0})
 		document.species[-1].merge(Document.POPULATION_DEFAULTS)
 		document.species[-1].random_spawn = true
 func _exit_tree() -> void:
@@ -325,17 +328,20 @@ func select(key: String) -> void:
 	if key.begins_with("object_type:"):
 		species_preview = SpeciesPreview.new(); properties.add_child(species_preview)
 		species_preview.show_object(entry,folder)
-		choice("behavior","Object behavior",["mine","thorium","salvage"],entry.get("behavior","mine"),["Floating mine","Thorium crystal","Metal salvage"])
-		var compatible := CheckBox.new(); compatible.text = "Magnet compatible"; compatible.button_pressed = bool(entry.get("magnet_compatible",entry.get("behavior","") == "salvage"))
-		properties.add_child(compatible); fields.magnet_compatible = compatible
-		var commodity_ids: Array = [""]; var commodity_names: Array = ["None"]
-		for commodity in gameplay_catalogue.get("tables",{}).get("commodity_text",{}).get("records",{}).values():
-			commodity_ids.append(str(commodity.id).to_lower()); commodity_names.append(str(commodity.get("Display name",commodity.id)))
-		var delivery := Document.ObjectDefinitions.delivery_defaults(entry)
-		var commodity_id := str(entry.get("delivery_commodity",delivery.commodity))
-		if not commodity_ids.has(commodity_id): commodity_ids.append(commodity_id); commodity_names.append(commodity_id)
-		choice("delivery_commodity","Drop-off commodity",commodity_ids,commodity_id,commodity_names)
-		number("delivery_quantity","Commodity units per delivered object",entry.get("delivery_quantity",delivery.quantity),0,999999,1)
+		choice("behavior","Object behavior",["mine","thorium","salvage","clam","pearl"],entry.get("behavior","mine"),["Floating mine","Thorium crystal","Salvage object","Clam","Pearl"])
+		if entry.get("behavior","mine") in ["thorium","salvage","pearl"]:
+			var compatible := CheckBox.new(); compatible.text = "Magnet compatible"; compatible.button_pressed = bool(entry.get("magnet_compatible",entry.get("behavior","") == "salvage"))
+			properties.add_child(compatible); fields.magnet_compatible = compatible
+			var grapple_compatible := CheckBox.new(); grapple_compatible.text = "Grapple compatible"; grapple_compatible.button_pressed = bool(entry.get("grapple_compatible",entry.get("behavior","") == "thorium" or entry.get("id","") == "cigarette_end"))
+			properties.add_child(grapple_compatible); fields.grapple_compatible = grapple_compatible
+			var commodity_ids: Array = [""]; var commodity_names: Array = ["None"]
+			for commodity in gameplay_catalogue.get("tables",{}).get("commodity_text",{}).get("records",{}).values():
+				commodity_ids.append(str(commodity.id).to_lower()); commodity_names.append(str(commodity.get("Display name",commodity.id)))
+			var delivery := Document.ObjectDefinitions.delivery_defaults(entry)
+			var commodity_id := str(entry.get("delivery_commodity",delivery.commodity))
+			if not commodity_ids.has(commodity_id): commodity_ids.append(commodity_id); commodity_names.append(commodity_id)
+			choice("delivery_commodity","Drop-off commodity",commodity_ids,commodity_id,commodity_names)
+			number("delivery_quantity","Commodity units per delivered object",entry.get("delivery_quantity",delivery.quantity),0,999999,1)
 		choice("appearance","Appearance",["sprite","model"],entry.appearance,["Billboard image","3D model"])
 		text_field("texture","Image asset (texture ID / BMP name)",entry.texture)
 		text_field("mask","Original transparency mask",entry.mask)
@@ -344,20 +350,27 @@ func select(key: String) -> void:
 		fields.model.item_selected.connect(func(_index: int) -> void: _update_object_preview())
 		fields.texture.text_submitted.connect(func(_text: String) -> void: _update_object_preview())
 		number("size","Size (maximum diameter)",entry.size,0.01,1000,0.05)
-		if entry.get("behavior","mine") != "salvage": number("health","Health",entry.health,0.01,100000,0.1)
+		if entry.get("behavior","mine") in ["mine","thorium"]: number("health","Health",entry.health,0.01,100000,0.1)
 		if entry.get("behavior","mine") == "thorium":
 			number("mass","Crystal mass",entry.get("mass",2.0),0.01,1000,0.1)
 			number("shard_mass","Shard mass",entry.get("shard_mass",1.0),0.01,1000,0.1)
 			number("shard_scale_percent","Shard size (% of original model)",entry.get("shard_scale_percent",100.0),0.1,1000,1)
 			for index in range(1,4): choice("shard" + str(index),"Shard " + str(index) + " model",models,str(entry.get("shard" + str(index),"SHARD" + str(index))))
 			number("radiation_range","Radiation range",entry.get("radiation_range",1.5),0,100,0.1)
-			number("radiation_strength","Radiation damage (shield points/second)",entry.get("radiation_strength",5.0),0,1000,0.1)
+			number("radiation_strength","Radiation damage at 1 unit (shield points/second)",entry.get("radiation_strength",5.0),0,1000,0.1)
 			number("glow_energy","Yellow light strength (0 disables)",entry.get("glow_energy",1.0),0,100,0.1)
 			number("glow_range","Glow light range",entry.get("glow_range",3.0),0,100,0.1)
 			number("glow_emission","Model glow strength (0 disables)",entry.get("glow_emission",0.25),0,100,0.05)
 			for channel in ["red","green","blue"]: number("glow_" + channel,"Glow " + channel,entry.get("glow_" + channel,Document.ObjectDefinitions.THORIUM["glow_" + channel]),0,1,0.01)
 			number("spawn_chance","Random drop chance per minute (%)",entry.get("spawn_chance",0.0),0,100,1)
 			number("maximum_population","Maximum crystal/shard population",entry.get("maximum_population",60),0,5000,1)
+		elif entry.get("behavior","mine") == "clam":
+			text_field("pearl_type","Pearl object type",str(entry.get("pearl_type","pearl")))
+			for row in [["close_distance","Close when sub is nearer than",0.01,10,0.01],["regrowth_seconds","Pearl regrowth (seconds)",1,86400,1],["opening_speed","Opening speed (degrees/second)",1,1000,1],["closing_speed","Closing speed (degrees/second)",1,2000,1],["open_angle","Open angle (degrees)",0,180,1],["closed_angle","Closed angle (degrees)",0,180,1],["pearl_height","Pearl height inside clam",0,10,0.01],["release_distance","Pearl release distance",0.01,10,0.01]]:
+				number(row[0],row[1],entry.get(row[0],Document.ObjectDefinitions.CLAM[row[0]]),row[2],row[3],row[4])
+		elif entry.get("behavior","mine") == "pearl":
+			number("mass","Pearl mass",entry.get("mass",1),0.01,1000,0.1)
+			text_field("pickup_commodity","Suck-O-Matic commodity",str(entry.get("pickup_commodity","pearls")))
 		elif entry.get("behavior","mine") == "salvage":
 			number("mass","Object mass",entry.get("mass",2.0),0.01,1000,0.1)
 			number("spawn_chance","Random drop chance per minute (%)",entry.get("spawn_chance",100.0),0,100,1)
@@ -374,6 +387,10 @@ func select(key: String) -> void:
 		choice("type","Object type",ids,entry.type,names)
 		number("count","Number in this group",entry.count,1,100,1)
 		number("radius","Group scatter radius",entry.radius,0,1000,0.1)
+		var type: Dictionary = document.object_types.filter(func(item: Dictionary) -> bool: return item.id == entry.type)[0]
+		if type.get("behavior","") == "clam":
+			number("initial_delay","First pearl delay (seconds; 0 = ready)",entry.get("initial_delay",0),0,86400,1)
+		for axis in range(3): number("group_rotation_" + str(axis),"Rotation " + ["X","Y","Z"][axis] + " (°)",entry.get("rotation",[0,0,0])[axis],-360,360,1)
 		label("One object sits at the group centre; multiple objects scatter within the radius. Positions repeat from the map seed.")
 	elif key.begins_with("species:"):
 		species_preview = SpeciesPreview.new(); properties.add_child(species_preview)
@@ -408,7 +425,9 @@ func select(key: String) -> void:
 		fields.animation_speed.value_changed.connect(func(value: float) -> void: species_preview.animation_speed = value)
 		number("turn_speed", "Maximum turn speed (°/s)", entry.get("turn_speed", 60.0), 1, 180, 1)
 		number("pitch_limit", "Maximum swim pitch (°)", entry.get("pitch_limit", 25.0), 0, 60, 1)
-		number("detection", "Detection distance", entry.detection, 0.1, 200, 0.1)
+		var ranges := Document.creature_ranges(entry)
+		number("flee_range", "Flee range", ranges.flee_range, 0.01, 200, 0.01)
+		number("attack_range", "Attack detection range", ranges.attack_range, 0.01, 200, 0.01)
 		number("startle_duration", "Flee startle duration (s; 0 disables)", entry.get("startle_duration", 0.3), 0, 1, 0.05)
 		number("startle_speed_multiplier", "Flee burst speed multiplier", entry.get("startle_speed_multiplier", 2.8), 1.6, 6, 0.1)
 		number("startle_turn_speed", "Flee startle turn speed (°/s)", entry.get("startle_turn_speed", 720.0), 180, 1440, 30)
@@ -440,6 +459,8 @@ func select(key: String) -> void:
 				else: choice("model", "3D model", models, str(entry.model))
 				for i in range(3): number("rotation_" + str(i), "Rotation " + ["X", "Y", "Z"][i] + " (°)", rad_to_deg(pose.basis.get_euler()[i]), -360, 360, 1)
 				for i in range(3): number("scale_" + str(i), "Scale " + ["X", "Y", "Z"][i], pose.basis.get_scale()[i], 0.01, 100, 0.01)
+			elif entry.kind == "player":
+				number("facing", "Facing (° clockwise)", fposmod(-rad_to_deg(atan2(pose.basis.z.x,pose.basis.z.z)),360.0), 0, 360, 1)
 			elif entry.kind == "dropoff":
 				number("radius", "Detection radius", entry.radius, 0.01, 1000, 0.01)
 			elif entry.kind == "light":
@@ -484,7 +505,13 @@ func choice(key: String, caption: String, options: Array, value: String, display
 	for index in range(options.size()):
 		control.add_item(str(display_names[index]) if index < display_names.size() else str(options[index]))
 		control.set_item_metadata(index, str(options[index]))
-	control.select(maxi(0, options.find(value))); properties.add_child(control); fields[key] = control
+	var selected_index := options.find(value)
+	if selected_index < 0:
+		# Preserve identifiers missing from the current list, including assets
+		# supplied by an inactive mod, instead of silently choosing another asset.
+		selected_index = control.item_count
+		control.add_item(value); control.set_item_metadata(selected_index,value)
+	control.select(selected_index); properties.add_child(control); fields[key] = control
 func _value(key: String) -> Variant:
 	var control: Control = fields[key]
 	if control is CheckBox: return control.button_pressed
@@ -500,9 +527,9 @@ func apply_properties() -> void:
 	var before := document.duplicate(true); var entry := record()
 	entry.name = _value("name")
 	if selected.begins_with("object_type:"):
-		for key in ["delivery_commodity","delivery_quantity"]:
+		for key in ["delivery_commodity","delivery_quantity","pearl_type","pearl_height","close_distance","open_angle","closed_angle","opening_speed","closing_speed","regrowth_seconds","release_distance","pickup_commodity"]:
 			if fields.has(key): entry[key] = _value(key)
-		for key in ["behavior","magnet_compatible","appearance","texture","mask","model","size","health","damage","explosion_radius","trigger_distance","blast_force","mass","shard_mass","shard_scale_percent","shard1","shard2","shard3","radiation_range","radiation_strength","glow_energy","glow_range","glow_emission","glow_red","glow_green","glow_blue","spawn_chance","maximum_population"]:
+		for key in ["behavior","magnet_compatible","grapple_compatible","appearance","texture","mask","model","size","health","damage","explosion_radius","trigger_distance","blast_force","mass","shard_mass","shard_scale_percent","shard1","shard2","shard3","radiation_range","radiation_strength","glow_energy","glow_range","glow_emission","glow_red","glow_green","glow_blue","spawn_chance","maximum_population"]:
 			if fields.has(key): entry[key] = _value(key)
 		if entry.behavior == "thorium":
 			for key in Document.ObjectDefinitions.THORIUM:
@@ -510,16 +537,27 @@ func apply_properties() -> void:
 		if entry.behavior == "salvage":
 			for key in Document.ObjectDefinitions.SALVAGE:
 				if not entry.has(key): entry[key] = Document.ObjectDefinitions.SALVAGE[key]
+		for defaults in [Document.ObjectDefinitions.CLAM,Document.ObjectDefinitions.PEARL]:
+			if entry.behavior == defaults.behavior:
+				for key in defaults:
+					if not entry.has(key): entry[key] = defaults[key]
 	elif selected.begins_with("object_group:"):
 		entry.position = [_value("position_0"),_value("position_1"),_value("position_2")]
 		for key in ["type","count","radius"]: entry[key] = _value(key)
+		if fields.has("initial_delay"): entry.initial_delay = _value("initial_delay")
+		var changed_rotation := false
+		for axis in range(3):
+			var field: Range = fields["group_rotation_" + str(axis)]
+			if not is_equal_approx(field.value,field.get_meta("initial_value")): changed_rotation = true
+		if changed_rotation: entry.rotation = [_value("group_rotation_0"),_value("group_rotation_1"),_value("group_rotation_2")]
 	elif selected.begins_with("species:"):
 		# Viewing/applying other properties should preserve the imported default.
 		if entry.has("health") or not is_equal_approx(fields.health.value,fields.health.get_meta("initial_value")): entry.health = _value("health")
+		entry.erase("detection")
 		for key in Document.POPULATION_DEFAULTS: entry[key] = _value(key)
 		entry.food_role = _value("food_role"); entry.has_zapper = fields.has_zapper.button_pressed
 		for combat_key in Document.COMBAT_DEFAULTS: entry[combat_key] = _value(combat_key)
-		for key in ["model", "mobility", "group_behaviour", "response", "speed", "animation_speed", "turn_speed", "pitch_limit", "detection", "startle_duration", "startle_speed_multiplier", "startle_turn_speed", "scale_min", "scale_max"]: entry[key] = _value(key)
+		for key in ["model", "mobility", "group_behaviour", "response", "speed", "animation_speed", "turn_speed", "pitch_limit", "flee_range", "attack_range", "startle_duration", "startle_speed_multiplier", "startle_turn_speed", "scale_min", "scale_max"]: entry[key] = _value(key)
 	else:
 		var point := Vector3(float(_value("position_0")), float(_value("position_1")), float(_value("position_2")))
 		if selected.begins_with("group:"):
@@ -539,6 +577,8 @@ func apply_properties() -> void:
 				for key in ["rotation_0", "rotation_1", "rotation_2", "scale_0", "scale_1", "scale_2"]:
 					if not is_equal_approx(fields[key].value, fields[key].get_meta("initial_value")): changed = true
 				if changed: pose.basis = Basis.from_euler(euler) * Basis.from_scale(scale_value)
+			if entry.kind == "player" and not is_equal_approx(fields.facing.value,fields.facing.get_meta("initial_value")):
+				pose.basis = Basis(Vector3.UP,-deg_to_rad(float(_value("facing"))))
 			if entry.kind == "dropoff": entry.radius = _value("radius")
 			if entry.kind == "light":
 				for key in ["energy", "range", "light_mode", "pulse_period", "flare_size", "flash_on_time", "flash_off_time"]: entry[key] = _value(key)
@@ -558,7 +598,7 @@ func _new_position() -> Vector3: return camera.position - camera.basis.z * 8.0
 func add_species() -> void:
 	if not loaded: return
 	var before := document.duplicate(true); var id := _new_id()
-	document.species.append({"id": id, "name": "New creature", "model": "ANGEL", "mobility": "swimming", "group_behaviour": "shoaling", "response": "flee", "speed": 1.3, "detection": 8.0, "scale_min": 100.0, "scale_max": 100.0})
+	document.species.append({"id": id, "name": "New creature", "model": "ANGEL", "mobility": "swimming", "group_behaviour": "shoaling", "response": "flee", "speed": 1.3, "attack_range": 8.0, "flee_range": 4.0, "scale_min": 100.0, "scale_max": 100.0})
 	document.species[-1].merge(Document.POPULATION_DEFAULTS)
 	document.species[-1].random_spawn = true
 	_remember(before); category.select(4); select("species:" + id)

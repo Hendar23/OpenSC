@@ -9,6 +9,10 @@ const GROUP_BEHAVIOURS := ["solitary", "shoaling", "schooling"]
 const RESPONSES := ["ignore", "flee", "defend", "attack"]
 const FOOD_ROLES := ["prey", "predator", "neutral"]
 const COMBAT_DEFAULTS := {"bite_damage":5.0,"attack_interval":1.0,"bite_range":0.15,"zapper_range":4.0,"zapper_damage":10.0}
+static func creature_ranges(species: Dictionary) -> Dictionary:
+	var legacy: Variant = species.get("detection",8.0)
+	return {"attack_range":species.get("attack_range",legacy),"flee_range":species.get("flee_range",float(legacy) * 0.5 if legacy is float or legacy is int else legacy)}
+
 static func creature_combat(species: Dictionary) -> Dictionary:
 	var model := str(species.get("model","")).trim_prefix("model.").to_lower()
 	var defaults := COMBAT_DEFAULTS.duplicate()
@@ -18,7 +22,7 @@ static func creature_combat(species: Dictionary) -> Dictionary:
 	return defaults
 const POPULATION_DEFAULTS := {"random_spawn": false, "groups_min": 3, "groups_max": 8, "count_min": 1, "count_max": 10, "spawn_chance": 100.0, "roam_radius": 10.0}
 static func empty() -> Dictionary:
-	return {"schema_version": 1, "seed": 8675309, "entities": {}, "species": [], "groups": [], "object_types": [ObjectDefinitions.FLOATING_MINE.duplicate(true), ObjectDefinitions.THORIUM.duplicate(true)] + ObjectDefinitions.metal_types(), "object_groups": []}
+	return {"schema_version": 1, "seed": 8675309, "entities": {}, "species": [], "groups": [], "object_types": [ObjectDefinitions.FLOATING_MINE.duplicate(true), ObjectDefinitions.THORIUM.duplicate(true), ObjectDefinitions.inert_thorium()] + ObjectDefinitions.metal_types() + [ObjectDefinitions.CIGARETTE.duplicate(true),ObjectDefinitions.CLAM.duplicate(true),ObjectDefinitions.PEARL.duplicate(true)], "object_groups": []}
 static func creature_health(species: Dictionary, catalogue: Dictionary) -> float:
 	var stats: Dictionary = catalogue.get("tables",{}).get("creature_stats",{}).get("records",{}).get(str(species.get("model","")).to_lower(),{})
 	return maxf(0.1,float(species.get("health",stats.get("health",10.0))))
@@ -67,7 +71,11 @@ static func valid(data: Variant) -> bool:
 		if float(species.get("roam_radius",10.0)) < 0.5 or float(species.get("roam_radius",10.0)) > 1000: return false
 		if str(species.get("model", "")).is_empty() or species.get("mobility") not in ["swimming", "crawling"]: return false
 		if species.get("group_behaviour") not in GROUP_BEHAVIOURS or species.get("response") not in RESPONSES: return false
-		for key in ["speed", "detection", "scale_min", "scale_max"]:
+		if not species.has("detection") and (not species.has("attack_range") or not species.has("flee_range")): return false
+		if species.has("detection") and (not finite_array([species.detection],1) or float(species.detection) <= 0): return false
+		for value in creature_ranges(species).values():
+			if not finite_array([value],1) or float(value) <= 0: return false
+		for key in ["speed", "scale_min", "scale_max"]:
 			if not finite_array([species.get(key)], 1) or float(species[key]) <= 0.0: return false
 		if float(species.scale_max) < float(species.scale_min) or float(species.scale_max) > 500.0: return false
 		if not finite_array([species.get("animation_speed",1.0)],1) or float(species.get("animation_speed",1.0)) < 0.0 or float(species.get("animation_speed",1.0)) > 10.0: return false
@@ -121,11 +129,12 @@ static func load_path(path: String) -> Dictionary:
 	if not valid(data): Mods.note("Invalid map file; keeping the next map or original world: " + path); return {}
 	ObjectDefinitions.ensure(data)
 	return data
-static func load_active() -> Dictionary:
+static func load_active(include_mod_wildlife: bool = true) -> Dictionary:
 	for entry in Mods.candidates("map.scen1"):
 		var data := load_path(entry.path)
-		if not data.is_empty(): return _add_mod_wildlife(data)
-	return _add_mod_wildlife(load_path(DEFAULT_PATH))
+		if not data.is_empty(): return _add_mod_wildlife(data) if include_mod_wildlife else data
+	var data := load_path(DEFAULT_PATH)
+	return _add_mod_wildlife(data) if include_mod_wildlife else data
 static func save(data: Dictionary, path: String = DEFAULT_PATH) -> Error:
 	if not valid(data): return ERR_INVALID_DATA
 	var absolute := ProjectSettings.globalize_path(path)
@@ -151,7 +160,7 @@ static func capture(world: Node3D, catalogue: Dictionary = {}) -> Dictionary:
 		if node is PulseLight: record.merge(node.settings())
 		elif node is OmniLight3D: record.merge({"energy": node.light_energy, "range": node.omni_range})
 		data.entities[key] = record
-	data.entities["player_spawn"] = {"name": "Player spawn", "kind": "player", "transform": encode(Transform3D(Basis.IDENTITY, world.get_meta("player_spawn"))), "deleted": false}
+	data.entities["player_spawn"] = {"name": "Player spawn", "kind": "player", "transform": encode(Transform3D(world.get_meta("player_spawn_basis",Basis.IDENTITY), world.get_meta("player_spawn"))), "deleted": false}
 	return data
 static func load_model(id: String, folder: String, animated: bool = false) -> Node3D:
 	# Model IDs resolve enabled modern replacements through the existing loader.
@@ -162,7 +171,10 @@ static func apply_entities(world: Node3D, folder: String, data: Dictionary) -> v
 	for key in data.entities:
 		var entry: Dictionary = data.entities[key]
 		if entry.kind == "player":
-			if not entry.get("deleted", false): world.set_meta("player_spawn", decode(entry.transform).origin)
+			if not entry.get("deleted", false):
+				var pose := decode(entry.transform)
+				world.set_meta("player_spawn",pose.origin)
+				world.set_meta("player_spawn_basis",pose.basis.orthonormalized())
 			continue
 		var node := world.get_node_or_null(NodePath(str(key))) as Node3D
 		if entry.get("deleted", false):
@@ -198,11 +210,19 @@ static func apply_entities(world: Node3D, folder: String, data: Dictionary) -> v
 
 static func _add_mod_wildlife(data: Dictionary) -> Dictionary:
 	if data.is_empty(): return data
-	for entry in Mods.candidates("data.wildlife"):
+	var additions_in_order := Mods.candidates("data.wildlife")
+	additions_in_order.reverse()
+	for entry in additions_in_order:
 		var additions: Variant = JSON.parse_string(FileAccess.get_file_as_string(entry.path))
 		if not additions is Dictionary or additions.get("schema_version") != 1 or not additions.get("species") is Array:
 			Mods.note("Invalid wildlife additions: " + str(entry.path)); continue
 		var candidate := data.duplicate(true)
+		# An enabled pack overrides matching map definitions, including mod
+		# species accidentally included in maps saved by older editor versions.
+		var replacement_ids := {}
+		for species in additions.species:
+			if species is Dictionary: replacement_ids[str(species.get("id",""))] = true
+		candidate.species = candidate.species.filter(func(species: Dictionary) -> bool: return not replacement_ids.has(str(species.id)))
 		candidate.species.append_array(additions.species)
 		if not valid(candidate):
 			Mods.note("Invalid or duplicate creature definitions in " + str(entry.name)); continue

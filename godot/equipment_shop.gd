@@ -1,7 +1,26 @@
 extends RefCounted
 
-const ITEMS := ["shield", "deep_sea_lights", "suckomat", "zapper", "magnet"]
-const SLOTS := {"zapper":9,"deep_sea_lights":5,"suckomat":3,"magnet":3}
+const ITEMS := ["shield", "hullstr", "radoff", "deep_sea_lights", "suckomat", "zapper", "magnet", "grapple"]
+const UPGRADES := {"hullstr":{"stat":"hull_strength","maximum":200},"radoff":{"stat":"radiation_shield","maximum":100}}
+
+static func upgrade_available(progress: Dictionary, id: String) -> bool:
+	if not UPGRADES.has(id): return true
+	var upgrade: Dictionary = UPGRADES[id]
+	return int(progress.status[upgrade.stat]) < int(upgrade.maximum)
+
+static func use_item(progress: Dictionary, pilot: Node, id: String) -> String:
+	if id == "shield": return consume_repair(progress,pilot)
+	if not UPGRADES.has(id) or int(progress.hold.get(id,0)) <= 0: return ""
+	if pilot.dead: return "The submarine is destroyed."
+	if not upgrade_available(progress,id): return "Upgrade already at maximum."
+	var upgrade: Dictionary = UPGRADES[id]
+	progress.status[upgrade.stat] = mini(int(upgrade.maximum),int(progress.status[upgrade.stat]) + 20)
+	progress.hold[id] -= 1
+	if progress.hold[id] == 0: progress.hold.erase(id)
+	pilot.hull_rating = float(progress.status.hull_strength)
+	pilot.radiation_rating = float(progress.status.radiation_shield)
+	return ""
+const SLOTS := {"zapper":9,"deep_sea_lights":5,"suckomat":3,"magnet":3,"grapple":3}
 
 static func shield_repair(catalogue: Dictionary, city_id: String, stage: int) -> Dictionary:
 	return offer(catalogue,city_id,stage,"shield")
@@ -24,10 +43,12 @@ static func offer(catalogue: Dictionary, city_id: String, stage: int, id: String
 
 static func buy(progress: Dictionary, offer: Dictionary) -> String:
 	if not offer.get("available",false): return str(offer.name) + " is not sold at this station."
+	if not upgrade_available(progress,str(offer.id)): return "Upgrade already at maximum."
+	if UPGRADES.has(str(offer.id)) and int(progress.hold.get(offer.id,0)) >= int(offer.maximum): return "Already owned."
 	if int(progress.status.credits) < int(offer.price): return "Not enough credits."
 	progress.status.credits -= int(offer.price)
 	progress.hold[offer.id] = int(progress.hold.get(offer.id,0)) + 1
-	return str(offer.name) + " placed in the hold."
+	return ""
 
 static func consume_repair(progress: Dictionary, pilot: Node) -> String:
 	if int(progress.hold.get("shield",0)) <= 0: return "Select Shield Repair from the hold."
@@ -36,7 +57,7 @@ static func consume_repair(progress: Dictionary, pilot: Node) -> String:
 	progress.hold.shield -= 1
 	if progress.hold.shield == 0: progress.hold.erase("shield")
 	pilot.restore_health(pilot.max_health,pilot.max_health)
-	return "Shields restored to full strength."
+	return ""
 
 static func installed(equipment: Node, weapons: Node) -> Dictionary:
 	var result := {}

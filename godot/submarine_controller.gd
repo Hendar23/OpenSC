@@ -6,6 +6,9 @@ var health := 100.0
 var dead := false
 var radiation_exposed := false
 var docking_in_progress := false
+const Damage = preload("res://original_damage.gd")
+var hull_rating := 100.0
+var radiation_rating := 0.0
 
 func restore_health(capacity: float = 100.0, remaining: float = 100.0) -> void:
 	radiation_exposed = false
@@ -14,11 +17,11 @@ func restore_health(capacity: float = 100.0, remaining: float = 100.0) -> void:
 	dead = health <= 0.0
 	health_changed.emit(health,max_health)
 
-func take_damage(amount: float, _source: Vector3 = Vector3.ZERO) -> void:
+func take_damage(amount: float, _source: Vector3 = Vector3.ZERO, feedback: bool = true) -> void:
 	if dead or not active or not controls_enabled or not is_finite(amount) or amount <= 0.0: return
-	var loss := minf(health,amount)
+	var loss := minf(health,amount * Damage.sustain(hull_rating) / Damage.BASE_SUSTAIN)
 	health -= loss
-	if impact_rumble != null: impact_rumble.damage(loss,max_health)
+	if feedback and impact_rumble != null: impact_rumble.damage(loss,max_health)
 	health_changed.emit(health,max_health)
 	if health <= 0.0:
 		dead = true; controls_enabled = false; active = false
@@ -31,7 +34,7 @@ func take_damage(amount: float, _source: Vector3 = Vector3.ZERO) -> void:
 
 func receive_radiation(strength: float, delta: float) -> void:
 	radiation_exposed = active and controls_enabled and not dead and is_finite(strength) and strength > 0.0
-	if radiation_exposed and is_finite(delta) and delta > 0.0: take_damage(strength * delta)
+	if radiation_exposed and is_finite(delta) and delta > 0.0: take_damage(strength * delta * Damage.radiation_protection(radiation_rating),Vector3.ZERO,false)
 
 const Movement = preload("res://movement_model.gd")
 const Controls = preload("res://pilot_input.gd")
@@ -100,7 +103,6 @@ func _ready() -> void:
 	impact_rumble = Rumble.new()
 	impact_rumble.pilot = self
 	add_child(impact_rumble)
-	submarine_audio.impact_accepted.connect(impact_rumble.impact)
 
 func fit_collision_to_visual() -> void:
 	var fitted := HullCollision.fit(visual,self)
@@ -130,10 +132,10 @@ func collision_height() -> float:
 func _process(delta: float) -> void:
 	submarine_audio.update(delta)
 
-func reset_at(point: Vector3) -> void:
+func reset_at(point: Vector3, heading: Basis = Basis.IDENTITY) -> void:
 	spawn = Vector3(point.x, minf(point.y, surface_height - surface_clearance(Basis.IDENTITY) - safe_margin), point.z)
 	position = spawn
-	rotation = Vector3.ZERO
+	basis = heading.orthonormalized()
 	velocity = Vector3.ZERO
 	movement.reset_motion()
 	angles = Vector3.ZERO
@@ -147,6 +149,7 @@ func reset_at(point: Vector3) -> void:
 	reset_transform = global_transform
 	pending_reset = true
 	previous_contacts.clear()
+	previous_rumble_contacts.clear()
 	previous_velocity = Vector3.ZERO
 	force_update_transform()
 	get_global_transform_interpolated()
@@ -204,8 +207,10 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		state.transform = reset_transform
 		pending_reset = false
 		previous_contacts.clear()
+		previous_rumble_contacts.clear()
 		previous_velocity = Vector3.ZERO
-	var impact_speed := _contact_impact(state)
+	var impact := _contact_impact(state)
+	var impact_speed: float = impact.speed
 	var controls := Controls.read() if controls_enabled else Vector4.ZERO
 	movement.velocity = state.linear_velocity
 	movement.angular_velocity = state.angular_velocity
@@ -235,14 +240,21 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	movement.velocity = state.linear_velocity
 	movement.angular_velocity = state.angular_velocity
 	previous_velocity = state.linear_velocity
+	if impact.rumble_speed > 0.0:
+		impact_rumble.call_deferred("impact",impact.rumble_speed)
 	if impact_speed > 0.0:
 		submarine_audio.call_deferred("impact", impact_speed)
-		apply_impact_damage.call_deferred(impact_speed)
+		apply_impact_damage.call_deferred(impact.damage_speed,impact.inflict)
 
-func apply_impact_damage(speed: float) -> void:
-	if not is_finite(speed): return
-	var excess := maxf(0.0,speed - float(movement.settings.impact_damage_threshold))
-	take_damage(excess * excess * float(movement.settings.impact_damage_scale))
+func impact_damage(speed: float, inflict: float = -1.0) -> float:
+	if not is_finite(speed) or not is_finite(inflict) or speed <= float(movement.settings.impact_damage_threshold): return 0.0
+	# The original terrain gate is checked before the hit, not a health clamp.
+	if inflict < 0 and health <= max_health * 0.04: return 0.0
+	var damage := Damage.terrain(speed,mass) if inflict < 0 else Damage.object_contact(speed,inflict)
+	return damage * float(movement.settings.impact_damage_scale)
+
+func apply_impact_damage(speed: float, inflict: float = -1.0) -> void:
+	take_damage(impact_damage(speed,inflict),Vector3.ZERO,false)
 
 func receive_explosion(source: Vector3, damage: float, impulse: float) -> void:
 	if not active or not controls_enabled: return
@@ -258,11 +270,26 @@ func surface_clearance(orientation: Basis) -> float:
 		for point in part.points: highest = maxf(highest,(orientation * (pose * point)).y)
 	return highest
 
-func _contact_impact(state: PhysicsDirectBodyState3D) -> float:
+var previous_rumble_contacts := {}
+func _contact_impact(state: PhysicsDirectBodyState3D) -> Dictionary:
 	var contacts := {}
+	var rumble_contacts := {}
 	var strongest := 0.0
+	var result := {"speed":0.0,"damage_speed":0.0,"inflict":-1.0,"rumble_speed":0.0}
+	var greatest_damage := 0.0
 	for index in range(state.get_contact_count()):
 		var body := state.get_contact_collider_object(index) as CollisionObject3D
+		# Feedback includes harmless wildlife/water contacts and gentle impacts,
+		# independently of damage and sound thresholds or sound cooldown.
+		var rumble_id := state.get_contact_collider_id(index)
+		var rumble_normal := state.get_contact_local_normal(index)
+		if not rumble_contacts.has(rumble_id): rumble_contacts[rumble_id] = []
+		rumble_contacts[rumble_id].append(rumble_normal)
+		var old_rumble_normals: Array = previous_rumble_contacts.get(rumble_id,[])
+		if not old_rumble_normals.any(func(old: Vector3) -> bool: return old.dot(rumble_normal) > 0.9):
+			var relative_rumble := previous_velocity - state.get_contact_collider_velocity_at_position(index)
+			var rumble_speed := maxf(maxf(0,-relative_rumble.dot(rumble_normal)),state.get_contact_impulse(index).length() / maxf(1,mass))
+			result.rumble_speed = maxf(result.rumble_speed,rumble_speed)
 		if body != null and body.has_method("receive_sub_push"):
 			body.call_deferred("receive_sub_push",previous_velocity if previous_velocity.length_squared() > state.linear_velocity.length_squared() else state.linear_velocity,collision_height() * 0.5)
 			continue
@@ -280,8 +307,24 @@ func _contact_impact(state: PhysicsDirectBodyState3D) -> float:
 		var closing := maxf(0.0, -relative.dot(normal))
 		var impulse_speed := state.get_contact_impulse(index).length() / maxf(1.0, mass)
 		strongest = maxf(strongest, maxf(closing, impulse_speed))
+		var inflict := -1.0
+		if body is RigidBody3D and body.get("stats") is Dictionary:
+			var stats: Dictionary = body.get("stats")
+			if stats.get("behavior","") == "thorium": inflict = 0.00006 if stats.get("id","") == "inert_thorium" else 0.0006
+			elif stats.get("behavior","") in ["salvage","pearl"]: inflict = 0.1
+		# Object damage uses centre-to-centre relative closing speed, rather
+		# than solver impulses (which also contain restitution and constraints).
+		var speed := closing
+		if inflict >= 0:
+			var direction := global_position - body.global_position
+			if direction.length_squared() > 0.000001: speed = maxf(0,-relative.dot(direction.normalized()))
+		var damage := impact_damage(speed,inflict)
+		if damage > greatest_damage:
+			greatest_damage = damage; result.damage_speed = speed; result.inflict = inflict
 	previous_contacts = contacts
-	return strongest
+	previous_rumble_contacts = rumble_contacts
+	result.speed = strongest
+	return result
 
 func _update_animation(delta: float) -> void:
 	if visual == null: return

@@ -1,6 +1,7 @@
 extends RefCounted
 
-static func find_game_folder(require_map: bool = true, config_path: String = "user://opensubculture.cfg") -> String:
+static func find_game_folder(require_map: bool = true, config_path: String = "") -> String:
+	if config_path.is_empty(): config_path = preload("res://player_storage.gd").preferences_path()
 	var config := ConfigFile.new()
 	if config.load(config_path) != OK: return ""
 	var folder := str(config.get_value("game", "folder", ""))

@@ -4,7 +4,8 @@
     {
       "count_max": 6.0,
       "count_min": 3.0,
-      "detection": 7.0,
+      "attack_range": 7.0,
+      "flee_range": 3.5,
       "group_behaviour": "schooling",
       "groups_max": 24.0,
       "groups_min": 12.0,

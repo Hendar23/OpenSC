@@ -11,9 +11,9 @@ func _initialize() -> void: call_deferred("run")
 func run() -> void:
  var types := {"object_types":Definitions.metal_types(),"object_groups":[]}; Definitions.ensure(types)
  for type in types.object_types:
-  if type.id in ["coin","bottletop","milktop","thorium"]:
-   check(type.delivery_quantity == (4 if type.id == "thorium" else 3),"Imported object settings receive delivery quantity for " + type.id)
-   check(type.delivery_commodity == ("ore" if type.id == "thorium" else ("copper" if type.id == "coin" else "metal")),"Object delivery commodity for " + type.id)
+  if type.id in ["coin","bottletop","milktop","thorium","cigarette_end"]:
+   check(type.delivery_quantity == (4 if type.id == "thorium" else 1 if type.id == "cigarette_end" else 2),"Imported object settings receive delivery quantity for " + type.id)
+   check(type.delivery_commodity == ("ore" if type.id == "thorium" else "tobacco" if type.id == "cigarette_end" else "copper" if type.id == "coin" else "metal"),"Object delivery commodity for " + type.id)
  check(Definitions.valid(types),"Delivery settings remain valid map data")
  types.object_types[0].delivery_quantity = 7; types.object_types[0].delivery_commodity = "copper"; Definitions.ensure(types)
  check(types.object_types[0].delivery_quantity == 7 and types.object_types[0].delivery_commodity == "copper","Editor choices are preserved rather than replaced by defaults")
@@ -30,6 +30,7 @@ func run() -> void:
  check(game.startup_complete,"Game loads")
  if not game.startup_complete: quit(1); return
  game._begin_new_game(); game.pilot.controls_enabled = true; game.pilot.set_physics_process(false); game.docking.set_physics_process(false)
+ game.equipment.set_installed(["deep_sea_lights","magnet"])
  var magnet: Node3D = game.equipment.magnet; magnet.set_physics_process(false); magnet.set_enabled(true)
  var coin := preload("res://salvage_body.gd").new(); game.object_population.add_child(coin)
  var definition: Dictionary = Definitions.metal_types()[2]
@@ -52,7 +53,7 @@ func run() -> void:
  check(game._delivery_prompt_active(),"Leaving and re-entering the zone allows another delivery request")
  var yes := InputEventJoypadButton.new(); yes.button_index = JOY_BUTTON_A; yes.pressed = true; game._input(yes)
  check(magnet.target == null and magnet.retracting and not coin.is_queued_for_deletion() and coin.get_meta("delivery_city",-1) == city,"Controller confirmation releases the physical object and retracts the magnet normally")
- check(game.player_progress.pending_deliveries[str(city)].copper == 3 and game.player_progress.cargo.is_empty(),"Delivery records three Copper at the city without immediately adding hold cargo")
+ check(game.player_progress.pending_deliveries[str(city)].copper == 2 and game.player_progress.cargo.is_empty(),"Delivery records two Copper at the city without immediately adding hold cargo")
  check(game.object_population.snapshot().any(func(entry: Dictionary) -> bool: return entry.get("delivery_city",-1) == city),"Accepted salvage remains in the saved world until docking at its city")
  magnet.enabled = true; magnet._attach(coin)
  check(magnet.target == null,"Accepted salvage cannot be delivered twice")
@@ -62,10 +63,10 @@ func run() -> void:
  check(game.save_games.write(0,game._save_snapshot("Pending delivery")) == OK,"Pending city deliveries are written to a valid save file")
  game.player_progress = Progress.restore()
  check(await game._load_saved_game(0),"Save containing pending deliveries loads normally")
- check(game.player_progress.pending_deliveries[str(city)].copper == 3 and game.player_progress.cargo.is_empty(),"Loading at another city preserves the delivery without collecting it")
+ check(game.player_progress.pending_deliveries[str(city)].copper == 2 and game.player_progress.cargo.is_empty(),"Loading at another city preserves the delivery without collecting it")
  check(game.object_population.snapshot().any(func(entry: Dictionary) -> bool: return entry.get("delivery_city",-1) == city),"Loading at another city also preserves the physical delivered object")
  game.docking.current = game.docking.ports[0]; game.docking.stage = game.Docking.Stage.DOCKED; game.dock_interface_active = false; game._process(0)
- check(game.player_progress.cargo.get("copper",0) == 3 and not game.player_progress.pending_deliveries.has(str(city)),"Docking transfers the saved delivery to the sub's trade inventory")
+ check(game.player_progress.cargo.get("copper",0) == 2 and not game.player_progress.pending_deliveries.has(str(city)),"Docking transfers the saved delivery to the sub's trade inventory")
  check(not game.object_population.snapshot().any(func(entry: Dictionary) -> bool: return entry.get("delivery_city",-1) == city),"Docking at the receiving city removes its accepted objects")
  DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.path(0)))
  DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.folder))

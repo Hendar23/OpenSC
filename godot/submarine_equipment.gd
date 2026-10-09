@@ -3,12 +3,13 @@ extends Node3D
 const Assets = preload("res://clump_loader.gd")
 const Images = preload("res://legacy_bmp.gd")
 const Mods = preload("res://mod_registry.gd")
-const DEFAULTS := {"light_energy": 3.0, "light_range": 18.0, "light_angle": 45.0, "light_down_angle": 45.0, "som_range": 2.0, "som_radius": 0.25, "som_pull_speed": 2.0, "som_pull_strength": 8.0, "som_capture_distance": 0.15, "som_volume_db": -16.0, "magnet_length":0.3, "magnet_speed":0.8, "magnet_water_drag":4.0, "magnet_cargo_weight":25.0, "magnet_pitch_influence":0.25, "magnet_volume_db":-16.0}
+const DEFAULTS := {"light_energy": 3.0, "light_range": 18.0, "light_angle": 45.0, "light_down_angle": 45.0, "som_range": 2.0, "som_radius": 0.25, "som_pull_speed": 2.0, "som_pull_strength": 8.0, "som_capture_distance": 0.15, "som_volume_db": -16.0, "magnet_length":0.3, "magnet_speed":0.8, "magnet_water_drag":4.0, "magnet_cargo_weight":25.0, "magnet_pitch_influence":0.25, "magnet_volume_db":-16.0, "grapple_length":1.0, "grapple_speed":1.0, "grapple_water_drag":0.1, "grapple_cargo_weight":4.0, "grapple_pitch_influence":0.25, "grapple_volume_db":-16.0}
 var settings := DEFAULTS.duplicate()
 var mounted: Array[Dictionary] = []
 var available: Array[Dictionary] = []
 var selected := 0
 var cycle_audio: AudioStreamPlayer
+var grapple: Node3D
 var magnet: Node3D
 var vacuum: Node3D
 var counter_digits: Array[Texture2D] = []
@@ -59,6 +60,7 @@ func setup(player: Node3D, folder: String) -> void:
 	_setup_vacuum(player,folder)
 	available.assign(mounted)
 	_setup_magnet(player,folder)
+	_setup_grapple(player,folder)
 	apply_settings()
 
 static func _meshes(node: Node3D, parent_pose: Transform3D, hull_only: bool = false) -> Array[Dictionary]:
@@ -145,11 +147,12 @@ func current() -> Dictionary:
 
 func apply_settings() -> void:
 	for item in available: item.mount.visible = item in mounted
-	if magnet != null:
-		magnet.chain_length = settings.magnet_length; magnet.speed = settings.magnet_speed; magnet.volume_db = settings.magnet_volume_db
-		magnet.water_drag = settings.magnet_water_drag; magnet.cargo_weight = settings.magnet_cargo_weight
-		magnet.pitch_influence = settings.magnet_pitch_influence
-		magnet.set_enabled(mounted.any(func(item: Dictionary) -> bool: return item.id == "magnet" and item.enabled))
+	for tool in [magnet,grapple]:
+		if tool == null: continue
+		var id: String = tool.tool_id
+		tool.chain_length = settings[id + "_length"]; tool.speed = settings[id + "_speed"]; tool.volume_db = settings[id + "_volume_db"]
+		tool.water_drag = settings[id + "_water_drag"]; tool.cargo_weight = settings[id + "_cargo_weight"]; tool.pitch_influence = settings[id + "_pitch_influence"]
+		tool.set_enabled(mounted.any(func(item: Dictionary) -> bool: return item.id == id and item.enabled))
 	if vacuum != null:
 		vacuum.enabled = false
 		vacuum.range_metres = settings.som_range
@@ -228,24 +231,41 @@ func set_installed(ids: Array) -> void:
 	apply_settings()
 
 func _setup_magnet(player: Node3D, folder: String) -> void:
-	var mount := Node3D.new(); mount.name = "MagnetMount"; add_child(mount)
-	mount.transform = available[1].mount.transform
-	var housing := Assets.load_clump(folder.path_join("CLUMPS/MAGNET.DFF"))
+	magnet = _setup_towing_tool(player,folder,"magnet","MAGNET","GRAPPLE")
+
+func _setup_grapple(player: Node3D, folder: String) -> void:
+	grapple = _setup_towing_tool(player,folder,"grapple","TOW","TOW")
+
+func towing_tool() -> Node3D:
+	for item in mounted:
+		if item.id == "magnet": return magnet
+		if item.id == "grapple": return grapple
+	return null
+
+func reset_towing() -> void:
+	for tool in [magnet,grapple]:
+		if tool != null: tool.reset()
+
+func _setup_towing_tool(player: Node3D, folder: String, id: String, model: String, icon: String) -> Node3D:
+	var mount := Node3D.new(); mount.name = "GrappleMount" if id == "grapple" else "MagnetMount"; add_child(mount)
+	mount.transform = (magnet.get_parent() if id == "grapple" and magnet != null else available[1].mount).transform
+	var housing := Assets.load_clump(folder.path_join("CLUMPS/" + model + ".DFF"))
 	if housing != null:
 		housing.rotation.y = PI; housing.scale *= player.VISUAL_SCALE; mount.add_child(housing)
-	preload("res://submarine_mounts.gd").apply(mount,player.visual,"magnet")
+	preload("res://submarine_mounts.gd").apply(mount,player.visual,id)
 	var icons: Array[Texture2D] = []
-	for file in ["GRAPPLE1","GRAPPLE2","GRAPPLE3"]:
+	for file in [icon + "1",icon + "2",icon + "3"]:
 		var image: Image
 		for replacement in Mods.candidates("texture." + file):
 			image = Assets._replacement_image(replacement.path)
 			if image != null: break
 		if image == null: image = Images.load_image(folder.path_join("GAMETEX/" + file + ".RAS"))
 		icons.append(ImageTexture.create_from_image(image) if image != null else null)
-	available.append({"id":"magnet","name":"Magnet","enabled":false,"mount":mount,"icons":icons})
-	magnet = preload("res://submarine_magnet.gd").new(); mount.add_child(magnet); magnet.setup(player,housing,folder)
-	magnet.state_changed.connect(func(on: bool) -> void:
+	available.append({"id":id,"name":"Grappling Hook" if id == "grapple" else "Magnet","enabled":false,"mount":mount,"icons":icons})
+	var tool := preload("res://submarine_magnet.gd").new(); tool.tool_id = id; mount.add_child(tool); tool.setup(player,housing,folder)
+	tool.state_changed.connect(func(on: bool) -> void:
 		for item in available:
-			if item.id == "magnet": item.enabled = on
+			if item.id == id: item.enabled = on
 	)
 	mount.hide()
+	return tool

@@ -3,8 +3,17 @@ extends RefCounted
 const DEFAULT_STATUS := {"hull_strength":100,"top_speed":100,"shields":100,"radiation_shield":0,"credits":0}
 
 static func restore(saved: Variant = {}) -> Dictionary:
-	var result := {"campaign_stage":1,"mission":"None","standing":{},"status":DEFAULT_STATUS.duplicate(),"hold":{},"cargo":{},"suckomat":[],"pending_deliveries":{}}
+	var result := {"campaign_stage":1,"mission":"None","standing":{},"status":DEFAULT_STATUS.duplicate(),"hold":{},"cargo":{},"suckomat":[],"pending_deliveries":{},"markets":{}}
 	if not saved is Dictionary: return result
+	result.markets = preload("res://commodity_market.gd").restore(saved.get("markets",{}))
+	result.economy = {"production_elapsed":0.0,"trader_elapsed":0.0}
+	var clock: Variant = saved.get("economy",{})
+	if clock is Dictionary:
+		if clock.get("quote_version",0) == 1: result.economy.quote_version = 1
+		for field in result.economy:
+			var value: Variant = clock.get(field,0.0)
+			if (value is int or value is float) and is_finite(float(value)) and value >= 0:
+				result.economy[field] = fmod(float(value),30.0 if field == "production_elapsed" else 150.1)
 	if saved.get("pending_deliveries") is Dictionary:
 		for city in saved.pending_deliveries:
 			var goods: Variant = saved.pending_deliveries[city]
@@ -21,7 +30,8 @@ static func restore(saved: Variant = {}) -> Dictionary:
 		for key in DEFAULT_STATUS:
 			var value: Variant = saved.status.get(key,DEFAULT_STATUS[key])
 			if (value is int or value is float) and is_finite(float(value)): result.status[key] = maxi(0,int(value))
-	result.status.hull_strength = maxi(1,result.status.hull_strength)
+	result.status.hull_strength = clampi(result.status.hull_strength,100,200)
+	result.status.radiation_shield = clampi(result.status.radiation_shield,0,100)
 	result.status.shields = clampi(result.status.shields,0,100)
 	if saved.get("hold") is Dictionary:
 		for id in saved.hold:

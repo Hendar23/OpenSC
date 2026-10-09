@@ -29,7 +29,7 @@ func transfer_to(cargo: Dictionary) -> void:
 	for item in storage: cargo[item] = int(cargo.get(item,0)) + 1
 	storage.clear()
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	var running: bool = enabled and pilot != null and pilot.active and pilot.controls_enabled and not pilot.dead
 	if audio != null:
 		if pilot != null and pilot.submarine_audio != null: audio.volume_db = volume_db + float(pilot.submarine_audio.tuning.settings.master_volume)
@@ -45,12 +45,14 @@ func _physics_process(_delta: float) -> void:
 		var query := PhysicsRayQueryParameters3D.create(global_position,body.global_position,1,[pilot.get_rid(),body.get_rid()])
 		if not get_world_3d().direct_space_state.intersect_ray(query).is_empty(): continue
 		if offset.length() < capture_distance:
+			if body.has_method("collected"): body.collected()
 			storage.append(item); body.dead = true; body.collision_layer = 0; body.hide(); body.queue_free()
 			enabled = false
 			if audio != null: audio.stop()
 			item_collected.emit(item)
 			break
 		else:
+			if body.has_method("pull_towards") and body.pull_towards(global_position,pull_speed,delta): continue
 			var direction: Vector3 = global_position - body.global_position
 			var desired: Vector3 = direction.normalized() * minf(pull_speed,direction.length() * 4.0)
 			body.apply_central_force((desired - body.linear_velocity) * body.mass * pull_strength)

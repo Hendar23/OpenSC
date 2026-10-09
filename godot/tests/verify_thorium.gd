@@ -18,7 +18,16 @@ func run() -> void:
 	var data := Document.empty()
 	data.object_groups = [{"id":"crystals","name":"Crystals","type":"thorium","position":[0,2,0],"count":1,"radius":0}]
 	var legacy := Document.empty(); legacy.object_types = [Definitions.FLOATING_MINE.duplicate(true)]; Definitions.ensure(legacy)
-	check(legacy.object_types.size() == 5 and Document.valid(legacy) and legacy.object_groups.is_empty(),"Old maps gain Thorium and metal object types without mission placements")
+	check(legacy.object_types.any(func(type: Dictionary) -> bool: return type.id == "inert_thorium") and Document.valid(legacy) and legacy.object_groups.is_empty(),"Old maps gain inert Thorium without adding placements")
+	var authored := Document.load_path("res://../Maps/scen1.json")
+	var starting: Array = authored.object_groups.filter(func(group: Dictionary) -> bool: return group.id == "original_thorium_53")
+	check(starting.size() == 1 and starting[0].count == 1 and starting[0].type == "thorium", "One normal starting Thorium is authored")
+	var original_pose := Document.decode(authored.entities["Scenery/THORIUM_53"].transform)
+	check(Document.vector(starting[0].position).is_equal_approx(original_pose.origin) and Basis.from_euler(Document.vector(starting[0].rotation) * PI / 180.0).is_equal_approx(original_pose.basis.orthonormalized()),"Starting Thorium preserves original position and orientation")
+	var normal: Dictionary = authored.object_types.filter(func(type: Dictionary) -> bool: return type.id == "thorium")[0]
+	var inert_stats: Dictionary = authored.object_types.filter(func(type: Dictionary) -> bool: return type.id == "inert_thorium")[0]
+	check(is_equal_approx(inert_stats.radiation_strength,normal.radiation_strength * 0.1) and inert_stats.mass == normal.mass and inert_stats.health == normal.health and inert_stats.model == normal.model,"Inert Thorium retains current tuning with one-tenth radiation")
+	check(inert_stats.grapple_compatible and not inert_stats.magnet_compatible and inert_stats.delivery_quantity == 4 and inert_stats.delivery_commodity == "ore","Inert Thorium uses grapple and yields four Thorium")
 	check(Document.valid(data),"Thorium stats and manually placed group validate")
 	var bad := data.duplicate(true); bad.object_types[1].spawn_chance = 101
 	check(not Document.valid(bad),"Invalid spawn probability rejected")
@@ -78,10 +87,10 @@ func run() -> void:
 	pop.thorium_types = {"thorium":definition}; pop.random.seed = 42
 	await physics_frame; await physics_frame
 	pop._random_drop(definition)
-	check(pop.get_child_count() == 1,"Random drop finds unobstructed nearby water")
+	check(pop.get_child_count() == 1,"Random drop finds unobstructed water across the map")
 	if pop.get_child_count() > 0:
 		var point: Vector3 = pop.get_child(0).position
-		check(point.y > 0 and Vector2(point.x,point.z).length() <= 35 and not camera.is_position_in_frustum(point),"Random crystals start above water nearby and outside view")
+		check(point.y > 0 and point.x >= -50 and point.x <= 50 and point.z >= -50 and point.z <= 50 and not camera.is_position_in_frustum(point),"Random crystals start above water within map bounds and outside view")
 	pop._random_drop(definition); pop._random_drop(definition)
 	check(pop.get_child_count() == 2,"Population cap reserves space for three shards per crystal")
 	pilot.controls_enabled = false; pop.spawn_elapsed = 59; pop._physics_process(2)
@@ -104,6 +113,11 @@ func run() -> void:
 	sub.set_physics_process(false); sub.active = true; sub.controls_enabled = true; sub.freeze = true; sub.position = Vector3(0,0,1)
 	pop.player = sub; pop._update_radiation(1.0)
 	check(sub.health == 95 and sub.radiation_exposed,"Nearby Thorium causes configured shield damage per second")
+	sub.position = Vector3(0,0,0.5); pop._update_radiation(1.0)
+	check(is_equal_approx(sub.health,85),"Moving twice as close doubles Thorium radiation damage")
+	sub.position = Vector3(0,0,Definitions.THORIUM.radiation_range); pop._update_radiation(1.0)
+	check(is_equal_approx(sub.health,85) and not sub.radiation_exposed,"Radiation stops exactly at the configured range boundary")
+	sub.restore_health(100,95); sub.position = Vector3(0,0,1); pop._update_radiation(0)
 	var gauge := preload("res://hud_display.gd").new(); gauge.kind = "shield"; gauge.pilot = sub
 	gauge.radiation_icon = preload("res://clump_loader.gd")._load_texture(pop.asset_folder,"RADIO","RADIOM",{})
 	check(gauge.radiation_icon != null and gauge.radiation_icon.get_size() == Vector2(35,34),"HUD uses original masked radiation symbol")
@@ -120,6 +134,14 @@ func run() -> void:
 	check(dark.get_node_or_null("ThoriumGlow") == null,"Zero glow strength removes the light")
 	radioactive.stats.radiation_strength = 5.0; pop._shatter(radioactive); pop._update_radiation(1.0)
 	check(sub.health == 95 and not sub.radiation_exposed,"Shattered Thorium shards cause neither radiation damage nor warning")
+	var inert := pop._create_thorium(Definitions.inert_thorium(),0,Transform3D.IDENTITY); inert.freeze = true
+	pop._update_radiation(1.0)
+	check(is_equal_approx(sub.health,94.5) and sub.radiation_exposed,"Inert Thorium is still radioactive at one tenth strength")
+	var inert_saved := pop.snapshot(); pop.restore_snapshot(JSON.parse_string(JSON.stringify(inert_saved)))
+	inert = pop.get_children().filter(func(body: Node) -> bool: return body is Thorium and body.stats.id == "inert_thorium")[0]
+	check(inert.stats.radiation_strength == 0.5 and inert.shard == 0,"Inert identity and radiation survive save/load")
+	pop._shatter(inert)
+	check(pop.get_children().filter(func(body: Node) -> bool: return body is Thorium and body.stats.id == "inert_thorium" and body.shard > 0).size() == 3,"Inert crystal shatters into three collectible shards")
 	var exported := pop.snapshot()
 	check(Population.valid_snapshot(JSON.parse_string(JSON.stringify(exported))),"Radiation and glow settings survive saved object JSON")
 	gauge.free()

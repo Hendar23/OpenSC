@@ -4,6 +4,8 @@ const Document = preload("res://map_document.gd")
 const Assets = preload("res://clump_loader.gd")
 const Mine = preload("res://floating_mine.gd")
 const Thorium = preload("res://thorium_body.gd")
+const Clam = preload("res://clam.gd")
+const Pearl = preload("res://pearl_body.gd")
 const Salvage = preload("res://salvage_body.gd")
 const Explosion = preload("res://mine_explosion.gd")
 const DOCK_SPAWN_MARGIN := 5.0
@@ -11,7 +13,7 @@ var player: Node3D:
 	set(value):
 		player = value
 		for mine in get_children():
-			if mine is Mine: mine.player = value
+			if mine is Mine or mine is Clam: mine.player = value
 var simulating := true
 var placements: Array[Vector3] = []
 var asset_folder := ""
@@ -19,6 +21,8 @@ var explosion_frames: Array[Texture2D] = []
 var thorium_explosion_sound: AudioStream
 var thorium_types: Dictionary = {}
 var salvage_types: Dictionary = {}
+var clam_types: Dictionary = {}
+var pearl_types: Dictionary = {}
 var thorium_templates: Dictionary = {}
 var initial_thorium: Array = []
 var spawn_elapsed := 0.0
@@ -47,6 +51,9 @@ func setup(folder: String, document: Dictionary, enabled: bool = true) -> void:
 		if entry.get("behavior","mine") == "thorium":
 			thorium_types[entry.id] = entry.duplicate(true)
 			for fragment in range(4): _thorium_template(entry,fragment)
+		elif entry.get("behavior","mine") in ["clam","pearl"]:
+			(clam_types if entry.behavior == "clam" else pearl_types)[entry.id] = entry.duplicate(true)
+			_thorium_template(entry,0)
 		elif entry.get("behavior","mine") == "salvage":
 			salvage_types[entry.id] = entry.duplicate(true)
 			_thorium_template(entry,0)
@@ -71,8 +78,14 @@ func setup(folder: String, document: Dictionary, enabled: bool = true) -> void:
 				var vertical := random.randf_range(-1,1); var angle := random.randf() * TAU
 				var horizontal := sqrt(1.0 - vertical * vertical)
 				offset = Vector3(cos(angle) * horizontal,vertical,sin(angle) * horizontal) * pow(random.randf(),1.0 / 3.0) * float(group.radius)
-			if definition.get("behavior","mine") in ["thorium","salvage"]:
-				var body := _create_thorium(definition,0,Transform3D(Basis.IDENTITY,center + offset))
+			var pose := Transform3D(Basis.from_euler(Document.vector(group.get("rotation",[0,0,0])) * PI / 180.0),center + offset)
+			if definition.get("behavior","mine") == "clam":
+				var clam := _create_clam(definition,pose,float(group.get("initial_delay",0)))
+				if clam != null: clam.set_meta("object_group",group.id)
+				placements.append(center + offset)
+				continue
+			if definition.get("behavior","mine") in ["thorium","salvage","pearl"]:
+				var body := _create_thorium(definition,0,pose)
 				if body != null: body.set_meta("object_group",group.id)
 				placements.append(center + offset)
 				continue
@@ -154,10 +167,19 @@ func _thorium_template(definition: Dictionary, fragment: int) -> Node3D:
 func _create_thorium(definition: Dictionary, fragment: int, pose: Transform3D) -> RigidBody3D:
 	var template := _thorium_template(definition,fragment)
 	if template == null: return null
-	var body: RigidBody3D = Salvage.new() if definition.get("behavior","") == "salvage" else Thorium.new()
+	var body: RigidBody3D = Pearl.new() if definition.get("behavior","") == "pearl" else Salvage.new() if definition.get("behavior","") == "salvage" else Thorium.new()
 	body.setup(definition,template.duplicate(),fragment,surface_height,simulating)
 	add_child(body); body.transform = pose
 	if body is Thorium: body.shattered.connect(_shatter.call_deferred)
+	return body
+
+func _create_clam(definition: Dictionary, pose: Transform3D, delay: float) -> StaticBody3D:
+	var template := _thorium_template(definition,0)
+	if template == null: return null
+	var body := Clam.new(); body.name = "Clam"; add_child(body); body.transform = pose
+	body.population = self; body.player = player
+	body.setup(definition,template.duplicate(),simulating,delay)
+	if delay <= 0: body._grow_pearl()
 	return body
 
 func _shatter(body: RigidBody3D) -> void:
@@ -181,6 +203,11 @@ func _shatter(body: RigidBody3D) -> void:
 func snapshot() -> Array:
 	var result: Array = []
 	for body in get_children():
+		if body is Clam and not body.is_queued_for_deletion():
+			result.append({"stats":body.stats.duplicate(true),"pose":Document.encode(body.transform),"clam_state":body.state()})
+			if body.has_meta("object_group"): result.back()["object_group"] = body.get_meta("object_group")
+			continue
+		if body is Pearl and is_instance_valid(body.clam): continue
 		if (body is Thorium or body is Salvage) and not body.dead and not body.is_queued_for_deletion():
 			result.append({"stats":body.stats.duplicate(true),"shard":body.shard,"pose":Document.encode(body.transform),"velocity":Document.array(body.linear_velocity),"spin":Document.array(body.angular_velocity),"health":body.health})
 			if body.has_meta("delivery_city"): result.back()["delivery_city"] = body.get_meta("delivery_city")
@@ -195,18 +222,38 @@ static func valid_snapshot(value: Variant) -> bool:
 		if not entry is Dictionary or not entry.get("stats") is Dictionary: return false
 		if entry.has("delivery_city") and (not Definitions.numeric(entry.delivery_city,0,1000000000000) or float(entry.delivery_city) != floorf(float(entry.delivery_city))): return false
 		if not Definitions.valid({"object_types":[entry.stats],"object_groups":[]}): return false
-		if entry.stats.get("behavior","") not in ["thorium","salvage"] or not Definitions.numeric(entry.get("shard"),0,3): return false
-		if float(entry.shard) != floorf(float(entry.shard)) or (entry.stats.get("behavior") == "salvage" and entry.shard != 0): return false
+		if entry.stats.get("behavior","") == "clam":
+			if not Document.finite_array(entry.get("pose"),12) or not entry.get("clam_state") is Dictionary: return false
+			var state: Dictionary = entry.clam_state
+			if not Definitions.numeric(state.get("angle"),0,180) or not Definitions.numeric(state.get("remaining"),0,86400): return false
+			if not state.get("pearl_offset") is Array or (not state.pearl_offset.is_empty() and not Document.finite_array(state.pearl_offset,3)): return false
+			continue
+		if entry.stats.get("behavior","") not in ["thorium","salvage","pearl"] or not Definitions.numeric(entry.get("shard"),0,3): return false
+		if float(entry.shard) != floorf(float(entry.shard)) or (entry.stats.get("behavior") != "thorium" and entry.shard != 0): return false
 		if not Document.finite_array(entry.get("pose"),12) or not Document.finite_array(entry.get("velocity"),3) or not Document.finite_array(entry.get("spin"),3): return false
 		if not Definitions.numeric(entry.get("health"),0,100000): return false
 	return true
 
 func restore_snapshot(entries: Array) -> void:
 	if not valid_snapshot(entries): return
+	# Saves from before interactive clams were added have no clam records.
+	# Seed the new authored clams and loose pearls once on that migration.
+	var restored := entries.duplicate(true)
+	if initial_thorium.any(func(entry: Dictionary) -> bool: return entry.stats.get("behavior","") == "clam") and not entries.any(func(entry: Dictionary) -> bool: return entry.stats.get("behavior","") == "clam"):
+		for entry in initial_thorium:
+			if entry.stats.get("behavior","") in ["clam","pearl"]: restored.append(entry.duplicate(true))
+	for body in get_children():
+		if body is Clam: body.free()
 	for body in get_children():
 		if body is Thorium or body is Salvage: body.free()
-	for entry in entries:
-		var definition: Dictionary = salvage_types.get(str(entry.stats.id),thorium_types.get(str(entry.stats.id),entry.stats))
+	for entry in restored:
+		if entry.stats.get("behavior","") == "clam":
+			var clam := _create_clam(clam_types.get(str(entry.stats.id),entry.stats),Document.decode(entry.pose),1)
+			if clam != null:
+				if entry.has("object_group"): clam.set_meta("object_group",entry.object_group)
+				clam.restore_state(entry.clam_state)
+			continue
+		var definition: Dictionary = pearl_types.get(str(entry.stats.id),salvage_types.get(str(entry.stats.id),thorium_types.get(str(entry.stats.id),entry.stats)))
 		var body := _create_thorium(definition,int(entry.shard),Document.decode(entry.pose))
 		if body != null:
 			if entry.has("delivery_city"):
@@ -223,32 +270,56 @@ func _physics_process(delta: float) -> void:
 	for definition in thorium_types.values() + salvage_types.values():
 		if random.randf() * 100.0 < float(definition.get("spawn_chance",0.0)): _random_drop(definition)
 
+func populate_startup() -> void:
+	if not simulating: return
+	# Original world creation makes twelve attempts per salvage type. These are
+	# independent of the ongoing replenishment budget and per-minute chance.
+	for definition in thorium_types.values() + salvage_types.values():
+		for attempt in range(12):
+			var point := _random_spawn_point(definition,true)
+			if point.is_empty(): continue
+			_spawn_at(definition,point.position)
+
+func _spawn_at(definition: Dictionary, point: Vector3) -> void:
+	_create_thorium(definition,0,Transform3D(Basis.from_euler(Vector3(random.randf(),random.randf(),random.randf()) * TAU),point))
+
 func _random_drop(definition: Dictionary) -> void:
 	# Each type has its own population limit; crystals reserve their future shards.
 	var population := 0
 	var cost := 3 if definition.get("behavior","") == "thorium" else 1
 	for body in get_children():
-		if (body is Thorium or body is Salvage) and not body.dead and str(body.stats.id) == str(definition.id):
+		if (body is Thorium or body is Salvage) and not body.dead and not body.is_queued_for_deletion() and str(body.stats.id) == str(definition.id):
 			population += 3 if body is Thorium and body.shard == 0 else 1
 	if population + cost > int(definition.get("maximum_population",60)): return
 	if not is_instance_valid(view_camera): view_camera = get_viewport().get_camera_3d()
-	var space := get_world_3d().direct_space_state
 	for attempt in range(40):
-		var angle := random.randf() * TAU
-		var distance := random.randf_range(12.0,35.0)
-		var target := player.global_position + Vector3(cos(angle),0,sin(angle)) * distance
-		if target.x < world_bounds.position.x or target.x > world_bounds.end.x or target.z < world_bounds.position.z or target.z > world_bounds.end.z: continue
-		if not _clear_of_docks(target,float(definition.size) * 0.5): continue
-		var above := Vector3(target.x,surface_height + 5.0,target.z)
-		if is_instance_valid(view_camera) and (view_camera.is_position_in_frustum(target) or view_camera.is_position_in_frustum(above)): continue
-		# Clear water between the player and drop avoids walls and isolated pockets.
-		var approach := PhysicsRayQueryParameters3D.create(player.global_position,target,1)
-		if not space.intersect_ray(approach).is_empty(): continue
-		var floor_query := PhysicsRayQueryParameters3D.create(above,Vector3(target.x,world_bounds.position.y - 5.0,target.z),1)
-		var floor_hit := space.intersect_ray(floor_query)
-		if floor_hit.is_empty() or floor_hit.position.y >= target.y - float(definition.size): continue
-		_create_thorium(definition,0,Transform3D(Basis.from_euler(Vector3(random.randf(),random.randf(),random.randf()) * TAU),above))
+		var point := _random_spawn_point(definition,false)
+		if point.is_empty(): continue
+		if is_instance_valid(view_camera) and (view_camera.is_position_in_frustum(point.position) or view_camera.is_position_in_frustum(point.floor)): continue
+		_spawn_at(definition,point.position)
 		return
+
+func _random_spawn_point(definition: Dictionary, startup: bool) -> Dictionary:
+	if world_bounds.size.x <= 0 or world_bounds.size.z <= 0: return {}
+	var radius := float(definition.size) * 0.5
+	var above := Vector3(random.randf_range(world_bounds.position.x,world_bounds.end.x),surface_height + 5.0,random.randf_range(world_bounds.position.z,world_bounds.end.z))
+	if not _clear_of_docks(above,radius): return {}
+	var space := get_world_3d().direct_space_state
+	var floor_query := PhysicsRayQueryParameters3D.create(above,Vector3(above.x,world_bounds.position.y - 5.0,above.z),1)
+	var floor_hit := space.intersect_ray(floor_query)
+	if floor_hit.is_empty() or floor_hit.normal.y < 0.25 or floor_hit.position.y + radius >= surface_height: return {}
+	var point := above
+	if startup:
+		# Crystals rest on terrain. Other salvage starts on terrain one quarter
+		# of the time, otherwise 5–8.75 original units higher, capped at water.
+		var lift := 0.0
+		if definition.get("behavior","") == "salvage" and (random.randi() & 3) != 0:
+			lift = 5.0 + float(random.randi() & 15) * 0.25
+		point.y = minf(surface_height - radius,floor_hit.position.y + radius + 0.03 + lift)
+	var sphere := SphereShape3D.new(); sphere.radius = maxf(0.01,radius * 0.9)
+	var clearance := PhysicsShapeQueryParameters3D.new(); clearance.shape = sphere; clearance.transform.origin = point; clearance.collision_mask = 9
+	if not space.intersect_shape(clearance,1).is_empty(): return {}
+	return {"position":point,"floor":floor_hit.position}
 
 func _clear_of_docks(position: Vector3, item_radius: float) -> bool:
 	var horizontal := Vector2(position.x,position.z)
@@ -267,6 +338,7 @@ func _update_radiation(delta: float) -> void:
 		for body in get_children():
 			if not body is Thorium or body.shard != 0 or body.dead or body.is_queued_for_deletion(): continue
 			var radius := float(body.stats.get("radiation_range",Definitions.THORIUM.radiation_range))
-			if radius > 0 and body.global_position.distance_squared_to(player.global_position) < radius * radius:
-				strength += float(body.stats.get("radiation_strength",Definitions.THORIUM.radiation_strength))
+			var distance: float = body.global_position.distance_to(player.global_position)
+			if radius > 0 and distance < radius:
+				strength += preload("res://original_damage.gd").radiation(float(body.stats.get("radiation_strength",Definitions.THORIUM.radiation_strength)),distance)
 	player.receive_radiation(strength,delta)

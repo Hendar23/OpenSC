@@ -15,7 +15,7 @@ var config := {}
 var capture_action := ""
 var capture_slot := 0
 var pending: InputEvent
-var settings_path := Bindings.CONFIG_PATH
+var settings_path := ""
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS; layer = 12

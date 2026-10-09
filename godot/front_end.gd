@@ -4,6 +4,7 @@ const Bindings = preload("res://input_bindings.gd")
 const BMP = preload("res://legacy_bmp.gd")
 const Mods = preload("res://mod_registry.gd")
 const TITLE_PATH := "res://game_assets/ui/title.png"
+const TITLE_TEXTURE: Texture2D = preload(TITLE_PATH)
 const WEBSITE_URL := "https://github.com/Hendar23/OpenSC"
 const LegacyAudio = preload("res://legacy_audio.gd")
 const SoundTuning = preload("res://sound_tuning.gd")
@@ -48,7 +49,7 @@ func _ready() -> void:
 	menu_layout = _screen(menu_layer)
 	menu_layout.get_parent().color = Color(0.0,0.01,0.025,0.25)
 	loading_picture = _picture(loading_layout)
-	loading_picture.texture = ImageTexture.create_from_image(Image.load_from_file(TITLE_PATH))
+	loading_picture.texture = TITLE_TEXTURE
 	menu_picture = _picture(menu_layout)
 	progress_bar = ProgressBar.new()
 	progress_bar.position = Vector2(140,14); progress_bar.size = Vector2(360,20)
@@ -176,7 +177,7 @@ func _layout() -> void:
 
 func load_art(folder: String) -> void:
 	loading_picture.texture = _texture(folder,"INTROTEX/LOADING.BMP","texture.menu_loading")
-	menu_picture.texture = _texture(folder,"","texture.menu_title",ImageTexture.create_from_image(Image.load_from_file(TITLE_PATH)))
+	menu_picture.texture = _texture(folder,"","texture.menu_title",TITLE_TEXTURE)
 	_update_title_mask()
 	_load_menu_audio(folder)
 

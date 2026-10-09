@@ -12,14 +12,12 @@ const DEFAULTS := {
 var settings: Dictionary = DEFAULTS.duplicate()
 var defaults: Dictionary = DEFAULTS.duplicate()
 var persistence_path := "user://submarine_sound.cfg"
-var defaults_hash := ""
 
 func load_settings(remember: bool = true, path: String = "", source: String = "res://submarine_audio.cfg") -> void:
 	if source == "res://submarine_audio.cfg" and path.is_empty(): source = preload("res://current_settings.gd").path("submarine_audio.cfg")
 	defaults = DEFAULTS.duplicate()
 	var config := ConfigFile.new()
 	if config.load(source) == OK: _apply(config, defaults)
-	defaults_hash = JSON.stringify(defaults).sha256_text()
 	persistence_path = path
 	if path.is_empty():
 		persistence_path = source
@@ -44,6 +42,5 @@ static func _apply(config: ConfigFile, values: Dictionary) -> void:
 func save_settings(path: String = "") -> Error:
 	var config := ConfigFile.new()
 	for key in settings: config.set_value("sound", key, settings[key])
-	config.set_value("defaults", "source_hash", defaults_hash)
 	config.set_value("settings", "unified", true)
 	return config.save(persistence_path if path.is_empty() else path)

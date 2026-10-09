@@ -29,8 +29,10 @@ func run() -> void:
 	game.pilot.controls_enabled = true
 	game.pilot.take_damage(-10); game.pilot.take_damage(NAN)
 	check(game.pilot.health == 70,"Negative and invalid damage cannot heal or corrupt shields")
-	game.pilot.restore_health(200,100)
-	check(game._dock_ui_model().status.shields == 50 and game._dock_ui_model().status.hull_strength == 200,"Hull capacity and remaining shield percentage stay separate")
+	game.player_progress.status.hull_strength = 180; game.pilot.hull_rating = 180
+	game.pilot.restore_health(100,50)
+	check(game._dock_ui_model().status.shields == 50 and game._dock_ui_model().status.hull_strength == 180,"Shield charge updates leave the applied hull upgrade unchanged")
+	game.player_progress.status.hull_strength = 100; game.pilot.hull_rating = 100
 	game.pilot.restore_health()
 	game._set_camera_mode(true)
 	game.pilot.take_damage(1000)

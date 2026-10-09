@@ -163,6 +163,7 @@ func _spawn_fish_group(candidate: Dictionary, group: int) -> void:
 		fish.setup(visual,point,game.world_root.get_meta("bounds"),game.pilot.surface_height,radius,random.randi())
 		# Terrain still blocks these fish, but weapons and player queries cannot see them.
 		fish.collision_layer = 0
+		fish.collision_mask = 5
 		fish.home = point if species.get("mobility","") == "crawling" else home
 		fish.roam_radius = float(species.get("roam_radius",10.0))
 		fish.swim_speed = float(species.get("speed",1.3)) * random.randf_range(0.9,1.1)
@@ -171,7 +172,7 @@ func _spawn_fish_group(candidate: Dictionary, group: int) -> void:
 		fish.pitch_limit = float(species.get("pitch_limit",25))
 		fish.group_behaviour = str(species.get("group_behaviour","schooling"))
 		fish.response = str(species.get("response","ignore"))
-		fish.detection_distance = float(species.get("detection",8.0))
+		fish.configure_ranges(species)
 		fish.startle_duration = float(species.get("startle_duration",0.3))
 		fish.startle_speed_multiplier = float(species.get("startle_speed_multiplier",2.8))
 		fish.startle_turn_speed = float(species.get("startle_turn_speed",720.0))

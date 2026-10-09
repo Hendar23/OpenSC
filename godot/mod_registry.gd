@@ -1,10 +1,10 @@
 extends RefCounted
 
 const DEFAULT_ROOT := "res://../Mods"
-const MOVEMENT_KEYS := ["main_forward", "main_reverse", "side_thrust", "forward_speed", "reverse_speed", "vertical_speed", "forward_drag", "lateral_drag", "vertical_drag", "turn_acceleration", "turn_speed", "turn_drag", "tilt_speed", "camera_distance", "mass", "water_resistance", "pitch_acceleration", "pitch_speed", "upright_strength", "upright_damping", "propeller_spin_down", "bubble_rate"]
+const MOVEMENT_KEYS := ["main_forward", "main_reverse", "side_thrust", "forward_speed", "reverse_speed", "vertical_speed", "forward_drag", "lateral_drag", "vertical_drag", "turn_acceleration", "turn_speed", "turn_drag", "tilt_speed", "camera_distance", "mass", "water_resistance", "pitch_acceleration", "pitch_speed", "upright_strength", "upright_damping", "propeller_spin_down", "bubble_rate", "impact_damage_threshold", "impact_damage_scale"]
 static var initialized := false
 static var root := ""
-static var preference_path := "user://mods.cfg"
+static var preference_path := ""
 static var packs: Array[Dictionary] = []
 static var enabled: Array[String] = []
 static var order: Array[String] = []
@@ -16,14 +16,14 @@ static var runtime_warnings: Array[String] = []
 static func ensure(read_preferences: bool = true) -> void:
 	if not initialized: initialize(read_preferences)
 
-static func initialize(read_preferences: bool = true, folder: String = DEFAULT_ROOT, preferences: String = "user://mods.cfg") -> void:
+static func initialize(read_preferences: bool = true, folder: String = DEFAULT_ROOT, preferences: String = "") -> void:
 	root = ProjectSettings.globalize_path(folder).replace("\\", "/").simplify_path().trim_suffix("/")
-	preference_path = preferences
+	preference_path = preload("res://player_storage.gd").preferences_path() if preferences.is_empty() else preferences
 	enabled.clear()
 	order.clear()
 	if read_preferences:
 		var config := ConfigFile.new()
-		if config.load(preferences) == OK:
+		if config.load(preference_path) == OK:
 			for id in config.get_value("mods", "enabled", []): enabled.append(str(id))
 			for id in config.get_value("mods", "order", []): order.append(str(id))
 	initialized = true
@@ -31,6 +31,7 @@ static func initialize(read_preferences: bool = true, folder: String = DEFAULT_R
 
 static func refresh() -> void:
 	packs.clear()
+	if not DirAccess.dir_exists_absolute(root): _rebuild(); return
 	var ids := {}
 	for folder in DirAccess.get_directories_at(root):
 		if folder.begins_with("."): continue
@@ -170,7 +171,9 @@ static func note(message: String) -> void:
 
 static func apply(ids: Array[String], priorities: Array[String], persist: bool = true) -> Error:
 	if persist:
-		var config := ConfigFile.new()
+		var directory_result := preload("res://player_storage.gd").ensure_parent(preference_path)
+		if directory_result != OK: return directory_result
+		var config := ConfigFile.new(); config.load(preference_path)
 		config.set_value("mods", "enabled", ids)
 		config.set_value("mods", "order", priorities)
 		var result := config.save(preference_path)

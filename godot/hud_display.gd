@@ -107,7 +107,7 @@ func _draw() -> void:
 		var item: Dictionary = equipment.current()
 		if not item.is_empty():
 			var icon_index := 0 if item.enabled else 1
-			if item.id == "magnet": icon_index = 2 if is_instance_valid(equipment.magnet.target) else (1 if item.enabled else 0)
+			if item.id in ["magnet","grapple"]: icon_index = 2 if is_instance_valid(equipment.towing_tool().target) else (1 if item.enabled else 0)
 			var icon: Texture2D = item.icons[icon_index]
 			if icon != null: draw_texture_rect(icon, rect, false)
 			if item.id == "suckomat" and equipment.counter_digits.size() == 10:

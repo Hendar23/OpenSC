@@ -4,9 +4,9 @@ signal action_requested(action: String, payload: Dictionary)
 const Mods = preload("res://mod_registry.gd")
 const BMP = preload("res://legacy_bmp.gd")
 const DEFAULT_PAGES := {
-	"home":{"buttons":[{"action":"missions","rect":[18,298,155,42]},{"action":"equipment","rect":[48,421,140,45]},{"action":"save","rect":[474,298,151,42]},{"action":"launch","rect":[466,421,142,45]}],"title":[218,10,202,40],"welcome":[95,94,450,130],"status":[222,304,198,155]},
-	"equipment":{"buttons":[{"action":"home","rect":[14,417,163,49]},{"action":"goods","rect":[465,417,163,49]}],"title":[218,10,202,38],"sale":[22,54,145,267],"hold":[478,54,143,267],"buy":[99,365,65,30],"sale_info":[22,365,68,30],"hold_info":[478,365,66,30],"sell":[554,365,66,30],"cost":[24,339,145,22],"sell_price":[478,339,143,22],"preview":[210,58,230,126],"status":[235,332,172,130],"message":[210,203,230,67]},
-	"goods":{"buttons":[{"action":"equipment","rect":[15,418,190,48]}]},
+	"home":{"buttons":[{"action":"missions","rect":[18,298,163,120]},{"action":"equipment","rect":[30,350,151,116]},{"action":"save","rect":[472,298,153,120]},{"action":"launch","rect":[458,350,150,116]}],"title":[218,10,202,40],"welcome":[95,94,450,130],"status":[222,304,198,155]},
+	"equipment":{"buttons":[{"action":"home","rect":[14,417,163,49]},{"action":"goods","rect":[465,417,163,49]}],"title":[218,10,202,38],"sale":[22,54,145,267],"hold":[478,54,143,267],"buy":[100,361,66,26],"sale_info":[27,361,66,26],"hold_info":[477,361,66,26],"sell":[550,361,66,26],"cost":[24,339,145,22],"sell_price":[478,339,143,22],"preview":[210,58,230,126],"status":[235,332,172,130],"message":[210,203,230,67]},
+	"goods":{"buttons":[{"action":"equipment","rect":[15,418,160,48]}],"list":[22,49,198,304],"buy":[248,364,65,27],"sell":[356,364,65,27],"info":[86,364,65,27]},
 	"missions":{"buttons":[{"action":"home","rect":[18,422,230,40]}]},
 	"save":{"buttons":[{"action":"home","rect":[23,419,190,42]}],"slots":[204,56,268,44]},
 	"load":{"buttons":[{"action":"close","rect":[23,419,190,42]}],"slots":[204,56,268,44]}
@@ -29,7 +29,9 @@ var status := ""
 var loaded_city := ""
 var preview: SubViewport
 var selected_hold := ""
+var selected_hold_copy := 0
 var selected_sale := ""
+var selected_commodity := ""
 var sale_list: ItemList
 var hold_list: ItemList
 var shop_offer_id := "shield"
@@ -38,6 +40,17 @@ var selection_dot: Texture2D
 var empty_dot: Texture2D
 var mount_dot: Control
 var info_dialog: AcceptDialog
+const DockButton = preload("res://dock_button.gd")
+const MENU_SOUNDS := {"over":"OVERBUTT","off":"OFFBUTT","activate":"ACTIVATE","equipment_trade":"SUBCYCLE","commodity_trade":"SELECT","install":"LOAD","repair":"SHIELD","error":"ERROR"}
+signal menu_sound_played(role: String)
+var sound_players := {}
+var audio_tuning := preload("res://sound_tuning.gd").new()
+var active_button: Button
+var controller_button: Button
+var rebuilding := false
+var dock_race := 1
+var art_cache := {}
+
 class DialogInput extends Node:
 	var handler: Callable
 	func _input(event: InputEvent) -> void: handler.call(event)
@@ -60,6 +73,8 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_resize); _resize(); hide()
 func setup(original_folder: String, state: Callable) -> void:
 	folder = original_folder; model = state
+	art_cache.clear()
+	_load_menu_audio()
 	pages = DEFAULT_PAGES.duplicate(true)
 	custom_colour = null
 	for id in ["ui.dock","ui.saves"]:
@@ -91,25 +106,124 @@ func label(text: String, area: Rect2, font_size: int = 13, centre: bool = false)
 	if centre: node.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	layout.add_child(node); node.position = area.position; node.size = area.size; node.clip_text = true; return node
 func button(action: String, area: Rect2, text: String = "", payload: Dictionary = {}) -> Button:
-	var node := Button.new(); node.position = area.position; node.size = area.size; node.text = text
+	var node := DockButton.new(); node.position = area.position; node.size = area.size; node.text = text
 	node.name = action + "_" + str(payload.slot) if action == "choose_slot" else action
 	node.add_theme_font_size_override("font_size",12); node.add_theme_color_override("font_color",text_colour)
 	node.add_theme_stylebox_override("normal",StyleBoxEmpty.new())
 	var focus := StyleBoxFlat.new(); focus.bg_color = Color(1,1,1,0.1); focus.border_color = text_colour; focus.set_border_width_all(1)
 	for state in ["hover","focus","pressed"]: node.add_theme_stylebox_override(state,focus)
+	_skin_button(node,action,payload)
+	node.mouse_entered.connect(func() -> void: _enter_button(node))
+	node.focus_entered.connect(func() -> void: _enter_button(node))
+	node.mouse_exited.connect(func() -> void: _leave_button(node))
+	node.focus_exited.connect(func() -> void: _leave_button(node))
+	node.button_down.connect(func() -> void:
+		node.held = true; node.set_meta("sounded_down",true); node.queue_redraw(); _play_menu_sound("activate"))
+	node.button_up.connect(func() -> void: node.held = false; node.queue_redraw())
 	layout.add_child(node); button_nodes.append(node)
 	node.pressed.connect(func() -> void:
+		if not node.get_meta("sounded_down",false): _play_menu_sound("activate")
+		node.set_meta("sounded_down",false)
 		if action in pages: open(action)
 		elif action == "choose_slot": _choose_slot(int(payload.slot))
 		elif action == "repair_info": shop_offer_id = selected_hold if payload.get("side","") == "hold" else selected_sale; _repair_info()
 		elif action in ["buy_equipment","sell_equipment"]: action_requested.emit(action,{"item":selected_sale if action == "buy_equipment" else selected_hold})
+		elif action in ["buy_commodity","sell_commodity"]: action_requested.emit(action,{"item":selected_commodity})
+		elif action == "commodity_info": _commodity_info()
 		elif action == "equipment_slot": action_requested.emit(action,{"slot":payload.slot,"item":selected_hold})
+		elif action == "use_repair": action_requested.emit(action,{"item":selected_hold})
 		else: action_requested.emit(action,payload))
 	return node
+func _button_texture(relative: String) -> Texture2D:
+	if not art_cache.has(relative): art_cache[relative] = texture("texture.ui_dock_button_" + relative.get_file().get_basename().to_lower(),"INTROTEX/" + relative + ".BMP")
+	return art_cache[relative]
+
+func _piece(node: Button, target: Array, relative: String, position: Vector2) -> void:
+	var image := _button_texture(relative)
+	if image != null: target.append({"texture":image,"rect":Rect2(position - node.position,image.get_size())})
+
+func _skin_button(node: DockButton, action: String, payload: Dictionary) -> void:
+	var procha := dock_race == 2
+	var prefix := "P" if procha else "B"
+	var trade := "TP" if procha else "TB"
+	if page == "home" and action in ["missions","equipment","save","launch"]:
+		var entries := {
+			"missions":["MISS",Vector2(27,307),Vector2(23,345),[Vector2(18,298),Vector2(181,298),Vector2(18,418)]],
+			"equipment":["TRAD",Vector2(70,435),Vector2(111,360),[Vector2(181,350),Vector2(181,466),Vector2(30,466)]],
+			"save":["SAVE",Vector2(490,307),Vector2(542,344),[Vector2(472,298),Vector2(625,298),Vector2(625,418)]],
+			"launch":["LAUN",Vector2(464,435),Vector2(460,360),[Vector2(458,350),Vector2(608,466),Vector2(458,466)]]}
+		var entry: Array = entries[action]
+		_piece(node,node.highlight_art,"ENGLISH/" + prefix + "D" + entry[0] + "T",entry[1])
+		_piece(node,node.held_art,prefix + "D" + entry[0] + "B",entry[2])
+		for point in entry[3]: node.hit_polygon.append(point - node.position)
+	elif action in ["buy_equipment","sell_equipment","repair_info","buy_commodity","sell_commodity","commodity_info"]:
+		var letter := "B" if action.begins_with("buy") else "S" if action.begins_with("sell") else "I"
+		_piece(node,node.highlight_art,"ENGLISH/" + trade + "-" + letter + "1",node.position)
+		_piece(node,node.held_art,"ENGLISH/" + trade + "-" + letter + "2",node.position)
+	elif page == "equipment" and action in ["home","goods"]:
+		if action == "home":
+			_piece(node,node.highlight_art,"ENGLISH/" + trade + "-DN1",Vector2(82,434))
+			_piece(node,node.held_art,trade + "-BUT1",Vector2(22,418))
+		else:
+			_piece(node,node.highlight_art,"ENGLISH/" + prefix + "GOOD",Vector2(473,435))
+			_piece(node,node.held_art,prefix + "GBUT",Vector2(563,416))
+	elif page == "missions" and action == "home":
+		_piece(node,node.highlight_art,"ENGLISH/M" + prefix + "-BDL",Vector2(93,437))
+		_piece(node,node.held_art,"M" + prefix + "-B1",Vector2(27,421))
+	elif action in ["home","equipment"] and page in ["goods","save","load"]:
+		_piece(node,node.highlight_art,"ENGLISH/" + prefix + "DONG",Vector2(82,434))
+		_piece(node,node.held_art,trade + "-BUT1",Vector2(22,418))
+	# Keep original overlays attached when a mod moves a navigation button.
+	for entry in DEFAULT_PAGES.get(page,{}).get("buttons",[]):
+		if entry.action != action: continue
+		var offset := node.position - rect(entry.rect).position
+		for piece in node.highlight_art + node.held_art: piece.rect.position += offset
+		for index in range(node.hit_polygon.size()): node.hit_polygon[index] += offset
+		break
+	if not node.highlight_art.is_empty():
+		for state in ["hover","focus","pressed"]: node.add_theme_stylebox_override(state,StyleBoxEmpty.new())
+
+func _load_menu_audio() -> void:
+	audio_tuning.load_settings()
+	for role in MENU_SOUNDS:
+		var player: AudioStreamPlayer = sound_players.get(role)
+		if player == null:
+			player = AudioStreamPlayer.new(); add_child(player); sound_players[role] = player
+		var path := folder.path_join("WAVES/" + str(MENU_SOUNDS[role]) + ".RAW")
+		for replacement in Mods.candidates("audio.menu." + role):
+			if preload("res://legacy_audio.gd").load_file(replacement.path) != null: path = replacement.path; break
+		player.stream = preload("res://legacy_audio.gd").load_file(path)
+
+func _play_menu_sound(role: String) -> void:
+	if rebuilding or not visible: return
+	var player: AudioStreamPlayer = sound_players.get(role)
+	if player == null or not player.is_inside_tree() or player.stream == null: return
+	var gain := float(audio_tuning.settings.master_volume)
+	player.volume_db = -80.0 if gain <= -60 else gain
+	player.play(); menu_sound_played.emit(role)
+
+func transaction_feedback(message: String, success_sound: String, changed: bool = true) -> void:
+	# Empty reports mean success, but some inventory actions intentionally do
+	# nothing. Those must not sound like a completed repair or installation.
+	if not message.is_empty(): _play_menu_sound("error")
+	elif changed: _play_menu_sound(success_sound)
+	report(message)
+
+func _enter_button(node: Button) -> void:
+	if node.disabled or active_button == node: return
+	if is_instance_valid(active_button):
+		active_button.highlighted = false; active_button.queue_redraw(); _play_menu_sound("off")
+	active_button = node; node.highlighted = true; node.queue_redraw(); _play_menu_sound("over")
+
+func _leave_button(node: Button) -> void:
+	if active_button != node: return
+	active_button = null; node.highlighted = false; node.queue_redraw(); _play_menu_sound("off")
+
 func open(next_page: String = "home") -> void:
 	page = next_page if pages.has(next_page) else "home"
 	status = ""; show(); rebuild(true); Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 func rebuild(new_page: bool = false) -> void:
+	rebuilding = true; active_button = null
 	var focused := get_viewport().gui_get_focus_owner()
 	var focus_name := str(focused.name) if not new_page and focused != null and layout.is_ancestor_of(focused) else ""
 	# A button may still be emitting pressed while its page changes.
@@ -117,7 +231,7 @@ func rebuild(new_page: bool = false) -> void:
 	button_nodes.clear()
 	var data: Dictionary = model.call() if model.is_valid() else {}
 	loaded_city = str(data.get("city","Dock"))
-	var race := int(data.get("race",1)); var prefix := "P" if race == 2 else "R" if race == 4 else "B"
+	var race := int(data.get("race",1)); dock_race = race; var prefix := "P" if race == 2 else "R" if race == 4 else "B"
 	text_colour = Color(0.2,0.95,1) if race == 2 else Color(1,0.8,0.15)
 	if custom_colour is Color: text_colour = custom_colour
 	var artwork := "TRAD1" if race != 2 else "TECH1"
@@ -148,12 +262,7 @@ func rebuild(new_page: bool = false) -> void:
 		"equipment":
 			_equipment_shop(data)
 
-		"goods":
-			label("\n".join(PackedStringArray(data.get("commodities",[]).slice(0,16))),Rect2(25,58,190,310),12)
-			label("Trade preview\n\nBuying and selling\nnot available yet",Rect2(251,98,188,195),13,true)
-			var cargo_lines := PackedStringArray()
-			for id in data.get("cargo",{}): cargo_lines.append("%s x%d" % ["Thorium" if id == "ore" else str(id).capitalize(),data.cargo[id]])
-			label("Cargo hold\n\n" + ("Empty" if cargo_lines.is_empty() else "\n".join(cargo_lines)),Rect2(509,56,104,322),13)
+		"goods": _commodity_shop(data)
 		"missions":
 			label("Available missions\n\nNo missions available yet.",Rect2(24,24,325,160),16)
 			label("Current mission\n\nNone",Rect2(392,24,224,160),16)
@@ -163,6 +272,7 @@ func rebuild(new_page: bool = false) -> void:
 			var slots: Array = data.get("slots",[])
 			for slot in slots:
 				var text := "%d  %s" % [int(slot.slot) + 1,slot.name]
+				if slot.valid and not str(slot.saved_at).is_empty(): text += " — " + str(slot.saved_at).replace("T"," ")
 				if slot.exists and not slot.valid: text = "%d  Unreadable save" % [int(slot.slot) + 1]
 				var node := button("choose_slot",Rect2(area.position + Vector2(0,int(slot.slot) * area.size.y),Vector2(area.size.x,25)),text,{"slot":slot.slot})
 				node.tooltip_text = "%s — %s" % [slot.city,slot.saved_at]
@@ -174,8 +284,9 @@ func rebuild(new_page: bool = false) -> void:
 	if restored != null: restored.grab_focus()
 	elif page in ["save","load"]:
 		(slot_controls[0] if not slot_controls.is_empty() else button_nodes[0]).grab_focus()
-	elif page == "equipment" and sale_list != null: sale_list.grab_focus()
+	elif page in ["equipment","goods"] and sale_list != null: sale_list.grab_focus()
 	elif not button_nodes.is_empty(): button_nodes[0].grab_focus()
+	rebuilding = false
 
 func _welcome(text: String, area: Rect2) -> void:
 	var scroll := ScrollContainer.new(); scroll.name = "CityWelcome"
@@ -204,10 +315,15 @@ func _equipment_shop(data: Dictionary) -> void:
 	for id in data.get("hold",{}):
 		var count := int(data.hold[id])
 		if count <= 0: continue
-		hold_list.add_item(str(offers.get(id,{}).get("name",id)) + (" ×%d" % count if count > 1 else ""))
-		hold_list.set_item_metadata(hold_list.item_count - 1,id)
-		if id == selected_hold: hold_list.select(hold_list.item_count - 1)
-	hold_list.item_selected.connect(func(index: int) -> void: selected_hold = str(hold_list.get_item_metadata(index)); _update_shop_selection(data))
+		for copy in range(count if id == "shield" else 1):
+			hold_list.add_item(str(offers.get(id,{}).get("name",id)) + (" ×%d" % count if count > 1 and id != "shield" else ""))
+			hold_list.set_item_metadata(hold_list.item_count - 1,id)
+			if id == selected_hold and copy == mini(selected_hold_copy,count - 1): hold_list.select(hold_list.item_count - 1)
+	hold_list.item_selected.connect(func(index: int) -> void:
+		selected_hold = str(hold_list.get_item_metadata(index)); selected_hold_copy = 0
+		for previous in range(index):
+			if hold_list.get_item_metadata(previous) == selected_hold: selected_hold_copy += 1
+		_update_shop_selection(data))
 	var price := label("",rect(settings.sell_price),12,true); price.name = "ResalePrice"
 	var info := button("repair_info",rect(settings.hold_info),"",{"side":"hold"}); info.name = "HoldInfo"
 	var sell := button("sell_equipment",rect(settings.sell)); sell.name = "SellShieldRepair"
@@ -252,6 +368,68 @@ func _equipment_shop(data: Dictionary) -> void:
 	sale_list.focus_neighbor_right = sale_list.get_path_to(slot_buttons[0]); hold_list.focus_neighbor_left = hold_list.get_path_to(slot_buttons[4])
 	_update_shop_selection(data)
 
+func _commodity_shop(data: Dictionary) -> void:
+	var offers: Dictionary = data.get("commodity_offers",{})
+	var settings: Dictionary = pages.goods
+	sale_list = _item_list("Commodities",rect(settings.list))
+	sale_list.add_theme_constant_override("v_separation",0)
+	sale_list.fixed_icon_size = Vector2i(1,16)
+	var spacer_image := Image.create(1,16,false,Image.FORMAT_RGBA8)
+	spacer_image.fill(Color.TRANSPARENT)
+	var spacer := ImageTexture.create_from_image(spacer_image)
+	var index := 0
+	for id in offers:
+		var offer: Dictionary = offers[id]
+		sale_list.add_item(str(offer.name),spacer); sale_list.set_item_metadata(index,id)
+		if id == selected_commodity: sale_list.select(index)
+		for column in range(3):
+			var value := str(offer.buy_price) if column == 0 else str(offer.sell_price) if column == 1 else str(data.get("cargo",{}).get(id,0))
+			if column < 2 and value == "0": value = "—"
+			var amount := label(value,Rect2([242,350,495][column],49 + index * 16,82,16),11,true)
+			amount.name = "Quote_%s_%d" % [id,column]
+			amount.tooltip_text = "City stock: %d" % int(offer.stock)
+		index += 1
+	sale_list.item_selected.connect(func(row: int) -> void: selected_commodity = str(sale_list.get_item_metadata(row)); _update_commodity_selection(model.call()))
+	if sale_list.item_count > 0 and sale_list.get_selected_items().is_empty():
+		sale_list.select(0); selected_commodity = str(sale_list.get_item_metadata(0))
+	var buy := button("buy_commodity",rect(settings.buy)); buy.name = "BuyCommodity"
+	var sell := button("sell_commodity",rect(settings.sell)); sell.name = "SellCommodity"
+	var info := button("commodity_info",rect(settings.info)); info.name = "CommodityInfo"
+	var credits := label("Credits: %d" % int(data.get("status",{}).get("credits",0)),Rect2(495,428,100,32),11,true)
+	credits.name = "CommodityCredits"
+	credits.autowrap_mode = TextServer.AUTOWRAP_OFF
+	credits.size = Vector2(100,32)
+	credits.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label(status if not offers.is_empty() else "No commodity market at this station.",Rect2(180,420,280,44),11,true)
+	sale_list.focus_neighbor_bottom = sale_list.get_path_to(info)
+	sale_list.focus_neighbor_right = sale_list.get_path_to(buy)
+	var controls: Array[Control] = [button_nodes[0],info,buy,sell]
+	for i in range(controls.size()):
+		var control := controls[i]
+		control.focus_neighbor_top = control.get_path_to(sale_list)
+		control.focus_neighbor_left = control.get_path_to(controls[(i - 1 + controls.size()) % controls.size()])
+		control.focus_neighbor_right = control.get_path_to(controls[(i + 1) % controls.size()])
+	_update_commodity_selection(data)
+
+func refresh_market() -> void:
+	if page != "goods" or not visible: return
+	var data: Dictionary = model.call()
+	for id in data.get("commodity_offers",{}):
+		var offer: Dictionary = data.commodity_offers[id]
+		for column in range(3):
+			var amount := layout.get_node_or_null("Quote_%s_%d" % [id,column]) as Label
+			if amount == null: continue
+			var value := int(offer.buy_price) if column == 0 else int(offer.sell_price) if column == 1 else int(data.get("cargo",{}).get(id,0))
+			amount.text = "—" if column < 2 and value == 0 else str(value)
+			amount.tooltip_text = "City stock: %d" % int(offer.stock)
+	_update_commodity_selection(data)
+
+func _update_commodity_selection(data: Dictionary) -> void:
+	var offer: Dictionary = data.get("commodity_offers",{}).get(selected_commodity,{})
+	(layout.get_node("BuyCommodity") as Button).disabled = int(offer.get("buy_price",0)) <= 0 or int(offer.get("stock",0)) <= 0 or int(data.get("status",{}).get("credits",0)) < int(offer.get("buy_price",0))
+	(layout.get_node("SellCommodity") as Button).disabled = int(offer.get("sell_price",0)) <= 0 or int(data.get("cargo",{}).get(selected_commodity,0)) <= 0
+	(layout.get_node("CommodityInfo") as Button).disabled = offer.is_empty()
+
 func _mount_highlight(slot: int) -> void:
 	if mount_dot == null: return
 	mount_dot.visible = slot in [3,5,9]
@@ -276,10 +454,11 @@ func _update_shop_selection(data: Dictionary) -> void:
 	var held: Dictionary = offers.get(selected_hold,{})
 	var count := int(data.get("hold",{}).get(selected_sale,0)) + int(selected_sale in data.get("installed",{}).values())
 	layout.get_node("BuyShieldRepair").disabled = sale.is_empty() or not sale.get("available",false) or int(data.status.credits) < int(sale.get("price",0)) or (selected_sale != "shield" and count >= int(sale.get("maximum",1)))
+	if not preload("res://equipment_shop.gd").upgrade_available(data,selected_sale): layout.get_node("BuyShieldRepair").disabled = true
 	layout.get_node("SaleInfo").disabled = sale.is_empty()
 	layout.get_node("HoldInfo").disabled = held.is_empty()
 	layout.get_node("SellShieldRepair").disabled = held.is_empty() or int(held.get("sell_price",0)) <= 0
-	layout.get_node("UseShieldRepair").disabled = selected_hold != "shield"
+	layout.get_node("UseShieldRepair").disabled = selected_hold not in ["shield","hullstr","radoff"] or not preload("res://equipment_shop.gd").upgrade_available(data,selected_hold)
 	layout.get_node("PurchasePrice").text = "Cost %d" % int(sale.price) if not sale.is_empty() else ""
 	layout.get_node("ResalePrice").text = "SellPrice %d" % int(held.sell_price) if not held.is_empty() else ""
 	if selection_dot == null:
@@ -294,9 +473,9 @@ func _update_shop_selection(data: Dictionary) -> void:
 			var id := str(list.get_item_metadata(index))
 			var offer: Dictionary = offers.get(id,{})
 			var number := int(data.get("hold",{}).get(id,0))
-			var chosen := selected_sale == id if list == sale_list else selected_hold == id
+			var chosen: bool = selected_sale == id if list == sale_list else list.get_selected_items().has(index)
 			list.set_item_icon(index,selection_dot if chosen else empty_dot)
-			list.set_item_text(index,str(offer.get("name",id)) + (" ×%d" % number if list == hold_list and number > 1 else ""))
+			list.set_item_text(index,str(offer.get("name",id)) + (" ×%d" % number if list == hold_list and number > 1 and id != "shield" else ""))
 	var slot: int = held.get("slot",0)
 	for node in slot_buttons:
 		var normal: StyleBoxFlat = node.get_theme_stylebox("normal")
@@ -306,12 +485,20 @@ func _update_shop_selection(data: Dictionary) -> void:
 func _repair_info() -> void:
 	var data: Dictionary = model.call() if model.is_valid() else {}
 	var offer: Dictionary = data.get("offers",{}).get(shop_offer_id,data.get("repair_offer",{}))
+	_show_item_info(offer,shop_offer_id)
+
+func _commodity_info() -> void:
+	var data: Dictionary = model.call() if model.is_valid() else {}
+	var offer: Dictionary = data.get("commodity_offers",{}).get(selected_commodity,{})
+	if not offer.is_empty(): _show_item_info(offer,selected_commodity)
+
+func _show_item_info(offer: Dictionary, item_id: String) -> void:
 	info_dialog.title = str(offer.get("name","Shield Repair"))
 	info_dialog.dialog_text = ""
 	for child in info_dialog.get_children():
 		if child.name == "RepairInfo": info_dialog.remove_child(child); child.queue_free()
 	var content := VBoxContainer.new(); content.name = "RepairInfo"; content.custom_minimum_size = Vector2(400,200); info_dialog.add_child(content)
-	var artwork := texture("texture.ui_equipment_info_" + shop_offer_id,str(offer.get("info_bitmap","INTROTEX/WSHIELDS.BMP")))
+	var artwork := texture("texture.ui_equipment_info_" + item_id,str(offer.get("info_bitmap","INTROTEX/WSHIELDS.BMP")))
 	if artwork != null:
 		var image := TextureRect.new(); image.texture = artwork; image.custom_minimum_size.y = 120
 		image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; content.add_child(image)
@@ -354,6 +541,12 @@ func _confirm_name() -> void:
 func report(message: String) -> void:
 	status = message; rebuild()
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(controller_button) and event.is_action_released("menu_accept"):
+		var held_button := controller_button
+		controller_button = null
+		held_button.button_up.emit()
+		if visible and not held_button.disabled: held_button.pressed.emit()
+		get_viewport().set_input_as_handled(); return
 	if not visible or name_dialog.visible or overwrite_dialog.visible or info_dialog.visible: return
 	var item_list := get_viewport().gui_get_focus_owner() as ItemList
 	if item_list != null and not Bindings.pressed(event,"menu_cancel"):
@@ -379,7 +572,8 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif Bindings.pressed(event,"menu_accept"):
 		var focused := get_viewport().gui_get_focus_owner() as Button
-		if focused != null and not focused.disabled: focused.pressed.emit(); get_viewport().set_input_as_handled()
+		if focused != null and not focused.disabled and not is_instance_valid(controller_button):
+			controller_button = focused; focused.button_down.emit(); get_viewport().set_input_as_handled()
 	else:
 		for direction in [["menu_left",SIDE_LEFT],["menu_right",SIDE_RIGHT],["menu_up",SIDE_TOP],["menu_down",SIDE_BOTTOM]]:
 			if not Bindings.pressed(event,direction[0]): continue
@@ -392,6 +586,9 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled(); break
 
 func dismiss() -> void:
+	if is_instance_valid(controller_button): controller_button.button_up.emit()
+	controller_button = null
+	active_button = null
 	name_dialog.hide(); overwrite_dialog.hide(); info_dialog.hide(); hide()
 
 func _wire_slot_focus() -> Array[Button]:

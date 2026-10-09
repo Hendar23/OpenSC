@@ -371,17 +371,9 @@ func _build_interface() -> void:
 	bubble_controls = VBoxContainer.new()
 	graphics_controls.add_child(bubble_controls)
 	var graphics_hint := Label.new()
-	graphics_hint.text = "Graphics settings save on release. Bubbles save/export with movement settings."
+	graphics_hint.text = "Changes are saved automatically. Export all settings includes every developer tab."
 	graphics_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	graphics_controls.add_child(graphics_hint)
-	var graphics_save := Button.new()
-	graphics_save.text = "Save graphics settings"
-	graphics_save.focus_mode = Control.FOCUS_NONE
-	graphics_save.pressed.connect(func() -> void:
-		_save_preferences()
-		if tuning_panel != null: tuning_panel._save()
-	)
-	graphics_tab.add_child(graphics_save)
 	var system := VBoxContainer.new()
 	system.name = "System"
 	system.add_theme_constant_override("separation", 12)
@@ -398,6 +390,14 @@ func _build_interface() -> void:
 		if dock_interface != null and dock_interface.visible: dock_interface.rebuild()
 	)
 	system.add_child(credits_button)
+	var market_speed_label := Label.new(); system.add_child(market_speed_label)
+	market_speed_slider = HSlider.new(); market_speed_slider.name = "MarketSpeed"
+	market_speed_slider.scrollable = false; market_speed_slider.focus_mode = Control.FOCUS_NONE
+	market_speed_slider.min_value = 0; market_speed_slider.max_value = 200; market_speed_slider.step = 1; market_speed_slider.value = 50
+	market_speed_slider.tooltip_text = "Speed of market price changes, production and traders. 100% uses the original timing; 0% pauses the market."
+	system.add_child(market_speed_slider)
+	market_speed_slider.value_changed.connect(func(value: float) -> void: market_speed_label.text = "Market speed: %.0f%%" % value)
+	market_speed_label.text = "Market speed: %.0f%%" % market_speed_slider.value
 	docking_radius_label = Label.new()
 	system.add_child(docking_radius_label)
 	docking_radius_slider = HSlider.new(); docking_radius_slider.scrollable = false
@@ -531,8 +531,9 @@ func _begin_new_game() -> void:
 		await _start_game(game_folder)
 	if not pilot_mode: return
 	_reset_loaded_world()
+	object_population.populate_startup()
 	cockpit_hud.set_bottom_camera_enabled(false)
-	day_night.hour = 12.0
+	day_night.hour = 10.0
 	player_progress = PlayerProgress.restore()
 	_update_daylight()
 	has_started_game = true
@@ -562,14 +563,15 @@ func _reset_loaded_world() -> void:
 		patch.bend = Vector3.ZERO
 		for material in patch.materials: material.set_shader_parameter("propeller_bend",Vector3.ZERO)
 	_clear_session_effects(world_root)
+	pilot.hull_rating = 100; pilot.radiation_rating = 0
 	pilot.restore_health(); pilot.collision_layer = 2
 	pilot.collision_mask = 13; pilot.active = true; pilot.controls_enabled = true
 	weapons.show()
 	pilot.visual.show()
-	pilot.reset_at(world_root.get_meta("player_spawn",world_root.get_meta("bounds").get_center()))
+	pilot.reset_at(world_root.get_meta("player_spawn",world_root.get_meta("bounds").get_center()),world_root.get_meta("player_spawn_basis",Basis.IDENTITY))
 	pilot._update_animation(0)
 	equipment.vacuum.reset()
-	if equipment.magnet != null: equipment.magnet.reset()
+	equipment.reset_towing()
 	equipment.set_installed(["deep_sea_lights","suckomat"])
 	weapons.set_installed(["zapper"])
 	equipment.selected = 0
@@ -712,7 +714,7 @@ func _start_game(folder: String) -> void:
 	await get_tree().physics_frame
 	var bounds: AABB = world_root.get_meta("bounds")
 	var point: Vector3 = world_root.get_meta("player_spawn", bounds.get_center())
-	pilot.reset_at(point)
+	pilot.reset_at(point,world_root.get_meta("player_spawn_basis",Basis.IDENTITY))
 	model.scale *= Pilot.VISUAL_SCALE
 	model.rotation.y = PI
 	pilot.add_child(model)
@@ -749,6 +751,7 @@ func _start_game(folder: String) -> void:
 	submarine_explosion_sound = Weapons._sound(folder,"audio.submarine.explosion","EXPLODE1")
 	pilot.submarine_audio.setup(pilot, folder)
 	front_end.audio_tuning = pilot.submarine_audio.tuning
+	dock_interface.audio_tuning = pilot.submarine_audio.tuning
 	if sound_panel != null: sound_panel.free()
 	sound_panel = SoundPanel.new()
 	sound_panel.name = "Sound"
@@ -757,6 +760,7 @@ func _start_game(folder: String) -> void:
 	sound_panel.setup(pilot.submarine_audio, true)
 	sound_panel.settings_changed.connect(_schedule_settings_save)
 	_select_developer_tab(str(selected_tab))
+	pilot.hull_rating = 100; pilot.radiation_rating = 0
 	pilot.restore_health(); pilot.collision_layer = 2; pilot.collision_mask = 13
 	pilot.active = true
 	if docking != null: docking.free()
@@ -814,8 +818,8 @@ func _build_docking_prompt() -> void:
 	docking_prompt.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	docking_prompt.offset_top = -85.0
 	docking_prompt.offset_bottom = -25.0
-	docking_prompt.offset_left = 20.0
-	docking_prompt.offset_right = -140.0
+	docking_prompt.offset_left = 140.0
+	docking_prompt.offset_right = -20.0
 	docking_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	docking_prompt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	docking_prompt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -826,9 +830,9 @@ func _build_docking_prompt() -> void:
 	docking_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(docking_prompt)
 	docking_portrait = preload("res://radio_portrait.gd").new()
-	docking_portrait.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	docking_portrait.offset_left = -116.0
-	docking_portrait.offset_right = -20.0
+	docking_portrait.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	docking_portrait.offset_left = 20.0
+	docking_portrait.offset_right = 116.0
 	docking_portrait.offset_top = -150.0
 	docking_portrait.offset_bottom = -30.0
 	docking_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -974,7 +978,15 @@ func _physics_process(_delta: float) -> void:
 		over_ui = over_ui or sound_panel.get_global_rect().has_point(pointer)
 	pilot.controls_enabled = pilot_mode and not pilot.dead and not map_open and not world_loading and not developer_ui_visible and not over_ui and not folder_dialog.visible and not export_all_dialog.visible and not mod_panel.visible and not tuning_panel.export_dialog.visible and (sound_panel == null or not sound_panel.export_dialog.visible) and (docking == null or docking.stage == Docking.Stage.IDLE)
 
+var market_speed_slider: HSlider
+var market_ui_elapsed := 0.0
 func _process(delta: float) -> void:
+	if pilot_mode and not world_loading and not front_end.menu_layer.visible and not get_tree().paused:
+		preload("res://commodity_market.gd").advance(gameplay_catalogue,player_progress,delta * market_speed_slider.value / 100.0)
+		market_ui_elapsed += delta
+		if market_ui_elapsed >= 0.3:
+			market_ui_elapsed = 0.0
+			if dock_interface_active and dock_interface.visible and dock_interface.page == "goods": dock_interface.refresh_market()
 	_update_mouse_pointer()
 	particles.active = pilot_mode and not world_loading
 	if pilot_mode and not world_loading and not developer_ui_visible: day_night.step(delta)
@@ -1145,6 +1157,7 @@ func _build_equipment_controls() -> void:
 	tab.add_theme_constant_override("separation", 12); scroll.add_child(tab)
 	for section in [
 		["Suck-O-Matic", [["som_range", "Suction depth", 0.1, 10.0, 0.05], ["som_radius", "Suction radius", 0.05, 3.0, 0.01], ["som_pull_speed", "Pull speed", 0.1, 10.0, 0.1], ["som_pull_strength", "Pull strength", 0.1, 50.0, 0.1], ["som_capture_distance", "Pickup distance", 0.02, 1.0, 0.01], ["som_volume_db", "Vacuum volume (dB)", -60.0, 0.0, 1.0]]],
+		["Grappling Hook", [["grapple_length", "Rope length", 0.05, 5.0, 0.01], ["grapple_speed", "Deployment / retraction speed", 0.1, 5.0, 0.1], ["grapple_water_drag", "Water drag", 0.1, 20.0, 0.1], ["grapple_cargo_weight", "Cargo weight multiplier", 1.0, 100.0, 1.0], ["grapple_pitch_influence", "Towing pitch influence", 0.0, 2.0, 0.05], ["grapple_volume_db", "Grapple volume (dB)", -60.0, 0.0, 1.0]]],
 		["Magnet", [["magnet_length", "Chain length", 0.05, 5.0, 0.01], ["magnet_speed", "Deployment / retraction speed", 0.1, 5.0, 0.1], ["magnet_water_drag", "Water drag", 0.1, 20.0, 0.1], ["magnet_cargo_weight", "Cargo weight multiplier", 1.0, 100.0, 1.0], ["magnet_pitch_influence", "Towing pitch influence", 0.0, 2.0, 0.05], ["magnet_volume_db", "Magnet volume (dB)", -60.0, 0.0, 1.0]]],
 		["Deep-Sea Lights", [["light_energy", "Light brightness", 0.1, 12.0, 0.1], ["light_range", "Light range", 2.0, 60.0, 1.0], ["light_angle", "Light beam angle", 5.0, 75.0, 1.0], ["light_down_angle", "Light downward angle", 0.0, 80.0, 1.0]]]
 	]:
@@ -1298,6 +1311,9 @@ func _load_preferences(path: String = "") -> void:
 	var config := ConfigFile.new()
 	if config.load(path) != OK: return
 	loading_preferences = true
+	var market_speed: Variant = config.get_value("view","market_speed",market_speed_slider.value / 100.0)
+	if (market_speed is float or market_speed is int) and is_finite(float(market_speed)):
+		market_speed_slider.value = clampf(float(market_speed) * 100.0,market_speed_slider.min_value,market_speed_slider.max_value)
 	var wildlife_density: Variant = config.get_value("view","wildlife_density",wildlife_density_slider.value / 100.0)
 	if (wildlife_density is float or wildlife_density is int) and is_finite(float(wildlife_density)):
 		wildlife_density_slider.value = clampf(float(wildlife_density) * 100.0,0.0,300.0)
@@ -1413,15 +1429,19 @@ func _save_preferences(path: String = "") -> Error:
 	if result != OK: _report_settings_error(path,result)
 	# The original asset folder is machine-specific, independent of tuning.
 	if not game_folder.is_empty() and defaults_directory.is_empty():
-		var paths := ConfigFile.new(); paths.load("user://opensubculture.cfg")
-		paths.erase_section("view"); paths.set_value("game","folder",game_folder)
-		paths.save("user://opensubculture.cfg")
+		var preferences := preload("res://player_storage.gd").preferences_path()
+		var directory_result := preload("res://player_storage.gd").ensure_parent(preferences)
+		var paths := ConfigFile.new(); paths.load(preferences)
+		paths.set_value("game","folder",game_folder)
+		var preference_result := paths.save(preferences) if directory_result == OK else directory_result
+		if preference_result != OK: _report_settings_error(preferences,preference_result); return preference_result
 	return result
 
 func _view_settings() -> Dictionary:
 	var settings := {"fog_visibility": fog_visibility, "fog_enabled": fog_button.button_pressed, "fog_start": fog_start_slider.value, "fog_curve": fog_curve_slider.value}
 	settings.merge(day_night.settings())
 	settings.merge(natural_light.settings)
+	settings["market_speed"] = market_speed_slider.value / 100.0
 	settings["wildlife_density"] = wildlife_density_slider.value / 100.0
 	settings["docking_radius"] = docking_radius_slider.value
 	settings["hud_scale"] = hud_scale_slider.value / 100.0
@@ -1485,8 +1505,8 @@ func _exploration_matches_map(signature: String) -> bool:
 # mutate docking, inventory or save data directly.
 func _delivery_prompt_active() -> bool:
 	if not pilot_mode or world_loading or get_tree().paused or map_open or developer_ui_visible or pilot == null or pilot.dead or docking == null or docking.stage != Docking.Stage.IDLE: return false
-	if equipment == null or equipment.magnet == null: return false
-	var magnet: Node3D = equipment.magnet
+	if equipment == null or equipment.towing_tool() == null: return false
+	var magnet: Node3D = equipment.towing_tool()
 	if not is_instance_valid(magnet.delivery_point) or not is_instance_valid(magnet.target): return false
 	var terms := _delivery_terms(magnet.target)
 	return not terms.commodity.is_empty() and terms.quantity > 0
@@ -1499,7 +1519,7 @@ func _delivery_terms(body: RigidBody3D) -> Dictionary:
 
 func _answer_delivery(accepted: bool) -> void:
 	if not _delivery_prompt_active(): return
-	var magnet: Node3D = equipment.magnet
+	var magnet: Node3D = equipment.towing_tool()
 	if not accepted: magnet.decline_delivery(); return
 	var body: RigidBody3D = magnet.target
 	var terms := _delivery_terms(body)
@@ -1510,6 +1530,7 @@ func _answer_delivery(accepted: bool) -> void:
 	magnet.set_enabled(false)
 	body.set_meta("delivery_city",int(city))
 	body.set_meta("metal_tow_target",false)
+	body.set_meta("grapple_tow_target",false)
 
 func _collect_city_deliveries(city_id: int) -> void:
 	object_population.collect_delivered_objects(city_id)
@@ -1517,24 +1538,12 @@ func _collect_city_deliveries(city_id: int) -> void:
 
 func _dock_ui_model() -> Dictionary:
 	var port: Dictionary = docking.current if docking != null else {}
-	var items: Array = []
-	for item in equipment.mounted if equipment != null else []: items.append(item.name)
-	var arms: Array = []
-	for item in weapons.mounted if weapons != null else []: arms.append(item.name)
-	var shop: Array = []
-	for item in gameplay_catalogue.get("tables",{}).get("equipment",{}).get("records",{}).values():
-		if item is Dictionary: shop.append(str(item.get("name",item.get("Name",item.get("id","Equipment")))))
-	var goods: Array = gameplay_catalogue.get("tables",{}).get("economy_commodities",{}).get("records",{}).keys()
-	goods.clear()
-	for item in gameplay_catalogue.get("tables",{}).get("economy_commodities",{}).get("records",{}).values():
-		var name := str(item.get("name",""))
-		if not name.is_empty() and not goods.has(name): goods.append(name)
 	var city_id := str(int(port.node.get_meta("city_id"))) if port.get("node") != null else ""
 	var city: Dictionary = gameplay_catalogue.get("tables",{}).get("city_info",{}).get("records",{}).get(city_id,{})
 	var standing: String = player_progress.standing.get(str(port.get("race",1)),"neutral")
 	var description_id := "%s%d.%s" % [city.get("description_key",""),player_progress.campaign_stage,standing]
 	var description: String = gameplay_catalogue.get("tables",{}).get("city_descriptions",{}).get("records",{}).get(description_id,{}).get("text","")
-	return {"city":port.get("name","Dock"),"city_id":city_id,"title_bitmap":city.get("title_bitmap",""),"welcome":description,"standing":{"bad":"Hostile","neutral":"Neutral","good":"Friendly"}.get(standing,"Neutral"),"mission":player_progress.mission,"status":player_progress.status.duplicate(),"race":port.get("race",1),"equipment":items,"weapons":arms,"shop_items":shop,"repair_offer":preload("res://equipment_shop.gd").shield_repair(gameplay_catalogue,city_id,player_progress.campaign_stage),"offers":preload("res://equipment_shop.gd").offers(gameplay_catalogue,city_id,player_progress.campaign_stage),"installed":preload("res://equipment_shop.gd").installed(equipment,weapons),"hold":player_progress.hold.duplicate(),"commodities":goods,"cargo":player_progress.cargo.duplicate(),"slots":save_games.slots(),"submarine":pilot.visual if pilot != null else null}
+	return {"city":port.get("name","Dock"),"city_id":city_id,"title_bitmap":city.get("title_bitmap",""),"welcome":description,"standing":{"bad":"Hostile","neutral":"Neutral","good":"Friendly"}.get(standing,"Neutral"),"mission":player_progress.mission,"status":player_progress.status.duplicate(),"race":port.get("race",1),"repair_offer":preload("res://equipment_shop.gd").shield_repair(gameplay_catalogue,city_id,player_progress.campaign_stage),"offers":preload("res://equipment_shop.gd").offers(gameplay_catalogue,city_id,player_progress.campaign_stage),"installed":preload("res://equipment_shop.gd").installed(equipment,weapons),"hold":player_progress.hold.duplicate(),"commodity_offers":preload("res://commodity_market.gd").offers(gameplay_catalogue,player_progress,city_id),"cargo":player_progress.cargo.duplicate(),"slots":save_games.slots() if dock_interface != null and dock_interface.page in ["save","load"] else []}
 
 func _save_snapshot(name: String) -> Dictionary:
 	player_progress.suckomat = equipment.vacuum.storage.duplicate()
@@ -1548,33 +1557,36 @@ func _save_snapshot(name: String) -> Dictionary:
 
 func _dock_ui_action(action: String, payload: Dictionary) -> void:
 	match action:
+		"buy_commodity","sell_commodity":
+			if docking.stage != Docking.Stage.DOCKED: return
+			var city_id := str(int(docking.current.node.get_meta("city_id")))
+			dock_interface.transaction_feedback(preload("res://commodity_market.gd").trade(gameplay_catalogue,player_progress,city_id,str(payload.get("item","")),action == "buy_commodity"),"commodity_trade")
 		"equipment_slot":
 			if docking.stage != Docking.Stage.DOCKED: return
-			dock_interface.report(preload("res://equipment_shop.gd").swap(player_progress,equipment,weapons,int(payload.slot),str(payload.get("item",""))))
+			var incoming := str(payload.get("item",""))
+			var installing: bool = preload("res://equipment_shop.gd").SLOTS.get(incoming,0) == int(payload.slot) and int(player_progress.hold.get(incoming,0)) > 0
+			dock_interface.transaction_feedback(preload("res://equipment_shop.gd").swap(player_progress,equipment,weapons,int(payload.slot),incoming),"install",installing)
 		"buy_equipment","sell_equipment":
 			if docking.stage != Docking.Stage.DOCKED: return
 			var id := str(payload.get("item",""))
 			var offer: Dictionary = _dock_ui_model().offers.get(id,{})
-			if offer.is_empty(): return
+			if offer.is_empty(): dock_interface.transaction_feedback("Item unavailable.","equipment_trade"); return
 			if action == "buy_equipment":
 				if id != "shield" and preload("res://equipment_shop.gd").owned(player_progress,equipment,weapons,id) >= int(offer.maximum):
-					dock_interface.report("Already owned."); return
-				dock_interface.report(preload("res://equipment_shop.gd").buy(player_progress,offer))
+					dock_interface.transaction_feedback("Already owned.","equipment_trade"); return
+				dock_interface.transaction_feedback(preload("res://equipment_shop.gd").buy(player_progress,offer),"equipment_trade")
 			elif int(player_progress.hold.get(id,0)) > 0 and int(offer.sell_price) > 0:
 				player_progress.hold[id] -= 1
 				if player_progress.hold[id] == 0: player_progress.hold.erase(id)
 				player_progress.status.credits += int(offer.sell_price)
-				dock_interface.report(str(offer.name) + " sold.")
-		"buy_repair","use_repair","sell_repair":
+				dock_interface.transaction_feedback("","equipment_trade")
+			else: dock_interface.transaction_feedback("Item cannot be sold.","equipment_trade")
+		"use_repair":
 			if docking.stage != Docking.Stage.DOCKED: return
-			var offer: Dictionary = _dock_ui_model().repair_offer
-			if action == "buy_repair": dock_interface.report(preload("res://equipment_shop.gd").buy(player_progress,offer))
-			elif action == "use_repair": dock_interface.report(preload("res://equipment_shop.gd").consume_repair(player_progress,pilot))
-			elif int(player_progress.hold.get("shield",0)) > 0 and int(offer.sell_price) > 0:
-				player_progress.hold.shield -= 1
-				if player_progress.hold.shield == 0: player_progress.hold.erase("shield")
-				player_progress.status.credits += int(offer.sell_price)
-				dock_interface.report("Shield Repair sold.")
+			var id := str(payload.get("item","shield"))
+			var previous_count := int(player_progress.hold.get(id,0))
+			var result := preload("res://equipment_shop.gd").use_item(player_progress,pilot,id)
+			dock_interface.transaction_feedback(result,"repair",int(player_progress.hold.get(id,0)) < previous_count)
 		"launch":
 			if docking.stage == Docking.Stage.DOCKED:
 				dock_interface.dismiss(); dock_interface_active = false; _request_docking()
@@ -1582,7 +1594,7 @@ func _dock_ui_action(action: String, payload: Dictionary) -> void:
 		"save_slot":
 			if docking.stage != Docking.Stage.DOCKED: dock_interface.report("Save games are available while docked."); return
 			var result := save_games.write(int(payload.slot),_save_snapshot(str(payload.name)))
-			dock_interface.report("Game saved." if result == OK else save_games.error)
+			dock_interface.report("" if result == OK else save_games.error)
 		"load_slot": _load_saved_game(int(payload.slot))
 
 func _load_saved_game(slot: int) -> bool:
@@ -1643,13 +1655,13 @@ func _load_saved_game(slot: int) -> bool:
 	_collect_city_deliveries(int(docking.current.node.get_meta("city_id")))
 	equipment.vacuum.storage.assign(player_progress.suckomat)
 	equipment.vacuum.transfer_to(player_progress.cargo)
-	var capacity := float(player_progress.status.hull_strength)
-	pilot.restore_health(capacity,capacity * float(player_progress.status.shields) / 100.0)
+	pilot.hull_rating = float(player_progress.status.hull_strength)
+	pilot.radiation_rating = float(player_progress.status.radiation_shield)
+	pilot.restore_health(100.0,float(player_progress.status.shields))
 	dock_interface.open("home"); dock_interface_active = true
 	loading_save = false; _update_mouse_pointer(); return true
 
 func _submarine_health_changed(remaining: float, capacity: float) -> void:
-	player_progress.status.hull_strength = int(round(capacity))
 	player_progress.status.shields = int(round(remaining / capacity * 100.0))
 
 func _submarine_destroyed() -> void:
@@ -1662,6 +1674,6 @@ func _submarine_destroyed() -> void:
 	wreck.setup_submarine(pilot,submarine_bubble_texture,mounts)
 	var burst := SessionExplosion.new(); world_root.add_child(burst); burst.global_position = pilot.global_position
 	burst.setup(submarine_explosion_frames,maxf(1.0,pilot.collision_height() * 3.0),submarine_explosion_sound)
-	if equipment.magnet != null: equipment.magnet.reset()
+	equipment.reset_towing()
 	weapons.hide(); equipment.hide()
 	_set_camera_mode(false)

@@ -24,6 +24,18 @@ func _run() -> void:
 	check(Document.valid(map.document), "Seeded editor document validates")
 	check(map.entity_list.item_count > 380, "Unfiltered entity list is populated")
 	check(not map.population.simulating, "Wildlife stays still while editing")
+	map.select("player_spawn")
+	check(map.fields.has("facing"), "Player spawn exposes facing in object properties")
+	var spawn_before := Document.decode(map.record().transform)
+	map.fields.facing.value = 90; map.apply_properties()
+	var spawn_after := Document.decode(map.record().transform)
+	check((-spawn_after.basis.z).is_equal_approx(Vector3.RIGHT) and spawn_after.origin.is_equal_approx(spawn_before.origin), "Clockwise facing changes spawn direction without moving it")
+	check(map.world.get_meta("player_spawn_basis").is_equal_approx(spawn_after.basis), "Editor applies spawn facing to the world")
+	var spawn_path := "res://tests/spawn-facing-roundtrip.json"
+	check(Document.save(map.document,spawn_path) == OK and Document.decode(Document.load_path(spawn_path).entities.player_spawn.transform).basis.is_equal_approx(spawn_after.basis), "Spawn facing survives map save and reload")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(spawn_path))
+	map.undo()
+	check(Document.decode(map.document.entities.player_spawn.transform).is_equal_approx(spawn_before), "Undo restores spawn facing")
 	var drops: Array = map.document.entities.keys().filter(func(id: String) -> bool: return map.document.entities[id].kind == "dropoff")
 	check(drops.size() == 5, "Five original city drop-off points are imported")
 	var drop_key: String = drops[0]; map.category.select(5); map._refresh_list(); map.select(drop_key)
@@ -39,7 +51,7 @@ func _run() -> void:
 	map.undo(); map.category.select(0); map._refresh_list()
 	var key := ""
 	for candidate in map.document.entities:
-		if map.document.entities[candidate].kind == "model" and not map.base_nodes[candidate].has_meta("city_id"): key = candidate; break
+		if map.document.entities[candidate].kind == "model" and not map.document.entities[candidate].deleted and map.base_nodes.has(candidate) and not map.base_nodes[candidate].has_meta("city_id"): key = candidate; break
 	map.select(key)
 	var before: Vector3 = map.point()
 	map.fields.position_0.value += 2.0; map.apply_properties()
@@ -57,6 +69,8 @@ func _run() -> void:
 	map.fields.food_role.select(Document.FOOD_ROLES.find("predator")); map.fields.has_zapper.button_pressed = true
 	map.fields.bite_damage.value = 7; map.fields.attack_interval.value = 0.5
 	map.fields.zapper_range.value = 6; map.fields.zapper_damage.value = 12
+	check(map.fields.has("flee_range") and map.fields.has("attack_range") and not map.fields.has("detection"),"Creature editor exposes separate flee and attack detection ranges")
+	map.fields.flee_range.value = 2; map.fields.attack_range.value = 9
 	check(is_equal_approx(map.species_preview.animation_speed,2.5),"Animation speed updates the creature preview")
 	map.apply_properties()
 	check(is_equal_approx(map.record().animation_speed,2.5) and Document.valid(map.document),"Animation speed is saved in valid species settings")
@@ -93,6 +107,7 @@ func _run() -> void:
 	var restored := Document.load_path(path)
 	check(not restored.is_empty() and restored.species[-1].health == 45.0,"Creature health survives saving and loading the map")
 	check(restored.species[-1].food_role == "predator" and restored.species[-1].has_zapper and restored.species[-1].zapper_damage == 12,"Combat settings survive saving and loading")
+	check(restored.species[-1].flee_range == 2 and restored.species[-1].attack_range == 9 and not restored.species[-1].has("detection"),"Independent perception ranges survive saving and loading")
 	check(not restored.is_empty() and restored.entities.size() == map.document.entities.size() and restored.groups.size() == map.document.groups.size() and restored.species[-1].name == "Turtle" and Document.decode(restored.entities[key].transform).is_equal_approx(Document.decode(map.document.entities[key].transform)), "Map properties survive a JSON round trip")
 	var invalid: Dictionary = map.document.duplicate(true)
 	invalid.species[0].health = 0.0
@@ -117,7 +132,7 @@ func _run() -> void:
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/species-population-preview.png")
 	map.select("object_type:coin")
-	check(map.fields.has("delivery_commodity") and map.fields.has("delivery_quantity") and map.fields.delivery_quantity.value == 3,"Object editor exposes delivery commodity and units")
+	check(map.fields.has("delivery_commodity") and map.fields.has("delivery_quantity") and map.fields.delivery_quantity.value == 2,"Object editor exposes delivery commodity and units")
 	for index in range(map.fields.delivery_commodity.item_count):
 		if map.fields.delivery_commodity.get_item_metadata(index) == "metal": map.fields.delivery_commodity.select(index); break
 	map.fields.delivery_quantity.value = 7; map.apply_properties()
@@ -125,6 +140,37 @@ func _run() -> void:
 	Document.save(map.document,path)
 	var delivery_document := Document.load_path(path)
 	check(delivery_document.object_types.any(func(type: Dictionary) -> bool: return type.id == "coin" and type.delivery_commodity == "metal" and type.delivery_quantity == 7),"Delivery properties survive a map export and reload")
+	map.select("object_type:cigarette_end")
+	check(map.fields.grapple_compatible.button_pressed and not map.fields.magnet_compatible.button_pressed,"Cigarette editor exposes independent grapple and magnet flags")
+	check(map.record().delivery_commodity == "tobacco" and map.fields.delivery_quantity.value == 1,"Cigarette delivery commodity and amount are editable")
+	map.fields.grapple_compatible.button_pressed = false; map.fields.magnet_compatible.button_pressed = true; map.apply_properties()
+	Document.save(map.document,path)
+	var grapple_document := Document.load_path(path)
+	check(grapple_document.object_types.any(func(type: Dictionary) -> bool: return type.id == "cigarette_end" and not type.grapple_compatible and type.magnet_compatible),"Both compatibility flags persist through map save and reload")
+	map.select("object_type:thorium")
+	check(map.fields.grapple_compatible.button_pressed and not map.fields.magnet_compatible.button_pressed,"Whole thorium defaults to grapple-only retrieval")
+	map.select("object_type:clam")
+	check(not map.fields.has("health") and not map.fields.has("magnet_compatible") and not map.fields.has("delivery_commodity"),"Static clams hide unsupported health, towing and delivery controls")
+	check(map.fields.has("regrowth_seconds") and map.fields.has("close_distance") and map.fields.has("opening_speed"),"Clam behaviour is editable")
+	map.fields.regrowth_seconds.value = 60; map.apply_properties()
+	check(map.record().regrowth_seconds == 60,"Clam timing edits apply")
+	map.document.object_groups.append({"id":"editable_clam","name":"Clam","type":"clam","count":1,"radius":0,"position":[0,0,0]})
+	map.select("object_group:editable_clam")
+	check(map.fields.has("initial_delay") and map.fields.has("group_rotation_1"),"Clam placement exposes first pearl delay and rotation")
+	map.fields.initial_delay.value = 12; map.fields.group_rotation_1.value = 45; map.apply_properties()
+	Document.save(map.document,path)
+	var clam_document := Document.load_path(path)
+	check(clam_document.object_groups.any(func(group: Dictionary) -> bool: return group.id == "editable_clam" and group.initial_delay == 12 and group.rotation[1] == 45),"Clam placement edits survive export")
+	map.select("object_type:pearl")
+	check(map.fields.has("mass") and map.fields.has("pickup_commodity"),"Pearl physics and collected commodity are editable")
+	check(not map.fields.has("health"),"Invulnerable pearls do not expose unused health")
+	var mine_types: Array = map.document.object_types.filter(func(type: Dictionary) -> bool: return type.get("behavior", "mine") == "mine")
+	check(not mine_types.is_empty(),"Mine fixture is available")
+	if not mine_types.is_empty():
+		map.select("object_type:" + str(mine_types[0].id))
+		check(map.fields.has("health") and not map.fields.has("grapple_compatible") and not map.fields.has("delivery_commodity"),"Mines expose damageable health without unsupported towing or delivery controls")
+	map.choice("missing_model_fixture","Model",["ANGEL","JACKFISH"],"custom_fish")
+	check(map._value("missing_model_fixture") == "custom_fish","An unavailable model ID survives dropdown creation without becoming the first original model")
 	editor.queue_free(); await process_frame
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	print("Map editor verification: %d checks, %d failures" % [checks, failures])

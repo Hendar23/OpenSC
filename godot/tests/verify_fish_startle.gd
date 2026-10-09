@@ -19,6 +19,9 @@ func _run() -> void:
 	world.add_child(fish); fish.set_physics_process(false)
 	fish.population = pop; fish.response = "flee"; fish.swim_speed = 1.0; fish.roam_radius = 1.0
 	fish.direction = Vector3.FORWARD; fish.goal = fish.position + Vector3.FORWARD * 20; fish.turn_timer = 100
+	player.position = fish.position + Vector3.FORWARD * 6
+	fish._physics_process(1.0 / 60.0)
+	check(not fish.fleeing and fish.startle_timer == 0,"Submarine outside the halved flee range does not frighten wildlife")
 	player.position = fish.position + Vector3.FORWARD * 3
 	await physics_frame
 	var previous := fish.direction
@@ -44,13 +47,13 @@ func _run() -> void:
 	player.position = fish.position + Vector3.FORWARD * 3
 	fish._physics_process(0.1)
 	check(fish.direction.dot(Vector3.BACK) > 0.8, "Fleeing overrides returning home outside roaming area")
-	player.position = fish.position + Vector3.FORWARD * 8.5; fish._physics_process(0.01)
+	player.position = fish.position + Vector3.FORWARD * fish.flee_range * 1.0625; fish._physics_process(0.01)
 	check(fish.fleeing, "Detection hysteresis avoids flicker near boundary")
-	player.position = fish.position + Vector3.FORWARD * 11; fish._physics_process(0.01)
+	player.position = fish.position + Vector3.FORWARD * fish.flee_range * 1.375; fish._physics_process(0.01)
 	check(not fish.fleeing, "Fish calms once submarine leaves")
 	player.position = fish.position + Vector3.FORWARD * 3; fish._physics_process(0.01)
 	check(fish.startle_timer > 0.0, "Returning submarine can startle fish again")
-	player.position = fish.position + Vector3.FORWARD * 11; fish._physics_process(0.05)
+	player.position = fish.position + Vector3.FORWARD * fish.flee_range * 1.375; fish._physics_process(0.05)
 	player.position = fish.position + Vector3.FORWARD * 3; fish._physics_process(0.05)
 	check(fish.startle_timer < fish.startle_duration, "Cooldown prevents immediate re-entry retrigger")
 	fish.response = "ignore"; fish._physics_process(0.01)

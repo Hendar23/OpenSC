@@ -268,7 +268,7 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 		fish.startle_turn_speed = float(species.get("startle_turn_speed", 720.0))
 		fish.group_behaviour = species.group_behaviour
 		fish.response = species.response
-		fish.detection_distance = float(species.detection)
+		fish.configure_ranges(species)
 		fish.mobility = species.mobility
 		fish.configure_health(Document.creature_health(species,gameplay_catalogue))
 		fish.configure_combat(species)

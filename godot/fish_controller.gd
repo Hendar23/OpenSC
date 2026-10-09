@@ -22,7 +22,8 @@ var rng := RandomNumberGenerator.new()
 var roam_radius := 10.0
 var group_behaviour := "solitary"
 var response := "ignore"
-var detection_distance := 8.0
+var attack_range := 8.0
+var flee_range := 4.0
 var mobility := "swimming"
 var population: Node3D
 var group_members: Array[Node3D] = []
@@ -63,7 +64,12 @@ var death_flesh_texture: Texture2D
 var combat: Node3D
 var pushed_velocity := Vector3.ZERO
 var last_push_frame := -1
+func configure_ranges(species: Dictionary) -> void:
+	var ranges := preload("res://map_document.gd").creature_ranges(species)
+	attack_range = float(ranges.attack_range); flee_range = float(ranges.flee_range)
+
 func configure_combat(species: Dictionary) -> void:
+	configure_ranges(species)
 	combat = preload("res://wildlife_combat.gd").new()
 	combat.configure(self,species); add_child(combat)
 
@@ -285,7 +291,7 @@ func _physics_process(delta: float) -> void:
 	if dead: return
 	# Offscreen wildlife still roams, but need not run expensive steering and
 	# terrain probes at 60 Hz. Close creatures retain full-rate reactions.
-	if not visual_animation_enabled and population != null and population.streaming and is_instance_valid(population.player) and global_position.distance_squared_to(population.player.global_position) > pow(maxf(detection_distance,3.0) + radius,2):
+	if not visual_animation_enabled and population != null and population.streaming and is_instance_valid(population.player) and global_position.distance_squared_to(population.player.global_position) > pow(maxf(maxf(attack_range,flee_range),3.0) + radius,2):
 		offscreen_delta += delta
 		if offscreen_delta < 0.1: return
 		delta = offscreen_delta; offscreen_delta = 0.0
@@ -334,7 +340,7 @@ func _physics_process(delta: float) -> void:
 		if response == "defend" and offset.length() < radius + 0.8: defense_timer = 3.0
 		if response == "flee":
 			# Hysteresis prevents repeated startles at the detection boundary.
-			var threatened := offset.length() < detection_distance * (1.25 if fleeing else 1.0)
+			var threatened := offset.length() < flee_range * (1.25 if fleeing else 1.0)
 			if threatened and not fleeing and startle_cooldown <= 0.0 and mobility == "swimming" and startle_duration > 0.0:
 				startle_timer = startle_duration
 				startle_cooldown = 2.0
@@ -347,7 +353,7 @@ func _physics_process(delta: float) -> void:
 				speed *= lerpf(1.6, startle_speed_multiplier, smoothstep(0.0, 0.35, startle_timer / maxf(startle_duration, 0.001))) if startle_timer > 0.0 else 1.6
 		else:
 			fleeing = false; startle_timer = 0.0
-		if offset.length() < detection_distance:
+		if offset.length() < attack_range:
 			if (response == "attack" or (response == "defend" and defense_timer > 0.0)) and not bool(population.player.get("dead")) and bool(population.player.get("active")) and bool(population.player.get("controls_enabled")):
 				desired = offset.normalized(); speed = swim_speed * 1.3; engaged = true
 				if combat != null: combat.target = population.player

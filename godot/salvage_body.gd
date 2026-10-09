@@ -11,7 +11,8 @@ func setup(definition: Dictionary, visual: Node3D, _fragment: int, water: float,
  collision_layer = 9; collision_mask = 11; freeze = not running; continuous_cd = true
  gravity_scale = 0.0; linear_damp = 0.3; angular_damp = 0.5
  var material := PhysicsMaterial.new(); material.friction = 0.45; material.bounce = 0.0; physics_material_override = material
- add_child(visual); set_meta("metal_tow_target",bool(stats.get("magnet_compatible",true)))
+ add_child(visual); set_meta("metal_tow_target",bool(stats.get("magnet_compatible",stats.get("id","") != "cigarette_end")))
+ set_meta("grapple_tow_target",bool(stats.get("grapple_compatible",stats.get("id","") == "cigarette_end")))
  var points := PackedVector3Array()
  for entry in preload("res://submarine_equipment.gd")._meshes(visual,Transform3D.IDENTITY):
   for surface in range(entry.mesh.get_surface_count()):

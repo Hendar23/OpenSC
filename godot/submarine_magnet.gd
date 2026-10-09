@@ -17,6 +17,7 @@ class CableBody extends RigidBody3D:
    state.linear_velocity *= exp(-water_drag * state.step)
    state.angular_velocity *= exp(-8.0 * state.step)
   if drop_limit > 0: state.linear_velocity.y = maxf(state.linear_velocity.y,-drop_limit)
+var tool_id := "magnet"
 var pilot: RigidBody3D
 var housing: Node3D
 var chain_template: Node3D
@@ -48,7 +49,13 @@ var deploy_audio: AudioStreamPlayer
 var clamp_audio: AudioStreamPlayer
 func setup(player: RigidBody3D, appearance: Node3D, folder: String) -> void:
  pilot = player; housing = appearance
- chain_template = Assets.load_clump(folder.path_join("CLUMPS/CHAIN.DFF"),PackedStringArray(),true)
+ chain_template = Assets.load_clump(folder.path_join("CLUMPS/LINE.DFF" if tool_id == "grapple" else "CLUMPS/CHAIN.DFF"),PackedStringArray(),true)
+ if tool_id == "grapple" and chain_template != null:
+  var rope_bounds := Mounts._bounds(Mounts._meshes(chain_template,Transform3D.IDENTITY))
+  if rope_bounds.size.x > rope_bounds.size.y and rope_bounds.size.x >= rope_bounds.size.z: chain_template.rotation.z += PI / 2.0
+  elif rope_bounds.size.z > rope_bounds.size.y: chain_template.rotation.x += PI / 2.0
+  var rope := chain_template
+  chain_template = Node3D.new(); chain_template.add_child(rope)
  if chain_template != null:
   var first := true
   for entry in Mounts._meshes(chain_template,Transform3D.IDENTITY):
@@ -60,8 +67,8 @@ func setup(player: RigidBody3D, appearance: Node3D, folder: String) -> void:
      var point: Vector3 = entry.pose * vertex
      if first: chain_bounds = AABB(point,Vector3.ZERO); first = false
      else: chain_bounds = chain_bounds.expand(point)
- deploy_audio = AudioStreamPlayer.new(); deploy_audio.stream = preload("res://submarine_weapons.gd")._sound(folder,"audio.equipment.magnet.deploy","MAG1"); add_child(deploy_audio)
- clamp_audio = AudioStreamPlayer.new(); clamp_audio.stream = preload("res://submarine_weapons.gd")._sound(folder,"audio.equipment.magnet.attach","MAG3"); add_child(clamp_audio)
+ deploy_audio = AudioStreamPlayer.new(); deploy_audio.stream = preload("res://submarine_weapons.gd")._sound(folder,"audio.equipment." + tool_id + ".deploy","GRAPPLE" if tool_id == "grapple" else "MAG1"); add_child(deploy_audio)
+ clamp_audio = AudioStreamPlayer.new(); clamp_audio.stream = preload("res://submarine_weapons.gd")._sound(folder,"audio.equipment." + tool_id + ".attach","GRAPPLE" if tool_id == "grapple" else "MAG3"); add_child(clamp_audio)
 func set_enabled(on: bool) -> void:
  if on == enabled: return
  if on and (housing == null or chain_template == null or not is_instance_valid(pilot) or not pilot.active or not pilot.controls_enabled or pilot.dead):
@@ -79,11 +86,11 @@ func set_enabled(on: bool) -> void:
  _play(deploy_audio); state_changed.emit(enabled)
 func _deploy() -> void:
  drop_points.assign(pilot.get_parent().find_children("*","Area3D",true,false).filter(func(point: Node) -> bool: return point.get_meta("editor_dropoff",false)))
- rig = Node3D.new(); rig.name = "MagnetChain"; rig.top_level = true; add_child(rig); rig.global_transform = Transform3D.IDENTITY
+ rig = Node3D.new(); rig.name = "GrappleRope" if tool_id == "grapple" else "MagnetChain"; rig.top_level = true; add_child(rig); rig.global_transform = Transform3D.IDENTITY
  rig.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON
  links.clear()
  for index in range(LINK_COUNT):
-  var visual := chain_template.duplicate() as Node3D; visual.name = "ChainLink%d" % (index + 1)
+  var visual := chain_template.duplicate() as Node3D; visual.name = ("RopeSegment%d" if tool_id == "grapple" else "ChainLink%d") % (index + 1)
   rig.add_child(visual); links.append(visual)
   for mesh in visual.find_children("*","MeshInstance3D",true,false): mesh.layers = 1
   # Kinematic contact follows each animated segment without another joint stack.
@@ -93,7 +100,7 @@ func _deploy() -> void:
   var contact := CollisionShape3D.new(); var capsule := CapsuleShape3D.new()
   capsule.radius = CHAIN_RADIUS; capsule.height = CHAIN_RADIUS * 2.0
   contact.shape = capsule; body.add_child(contact); link_colliders.append(contact)
- head = CableBody.new(); head.name = "MagnetHead"; head.mass = 0.15; head.gravity_scale = 0.0
+ head = CableBody.new(); head.name = "GrappleHead" if tool_id == "grapple" else "MagnetHead"; head.mass = 0.15; head.gravity_scale = 0.0
  head.water = float(pilot.get_parent().get_meta("surface_height",0.0)); head.water_drag = water_drag
  head.linear_damp = 0.0; head.angular_damp = 0.0; head.continuous_cd = true
  head.collision_layer = 16; head.collision_mask = 11; head.contact_monitor = true; head.max_contacts_reported = 8
@@ -134,7 +141,7 @@ func _draw_chain() -> void:
   contact.shape.height = maxf(length,CHAIN_RADIUS * 2.0)
   contact.get_parent().global_transform = Transform3D(_link_basis(previous - next) if length > 0.0001 else Basis.IDENTITY,(previous + next) * 0.5)
   if link.visible:
-   var width := 0.02 / maxf(chain_bounds.size.x,chain_bounds.size.z)
+   var width := (0.008 if tool_id == "grapple" else 0.02) / maxf(maxf(chain_bounds.size.x,chain_bounds.size.z),0.0001)
    var height := length / maxf(chain_bounds.size.y * (maxf(pose,0.0001) if chain_has_pose else 1.0),0.0001)
    var basis := _link_basis(previous - next)
    link.global_transform = Transform3D(basis.scaled_local(Vector3(width,height,width)),previous + basis * Vector3(-chain_bounds.get_center().x * width,-chain_bounds.end.y * height,-chain_bounds.get_center().z * width))
@@ -228,7 +235,7 @@ func _parallel_inertia(body_mass: float, offset: Vector3) -> Basis:
  return Basis(Vector3(diagonal - offset.x * offset.x,-offset.y * offset.x,-offset.z * offset.x),Vector3(-offset.x * offset.y,diagonal - offset.y * offset.y,-offset.z * offset.y),Vector3(-offset.x * offset.z,-offset.y * offset.z,diagonal - offset.z * offset.z)).scaled(Vector3.ONE * body_mass)
 func _attach(body: Node) -> void:
  if not enabled or not is_instance_valid(head) or is_instance_valid(target) or not is_instance_valid(body) or not body is RigidBody3D: return
- if not body.get_meta("metal_tow_target",false) or body.has_meta("delivery_city") or bool(body.get("dead")) or body.freeze: return
+ if not body.get_meta("grapple_tow_target" if tool_id == "grapple" else "metal_tow_target",false) or body.has_meta("delivery_city") or bool(body.get("dead")) or body.freeze: return
  target = body
  # World objects inherit the non-interpolated scenery branch. Match the
  # submarine and cable's render timing so the clamp does not judder at 60 Hz.

@@ -24,7 +24,7 @@ func run() -> void:
 	game.dock_interface.open("equipment")
 	var buy: Button = game.dock_interface.layout.get_node("BuyShieldRepair")
 	check(buy.disabled,"Buying without credits is disabled")
-	game._dock_ui_action("buy_repair",{})
+	game._dock_ui_action("buy_equipment",{"item":"shield"})
 	check(game.player_progress.hold.is_empty() and game.player_progress.status.credits == 0,"Insufficient funds cannot buy a kit")
 	var grant: Button = game.find_child("GiveTestingCredits",true,false)
 	grant.pressed.emit()
@@ -38,8 +38,8 @@ func run() -> void:
 	check(not game.dock_interface.layout.get_node("BuyShieldRepair").disabled,"Further repair kits can be purchased")
 	check(root.gui_get_focus_owner() == game.dock_interface.layout.get_node("BuyShieldRepair"),"Buying keeps focus on Buy rather than Done")
 	game.dock_interface.layout.get_node("BuyShieldRepair").pressed.emit()
-	check(game.player_progress.hold.get("shield",0) == 2 and game.dock_interface.hold_list.get_item_text(game.dock_interface.hold_list.item_count - 1).ends_with("×2"),"Multiple kits stack with a quantity in the hold")
-	check(game.dock_interface.hold_list.item_count == 1,"Hold has separate non-overlapping item rows")
+	check(game.player_progress.hold.get("shield",0) == 2 and game.dock_interface.hold_list.get_item_text(0) == "Shield Repair" and game.dock_interface.hold_list.get_item_text(1) == "Shield Repair","Multiple kits each have an individual named hold entry")
+	check(game.dock_interface.hold_list.item_count == 2,"Hold has separate non-overlapping item rows")
 	check(game.dock_interface.layout.get_node("UseShieldRepair").disabled,"Repair must be selected before clicking the sub")
 	game.dock_interface.hold_list.select(game.dock_interface.hold_list.item_count - 1)
 	game.dock_interface.hold_list.item_selected.emit(game.dock_interface.hold_list.item_count - 1)
@@ -49,7 +49,7 @@ func run() -> void:
 	check(not game.dock_interface.layout.get_node("UseShieldRepair").disabled,"Selecting the hold item enables use on the sub image")
 	game.dock_interface.layout.get_node("UseShieldRepair").pressed.emit()
 	check(game.player_progress.hold.get("shield",0) == 2,"A full shield does not waste the repair kit")
-	game.pilot.restore_health(200,50)
+	game.pilot.restore_health(100,50)
 	game.dock_interface.rebuild()
 	if DisplayServer.get_name() != "headless":
 		for frame in range(6): await process_frame
@@ -59,7 +59,7 @@ func run() -> void:
 	var saved: Dictionary = game._save_snapshot("Repair test")
 	check(game.save_games.write(0,saved) == OK,"Repair inventory saves")
 	game.dock_interface.layout.get_node("UseShieldRepair").pressed.emit()
-	check(game.pilot.health == 200 and game.player_progress.status.shields == 100 and game.player_progress.hold.get("shield",0) == 1,"Clicking the sub consumes one kit and restores its full upgraded shield capacity")
+	check(game.pilot.health == 100 and game.player_progress.status.shields == 100 and game.player_progress.hold.get("shield",0) == 1,"Clicking the sub consumes one kit and restores its full shield capacity")
 	check(await game._load_saved_game(0),"Saved repair inventory loads")
 	for frame in range(10): await process_frame
 	check(game.player_progress.hold.get("shield",0) == 2 and game.pilot.health == 50 and game.player_progress.status.credits == 100000 - cost * 2,"Loading preserves the purchased kits, credits and damage")

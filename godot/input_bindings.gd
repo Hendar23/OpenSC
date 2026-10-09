@@ -19,7 +19,7 @@ const BUTTONS := {
 	"equipment_next":JOY_BUTTON_DPAD_RIGHT,"weapon_previous":JOY_BUTTON_DPAD_UP,
 	"weapon_next":JOY_BUTTON_DPAD_DOWN,"weapon_fire":JOY_BUTTON_X,"main_menu":JOY_BUTTON_START
 }
-const CONFIG_PATH := "user://controls.cfg"
+const Storage = preload("res://player_storage.gd")
 const AXES := {"thrust_forward":[JOY_AXIS_TRIGGER_RIGHT,1],"thrust_reverse":[JOY_AXIS_TRIGGER_LEFT,1],"thrust_up":[JOY_AXIS_RIGHT_Y,-1],"thrust_down":[JOY_AXIS_RIGHT_Y,1],"turn_left":[JOY_AXIS_LEFT_X,-1],"turn_right":[JOY_AXIS_LEFT_X,1],"pitch_up":[JOY_AXIS_LEFT_Y,1],"pitch_down":[JOY_AXIS_LEFT_Y,-1]}
 static var bindings := {}
 static var installed := false
@@ -76,15 +76,19 @@ static func valid(value: Variant) -> bool:
 		"axis": return value.get("axis") is int and value.axis >= 0 and value.axis < JOY_AXIS_MAX and value.get("sign") in [-1,1]
 		"mouse": return value.get("button") is int and value.button >= 1 and value.button <= MOUSE_BUTTON_XBUTTON2
 	return false
-static func load_settings(path: String = CONFIG_PATH) -> void:
+static func load_settings(path: String = "") -> void:
+	if path.is_empty(): path = Storage.preferences_path()
 	var config := ConfigFile.new()
 	if config.load(path) != OK: return
 	for action in bindings:
 		if not config.has_section_key("bindings",action): continue
 		var slots: Variant = config.get_value("bindings",action,null)
 		if slots is Array and slots.size() == 2 and valid(slots[0]) and valid(slots[1]): bindings[action] = slots.duplicate(true)
-static func save_settings(path: String = CONFIG_PATH) -> Error:
-	var config := ConfigFile.new()
+static func save_settings(path: String = "") -> Error:
+	if path.is_empty(): path = Storage.preferences_path()
+	var result := Storage.ensure_parent(path)
+	if result != OK: return result
+	var config := ConfigFile.new(); config.load(path)
 	for action in bindings: config.set_value("bindings",action,bindings[action])
 	return config.save(path)
 static func set_binding(action: String, slot: int, value: Variant) -> bool:

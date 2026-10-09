@@ -165,6 +165,8 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 		var model_name := ""
 		var solid := true
 		var object_id := int(row.get("ObjectID", -1))
+		# Interactive clams and pearls belong to the editable object population.
+		if object_id == 32 or int(row.get("ObjectType",0)) in [84,85]: continue
 		if int(row.get("AutoCreate", 0)) == 1:
 			# The database stores one-based object-definition IDs.
 			var type_id := int(row.get("ObjectType", 0)) - 1
@@ -176,8 +178,6 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 				# Pulse-light generators have no mesh; don't render their editor clump.
 				if definition.get("object") == "PULSELIGHT":
 					_add_light(scenery, placement(row, offset).origin, 0.7, 4.0, folder)
-		elif object_id == 32 and row.get("clump") == "CLAM":
-			model_name = "CLAM"
 		elif row.get("clump") == "PIPEBARS":
 			model_name = "PIPEBARS"
 		if model_name.is_empty() or model_name == "NONE":
@@ -194,6 +194,7 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 	for row in tables.get("Scenarios", []):
 		if int(row.get("ID", 0)) == 1:
 			world.set_meta("player_spawn", Vector3(float(row.PlayerX), float(row.PlayerY), float(row.PlayerZ)) + offset)
+			world.set_meta("player_spawn_basis", Basis(Vector3.UP,PI * 0.5))
 	for template in cache.values():
 		if template != null: template.free()
 	world.set_meta("scenery_ready", true)

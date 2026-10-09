@@ -27,8 +27,8 @@ var weapons: Node3D
 func _ready() -> void:
 	var sidebar := VBoxContainer.new(); sidebar.custom_minimum_size.x = 320; add_child(sidebar)
 	label = Label.new(); label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; sidebar.add_child(label)
-	selector = OptionButton.new(); selector.add_item("Deep-Sea Lights"); selector.add_item("Zapper"); selector.add_item("Suck-O-Matic"); selector.add_item("Magnet"); sidebar.add_child(selector)
-	selector.item_selected.connect(func(index: int) -> void: selected = ["deep_sea_lights","zapper","suckomat","magnet"][index]; _sync())
+	selector = OptionButton.new(); selector.add_item("Deep-Sea Lights"); selector.add_item("Zapper"); selector.add_item("Suck-O-Matic"); selector.add_item("Magnet"); selector.add_item("Grappling Hook"); sidebar.add_child(selector)
+	selector.item_selected.connect(func(index: int) -> void: selected = ["deep_sea_lights","zapper","suckomat","magnet","grapple"][index]; _sync())
 	for caption in ["Position X (right)","Position Y (up)","Position Z (back)","Rotation X (degrees)","Rotation Y (degrees)","Rotation Z (degrees)"]:
 		var row := HBoxContainer.new(); sidebar.add_child(row)
 		var text := Label.new(); text.text = caption; text.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(text)

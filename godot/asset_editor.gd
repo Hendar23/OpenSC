@@ -337,10 +337,12 @@ func _load_folder(folder: String) -> void:
 	folder_filter.select(0)
 	_filter_assets()
 	if remember_preferences:
+		var preferences := preload("res://player_storage.gd").preferences_path()
+		preload("res://player_storage.gd").ensure_parent(preferences)
 		var config := ConfigFile.new()
-		config.load("user://opensubculture.cfg")
+		config.load(preferences)
 		config.set_value("game", "folder", folder)
-		config.save("user://opensubculture.cfg")
+		config.save(preferences)
 
 func _filter_assets() -> void:
 	asset_list.clear()

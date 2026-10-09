@@ -42,6 +42,7 @@ func run() -> void:
  ui.selected_sale = "magnet"; ui.rebuild()
  ui.layout.get_node("BuyShieldRepair").grab_focus(); ui.layout.get_node("BuyShieldRepair").pressed.emit()
  check(game.player_progress.hold.get("magnet",0) == 1 and Shop.installed(game.equipment,game.weapons)[3] == "suckomat","Buying stores the magnet without equipping it")
+ check(ui.status.is_empty(),"Purchasing succeeds without an item-moving message")
  check(root.gui_get_focus_owner() == ui.layout.get_node("BuyShieldRepair"),"Buy retains controller focus")
  check(ui.layout.get_node("BuyShieldRepair").disabled,"Original maximum prevents duplicate tools")
  ui.selected_hold = "magnet"; ui.rebuild()
@@ -64,13 +65,37 @@ func run() -> void:
  game.weapons.update_fire(true,0.1)
  check(not game.weapons.firing,"An uninstalled zapper cannot fire")
  ui.selected_hold = "magnet"; ui.rebuild(); ui.slot_buttons[7].pressed.emit()
+ var Market = preload("res://commodity_market.gd")
+ var city_id := str(int(game.docking.current.node.get_meta("city_id")))
+ var commodity_offers := Market.offers(game.gameplay_catalogue,game.player_progress,city_id)
+ for commodity in commodity_offers:
+  if commodity_offers[commodity].buy_price > 0 and commodity_offers[commodity].stock > 0:
+   game._dock_ui_action("buy_commodity",{"item":commodity}); break
+ game.set_process(false) # Freeze economy time while testing an exact disk round-trip.
+ var saved_markets: Dictionary = game.player_progress.markets.duplicate(true)
+ var saved_cargo: Dictionary = game.player_progress.cargo.duplicate(true)
+ check(not saved_cargo.is_empty(),"Game commodity action adds purchased cargo")
  game.save_games.folder = "res://tests/equipment-swap-fixtures"
  check(game.save_games.write(0,game._save_snapshot("Equipment swap")) == OK,"Equipment layout saves")
  game.equipment.set_installed(["deep_sea_lights","suckomat"]); game.weapons.set_installed(["zapper"])
  check(await game._load_saved_game(0),"Equipment layout loads")
+ var markets_match := true
+ for city in saved_markets:
+  for id in saved_markets[city]:
+   for field in saved_markets[city][id]:
+    if not is_equal_approx(float(saved_markets[city][id][field]),float(game.player_progress.markets[city][id].get(field,-INF))): markets_match = false
+ check(markets_match and game.player_progress.cargo == saved_cargo,"Disk save/load restores fractional market prices, stocks and cargo")
  check(Shop.installed(game.equipment,game.weapons).get(3) == "magnet" and game.weapons.mounted.is_empty() and game.player_progress.hold.zapper == 1 and game.player_progress.hold.suckomat == 1,"Save restores both installed equipment and hold contents")
  ui.open("equipment"); ui.selected_hold = "magnet"; ui.rebuild()
- check(ui.hold_list.item_count == 3,"Hold only lists actual stored items")
+ check(ui.hold_list.item_count == 4,"Hold only lists actual stored items")
+ var repairs: Array[int] = []
+ for row in range(ui.hold_list.item_count):
+  if ui.hold_list.get_item_metadata(row) == "shield": repairs.append(row)
+ check(repairs.size() == 2 and ui.hold_list.get_item_text(repairs[0]) == "Shield Repair" and ui.hold_list.get_item_text(repairs[1]) == "Shield Repair","Each shield repair has its own named row")
+ ui.hold_list.select(repairs[1]); ui.hold_list.item_selected.emit(repairs[1]); ui.rebuild()
+ check(ui.hold_list.get_selected_items() == PackedInt32Array([repairs[1]]),"Rebuild preserves the selected repair entry")
+ ui.layout.get_node("SellShieldRepair").pressed.emit()
+ check(game.player_progress.hold.shield == 1 and ui.hold_list.item_count == 3,"Selling removes one repair entry")
  var panel: PanelContainer = game.sound_panel
  panel.sliders.wildlife_zapper_volume.value = -7; panel.sliders.wildlife_splat_volume.value = -24; panel.sliders.master_volume.value = -3
  var sample := AudioStreamPlayer3D.new(); game.world_root.add_child(sample)
@@ -95,7 +120,35 @@ func run() -> void:
  game.equipment.set_installed(["deep_sea_lights"])
  check(not game.equipment.magnet.enabled and game.equipment.magnet.target == null,"Unequipping switches the magnet off and releases its target")
  game.equipment.set_installed(["deep_sea_lights","magnet"]); game.equipment.selected = game.equipment.mounted.find(magnet); game.equipment.toggle_selected()
+ game.docking.stage = game.Docking.Stage.DOCKED
+ for port in game.docking.ports:
+  game.docking.current = port
+  var upgrades: Dictionary = game._dock_ui_model().offers
+  check(upgrades.radoff.available == (str(port.name).begins_with("Refinery") or str(port.name).begins_with("Tryton")),"Original RADOFF initial availability: " + str(port.name))
+ for port in game.docking.ports:
+  if str(port.name).begins_with("Refinery"): game.docking.current = port; break
+ game.player_progress.status.credits = 1000000
+ game.pilot.restore_health(100,70)
+ for id in ["hullstr","radoff"]:
+  for step in range(5):
+   ui.open("equipment"); ui.selected_sale = id; ui.rebuild()
+   var price: int = game._dock_ui_model().offers[id].price
+   var before: int = game.player_progress.status.credits
+   ui.layout.get_node("BuyShieldRepair").pressed.emit()
+   check(game.player_progress.hold.get(id,0) == 1 and game.player_progress.status.credits == before - price,"Upgrade purchase deducts original price and enters hold")
+   ui.selected_hold = id; ui.rebuild(); ui.layout.get_node("UseShieldRepair").pressed.emit()
+   var stat := "hull_strength" if id == "hullstr" else "radiation_shield"
+   check(game.player_progress.status[stat] == (100 if id == "hullstr" else 0) + 20 * (step + 1) and not game.player_progress.hold.has(id),"Clicking submarine applies one twenty-point upgrade")
+   check(ui.status.is_empty() and game.pilot.health == 70 and game.pilot.max_health == 100,"Upgrade use adds no message and leaves shield charge/capacity unchanged")
+  ui.selected_sale = id; ui.rebuild()
+  check(ui.layout.get_node("BuyShieldRepair").disabled,"Fully upgraded item cannot be bought")
+  var credits: int = game.player_progress.status.credits
+  game._dock_ui_action("buy_equipment",{"item":id})
+  check(game.player_progress.status.credits == credits and not game.player_progress.hold.has(id),"Backend also rejects purchases at maximum")
+ check(game.pilot.hull_rating == 200 and game.pilot.radiation_rating == 100,"Upgrade use synchronizes both pilot resistances")
  game._begin_new_game()
+ check(game.pilot.hull_rating == 100 and game.pilot.radiation_rating == 0,"New game clears damage resistance upgrades")
+ check(game.player_progress.markets.is_empty(),"New game clears all previous markets")
  check(not game.equipment.magnet.enabled and not is_instance_valid(game.equipment.magnet.rig),"Starting a new game removes the magnet chain")
  check(Shop.installed(game.equipment,game.weapons).get(3) == "suckomat" and game.weapons.current().get("id") == "zapper" and game.player_progress.hold.is_empty(),"New game restores the original starter loadout")
  DirAccess.remove_absolute("res://tests/equipment-swap-fixtures/slot-0.json")

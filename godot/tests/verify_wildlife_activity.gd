@@ -27,7 +27,7 @@ func run() -> void:
 	check(not fish.is_processing() and not fish.is_physics_processing(),"Pausing suppresses both callbacks")
 	pop.set_simulating(true)
 	check(fish.is_processing() and fish.is_physics_processing(),"Resuming restores visible wildlife")
-	fish.position = Vector3(0,0,8); fish.detection_distance = 3; fish.visual_animation_enabled = false
+	fish.position = Vector3(0,0,8); fish.attack_range = 3; fish.flee_range = 1.5; fish.visual_animation_enabled = false
 	var time := fish.animation_time
 	fish._physics_process(1.0/60.0)
 	check(fish.animation_time == time and fish.offscreen_delta > 0,"Distant offscreen AI batches short physics ticks")

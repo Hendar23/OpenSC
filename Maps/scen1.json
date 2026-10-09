@@ -53,7 +53,7 @@
       ]
     },
     "Scenery/BOTTLTOP_383": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "BOTTLTOP",
       "name": "BOTTLTOP_383",
@@ -74,7 +74,7 @@
       ]
     },
     "Scenery/BOTTLTOP_384": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "BOTTLTOP",
       "name": "BOTTLTOP_384",
@@ -95,7 +95,7 @@
       ]
     },
     "Scenery/BOTTLTOP_385": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "BOTTLTOP",
       "name": "BOTTLTOP_385",
@@ -116,7 +116,7 @@
       ]
     },
     "Scenery/CLAM_0": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "CLAM",
       "name": "CLAM_0",
@@ -137,7 +137,7 @@
       ]
     },
     "Scenery/CLAM_1": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "CLAM",
       "name": "CLAM_1",
@@ -158,7 +158,7 @@
       ]
     },
     "Scenery/CLAM_2": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "CLAM",
       "name": "CLAM_2",
@@ -179,7 +179,7 @@
       ]
     },
     "Scenery/CLAM_3": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "CLAM",
       "name": "CLAM_3",
@@ -200,7 +200,7 @@
       ]
     },
     "Scenery/CLAM_4": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "CLAM",
       "name": "CLAM_4",
@@ -221,7 +221,7 @@
       ]
     },
     "Scenery/CLAM_5": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "CLAM",
       "name": "CLAM_5",
@@ -242,7 +242,7 @@
       ]
     },
     "Scenery/COIN_232": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "COIN",
       "name": "COIN_232",
@@ -263,7 +263,7 @@
       ]
     },
     "Scenery/COIN_233": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "COIN",
       "name": "COIN_233",
@@ -523,6 +523,35 @@
         132.153533935547
       ]
     },
+    "Scenery/Light_23": {
+      "deleted": false,
+      "energy": 0.7,
+      "flare_size": 4.0,
+      "flash_off_time": 1.0,
+      "flash_on_time": 0.5,
+      "kind": "light",
+      "light_mode": "flashing",
+      "model": "",
+      "name": "Light_23",
+      "pulse_minimum": 0.2,
+      "pulse_period": 2.4,
+      "range": 4.0,
+      "solid": false,
+      "transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        198.146392822266,
+        157.245635986328,
+        242.456726074219
+      ]
+    },
     "Scenery/Light_24": {
       "deleted": false,
       "energy": 0.699999988079071,
@@ -611,6 +640,35 @@
         329.424346923828,
         160.683975219727,
         135.47477722168
+      ]
+    },
+    "Scenery/Light_28": {
+      "deleted": false,
+      "energy": 0.7,
+      "flare_size": 4.0,
+      "flash_off_time": 1.0,
+      "flash_on_time": 0.5,
+      "kind": "light",
+      "light_mode": "flashing",
+      "model": "",
+      "name": "Light_28",
+      "pulse_minimum": 0.2,
+      "pulse_period": 2.4,
+      "range": 4.0,
+      "solid": false,
+      "transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        277.678802490234,
+        158.791717529297,
+        201.643615722656
       ]
     },
     "Scenery/Light_29": {
@@ -759,6 +817,35 @@
         253.50146484375
       ]
     },
+    "Scenery/Light_34": {
+      "deleted": false,
+      "energy": 0.7,
+      "flare_size": 4.0,
+      "flash_off_time": 1.0,
+      "flash_on_time": 0.5,
+      "kind": "light",
+      "light_mode": "flashing",
+      "model": "",
+      "name": "Light_34",
+      "pulse_minimum": 0.2,
+      "pulse_period": 2.4,
+      "range": 4.0,
+      "solid": false,
+      "transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        270.795989990234,
+        158.729248046875,
+        201.656967163086
+      ]
+    },
     "Scenery/Light_35": {
       "deleted": false,
       "energy": 0.699999988079071,
@@ -787,6 +874,35 @@
         318.407836914063,
         157.450347900391,
         259.533569335938
+      ]
+    },
+    "Scenery/Light_36": {
+      "deleted": false,
+      "energy": 0.7,
+      "flare_size": 4.0,
+      "flash_off_time": 1.0,
+      "flash_on_time": 0.5,
+      "kind": "light",
+      "light_mode": "flashing",
+      "model": "",
+      "name": "Light_36",
+      "pulse_minimum": 0.2,
+      "pulse_period": 2.4,
+      "range": 4.0,
+      "solid": false,
+      "transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        200.510620117188,
+        158.215484619141,
+        254.833969116211
       ]
     },
     "Scenery/Light_37": {
@@ -1055,6 +1171,64 @@
         265.181488037109
       ]
     },
+    "Scenery/Light_58": {
+      "deleted": false,
+      "energy": 1.0,
+      "flare_size": 4.0,
+      "flash_off_time": 1.0,
+      "flash_on_time": 0.5,
+      "kind": "light",
+      "light_mode": "flashing",
+      "model": "",
+      "name": "Light_58",
+      "pulse_minimum": 0.2,
+      "pulse_period": 2.4,
+      "range": 1.0,
+      "solid": false,
+      "transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        254.335845947266,
+        161.431015014648,
+        212.388870239258
+      ]
+    },
+    "Scenery/Light_59": {
+      "deleted": false,
+      "energy": 1.0,
+      "flare_size": 4.0,
+      "flash_off_time": 1.0,
+      "flash_on_time": 0.5,
+      "kind": "light",
+      "light_mode": "flashing",
+      "model": "",
+      "name": "Light_59",
+      "pulse_minimum": 0.2,
+      "pulse_period": 2.4,
+      "range": 1.0,
+      "solid": false,
+      "transform": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        316.179046630859,
+        152.983856201172,
+        255.919387817383
+      ]
+    },
     "Scenery/Light_62": {
       "deleted": true,
       "energy": 1.0,
@@ -1168,7 +1342,7 @@
       ]
     },
     "Scenery/PEARL_54": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "PEARL",
       "name": "PEARL_54",
@@ -1189,7 +1363,7 @@
       ]
     },
     "Scenery/PEARL_55": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "PEARL",
       "name": "PEARL_55",
@@ -1210,7 +1384,7 @@
       ]
     },
     "Scenery/PEARL_56": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "PEARL",
       "name": "PEARL_56",
@@ -8560,7 +8734,7 @@
       ]
     },
     "Scenery/THORIUM_163": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "THORIUM",
       "name": "THORIUM_163",
@@ -8581,7 +8755,7 @@
       ]
     },
     "Scenery/THORIUM_164": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "THORIUM",
       "name": "THORIUM_164",
@@ -8602,7 +8776,7 @@
       ]
     },
     "Scenery/THORIUM_194": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "THORIUM",
       "name": "THORIUM_194",
@@ -8623,7 +8797,7 @@
       ]
     },
     "Scenery/THORIUM_213": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "THORIUM",
       "name": "THORIUM_213",
@@ -8644,7 +8818,7 @@
       ]
     },
     "Scenery/THORIUM_215": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "THORIUM",
       "name": "THORIUM_215",
@@ -8665,7 +8839,7 @@
       ]
     },
     "Scenery/THORIUM_280": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "THORIUM",
       "name": "THORIUM_280",
@@ -8686,7 +8860,7 @@
       ]
     },
     "Scenery/THORIUM_365": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "THORIUM",
       "name": "THORIUM_365",
@@ -8707,7 +8881,7 @@
       ]
     },
     "Scenery/THORIUM_366": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "THORIUM",
       "name": "THORIUM_366",
@@ -8728,7 +8902,7 @@
       ]
     },
     "Scenery/THORIUM_382": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "THORIUM",
       "name": "THORIUM_382",
@@ -8749,7 +8923,7 @@
       ]
     },
     "Scenery/THORIUM_388": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "THORIUM",
       "name": "THORIUM_388",
@@ -8770,7 +8944,7 @@
       ]
     },
     "Scenery/THORIUM_53": {
-      "deleted": false,
+      "deleted": true,
       "kind": "model",
       "model": "THORIUM",
       "name": "THORIUM_53",
@@ -8921,15 +9095,15 @@
       "kind": "player",
       "name": "Player spawn",
       "transform": [
+        0.0,
+        0.0,
+        -1.0,
+        0.0,
+        1.0,
+        0.0,
         1.0,
         0.0,
         0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
         325.530609130859,
         157.0,
         256.264984130859
@@ -9029,75 +9203,164 @@
     },
     {
       "count": 1.0,
-      "id": "entity_44799479",
-      "name": "Test Thorium",
+      "id": "original_clam_0",
+      "initial_delay": 0.0,
+      "name": "Clam 1",
       "position": [
-        304.549774169922,
-        158.927001953125,
-        254.499145507813
+        191.398315429688,
+        150.495681762695,
+        155.762878417969
       ],
-      "radius": 5.0,
+      "radius": 0.0,
+      "rotation": [
+        0.0,
+        180.0,
+        0.0
+      ],
+      "type": "clam"
+    },
+    {
+      "count": 1.0,
+      "id": "original_clam_1",
+      "initial_delay": 0.0,
+      "name": "Clam 2",
+      "position": [
+        222.344009399414,
+        152.866500854492,
+        228.439025878906
+      ],
+      "radius": 0.0,
+      "rotation": [
+        0.0,
+        -130.254302944028,
+        0.0
+      ],
+      "type": "clam"
+    },
+    {
+      "count": 1.0,
+      "id": "original_clam_2",
+      "initial_delay": 1800.0,
+      "name": "Clam 3",
+      "position": [
+        273.040222167969,
+        154.979476928711,
+        273.714874267578
+      ],
+      "radius": 0.0,
+      "rotation": [
+        0.0,
+        179.978148403612,
+        0.0
+      ],
+      "type": "clam"
+    },
+    {
+      "count": 1.0,
+      "id": "original_clam_3",
+      "initial_delay": 3600.0,
+      "name": "Clam 4",
+      "position": [
+        325.916381835938,
+        149.521423339844,
+        232.482757568359
+      ],
+      "radius": 0.0,
+      "rotation": [
+        0.0,
+        -152.167202707208,
+        0.0
+      ],
+      "type": "clam"
+    },
+    {
+      "count": 1.0,
+      "id": "original_clam_4",
+      "initial_delay": 5400.0,
+      "name": "Clam 5",
+      "position": [
+        293.413452148438,
+        153.760437011719,
+        179.904495239258
+      ],
+      "radius": 0.0,
+      "rotation": [
+        -4.1880722160186,
+        -167.619112345771,
+        1.18993997583058
+      ],
+      "type": "clam"
+    },
+    {
+      "count": 1.0,
+      "id": "original_clam_5",
+      "initial_delay": 7200.0,
+      "name": "Clam 6",
+      "position": [
+        280.234710693359,
+        157.811157226563,
+        137.505905151367
+      ],
+      "radius": 0.0,
+      "rotation": [
+        -19.9161212800835,
+        -167.427170369715,
+        -13.5742855130848
+      ],
+      "type": "clam"
+    },
+    {
+      "count": 1.0,
+      "id": "original_pearl_54",
+      "name": "Refinery pearl 1",
+      "position": [
+        324.810028076172,
+        158.343933105468,
+        118.583221435547
+      ],
+      "radius": 0.0,
+      "type": "pearl"
+    },
+    {
+      "count": 1.0,
+      "id": "original_pearl_55",
+      "name": "Refinery pearl 2",
+      "position": [
+        324.93685913086,
+        158.376892089843,
+        118.768562316895
+      ],
+      "radius": 0.0,
+      "type": "pearl"
+    },
+    {
+      "count": 1.0,
+      "id": "original_pearl_56",
+      "name": "Refinery pearl 3",
+      "position": [
+        325.116455078126,
+        158.577056884765,
+        118.750541687012
+      ],
+      "radius": 0.0,
+      "type": "pearl"
+    },
+    {
+      "count": 1.0,
+      "id": "original_thorium_53",
+      "name": "Starting Thorium",
+      "position": [
+        271.640960693359,
+        157.284866333008,
+        155.101989746094
+      ],
+      "radius": 0.0,
+      "rotation": [
+        -18.3561477661133,
+        5.76253938674927,
+        5.00727653503418
+      ],
       "type": "thorium"
-    },
-    {
-      "count": 1.0,
-      "id": "entity_43695279",
-      "name": "Test Bottletop",
-      "position": [
-        301.779876708984,
-        158.134750366211,
-        259.276031494141
-      ],
-      "radius": 5.0,
-      "type": "bottletop"
-    },
-    {
-      "count": 1.0,
-      "id": "entity_77869090",
-      "name": "Test millk top",
-      "position": [
-        302.00048828125,
-        158.134750366211,
-        263.759368896484
-      ],
-      "radius": 5.0,
-      "type": "milktop"
-    },
-    {
-      "count": 1.0,
-      "id": "entity_149640323",
-      "name": "Test coin group",
-      "position": [
-        303.936981201172,
-        157.383834838867,
-        255.708892822266
-      ],
-      "radius": 5.0,
-      "type": "coin"
-    },
-    {
-      "count": 1.0,
-      "id": "entity_224099178",
-      "name": "test coin 2",
-      "position": [
-        315.237426757813,
-        155.423690795898,
-        143.898010253906
-      ],
-      "radius": 5.0,
-      "type": "coin"
-    },
-    {
-      "count": 1.0,
-      "id": "entity_257321636",
-      "name": "test milk top 2",
-      "position": [
-        313.674652099609,
-        155.423690795898,
-        142.279159545898
-      ],
-      "radius": 5.0,
-      "type": "milktop"
     }
   ],
   "object_types": [
@@ -9109,6 +9372,7 @@
       "delivery_commodity": "",
       "delivery_quantity": 0.0,
       "explosion_radius": 3.0,
+      "grapple_compatible": false,
       "health": 0.5,
       "id": "floating_mine",
       "magnet_compatible": false,
@@ -9133,6 +9397,7 @@
       "glow_green": 0.8,
       "glow_range": 3.0,
       "glow_red": 1.0,
+      "grapple_compatible": true,
       "health": 10.01,
       "id": "thorium",
       "magnet_compatible": false,
@@ -9142,7 +9407,7 @@
       "model": "THORIUM",
       "name": "Thorium",
       "radiation_range": 1.5,
-      "radiation_strength": 5.0,
+      "radiation_strength": 1.5,
       "shard1": "SHARD1",
       "shard2": "SHARD2",
       "shard3": "SHARD3",
@@ -9159,8 +9424,9 @@
       "blast_force": 0.0,
       "damage": 0.0,
       "delivery_commodity": "metal",
-      "delivery_quantity": 3.0,
+      "delivery_quantity": 2.0,
       "explosion_radius": 0.0,
+      "grapple_compatible": false,
       "health": 1.0,
       "id": "bottletop",
       "magnet_compatible": true,
@@ -9180,8 +9446,9 @@
       "blast_force": 0.0,
       "damage": 0.0,
       "delivery_commodity": "metal",
-      "delivery_quantity": 3.0,
+      "delivery_quantity": 2.0,
       "explosion_radius": 0.0,
+      "grapple_compatible": false,
       "health": 1.0,
       "id": "milktop",
       "magnet_compatible": true,
@@ -9201,8 +9468,9 @@
       "blast_force": 0.0,
       "damage": 0.0,
       "delivery_commodity": "copper",
-      "delivery_quantity": 3.0,
+      "delivery_quantity": 2.0,
       "explosion_radius": 0.0,
+      "grapple_compatible": false,
       "health": 1.0,
       "id": "coin",
       "magnet_compatible": true,
@@ -9215,15 +9483,122 @@
       "spawn_chance": 100.0,
       "texture": "COIN",
       "trigger_distance": 0.0
+    },
+    {
+      "appearance": "model",
+      "behavior": "salvage",
+      "blast_force": 0.0,
+      "damage": 0.0,
+      "delivery_commodity": "tobacco",
+      "delivery_quantity": 1.0,
+      "explosion_radius": 0.0,
+      "grapple_compatible": true,
+      "health": 1.0,
+      "id": "cigarette_end",
+      "magnet_compatible": false,
+      "mask": "FAGBUTT",
+      "mass": 0.6,
+      "maximum_population": 20.0,
+      "model": "FAGBUTT",
+      "name": "Cigarette End",
+      "size": 1.0,
+      "spawn_chance": 100.0,
+      "texture": "FAGBUTT",
+      "trigger_distance": 0.0
+    },
+    {
+      "appearance": "model",
+      "behavior": "clam",
+      "blast_force": 0.0,
+      "close_distance": 0.75,
+      "closed_angle": 10.0,
+      "closing_speed": 750.0,
+      "damage": 0.0,
+      "delivery_commodity": "",
+      "delivery_quantity": 0.0,
+      "explosion_radius": 0.0,
+      "grapple_compatible": false,
+      "health": 1.0,
+      "id": "clam",
+      "magnet_compatible": false,
+      "mask": "CLAM",
+      "model": "CLAM",
+      "name": "Clam",
+      "open_angle": 90.0,
+      "opening_speed": 75.0,
+      "pearl_height": 0.2,
+      "pearl_type": "pearl",
+      "regrowth_seconds": 7200.0,
+      "release_distance": 1.0,
+      "size": 1.0,
+      "texture": "CLAM",
+      "trigger_distance": 0.0
+    },
+    {
+      "appearance": "model",
+      "behavior": "pearl",
+      "blast_force": 0.0,
+      "damage": 0.0,
+      "delivery_commodity": "",
+      "delivery_quantity": 0.0,
+      "explosion_radius": 0.0,
+      "grapple_compatible": false,
+      "health": 1.0,
+      "id": "pearl",
+      "magnet_compatible": false,
+      "mask": "PEARL",
+      "mass": 1.0,
+      "model": "PEARL",
+      "name": "Pearl",
+      "pickup_commodity": "pearls",
+      "size": 0.143715,
+      "texture": "PEARL",
+      "trigger_distance": 0.0
+    },
+    {
+      "appearance": "model",
+      "behavior": "thorium",
+      "blast_force": 0.0,
+      "damage": 0.0,
+      "delivery_commodity": "ore",
+      "delivery_quantity": 4.0,
+      "explosion_radius": 0.0,
+      "glow_blue": 0.1,
+      "glow_emission": 0.25,
+      "glow_energy": 1.0,
+      "glow_green": 0.8,
+      "glow_range": 3.0,
+      "glow_red": 1.0,
+      "grapple_compatible": true,
+      "health": 10.01,
+      "id": "inert_thorium",
+      "magnet_compatible": false,
+      "mask": "THORIUM",
+      "mass": 12.01,
+      "maximum_population": 10.0,
+      "model": "THORIUM",
+      "name": "Inert Thorium",
+      "radiation_range": 1.5,
+      "radiation_strength": 0.25,
+      "shard1": "SHARD1",
+      "shard2": "SHARD2",
+      "shard3": "SHARD3",
+      "shard_mass": 3.01,
+      "shard_scale_percent": 100.1,
+      "size": 1.0,
+      "spawn_chance": 0.0,
+      "texture": "THORIUM",
+      "trigger_distance": 0.0
     }
   ],
   "schema_version": 1.0,
   "seed": 8675309.0,
   "species": [
     {
+      "attack_range": 7.0,
       "count_max": 18.0,
       "count_min": 4.0,
-      "detection": 7.0,
+      "flee_range": 3.5,
       "group_behaviour": "shoaling",
       "groups_max": 24.0,
       "groups_min": 12.0,
@@ -9246,9 +9621,10 @@
       "turn_speed": 60.0
     },
     {
+      "attack_range": 7.0,
       "count_max": 30.0,
       "count_min": 10.0,
-      "detection": 7.0,
+      "flee_range": 3.5,
       "group_behaviour": "schooling",
       "groups_max": 24.0,
       "groups_min": 12.0,
@@ -9271,9 +9647,10 @@
     },
     {
       "animation_speed": 1.0,
+      "attack_range": 8.0,
       "count_max": 3.0,
       "count_min": 1.0,
-      "detection": 8.0,
+      "flee_range": 4.0,
       "group_behaviour": "shoaling",
       "groups_max": 12.0,
       "groups_min": 6.0,
@@ -9295,9 +9672,10 @@
       "turn_speed": 60.0
     },
     {
+      "attack_range": 6.0,
       "count_max": 30.0,
       "count_min": 30.0,
-      "detection": 6.0,
+      "flee_range": 3.0,
       "group_behaviour": "shoaling",
       "groups_max": 24.0,
       "groups_min": 12.0,
@@ -9322,11 +9700,12 @@
     {
       "animation_speed": 1.0,
       "attack_interval": 1.0,
+      "attack_range": 8.0,
       "bite_damage": 5.0,
       "bite_range": 0.15,
       "count_max": 1.0,
       "count_min": 1.0,
-      "detection": 8.0,
+      "flee_range": 4.0,
       "food_role": "neutral",
       "group_behaviour": "shoaling",
       "groups_max": 12.0,
@@ -9353,9 +9732,10 @@
       "zapper_range": 4.0
     },
     {
+      "attack_range": 8.0,
       "count_max": 10.0,
       "count_min": 2.0,
-      "detection": 8.0,
+      "flee_range": 4.0,
       "group_behaviour": "shoaling",
       "groups_max": 24.0,
       "groups_min": 12.0,
@@ -9379,11 +9759,12 @@
     {
       "animation_speed": 1.0,
       "attack_interval": 1.0,
+      "attack_range": 8.0,
       "bite_damage": 5.0,
       "bite_range": 0.15,
       "count_max": 1.0,
       "count_min": 1.0,
-      "detection": 8.0,
+      "flee_range": 4.0,
       "food_role": "predator",
       "group_behaviour": "shoaling",
       "groups_max": 12.0,
@@ -9412,11 +9793,12 @@
     {
       "animation_speed": 1.0,
       "attack_interval": 1.0,
+      "attack_range": 8.0,
       "bite_damage": 5.0,
       "bite_range": 0.15,
       "count_max": 2.0,
       "count_min": 1.0,
-      "detection": 8.0,
+      "flee_range": 4.0,
       "food_role": "predator",
       "group_behaviour": "shoaling",
       "groups_max": 12.0,
@@ -9442,9 +9824,10 @@
       "zapper_range": 4.0
     },
     {
+      "attack_range": 8.0,
       "count_max": 1.0,
       "count_min": 1.0,
-      "detection": 8.0,
+      "flee_range": 4.0,
       "group_behaviour": "solitary",
       "groups_max": 12.0,
       "groups_min": 6.0,
@@ -9467,9 +9850,10 @@
       "turn_speed": 30.0
     },
     {
+      "attack_range": 8.0,
       "count_max": 6.0,
       "count_min": 1.0,
-      "detection": 8.0,
+      "flee_range": 4.0,
       "group_behaviour": "solitary",
       "groups_max": 12.0,
       "groups_min": 6.0,
@@ -9492,9 +9876,10 @@
     },
     {
       "animation_speed": 10.0,
+      "attack_range": 8.0,
       "count_max": 6.0,
       "count_min": 1.0,
-      "detection": 8.0,
+      "flee_range": 4.0,
       "group_behaviour": "solitary",
       "groups_max": 24.0,
       "groups_min": 12.0,
@@ -9517,9 +9902,10 @@
       "turn_speed": 60.0
     },
     {
+      "attack_range": 8.0,
       "count_max": 5.0,
       "count_min": 1.0,
-      "detection": 8.0,
+      "flee_range": 4.0,
       "group_behaviour": "shoaling",
       "groups_max": 12.0,
       "groups_min": 6.0,
@@ -9543,11 +9929,12 @@
     {
       "animation_speed": 1.0,
       "attack_interval": 1.0,
+      "attack_range": 8.0,
       "bite_damage": 5.0,
       "bite_range": 0.15,
       "count_max": 1.0,
       "count_min": 1.0,
-      "detection": 8.0,
+      "flee_range": 4.0,
       "food_role": "predator",
       "group_behaviour": "solitary",
       "groups_max": 12.0,
@@ -9573,9 +9960,10 @@
       "zapper_range": 4.0
     },
     {
+      "attack_range": 8.0,
       "count_max": 5.0,
       "count_min": 1.0,
-      "detection": 8.0,
+      "flee_range": 4.0,
       "group_behaviour": "shoaling",
       "groups_max": 8.0,
       "groups_min": 3.0,
@@ -9597,9 +9985,10 @@
       "turn_speed": 60.0
     },
     {
+      "attack_range": 8.0,
       "count_max": 10.0,
       "count_min": 1.0,
-      "detection": 8.0,
+      "flee_range": 4.0,
       "group_behaviour": "shoaling",
       "groups_max": 6.0,
       "groups_min": 3.0,
@@ -9621,9 +10010,10 @@
       "turn_speed": 60.0
     },
     {
+      "attack_range": 8.0,
       "count_max": 5.0,
       "count_min": 1.0,
-      "detection": 8.0,
+      "flee_range": 4.0,
       "group_behaviour": "shoaling",
       "groups_max": 8.0,
       "groups_min": 3.0,
@@ -9646,9 +10036,10 @@
       "turn_speed": 60.0
     },
     {
+      "attack_range": 8.0,
       "count_max": 4.0,
       "count_min": 1.0,
-      "detection": 8.0,
+      "flee_range": 4.0,
       "group_behaviour": "shoaling",
       "groups_max": 8.0,
       "groups_min": 3.0,
@@ -9668,63 +10059,6 @@
       "startle_speed_multiplier": 2.8,
       "startle_turn_speed": 720.0,
       "turn_speed": 60.0
-    },
-    {
-      "count_max": 10.0,
-      "count_min": 1.0,
-      "detection": 8.0,
-      "group_behaviour": "shoaling",
-      "groups_max": 12.0,
-      "groups_min": 6.0,
-      "id": "entity_302878756",
-      "mobility": "swimming",
-      "model": "MJACK",
-      "name": "MJackfish",
-      "pitch_limit": 25.0,
-      "random_spawn": true,
-      "response": "flee",
-      "roam_radius": 10.0,
-      "scale_max": 100.0,
-      "scale_min": 70.0,
-      "spawn_chance": 100.0,
-      "speed": 1.3,
-      "startle_duration": 0.3,
-      "startle_speed_multiplier": 2.8,
-      "startle_turn_speed": 720.0,
-      "turn_speed": 60.0
-    },
-    {
-      "animation_speed": 1.0,
-      "attack_interval": 1.0,
-      "bite_damage": 5.0,
-      "bite_range": 0.15,
-      "count_max": 6.0,
-      "count_min": 3.0,
-      "detection": 7.0,
-      "food_role": "prey",
-      "group_behaviour": "schooling",
-      "groups_max": 24.0,
-      "groups_min": 12.0,
-      "has_zapper": false,
-      "health": 10.0,
-      "id": "clownfish",
-      "mobility": "swimming",
-      "model": "ANGEL",
-      "name": "Clownfish",
-      "pitch_limit": 25.0,
-      "random_spawn": true,
-      "response": "flee",
-      "roam_radius": 10.0,
-      "scale_max": 100.0,
-      "scale_min": 70.0,
-      "spawn_chance": 100.0,
-      "speed": 1.3,
-      "startle_duration": 0.3,
-      "startle_speed_multiplier": 5.0,
-      "startle_turn_speed": 720.0,
-      "turn_speed": 60.0,
-      "zapper_damage": 10.0,
-      "zapper_range": 4.0
     }
   ]
 }

@@ -31,8 +31,9 @@ func run() -> void:
 	check(ui.name_dialog.visible and ui.name_field.text == "Touka Reef","Selecting an empty slot suggests the current city name")
 	await pad(ui.name_dialog,JOY_BUTTON_A)
 	check(not ui.name_dialog.visible and saved.get("slot") == 1 and saved.get("name") == "Touka Reef","Controller confirm accepts the suggested name and saves")
-	slots[1] = {"slot":1,"name":"My voyage","exists":true,"valid":true,"city":"Touka Reef","saved_at":""}
+	slots[1] = {"slot":1,"name":"My voyage","exists":true,"valid":true,"city":"Touka Reef","saved_at":"2026-10-08T22:15:30"}
 	ui.open("save"); ui._choose_slot(1); await process_frame
+	check(ui.button_nodes.any(func(node: Button) -> bool: return node.text.contains("My voyage — 2026-10-08 22:15:30")),"Save list shows the name with its saved date and time")
 	check(ui.name_field.text == "My voyage","Existing slots retain their saved name")
 	await pad(ui.name_dialog,JOY_BUTTON_B)
 	check(not ui.name_dialog.visible,"Controller cancel closes naming without saving")
@@ -46,5 +47,7 @@ func run() -> void:
 	ui.open("save"); ui.report("Saved.")
 	await pad(root,JOY_BUTTON_DPAD_DOWN)
 	check(root.gui_get_focus_owner().name == "choose_slot_1","Slot navigation survives a menu refresh")
+	ui.open("load")
+	check(ui.button_nodes.any(func(node: Button) -> bool: return node.text.contains("My voyage — 2026-10-08 22:15:30")),"Load list also shows the saved date and time")
 	paused = false; ui.free()
 	print("Save menu input: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

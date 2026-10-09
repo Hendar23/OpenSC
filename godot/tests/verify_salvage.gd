@@ -55,10 +55,15 @@ func run() -> void:
   pop._random_drop(definition)
  check(pop.get_child_count() == 3,"Each metal has its own population budget")
  for body in pop.get_children():
-  check(body.position.y > 0 and Vector2(body.position.x,body.position.z).length() <= 35 and not camera.is_position_in_frustum(body.position),"Metal drops above water near the player and outside view")
+  check(body.position.y > 0 and body.position.x >= -50 and body.position.x <= 50 and body.position.z >= -50 and body.position.z <= 50 and not camera.is_position_in_frustum(body.position),"Metal drops above water across map bounds and outside view")
   check(pop._clear_of_docks(body.global_position,float(body.stats.size) * 0.5),"Random metal drops avoid the dock safety radius")
  for definition in metals: pop._random_drop(definition)
  check(pop.get_child_count() == 3,"Per-type caps stop further drops")
+ var cigarette := Definitions.CIGARETTE.duplicate(true); cigarette.maximum_population = 1
+ pop._random_drop(cigarette); pop._random_drop(cigarette)
+ var cigarettes: Array = pop.get_children().filter(func(body: Node) -> bool: return body.stats.id == "cigarette_end")
+ check(cigarettes.size() == 1 and pop.get_child_count() == 4,"Cigarette ends join the random spawn system with their own population cap")
+ check(cigarettes[0].get_meta("grapple_tow_target",false) and not cigarettes[0].get_meta("metal_tow_target",true),"Random cigarette ends accept the grapple and reject the magnet")
  pop.restore_snapshot([])
  var exclusions: Array[Dictionary] = pop.dock_spawn_exclusions.duplicate(true)
  pop.dock_spawn_exclusions = [{"center":Vector2.ZERO,"radius":1000.0}]
@@ -67,8 +72,9 @@ func run() -> void:
  check(pop.get_child_count() == 0,"Blocked dock areas suppress both Thorium and metal drops rather than falling back to unsafe positions")
  pop.dock_spawn_exclusions = exclusions
  for definition in metals: pop.salvage_types[definition.id] = definition
+ for definition in pop.thorium_types.values(): definition.spawn_chance = 0
  pop.spawn_elapsed = 59; pop._physics_process(2)
- check(pop.get_child_count() == 3,"Metal uses the same timed random-drop system as Thorium")
+ check(pop.get_child_count() == 4,"Metal and cigarette ends use the same timed random-drop system as Thorium")
  pilot.controls_enabled = false; pop.spawn_elapsed = 59; pop._physics_process(2)
  check(pop.spawn_elapsed == 59,"Dock/menu sequences stop random drops")
  world.free()

@@ -1,5 +1,10 @@
 extends SceneTree
 const Pilot = preload("res://submarine_controller.gd")
+class FakeJoy extends RefCounted:
+	var calls := 0
+	func get_connected_joypads() -> Array: return [0]
+	func start_joy_vibration(_device: int, _weak: float, _strong: float, _duration: float) -> void: calls += 1
+	func stop_joy_vibration(_device: int) -> void: pass
 var checks := 0
 var failures := 0
 func check(ok: bool, message: String) -> void:
@@ -9,6 +14,7 @@ func _initialize() -> void: call_deferred("run")
 func run() -> void:
 	var pilot := Pilot.new(); pilot.remember_settings = false; pilot.active = true; root.add_child(pilot)
 	pilot.visual = Node3D.new(); pilot.add_child(pilot.visual)
+	var joy := FakeJoy.new(); pilot.impact_rumble.joy_input = joy
 	pilot.movement.settings.impact_damage_threshold = 0.75; pilot.movement.settings.impact_damage_scale = 1.0
 	pilot.apply_impact_damage(0.5)
 	check(pilot.health == 100,"Gentle contact causes no damage")
@@ -27,6 +33,7 @@ func run() -> void:
 	pilot.reset_at(Vector3.ZERO); pilot.velocity = Vector3.RIGHT * 4
 	for frame in range(90): await physics_frame
 	check(pilot.health < 100 and pilot.health > 50,"A real wall collision damages the hull without destroying it")
+	check(joy.calls > 0,"Real wall collision produces physical rumble")
 	var after_hit: float = pilot.health
 	for frame in range(60):
 		pilot.velocity = Vector3.RIGHT * 0.1; await physics_frame
@@ -38,6 +45,7 @@ func run() -> void:
 	for frame in range(60): await physics_frame
 	check(pilot.health == 100,"The water surface causes no collision damage")
 	water.free(); pilot.restore_health(); pilot.reset_at(Vector3.ZERO)
+	var before_fish := joy.calls
 	var fish := preload("res://fish_controller.gd").new()
 	fish.setup(Node3D.new(),Vector3(2,0,0),AABB(Vector3.ONE * -100,Vector3.ONE * 200),100,0.06,42)
 	root.add_child(fish); fish.swim_speed = 0
@@ -45,8 +53,9 @@ func run() -> void:
 	for frame in range(90): await physics_frame
 	check(pilot.health == 100 and fish.health == fish.max_health,"Real submarine/wildlife contacts cause no damage to either body")
 	check(fish.position.x > 2.1,"Submarine contact pushes the creature aside")
+	check(joy.calls > before_fish,"Harmless wildlife collision also produces rumble")
 	fish.free()
-	pilot.apply_impact_damage(100)
+	pilot.apply_impact_damage(1000)
 	check(pilot.dead,"Fatal impact uses submarine destruction")
 	pilot.free()
 	print("Impact damage: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

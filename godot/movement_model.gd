@@ -23,7 +23,9 @@ const DEFAULTS := {
 }
 var settings: Dictionary = DEFAULTS.duplicate()
 var defaults: Dictionary = DEFAULTS.duplicate()
-var defaults_hash := ""
+var base_settings := {}
+var mod_values := {}
+var mod_section := ""
 var persistence_path := "user://submarine_tuning.cfg"
 var velocity := Vector3.ZERO
 var angular_velocity := Vector3.ZERO
@@ -124,19 +126,14 @@ func rotational_inertia() -> float:
 	return 0.4 * maxf(1.0,float(settings.mass) + cargo_mass) * 0.675 * 0.675
 
 func load_settings(persist_update: bool = true, path: String = "user://submarine_tuning.cfg", source: String = "res://submarine_tuning.cfg") -> void:
+	mod_values.clear(); mod_section = ""
 	if path == "user://submarine_tuning.cfg" and source == "res://submarine_tuning.cfg":
 		source = preload("res://current_settings.gd").path("submarine_tuning.cfg")
 		path = source
 	defaults = DEFAULTS.duplicate()
 	var exported := ConfigFile.new()
 	if exported.load(source) == OK: _apply_values(exported,defaults)
-	var patch := ConfigFile.new()
-	patch.set_value("movement", "physics_version", 2)
-	for key in Mods.movement: patch.set_value("movement", key, Mods.movement[key])
-	_apply_values(patch, defaults)
 	persistence_path = path
-	# Record the effective defaults for exported profiles; saved choices take precedence.
-	defaults_hash = JSON.stringify(defaults).sha256_text()
 	var config := ConfigFile.new()
 	settings = defaults.duplicate()
 	if config.load(persistence_path) == OK:
@@ -144,6 +141,21 @@ func load_settings(persist_update: bool = true, path: String = "user://submarine
 	elif persist_update:
 		var result := save_settings(persistence_path)
 		if result != OK: push_warning("Could not persist updated movement defaults: " + error_string(result))
+	base_settings = settings.duplicate()
+	mod_values.clear(); mod_section = ""
+	if not Mods.movement.is_empty():
+		# Presets overlay the current shared tuning. Keep edited preset values in
+		# the same file, scoped to the active mod order, so disabling a mod restores
+		# the underlying tuning rather than leaving its values installed globally.
+		mod_section = "mod_movement." + JSON.stringify(Mods.active_ids()).sha256_text().substr(0,16)
+		var patch := ConfigFile.new(); patch.set_value("movement","physics_version",2)
+		for key in Mods.movement: patch.set_value("movement",key,Mods.movement[key])
+		_apply_values(patch,settings)
+		for key in Mods.movement:
+			if not settings.has(key): continue
+			mod_values[key] = settings[key]
+			patch.set_value("movement",key,config.get_value(mod_section,key,settings[key]))
+		_apply_values(patch,settings)
 
 static func _apply_values(config: ConfigFile, values: Dictionary) -> void:
 	for key in DEFAULTS:
@@ -158,9 +170,17 @@ static func _apply_values(config: ConfigFile, values: Dictionary) -> void:
 func save_settings(path: String = "") -> Error:
 	if path.is_empty(): path = persistence_path
 	var config := ConfigFile.new()
+	var values := settings.duplicate()
+	if path == persistence_path:
+		config.load(path)
+		if not mod_section.is_empty():
+			if config.has_section(mod_section): config.erase_section(mod_section)
+			for key in mod_values:
+				values[key] = base_settings[key]
+				if not is_equal_approx(float(settings[key]),float(mod_values[key])): config.set_value(mod_section,key,settings[key])
+	if config.has_section("defaults"): config.erase_section("defaults")
 	config.set_value("movement", "physics_version", 2)
-	for key in settings:
-		config.set_value("movement", key, settings[key])
-	config.set_value("defaults", "source_hash", defaults_hash)
+	for key in values:
+		config.set_value("movement", key, values[key])
 	config.set_value("settings", "unified", true)
 	return config.save(path)

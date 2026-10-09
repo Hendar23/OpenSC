@@ -19,7 +19,24 @@ func run() -> void:
 		await physics_frame
 	check(game.startup_complete,"Game loads")
 	if not game.startup_complete: quit(1); return
+	check(game.market_speed_slider.get_parent().name == "System" and not game.market_speed_slider.scrollable,"Market speed slider lives under System and ignores the mouse wheel")
+	game.market_speed_slider.value = 10
+	check(is_equal_approx(game._view_settings().market_speed,0.1),"Exported settings include adjustable market speed")
+	var speed_path := "res://tests/market-speed-settings.cfg"
+	game.remember_preferences = true
+	var previous_directory: String = game.defaults_directory
+	game.defaults_directory = "res://tests"
+	check(game._save_preferences(speed_path) == OK,"Market speed saves with shared settings")
+	game.remember_preferences = false; game.defaults_directory = previous_directory
+	game.market_speed_slider.value = 50
+	game._load_preferences(speed_path)
+	check(game.market_speed_slider.value == 10,"Market speed persists after reloading settings")
+	game.market_speed_slider.value = 50
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(speed_path))
 	game._begin_new_game(); game.pilot.set_physics_process(false); game.docking.set_physics_process(false)
+	check((-game.pilot.global_basis.z).is_equal_approx(Vector3.LEFT),"New game faces 90 degrees right of the previous positive-Z heading")
+	check(game.pilot.global_basis.is_equal_approx(game.world_root.get_meta("player_spawn_basis")),"New game uses the editable spawn rotation")
+	check(game.docking_portrait.anchor_left == 0.0 and game.docking_portrait.offset_left == 20.0 and game.docking_prompt.offset_left > game.docking_portrait.offset_right,"Radio portraits sit left of the message text")
 	game.save_games.folder = "res://tests/save-fixture"
 	var port: Dictionary = game.docking.ports[0]
 	game.docking.current = port; game.docking.saved_collision_mask = game.pilot.collision_mask
@@ -37,6 +54,27 @@ func run() -> void:
 	game.dock_interface_active = false
 	game._process(0.0)
 	check(game.player_progress.cargo.get("ore",0) == 3 and game.equipment.vacuum.storage.is_empty(),"Entering dock transfers Suck-O-Matic storage into cargo")
+	game.market_speed_slider.value = 0
+	var clock_before: Dictionary = game.player_progress.economy.duplicate(true)
+	game._process(1.0)
+	check(game.player_progress.economy == clock_before,"Zero market speed pauses the economy")
+	game.market_speed_slider.value = 10
+	var phase_before := float(game.player_progress.economy.production_elapsed)
+	game._process(1.0)
+	check(is_equal_approx(float(game.player_progress.economy.production_elapsed) - phase_before,0.1),"Market speed applies immediately to simulation time")
+	game.market_speed_slider.value = 50
+	game.dock_interface.open("goods")
+	var starting_offers: Dictionary = game._dock_ui_model().commodity_offers
+	for step in range(10): game._process(1.0)
+	var moving_offer := ""
+	var current_offers: Dictionary = game._dock_ui_model().commodity_offers
+	for id in starting_offers:
+		if starting_offers[id].buy_price != current_offers[id].buy_price: moving_offer = id; break
+	check(not moving_offer.is_empty(),"Docked market prices begin moving within ten seconds at half speed")
+	if not moving_offer.is_empty():
+		check(game.dock_interface.layout.get_node("Quote_%s_0" % moving_offer).text == str(current_offers[moving_offer].buy_price),"Goods screen visibly refreshes moving prices while docked")
+	game.dock_interface.open("home")
+	game.day_night.hour = 18.25
 	var crystal_stats := preload("res://object_definitions.gd").THORIUM.duplicate(true)
 	var intact: RigidBody3D = game.object_population._create_thorium(crystal_stats,0,Transform3D(Basis.IDENTITY,port.entry + Vector3.UP))
 	intact.freeze = true; intact.linear_velocity = Vector3(0.2,-0.3,0.1)
@@ -45,6 +83,17 @@ func run() -> void:
 	for body in game.object_population.get_children():
 		if body is Thorium: body.freeze = true
 	var snapshot: Dictionary = game._save_snapshot("Test dock")
+	snapshot.progress.status.hull_strength = 180
+	snapshot.progress.status.radiation_shield = 60
+	for bad_id in [NAN,INF,-1,1.5]:
+		var invalid := snapshot.duplicate(true); invalid.dock.id = bad_id
+		check(not game.save_games.valid(invalid),"Invalid dock identity is rejected before loading")
+	var invalid_pose := snapshot.duplicate(true); invalid_pose.pose = preload("res://map_document.gd").encode(Transform3D(Basis(Vector3.ZERO,Vector3.ZERO,Vector3.ZERO),Vector3.ZERO))
+	check(not game.save_games.valid(invalid_pose),"Singular saved submarine pose is rejected")
+	var duplicate_item := snapshot.duplicate(true); duplicate_item.equipment.append(duplicate_item.equipment[0].duplicate())
+	check(not game.save_games.valid(duplicate_item),"Duplicate installed equipment cannot enter a save")
+	var duplicate_weapon := snapshot.duplicate(true); duplicate_weapon.weapons.append(duplicate_weapon.weapons[0])
+	check(not game.save_games.valid(duplicate_weapon),"Duplicate installed weapons cannot enter a save")
 	check(snapshot.objects.size() == authored_count + 4,"Dock save includes one crystal and three shards")
 	var map_document: Dictionary = preload("res://map_document.gd").load_active()
 	var transitional_signature := JSON.stringify(map_document).sha256_text()
@@ -87,6 +136,8 @@ func run() -> void:
 	game.dock_interface.button_nodes[1].grab_focus()
 	var accept := InputEventJoypadButton.new(); accept.button_index = JOY_BUTTON_A; accept.pressed = true
 	game.dock_interface._input(accept)
+	check(game.dock_interface.page == "home","Controller hold keeps the current dock page visible")
+	accept.pressed = false; game.dock_interface._input(accept)
 	check(game.dock_interface.page == "equipment","Controller A activates the focused dock control")
 	var override_path := "res://tests/dock-layout-fixture.json"
 	var layout_file := FileAccess.open(override_path,FileAccess.WRITE)
@@ -122,6 +173,7 @@ func run() -> void:
 	check(is_equal_approx(game.day_night.hour,18.25),"Restores time of day")
 	check(game.player_progress.status.shields == 70 and game.player_progress.status.credits == 321 and game.player_progress.campaign_stage == 2 and game._dock_ui_model().standing == "Friendly","Restores submarine status, reputation and story stage")
 	check(game.pilot.health == 70 and game.pilot.max_health == 100 and not game.pilot.dead,"Loaded dock status also restores real submarine shields")
+	check(game.pilot.hull_rating == 180 and game.pilot.radiation_rating == 60 and game.player_progress.status.hull_strength == 180,"Saved upgrades restore resistance without increasing shield capacity")
 	check(game.player_progress.cargo.get("ore",0) == 3 and game.equipment.vacuum.storage.is_empty(),"Collected cargo survives dock save/load")
 	check(game.equipment.mounted[0].enabled,"Restores headlight state")
 	check(game.cockpit_hud.map_data.explored.get_pixel(100,101).r > 0.99 and game.cockpit_hud.map_data.explored.get_pixel(99,101).r < 0.01,"Restores explored fog mask")
@@ -138,7 +190,7 @@ func run() -> void:
 	check(await game._load_saved_game(1),"Loads a save from a different physical map")
 	check(game.cockpit_hud.map_data.explored.get_pixel(100,101).r == 0.0,"Changed map starts with fresh exploration")
 	check(game.pilot.global_position.is_equal_approx(game.docking.current.inside),"Load uses the current dock location")
-	var missing_dock := snapshot.duplicate(true); missing_dock.dock.id = -999
+	var missing_dock := snapshot.duplicate(true); missing_dock.dock.id = 999999
 	game.save_games.write(1,missing_dock)
 	check(not await game._load_saved_game(1),"Missing saved dock still prevents loading")
 	var missing_item := snapshot.duplicate(true); missing_item.weapons.append("unavailable-test-weapon")
@@ -188,6 +240,9 @@ func run() -> void:
 			check(part.get_global_transform_interpolated().is_equal_approx(part.global_transform),"Saved slot %d launches with the current display position and angle for %s" % [slot,part.name])
 	for slot in [0,1,2,6]: DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.path(slot)))
 	game._begin_new_game()
+	check(is_equal_approx(game.day_night.hour,10.0),"New Game starts at 10:00")
+	var fixed_count: int = game.object_population.initial_thorium.size()
+	check(game.object_population.snapshot().size() > fixed_count and game.object_population.snapshot().size() <= fixed_count + 72,"New Game adds its startup batch to authored objects")
 	check(game.player_progress.status.shields == 100 and game.player_progress.status.credits == 0 and game.player_progress.standing.is_empty(),"New game resets status and reputation")
 	var legacy_progress: Dictionary = game.PlayerProgress.restore({})
 	check(legacy_progress.status.hull_strength == 100 and legacy_progress.campaign_stage == 1,"Old saves without status receive starting values")
