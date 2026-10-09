@@ -15,7 +15,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="OpenSubCulture: asset viewer"
-config/version="0.1.0-dev"
+config/version="0.1.0-alpha.1"
 run/main_scene="res://game.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
@@ -27,7 +27,7 @@ InputBindings="*res://input_bindings.gd"
 
 window/size/viewport_width=1280
 window/size/viewport_height=720
-window/size/mode=3
+window/size/mode=4
 window/stretch/mode="canvas_items"
 
 [physics]

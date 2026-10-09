@@ -111,6 +111,7 @@ func setup(sound: Node, in_tabs: bool = false) -> void:
 	_row(rows, ["wildlife_zapper_volume", "Fish zapper volume", -60.0, 6.0, 1.0, "dB"])
 	_row(rows, ["wildlife_splat_volume", "Wildlife splat volume", -60.0, 6.0, 1.0, "dB"])
 	_row(rows, ["low_shield_volume", "Low shield warning volume", -60.0, 6.0, 1.0, "dB"])
+	_row(rows, ["dock_menu_volume", "Dock menu / buying and selling volume", -60.0, 6.0, 1.0, "dB"])
 	var docking_heading := Label.new()
 	docking_heading.text = "Docking · DOCKING / DOCK / DOCKSHUT"
 	docking_heading.add_theme_font_size_override("font_size", 17)

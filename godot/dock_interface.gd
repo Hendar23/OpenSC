@@ -8,7 +8,7 @@ const DEFAULT_PAGES := {
 	"equipment":{"buttons":[{"action":"home","rect":[14,417,163,49]},{"action":"goods","rect":[465,417,163,49]}],"title":[218,10,202,38],"sale":[22,54,145,267],"hold":[478,54,143,267],"buy":[100,361,66,26],"sale_info":[27,361,66,26],"hold_info":[477,361,66,26],"sell":[550,361,66,26],"cost":[24,339,145,22],"sell_price":[478,339,143,22],"preview":[210,58,230,126],"status":[235,332,172,130],"message":[210,203,230,67]},
 	"goods":{"buttons":[{"action":"equipment","rect":[15,418,160,48]}],"list":[22,49,198,304],"buy":[248,364,65,27],"sell":[356,364,65,27],"info":[86,364,65,27]},
 	"missions":{"buttons":[{"action":"home","rect":[18,422,230,40]}]},
-	"save":{"buttons":[{"action":"home","rect":[23,419,190,42]}],"slots":[204,56,268,44]},
+	"save":{"buttons":[{"action":"home","rect":[20,395,190,71]}],"slots":[204,56,268,44]},
 	"load":{"buttons":[{"action":"close","rect":[23,419,190,42]}],"slots":[204,56,268,44]}
 }
 var folder := ""
@@ -113,16 +113,20 @@ func button(action: String, area: Rect2, text: String = "", payload: Dictionary 
 	var focus := StyleBoxFlat.new(); focus.bg_color = Color(1,1,1,0.1); focus.border_color = text_colour; focus.set_border_width_all(1)
 	for state in ["hover","focus","pressed"]: node.add_theme_stylebox_override(state,focus)
 	_skin_button(node,action,payload)
+	# Inventory actions play their result sound after the transaction succeeds
+	# or fails. A generic press sound here would play over that result.
+	var outcome_sound := action in ["buy_equipment","sell_equipment","buy_commodity","sell_commodity","equipment_slot","use_repair"]
 	node.mouse_entered.connect(func() -> void: _enter_button(node))
 	node.focus_entered.connect(func() -> void: _enter_button(node))
 	node.mouse_exited.connect(func() -> void: _leave_button(node))
 	node.focus_exited.connect(func() -> void: _leave_button(node))
 	node.button_down.connect(func() -> void:
-		node.held = true; node.set_meta("sounded_down",true); node.queue_redraw(); _play_menu_sound("activate"))
+		node.held = true; node.set_meta("sounded_down",true); node.queue_redraw()
+		if not outcome_sound: _play_menu_sound("activate"))
 	node.button_up.connect(func() -> void: node.held = false; node.queue_redraw())
 	layout.add_child(node); button_nodes.append(node)
 	node.pressed.connect(func() -> void:
-		if not node.get_meta("sounded_down",false): _play_menu_sound("activate")
+		if not outcome_sound and not node.get_meta("sounded_down",false): _play_menu_sound("activate")
 		node.set_meta("sounded_down",false)
 		if action in pages: open(action)
 		elif action == "choose_slot": _choose_slot(int(payload.slot))
@@ -145,6 +149,7 @@ func _piece(node: Button, target: Array, relative: String, position: Vector2) ->
 func _skin_button(node: DockButton, action: String, payload: Dictionary) -> void:
 	var procha := dock_race == 2
 	var prefix := "P" if procha else "B"
+	var goods_prefix := "R" if dock_race == 4 else prefix
 	var trade := "TP" if procha else "TB"
 	if page == "home" and action in ["missions","equipment","save","launch"]:
 		var entries := {
@@ -158,8 +163,13 @@ func _skin_button(node: DockButton, action: String, payload: Dictionary) -> void
 		for point in entry[3]: node.hit_polygon.append(point - node.position)
 	elif action in ["buy_equipment","sell_equipment","repair_info","buy_commodity","sell_commodity","commodity_info"]:
 		var letter := "B" if action.begins_with("buy") else "S" if action.begins_with("sell") else "I"
-		_piece(node,node.highlight_art,"ENGLISH/" + trade + "-" + letter + "1",node.position)
-		_piece(node,node.held_art,"ENGLISH/" + trade + "-" + letter + "2",node.position)
+		if page == "goods" and dock_race == 4:
+			var name := "BUY" if letter == "B" else "SELL" if letter == "S" else "INFO"
+			_piece(node,node.highlight_art,"ENGLISH/" + name,node.position)
+			_piece(node,node.held_art,"ENGLISH/" + name + "LIT",node.position)
+		else:
+			_piece(node,node.highlight_art,"ENGLISH/" + trade + "-" + letter + "1",node.position)
+			_piece(node,node.held_art,"ENGLISH/" + trade + "-" + letter + "2",node.position)
 	elif page == "equipment" and action in ["home","goods"]:
 		if action == "home":
 			_piece(node,node.highlight_art,"ENGLISH/" + trade + "-DN1",Vector2(82,434))
@@ -168,11 +178,14 @@ func _skin_button(node: DockButton, action: String, payload: Dictionary) -> void
 			_piece(node,node.highlight_art,"ENGLISH/" + prefix + "GOOD",Vector2(473,435))
 			_piece(node,node.held_art,prefix + "GBUT",Vector2(563,416))
 	elif page == "missions" and action == "home":
-		_piece(node,node.highlight_art,"ENGLISH/M" + prefix + "-BDL",Vector2(93,437))
-		_piece(node,node.held_art,"M" + prefix + "-B1",Vector2(27,421))
-	elif action in ["home","equipment"] and page in ["goods","save","load"]:
-		_piece(node,node.highlight_art,"ENGLISH/" + prefix + "DONG",Vector2(82,434))
-		_piece(node,node.held_art,trade + "-BUT1",Vector2(22,418))
+		_piece(node,node.highlight_art,"ENGLISH/M" + goods_prefix + "-BDL",Vector2(93,437))
+		_piece(node,node.held_art,"M" + goods_prefix + "-B1",Vector2(27,421))
+	elif page == "goods" and action == "equipment":
+		_piece(node,node.highlight_art,"ENGLISH/" + goods_prefix + "DONG",Vector2(82,434))
+		_piece(node,node.held_art,goods_prefix + "POPL",Vector2(22,418))
+	elif page == "save" and action == "home":
+		_piece(node,node.highlight_art,"ENGLISH/" + prefix + "STEXT1",Vector2(94,427))
+		_piece(node,node.held_art,prefix + "SLIT2",Vector2(20,395))
 	# Keep original overlays attached when a mod moves a navigation button.
 	for entry in DEFAULT_PAGES.get(page,{}).get("buttons",[]):
 		if entry.action != action: continue
@@ -198,8 +211,9 @@ func _play_menu_sound(role: String) -> void:
 	if rebuilding or not visible: return
 	var player: AudioStreamPlayer = sound_players.get(role)
 	if player == null or not player.is_inside_tree() or player.stream == null: return
-	var gain := float(audio_tuning.settings.master_volume)
-	player.volume_db = -80.0 if gain <= -60 else gain
+	var master := float(audio_tuning.settings.master_volume)
+	var gain := float(audio_tuning.settings.dock_menu_volume)
+	player.volume_db = -80.0 if master <= -60 or gain <= -60 else master + gain
 	player.play(); menu_sound_played.emit(role)
 
 func transaction_feedback(message: String, success_sound: String, changed: bool = true) -> void:

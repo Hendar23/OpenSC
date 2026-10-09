@@ -464,6 +464,12 @@ func select(key: String) -> void:
 			elif entry.kind == "dropoff":
 				number("radius", "Detection radius", entry.radius, 0.01, 1000, 0.01)
 			elif entry.kind == "light":
+				for i in range(3): number("rotation_" + str(i), "Rotation " + ["X", "Y", "Z"][i] + " (°)", rad_to_deg(pose.basis.get_euler()[i]), -360, 360, 1)
+				choice("light_type", "Light type", ["beacon", "searchlight"], entry.get("light_type", "beacon"), ["Beacon / flare", "Searchlight"])
+				for setting in Document.Searchlight.DEFAULTS:
+					var caption: String = {"sweep_speed":"Sweep speed (°/s)", "sweep_angle":"Sweep half-angle (°)", "beam_length":"Beam length", "beam_width":"Beam end width", "beam_brightness":"Beam brightness", "beam_softness":"Beam softness", "day_brightness":"Daytime brightness multiplier"}[setting]
+					var limits: Array = {"sweep_speed":[0,180,1], "sweep_angle":[0,180,1], "beam_length":[0.1,100,0.1], "beam_width":[0.02,50,0.02], "beam_brightness":[0,4,0.05], "beam_softness":[0.05,1,0.05], "day_brightness":[0,1,0.05]}[setting]
+					number(setting, caption, entry.get(setting, Document.Searchlight.DEFAULTS[setting]), limits[0], limits[1], limits[2])
 				number("energy", "Light energy", entry.get("energy", 1), 0, 16, 0.1)
 				number("range", "Light range", entry.get("range", 5), 0.1, 1000, 0.1)
 				choice("light_mode", "Light style", ["steady", "pulsing", "flashing"], Document.PulseLight.mode_from(entry), ["Steady", "Pulsing", "Flashing"])
@@ -473,13 +479,17 @@ func select(key: String) -> void:
 				number("flash_off_time", "Flash off time (seconds)", entry.get("flash_off_time", 1.0), 0.05, 60, 0.05)
 				number("flare_size", "Flare size", entry.get("flare_size", 4.0), 0.1, 100, 0.1)
 				fields.light_mode.item_selected.connect(func(_index: int) -> void: _update_light_fields())
+				fields.light_type.item_selected.connect(func(_index: int) -> void: _update_light_fields())
 				_update_light_fields()
 	_refresh_list(); _update_outline()
 func _update_light_fields() -> void:
 	var mode: String = _value("light_mode")
-	for key in ["pulse_period", "pulse_minimum", "flash_on_time", "flash_off_time"]:
+	var searchlight: bool = _value("light_type") == "searchlight"
+	var keys: Array = Document.Searchlight.DEFAULTS.keys() + ["energy", "range", "light_mode", "pulse_period", "pulse_minimum", "flare_size", "flash_on_time", "flash_off_time"]
+	for key in keys:
 		var control: Control = fields[key]
-		var shown := mode == ("pulsing" if key.begins_with("pulse_") else "flashing")
+		var shown: bool = searchlight if key in Document.Searchlight.DEFAULTS else not searchlight
+		if key in ["pulse_period", "pulse_minimum", "flash_on_time", "flash_off_time"]: shown = shown and mode == ("pulsing" if key.begins_with("pulse_") else "flashing")
 		control.visible = shown
 		properties.get_child(control.get_index() - 1).visible = shown
 func label(text: String) -> void:
@@ -581,8 +591,17 @@ func apply_properties() -> void:
 				pose.basis = Basis(Vector3.UP,-deg_to_rad(float(_value("facing"))))
 			if entry.kind == "dropoff": entry.radius = _value("radius")
 			if entry.kind == "light":
-				for key in ["energy", "range", "light_mode", "pulse_period", "flare_size", "flash_on_time", "flash_off_time"]: entry[key] = _value(key)
-				entry.pulse_minimum = float(_value("pulse_minimum")) / 100.0
+				entry.light_type = _value("light_type")
+				var changed := false
+				for i in range(3):
+					var control: SpinBox = fields["rotation_" + str(i)]
+					if not is_equal_approx(control.value, control.get_meta("initial_value")): changed = true
+				if changed: pose.basis = Basis.from_euler(Vector3(deg_to_rad(_value("rotation_0")), deg_to_rad(_value("rotation_1")), deg_to_rad(_value("rotation_2")))) * Basis.from_scale(pose.basis.get_scale())
+				if entry.light_type == "searchlight":
+					for key in Document.Searchlight.DEFAULTS: entry[key] = _value(key)
+				else:
+					for key in ["energy", "range", "light_mode", "pulse_period", "flare_size", "flash_on_time", "flash_off_time"]: entry[key] = _value(key)
+					entry.pulse_minimum = float(_value("pulse_minimum")) / 100.0
 				entry.erase("pulse_enabled")
 			entry.transform = Document.encode(pose)
 	if not Document.valid(document): document = before; status.text = "Invalid properties: check minimum / maximum values."; return

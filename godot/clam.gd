@@ -55,13 +55,17 @@ func release_pearl() -> void:
 	pearl = null; remaining = float(stats.regrowth_seconds)
 
 func state() -> Dictionary:
-	return {"angle":angle,"remaining":remaining,"pearl_offset":preload("res://map_document.gd").array(to_local(pearl.global_position)) if is_instance_valid(pearl) and not pearl.is_queued_for_deletion() else []}
+	var result := {"angle":angle,"remaining":remaining,"pearl_offset":preload("res://map_document.gd").array(to_local(pearl.global_position)) if is_instance_valid(pearl) and not pearl.is_queued_for_deletion() else []}
+	if not result.pearl_offset.is_empty(): result.pearl_id = preload("res://entity_identity.gd").of(pearl)
+	return result
 
 func restore_state(value: Dictionary) -> void:
 	angle = float(value.angle); remaining = float(value.remaining)
 	if value.pearl_offset.size() == 3:
 		_grow_pearl()
-		if is_instance_valid(pearl): pearl.global_position = to_global(preload("res://map_document.gd").vector(value.pearl_offset))
+		if is_instance_valid(pearl):
+			pearl.global_position = to_global(preload("res://map_document.gd").vector(value.pearl_offset))
+			if value.has("pearl_id"): preload("res://entity_identity.gd").assign_id(pearl,value.pearl_id)
 	_update_shell()
 
 func _exit_tree() -> void:

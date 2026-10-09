@@ -17,7 +17,7 @@ static func ensure(read_preferences: bool = true) -> void:
 	if not initialized: initialize(read_preferences)
 
 static func initialize(read_preferences: bool = true, folder: String = DEFAULT_ROOT, preferences: String = "") -> void:
-	root = ProjectSettings.globalize_path(folder).replace("\\", "/").simplify_path().trim_suffix("/")
+	root = preload("res://runtime_paths.gd").external(folder).replace("\\", "/").simplify_path().trim_suffix("/")
 	preference_path = preload("res://player_storage.gd").preferences_path() if preferences.is_empty() else preferences
 	enabled.clear()
 	order.clear()

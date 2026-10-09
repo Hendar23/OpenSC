@@ -57,6 +57,7 @@ func run() -> void:
 	check(not game.front_end.is_button_available("continue") and game.front_end.is_button_available("new_game"),"Main menu cannot resume a destroyed sub")
 	game._begin_new_game()
 	check(not game.pilot.dead and game.pilot.health == 100 and game.pilot.visual.visible and game.weapons.visible and game.pilot.collision_layer == 2,"New game restores the intact submarine and collision")
+	check(game.equipment.visible and game.equipment.mounted.all(func(item: Dictionary) -> bool: return item.mount.visible),"New game restores equipment hidden by the previous submarine destruction")
 	check(game.world_root.get_node_or_null("SubmarineWreck") == null,"New game clears old submarine pieces")
 	paused = false; game.queue_free(); await process_frame
 	print("Submarine damage: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

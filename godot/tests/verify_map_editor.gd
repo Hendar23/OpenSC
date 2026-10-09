@@ -24,6 +24,38 @@ func _run() -> void:
 	check(Document.valid(map.document), "Seeded editor document validates")
 	check(map.entity_list.item_count > 380, "Unfiltered entity list is populated")
 	check(not map.population.simulating, "Wildlife stays still while editing")
+	var searchlights: Array = map.document.entities.keys().filter(func(id: String) -> bool: return map.document.entities[id].get("light_type") == "searchlight")
+	check(searchlights.size() == 10, "Original searchlights are imported as light entities")
+	map.category.select(2); map._refresh_list()
+	check(searchlights.all(func(id: String) -> bool: return map.list_keys.has(id)), "Searchlights appear under Lights")
+	var beam_key: String = searchlights[0]; map.select(beam_key)
+	check(map.fields.sweep_speed.visible and not map.fields.energy.visible and map.fields.rotation_1.visible, "Searchlight controls replace beacon controls and retain orientation")
+	check(map.fields.sweep_speed.value == 15, "Default searchlight sweep speed is halved")
+	if DisplayServer.get_name() != "headless":
+		for frame in range(5): await process_frame
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png("res://tests/searchlight-editor.png")
+	map.fields.sweep_speed.value = 9; map.fields.sweep_angle.value = 30
+	map.fields.beam_width.value = 1.4; map.fields.beam_softness.value = 0.8; map.fields.day_brightness.value = 0.1
+	map.fields.rotation_1.value += 15; map.apply_properties()
+	var beam: Node3D = map.world.get_node(NodePath(beam_key))
+	check(beam.sweep_speed == 9 and is_equal_approx(beam.tuning.beam_width, 1.4) and is_equal_approx(beam.tuning.day_brightness, 0.1), "Searchlight edits update the preview")
+	var beam_path := "res://tests/searchlight-roundtrip.json"
+	check(Document.save(map.document, beam_path) == OK, "Map saves with searchlight properties")
+	var beam_document := Document.load_path(beam_path)
+	check(beam_document.entities[beam_key].beam_softness == 0.8 and beam_document.entities[beam_key].sweep_speed == 9, "Searchlight tuning survives save/load")
+	map.duplicate_selection()
+	var copy: Node3D = map.world.get_node(NodePath(map.selected))
+	check(copy is Document.Searchlight and copy.material != beam.material and copy.sweep_speed == 9, "Duplicating a beam preserves settings with independent shader resources")
+	map.undo(); map.undo(); map.select(beam_key)
+	check(map.world.get_node(NodePath(beam_key)).sweep_speed == 15, "Undo restores original searchlight tuning")
+	var bad_beam := beam_document.duplicate(true); bad_beam.entities[beam_key].beam_softness = -1
+	check(not Document.valid(bad_beam), "Malformed beam settings are rejected")
+	var legacy_beam := beam_document.duplicate(true); legacy_beam.entities[beam_key].kind = "model"; legacy_beam.entities[beam_key].erase("light_type")
+	Document.save(legacy_beam, beam_path)
+	check(Document.load_path(beam_path).entities[beam_key].light_type == "searchlight", "Older cone model records migrate into Lights")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(beam_path))
+	map.category.select(0); map._refresh_list()
 	map.select("player_spawn")
 	check(map.fields.has("facing"), "Player spawn exposes facing in object properties")
 	var spawn_before := Document.decode(map.record().transform)

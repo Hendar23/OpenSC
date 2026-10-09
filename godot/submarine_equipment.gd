@@ -1,4 +1,5 @@
 extends Node3D
+signal activated(equipment_id: String, active: bool)
 
 const Assets = preload("res://clump_loader.gd")
 const Images = preload("res://legacy_bmp.gd")
@@ -43,9 +44,11 @@ func setup(player: Node3D, folder: String) -> void:
 	lamp.position = Vector3(0, housing_bounds.get_center().y, housing_bounds.position.z - 0.008)
 	lamp.light_color = Color(1.0, 0.97, 0.9)
 	lamp.spot_attenuation = 0.5
-	# Simple floodlight illumination stays clean even immediately above
-	# the coarse original seabed, without shadow-map self-shadow stripes.
-	lamp.shadow_enabled = false
+	# Dock walls and terrain must occlude the beam, including during launch.
+	# Small biases suit the original world's metre-scale geometry.
+	lamp.shadow_enabled = true
+	lamp.shadow_bias = 0.01
+	lamp.shadow_normal_bias = 0.02
 	mount.add_child(lamp)
 	var icons: Array[Texture2D] = []
 	for file in ["DEEPWP1", "DEEPWP2"]:
@@ -141,6 +144,7 @@ func toggle_selected() -> void:
 	if mounted.is_empty(): return
 	mounted[selected].enabled = not mounted[selected].enabled
 	apply_settings()
+	activated.emit(str(mounted[selected].id),bool(mounted[selected].enabled))
 
 func current() -> Dictionary:
 	return {} if mounted.is_empty() else mounted[selected]

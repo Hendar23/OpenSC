@@ -26,7 +26,9 @@ func run() -> void:
 	check(Document.vector(starting[0].position).is_equal_approx(original_pose.origin) and Basis.from_euler(Document.vector(starting[0].rotation) * PI / 180.0).is_equal_approx(original_pose.basis.orthonormalized()),"Starting Thorium preserves original position and orientation")
 	var normal: Dictionary = authored.object_types.filter(func(type: Dictionary) -> bool: return type.id == "thorium")[0]
 	var inert_stats: Dictionary = authored.object_types.filter(func(type: Dictionary) -> bool: return type.id == "inert_thorium")[0]
-	check(is_equal_approx(inert_stats.radiation_strength,normal.radiation_strength * 0.1) and inert_stats.mass == normal.mass and inert_stats.health == normal.health and inert_stats.model == normal.model,"Inert Thorium retains current tuning with one-tenth radiation")
+	# Map authors can tune normal and inert crystals independently after seeding.
+	var derived_inert := Definitions.inert_thorium(normal)
+	check(is_equal_approx(derived_inert.radiation_strength,normal.radiation_strength * 0.1) and derived_inert.mass == normal.mass and derived_inert.health == normal.health and derived_inert.model == normal.model,"New inert Thorium definitions inherit tuning with one-tenth radiation")
 	check(inert_stats.grapple_compatible and not inert_stats.magnet_compatible and inert_stats.delivery_quantity == 4 and inert_stats.delivery_commodity == "ore","Inert Thorium uses grapple and yields four Thorium")
 	check(Document.valid(data),"Thorium stats and manually placed group validate")
 	var bad := data.duplicate(true); bad.object_types[1].spawn_chance = 101

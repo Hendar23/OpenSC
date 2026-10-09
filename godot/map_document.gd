@@ -4,6 +4,7 @@ const Mods = preload("res://mod_registry.gd")
 const Assets = preload("res://clump_loader.gd")
 const Scenery = preload("res://scenery_loader.gd")
 const PulseLight = preload("res://pulse_light.gd")
+const Searchlight = preload("res://searchlight.gd")
 const DEFAULT_PATH := "res://../Maps/scen1.json"
 const GROUP_BEHAVIOURS := ["solitary", "shoaling", "schooling"]
 const RESPONSES := ["ignore", "flee", "defend", "attack"]
@@ -111,6 +112,12 @@ static func valid(data: Variant) -> bool:
 		if entity.kind == "dropoff":
 			if not ObjectDefinitions.numeric(entity.get("radius"),0.01,1000) or not ObjectDefinitions.numeric(entity.get("city_id",0),0,1000000000000): return false
 		if entity.kind == "light":
+			if entity.get("light_type", "beacon") not in ["beacon", "searchlight"]: return false
+			if entity.get("light_type", "beacon") == "searchlight":
+				for property in Searchlight.DEFAULTS:
+					var limits: Array = {"sweep_speed":[0,180], "sweep_angle":[0,180], "beam_length":[0.1,100], "beam_width":[0.02,50], "beam_brightness":[0,4], "beam_softness":[0.05,1], "day_brightness":[0,1]}[property]
+					if not ObjectDefinitions.numeric(entity.get(property, Searchlight.DEFAULTS[property]), limits[0], limits[1]): return false
+				continue
 			if entity.has("pulse_enabled") and not entity.pulse_enabled is bool: return false
 			if PulseLight.mode_from(entity) not in ["steady", "pulsing", "flashing"]: return false
 			for property in ["energy", "range", "pulse_period", "pulse_minimum", "flare_size", "flash_on_time", "flash_off_time"]:
@@ -124,9 +131,15 @@ static func valid(data: Variant) -> bool:
 			if not entity.dock is Dictionary or not finite_array([entity.dock.get("city_id"), entity.dock.get("race_id")], 2): return false
 	return true
 static func load_path(path: String) -> Dictionary:
+	path = preload("res://runtime_paths.gd").external(path)
 	if not FileAccess.file_exists(path): return {}
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 	if not valid(data): Mods.note("Invalid map file; keeping the next map or original world: " + path); return {}
+	# Earlier editor builds captured the recovered cones as scenery models.
+	for key in data.entities:
+		var entry: Dictionary = data.entities[key]
+		if str(key).begins_with("Scenery/Searchlight_") and entry.kind == "model" and str(entry.get("model", "")).to_upper() == "BIGLITE":
+			entry.kind = "light"; entry.light_type = "searchlight"; entry.solid = false
 	ObjectDefinitions.ensure(data)
 	return data
 static func load_active(include_mod_wildlife: bool = true) -> Dictionary:
@@ -137,7 +150,7 @@ static func load_active(include_mod_wildlife: bool = true) -> Dictionary:
 	return _add_mod_wildlife(data) if include_mod_wildlife else data
 static func save(data: Dictionary, path: String = DEFAULT_PATH) -> Error:
 	if not valid(data): return ERR_INVALID_DATA
-	var absolute := ProjectSettings.globalize_path(path)
+	var absolute := preload("res://runtime_paths.gd").external(path)
 	DirAccess.make_dir_recursive_absolute(absolute.get_base_dir())
 	var file := FileAccess.open(absolute + ".tmp", FileAccess.WRITE)
 	if file == null: return FileAccess.get_open_error()
@@ -147,17 +160,17 @@ static func save(data: Dictionary, path: String = DEFAULT_PATH) -> Error:
 static func capture(world: Node3D, catalogue: Dictionary = {}) -> Dictionary:
 	var data := empty()
 	for node in world.find_children("*", "Node3D", true, false):
-		if not node.has_meta("editor_model") and not node.has_meta("editor_dropoff") and not node is OmniLight3D: continue
+		if not node.has_meta("editor_model") and not node.has_meta("editor_dropoff") and not node is OmniLight3D and not node is Searchlight: continue
 		var key := str(world.get_path_to(node))
 		# Creature-attached lights (such as an angler's lure) are not map entities.
 		if not key.begins_with("Scenery/") and not key.begins_with("Added/"): continue
-		var record := {"name": str(node.get_meta("city_name", node.name)), "kind": "dropoff" if node.has_meta("editor_dropoff") else ("light" if node is OmniLight3D else "model"), "model": str(node.get_meta("editor_model", "")), "transform": encode(node.global_transform), "deleted": false, "solid": node.has_node("SceneryCollision")}
+		var record := {"name": str(node.get_meta("city_name", node.name)), "kind": "dropoff" if node.has_meta("editor_dropoff") else ("light" if node is OmniLight3D or node is Searchlight else "model"), "model": str(node.get_meta("editor_model", "")), "transform": encode(node.global_transform), "deleted": false, "solid": node.has_node("SceneryCollision")}
 		if node.has_meta("editor_dropoff"):
 			record.radius = node.radius; record.city_id = node.city_id
 			var city: Dictionary = catalogue.get("tables",{}).get("city_info",{}).get("records",{}).get(str(node.city_id),{})
 			record.name = str(city.get("name","City " + str(node.city_id))) + " drop-off point"
 		if node.has_meta("city_id"): record.dock = {"city_id": int(node.get_meta("city_id")), "race_id": int(node.get_meta("race_id", 1))}
-		if node is PulseLight: record.merge(node.settings())
+		if node is PulseLight or node is Searchlight: record.merge(node.settings())
 		elif node is OmniLight3D: record.merge({"energy": node.light_energy, "range": node.omni_range})
 		data.entities[key] = record
 	data.entities["player_spawn"] = {"name": "Player spawn", "kind": "player", "transform": encode(Transform3D(world.get_meta("player_spawn_basis",Basis.IDENTITY), world.get_meta("player_spawn"))), "deleted": false}
@@ -183,7 +196,7 @@ static func apply_entities(world: Node3D, folder: String, data: Dictionary) -> v
 		if node == null and str(key).begins_with("Added/"):
 			if not world.has_node("Added"):
 				var added := Node3D.new(); added.name = "Added"; world.add_child(added)
-			node = preload("res://drop_off_point.gd").new() if entry.kind == "dropoff" else (PulseLight.new() if entry.kind == "light" else load_model(str(entry.get("model", "")), folder, entry.has("dock")))
+			node = preload("res://drop_off_point.gd").new() if entry.kind == "dropoff" else ((Searchlight.new() if entry.get("light_type") == "searchlight" else PulseLight.new()) if entry.kind == "light" else load_model(str(entry.get("model", "")), folder, entry.has("dock")))
 			if node == null: continue
 			node.name = str(key).get_file()
 			world.get_node("Added").add_child(node)
@@ -191,6 +204,10 @@ static func apply_entities(world: Node3D, folder: String, data: Dictionary) -> v
 				node.set_meta("editor_model", entry.model)
 				if entry.get("solid", true): Scenery._add_prop_collision(node)
 		if node == null: continue
+		if entry.kind == "light" and ((entry.get("light_type") == "searchlight") != (node is Searchlight)):
+			var replacement: Node3D = Searchlight.new() if entry.get("light_type") == "searchlight" else PulseLight.new()
+			var parent := node.get_parent(); var original_name := node.name
+			node.free(); replacement.name = original_name; parent.add_child(replacement); node = replacement
 		if entry.has("dock"):
 			node.set_meta("city_id", int(entry.dock.city_id)); node.set_meta("race_id", int(entry.dock.race_id)); node.set_meta("city_name", str(entry.name))
 		if entry.kind == "model" and str(node.get_meta("editor_model", "")) != str(entry.get("model", "")) and not node.has_meta("city_id"):
@@ -202,7 +219,7 @@ static func apply_entities(world: Node3D, folder: String, data: Dictionary) -> v
 				if entry.get("solid", true): Scenery._add_prop_collision(node)
 		if entry.kind == "dropoff": node.configure(float(entry.radius),int(entry.get("city_id",0)))
 		node.global_transform = decode(entry.transform)
-		if node is PulseLight:
+		if node is PulseLight or node is Searchlight:
 			node.configure(folder, entry)
 		elif node is OmniLight3D:
 			node.light_energy = clampf(float(entry.get("energy", 1.0)), 0.0, 16.0)

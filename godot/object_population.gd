@@ -8,6 +8,7 @@ const Clam = preload("res://clam.gd")
 const Pearl = preload("res://pearl_body.gd")
 const Salvage = preload("res://salvage_body.gd")
 const Explosion = preload("res://mine_explosion.gd")
+const Identity = preload("res://entity_identity.gd")
 const DOCK_SPAWN_MARGIN := 5.0
 var player: Node3D:
 	set(value):
@@ -81,16 +82,21 @@ func setup(folder: String, document: Dictionary, enabled: bool = true) -> void:
 			var pose := Transform3D(Basis.from_euler(Document.vector(group.get("rotation",[0,0,0])) * PI / 180.0),center + offset)
 			if definition.get("behavior","mine") == "clam":
 				var clam := _create_clam(definition,pose,float(group.get("initial_delay",0)))
-				if clam != null: clam.set_meta("object_group",group.id)
+				if clam != null:
+					clam.set_meta("object_group",group.id)
+					Identity.assign_id(clam,Identity.authored(str(group.id),index))
 				placements.append(center + offset)
 				continue
 			if definition.get("behavior","mine") in ["thorium","salvage","pearl"]:
 				var body := _create_thorium(definition,0,pose)
-				if body != null: body.set_meta("object_group",group.id)
+				if body != null:
+					body.set_meta("object_group",group.id)
+					Identity.assign_id(body,Identity.authored(str(group.id),index))
 				placements.append(center + offset)
 				continue
 			var mine := preload("res://floating_mine.gd").new(); mine.name = "Mine_%s_%d" % [group.id,index]
 			mine.setup(definition,template.duplicate(),sound,enabled); add_child(mine)
+			Identity.assign_id(mine,Identity.authored(str(group.id),index))
 			mine.home = center + offset; mine.position = mine.home; mine.phase = random.randf() * TAU; mine.player = player; mine.explosion_frames.assign(explosion_frames)
 			mine.set_meta("object_group",group.id); mine.exploded.connect(_exploded.bind(float(definition.get("blast_force",300.0)))); placements.append(mine.home)
 		template.free()
@@ -169,6 +175,7 @@ func _create_thorium(definition: Dictionary, fragment: int, pose: Transform3D) -
 	if template == null: return null
 	var body: RigidBody3D = Pearl.new() if definition.get("behavior","") == "pearl" else Salvage.new() if definition.get("behavior","") == "salvage" else Thorium.new()
 	body.setup(definition,template.duplicate(),fragment,surface_height,simulating)
+	Identity.assign_id(body)
 	add_child(body); body.transform = pose
 	if body is Thorium: body.shattered.connect(_shatter.call_deferred)
 	return body
@@ -177,6 +184,7 @@ func _create_clam(definition: Dictionary, pose: Transform3D, delay: float) -> St
 	var template := _thorium_template(definition,0)
 	if template == null: return null
 	var body := Clam.new(); body.name = "Clam"; add_child(body); body.transform = pose
+	Identity.assign_id(body)
 	body.population = self; body.player = player
 	body.setup(definition,template.duplicate(),simulating,delay)
 	if delay <= 0: body._grow_pearl()
@@ -196,6 +204,8 @@ func _shatter(body: RigidBody3D) -> void:
 		var direction := Vector3(cos(index * TAU / 3.0),0.3,sin(index * TAU / 3.0))
 		var piece := _create_thorium(definition,index,pose)
 		if piece != null:
+			# Each shard is a new entity; retain its origin for future objectives.
+			piece.set_meta("source_entity_id",Identity.of(body))
 			piece.position += direction * float(piece.get_child(0).get_meta("diameter",0.5)) * 0.7
 			piece.linear_velocity = velocity + direction * 0.7
 			piece.angular_velocity = spin + Vector3(index,1,-index) * 0.5
@@ -204,13 +214,15 @@ func snapshot() -> Array:
 	var result: Array = []
 	for body in get_children():
 		if body is Clam and not body.is_queued_for_deletion():
-			result.append({"stats":body.stats.duplicate(true),"pose":Document.encode(body.transform),"clam_state":body.state()})
+			result.append({"entity_id":Identity.of(body),"stats":body.stats.duplicate(true),"pose":Document.encode(body.transform),"clam_state":body.state()})
 			if body.has_meta("object_group"): result.back()["object_group"] = body.get_meta("object_group")
 			continue
 		if body is Pearl and is_instance_valid(body.clam): continue
 		if (body is Thorium or body is Salvage) and not body.dead and not body.is_queued_for_deletion():
-			result.append({"stats":body.stats.duplicate(true),"shard":body.shard,"pose":Document.encode(body.transform),"velocity":Document.array(body.linear_velocity),"spin":Document.array(body.angular_velocity),"health":body.health})
+			result.append({"entity_id":Identity.of(body),"stats":body.stats.duplicate(true),"shard":body.shard,"pose":Document.encode(body.transform),"velocity":Document.array(body.linear_velocity),"spin":Document.array(body.angular_velocity),"health":body.health})
 			if body.has_meta("delivery_city"): result.back()["delivery_city"] = body.get_meta("delivery_city")
+			for key in ["object_group","source_entity_id"]:
+				if body.has_meta(key): result.back()[key] = body.get_meta(key)
 	return result
 func collect_delivered_objects(city_id: int) -> void:
 	for body in get_children():
@@ -218,15 +230,25 @@ func collect_delivered_objects(city_id: int) -> void:
 
 static func valid_snapshot(value: Variant) -> bool:
 	if not value is Array or value.size() > 15000: return false
+	var identities := {}
 	for entry in value:
 		if not entry is Dictionary or not entry.get("stats") is Dictionary: return false
+		# Identity fields are optional for older saves; reject ambiguous targets.
+		if entry.has("entity_id"):
+			if not Identity.valid(entry.entity_id) or identities.has(entry.entity_id): return false
+			identities[entry.entity_id] = true
+		if entry.has("source_entity_id") and not Identity.valid(entry.source_entity_id): return false
 		if entry.has("delivery_city") and (not Definitions.numeric(entry.delivery_city,0,1000000000000) or float(entry.delivery_city) != floorf(float(entry.delivery_city))): return false
 		if not Definitions.valid({"object_types":[entry.stats],"object_groups":[]}): return false
 		if entry.stats.get("behavior","") == "clam":
 			if not Document.finite_array(entry.get("pose"),12) or not entry.get("clam_state") is Dictionary: return false
 			var state: Dictionary = entry.clam_state
+			if state.has("pearl_id"):
+				if not Identity.valid(state.pearl_id) or identities.has(state.pearl_id): return false
+				identities[state.pearl_id] = true
 			if not Definitions.numeric(state.get("angle"),0,180) or not Definitions.numeric(state.get("remaining"),0,86400): return false
 			if not state.get("pearl_offset") is Array or (not state.pearl_offset.is_empty() and not Document.finite_array(state.pearl_offset,3)): return false
+			if state.has("pearl_id") and state.pearl_offset.is_empty(): return false
 			continue
 		if entry.stats.get("behavior","") not in ["thorium","salvage","pearl"] or not Definitions.numeric(entry.get("shard"),0,3): return false
 		if float(entry.shard) != floorf(float(entry.shard)) or (entry.stats.get("behavior") != "thorium" and entry.shard != 0): return false
@@ -246,16 +268,30 @@ func restore_snapshot(entries: Array) -> void:
 		if body is Clam: body.free()
 	for body in get_children():
 		if body is Thorium or body is Salvage: body.free()
+	var identities := {}
 	for entry in restored:
+		if entry.has("entity_id"): identities[entry.entity_id] = true
+		if entry.get("clam_state",{}).has("pearl_id"): identities[entry.clam_state.pearl_id] = true
+	for index in range(restored.size()):
+		var entry: Dictionary = restored[index]
+		# Assign once on old-save migration, then preserve the saved identity.
+		var identity: String = entry.get("entity_id","legacy/%d" % index)
+		if not entry.has("entity_id"):
+			while identities.has(identity): identity += "/migrated"
+			identities[identity] = true
 		if entry.stats.get("behavior","") == "clam":
 			var clam := _create_clam(clam_types.get(str(entry.stats.id),entry.stats),Document.decode(entry.pose),1)
 			if clam != null:
+				Identity.assign_id(clam,identity)
 				if entry.has("object_group"): clam.set_meta("object_group",entry.object_group)
 				clam.restore_state(entry.clam_state)
 			continue
 		var definition: Dictionary = pearl_types.get(str(entry.stats.id),salvage_types.get(str(entry.stats.id),thorium_types.get(str(entry.stats.id),entry.stats)))
 		var body := _create_thorium(definition,int(entry.shard),Document.decode(entry.pose))
 		if body != null:
+			Identity.assign_id(body,identity)
+			for key in ["object_group","source_entity_id"]:
+				if entry.has(key): body.set_meta(key,entry[key])
 			if entry.has("delivery_city"):
 				body.set_meta("delivery_city",int(entry.delivery_city)); body.set_meta("metal_tow_target",false)
 			body.health = minf(float(entry.health),float(definition.health))

@@ -148,14 +148,14 @@ func _run() -> void:
 	check(is_equal_approx(viewer.fog_visibility, 70.0), "Visibility settings save and reload")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("res://tests/visibility-test.cfg"))
 	if DisplayServer.get_name() != "headless":
-		check(viewer.get_window().mode == Window.MODE_FULLSCREEN, "Game starts full screen")
+		check(viewer.get_window().mode == Window.MODE_EXCLUSIVE_FULLSCREEN, "Game starts full screen")
 		var key := InputEventKey.new()
 		key.keycode = KEY_F11
 		key.pressed = true
 		viewer._input(key)
-		check(viewer.get_window().mode == Window.MODE_FULLSCREEN, "F11 leaves game full screen")
+		check(viewer.get_window().mode == Window.MODE_EXCLUSIVE_FULLSCREEN, "F11 leaves game full screen")
 		viewer._input(key)
-		check(viewer.get_window().mode == Window.MODE_FULLSCREEN, "F11 restores full screen")
+		check(viewer.get_window().mode == Window.MODE_EXCLUSIVE_FULLSCREEN, "F11 restores full screen")
 	viewer.queue_free()
 	await create_timer(0.25).timeout
 	print("World verification: %d checks, %d failures" % [checks, failures])

@@ -22,6 +22,17 @@ func _run() -> void:
 	game._toggle_sound_tuning()
 	check(game.canvas.visible and panel.visible and not game.tuning_panel.visible, "Sound shortcut reveals developer UI without overlapping movement tuning")
 	check(panel.sliders.has("explosion_volume") and panel.sliders.has("low_shield_volume"), "Explosion and shield warning sound controls are available")
+	check(panel.sliders.has("dock_menu_volume") and not panel.sliders.dock_menu_volume.scrollable,"Dock menu volume is adjustable without mouse-wheel changes")
+	panel.sliders.dock_menu_volume.value = -18
+	panel.sliders.master_volume.value = -3
+	game.dock_interface.open("home"); game.dock_interface._play_menu_sound("commodity_trade")
+	check(game.dock_interface.sound_players.commodity_trade.volume_db == -21,"Dock transaction gain combines with the master volume live")
+	panel.sliders.dock_menu_volume.value = -60; game.dock_interface._play_menu_sound("commodity_trade")
+	check(game.dock_interface.sound_players.commodity_trade.volume_db == -80,"Dock menu slider can mute its sounds")
+	panel.sliders.dock_menu_volume.value = -18; panel.sliders.master_volume.value = -60
+	game.dock_interface._play_menu_sound("commodity_trade")
+	check(game.dock_interface.sound_players.commodity_trade.volume_db == -80,"Master mute also mutes dock menu audio")
+	panel.sliders.master_volume.value = 0; game.dock_interface.dismiss()
 	panel.sliders.main_propeller_volume.value = -18
 	panel.sliders.main_propeller_pitch_max.value = 2.5
 	check(audio.tuning.settings.main_propeller_volume == -18 and audio.tuning.settings.main_propeller_pitch_max == 2.5, "Sliders update the live mix")
@@ -49,6 +60,7 @@ func _run() -> void:
 	check(restored.settings.main_propeller_volume == -18 and restored.settings.main_propeller_pitch_max == 2.5, "Exported sound settings load as defaults")
 	check(is_equal_approx(restored.settings.impact_pitch_variation, 0.08) and is_equal_approx(restored.settings.impact_creak_chance, 0.3), "Collision settings export and load as defaults alongside the mix")
 	check(restored.settings.dock_doors_volume == -22.0, "Docking gain exports and loads as a default")
+	check(restored.settings.dock_menu_volume == -18,"Dock menu volume exports and reloads")
 	check(is_equal_approx(restored.settings.impact_rumble_strength, 0.4), "Controller rumble strength exports and loads as a default")
 	var burst := preload("res://mine_explosion.gd").new(); game.world_root.add_child(burst)
 	burst.setup([],1.0,game.submarine_explosion_sound)
@@ -64,6 +76,7 @@ func _run() -> void:
 	game.tuning_panel.sliders.main_forward.value = 670
 	panel.sliders.explosion_volume.value = -17
 	game.equipment_controls.som_radius.value = 0.32
+	panel.sliders.dock_menu_volume.value = -24
 	await process_frame
 	game.remember_preferences = false
 	var shipped_view := ConfigFile.new(); shipped_view.load(game.defaults_directory.path_join("view_defaults.cfg"))
@@ -72,6 +85,7 @@ func _run() -> void:
 	check(shipped_movement.get_value("movement","main_forward") == 670 and shipped_sound.get_value("sound","explosion_volume") == -17 and is_equal_approx(shipped_view.get_value("view","som_radius"),0.32),"Changes automatically update the single current settings set")
 	var loaded := Tuning.new(); loaded.load_settings(false,"",game.defaults_directory.path_join("submarine_audio.cfg"))
 	check(loaded.settings.explosion_volume == -17,"A fresh settings instance reads the same current values")
+	check(loaded.settings.dock_menu_volume == -24,"Dock menu volume saves automatically and survives reload")
 	check(shipped_sound.get_value("settings","unified",false) and shipped_movement.get_value("settings","unified",false),"Autosaving retains the completed legacy migration marker")
 	var stale_path := game.defaults_directory.path_join("stale-movement.cfg")
 	var stale := ConfigFile.new(); stale.set_value("movement","main_forward",50); stale.save(stale_path)

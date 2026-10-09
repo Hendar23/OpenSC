@@ -8,4 +8,11 @@ if not defined OSC_GODOT (
   pause
   exit /b 1
 )
+echo Preparing game files...
+"%OSC_GODOT%" --headless --path "%~dp0godot" --editor --import
+if errorlevel 1 (
+  echo Godot could not prepare the game files. See the errors above.
+  pause
+  exit /b 1
+)
 start "" "%OSC_GODOT%" --path "%~dp0godot" res://game.tscn

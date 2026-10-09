@@ -1,8 +1,9 @@
 extends RefCounted
 static func path(filename: String) -> String:
-	if FileAccess.file_exists(ProjectSettings.globalize_path("res://project.godot")):
+	if OS.has_feature("editor"):
 		return "res://".path_join(filename)
-	var destination := "user://".path_join(filename)
+	var destination := preload("res://player_storage.gd").root_path().path_join("settings").path_join(filename)
+	preload("res://player_storage.gd").ensure_parent(destination)
 	if not FileAccess.file_exists(destination):
 		var source := FileAccess.open("res://".path_join(filename),FileAccess.READ)
 		var target := FileAccess.open(destination,FileAccess.WRITE)

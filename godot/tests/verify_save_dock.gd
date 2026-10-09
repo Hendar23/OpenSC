@@ -19,6 +19,8 @@ func run() -> void:
 		await physics_frame
 	check(game.startup_complete,"Game loads")
 	if not game.startup_complete: quit(1); return
+	if DisplayServer.get_name() != "headless":
+		check(root.mode == Window.MODE_EXCLUSIVE_FULLSCREEN and root.size == DisplayServer.screen_get_size(root.current_screen),"Exclusive fullscreen covers the complete display without the standard fullscreen edge")
 	check(game.market_speed_slider.get_parent().name == "System" and not game.market_speed_slider.scrollable,"Market speed slider lives under System and ignores the mouse wheel")
 	game.market_speed_slider.value = 10
 	check(is_equal_approx(game._view_settings().market_speed,0.1),"Exported settings include adjustable market speed")
@@ -54,6 +56,17 @@ func run() -> void:
 	game.dock_interface_active = false
 	game._process(0.0)
 	check(game.player_progress.cargo.get("ore",0) == 3 and game.equipment.vacuum.storage.is_empty(),"Entering dock transfers Suck-O-Matic storage into cargo")
+	check(paused and not game.world_root.can_process() and not game.pilot.can_process() and not game.docking.can_process(),"Dock menus pause gameplay processing and world physics")
+	check(game.dock_interface.can_process() and game.can_process(),"Dock controls and the market remain responsive while paused")
+	var pause_probe := RigidBody3D.new(); game.world_root.add_child(pause_probe)
+	pause_probe.global_position = port.entry; pause_probe.linear_velocity = Vector3(2,0,0)
+	var probe_position := pause_probe.global_position
+	var paused_hour := float(game.day_night.hour)
+	var sound_probe := AudioStreamPlayer.new(); pause_probe.add_child(sound_probe)
+	check(not sound_probe.can_process(),"Outside-world audio inherits the dock pause")
+	for frame in range(4): await physics_frame
+	check(pause_probe.global_position.is_equal_approx(probe_position) and is_equal_approx(game.day_night.hour,paused_hour),"Dock pause freezes physical objects and the world clock")
+	pause_probe.free()
 	game.market_speed_slider.value = 0
 	var clock_before: Dictionary = game.player_progress.economy.duplicate(true)
 	game._process(1.0)
@@ -74,6 +87,11 @@ func run() -> void:
 	if not moving_offer.is_empty():
 		check(game.dock_interface.layout.get_node("Quote_%s_0" % moving_offer).text == str(current_offers[moving_offer].buy_price),"Goods screen visibly refreshes moving prices while docked")
 	game.dock_interface.open("home")
+	var economy_before_menu: Dictionary = game.player_progress.economy.duplicate(true)
+	game._show_main_menu(); game._process(1.0)
+	check(game.player_progress.economy == economy_before_menu,"Main menu pauses the market as well as the outside world")
+	game._resume_game()
+	check(paused and game.dock_interface.visible and game.dock_interface.page == "home","Resuming a docked game restores dock menus without resuming the world")
 	game.day_night.hour = 18.25
 	var crystal_stats := preload("res://object_definitions.gd").THORIUM.duplicate(true)
 	var intact: RigidBody3D = game.object_population._create_thorium(crystal_stats,0,Transform3D(Basis.IDENTITY,port.entry + Vector3.UP))
@@ -178,6 +196,7 @@ func run() -> void:
 	check(game.equipment.mounted[0].enabled,"Restores headlight state")
 	check(game.cockpit_hud.map_data.explored.get_pixel(100,101).r > 0.99 and game.cockpit_hud.map_data.explored.get_pixel(99,101).r < 0.01,"Restores explored fog mask")
 	check(game.dock_interface.visible and not game.pilot.visual.visible,"Dock UI displayed with docked sub hidden")
+	check(paused and not game.world_root.can_process(),"Loading a docked save also pauses the outside world")
 	var launch_camera: Vector3 = game.docking.cinematic_camera
 	var launch_basis: Basis = game.Docking.upright_basis(game.pilot.global_basis)
 	var launch_offset: Vector3 = launch_camera - game.docking.current.entry
@@ -200,6 +219,7 @@ func run() -> void:
 	game.first_person = true
 	game._dock_ui_action("launch",{})
 	check(game.docking.stage != game.Docking.Stage.DOCKED,"Launch starts undocking")
+	check(not paused and game.world_root.can_process() and game.pilot.can_process() and game.docking.can_process(),"Launch resumes the outside world before undocking starts")
 	game.docking.set_physics_process(false)
 	game._process(0)
 	check(game.camera.global_position.is_equal_approx(launch_camera) and not game.first_person,"Launch preserves outside camera even after cockpit mode")

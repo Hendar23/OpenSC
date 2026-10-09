@@ -1,6 +1,7 @@
 extends RefCounted
 const Mods = preload("res://mod_registry.gd")
 const DEFAULTS := {
+	"dock_menu_volume": -12.0,
 	"master_volume": 0.0, "low_shield_volume": 0.0, "explosion_volume": -10.0, "wildlife_zapper_volume": -16.0, "wildlife_splat_volume": -22.0, "volume_response": 0.18, "pitch_response": 0.2, "loop_blend_ms": 15.0,
 	"main_propeller_volume": -10.0, "main_propeller_pitch_min": 0.45, "main_propeller_pitch_max": 1.35, "main_propeller_speed_pitch": 0.65,
 	"side_pods_volume": -15.0, "side_pods_pitch_min": 0.45, "side_pods_pitch_max": 1.0, "side_pods_speed_pitch": 0.25,

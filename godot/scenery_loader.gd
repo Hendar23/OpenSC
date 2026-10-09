@@ -2,6 +2,7 @@ extends RefCounted
 
 const Assets = preload("res://clump_loader.gd")
 const PulseLight = preload("res://pulse_light.gd")
+const Searchlight = preload("res://searchlight.gd")
 
 # Serialized fields are always present; the row mask says which values are
 # initialized. Runtime pointers and each matrix's fourth lanes are garbage.
@@ -138,6 +139,7 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 	var plants := 0
 	var patches := 0
 	var skipped := 0
+	var searchlights := 0
 	# Scatter before adding prop collision, so grounding rays see only BSP terrain.
 	for row in tables.get("Objects", []):
 		if int(row.get("ObjectID", -1)) not in [26, 27]: continue
@@ -165,6 +167,21 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 		var model_name := ""
 		var solid := true
 		var object_id := int(row.get("ObjectID", -1))
+		# Startup explicitly creates LIGHTCONE for these dormant database markers;
+		# their editor clump is LITEBEEM, but the runtime uses BIGLITE.
+		if int(row.get("MissionID", 0)) == 2 and object_id == 1:
+			var template := _template("BIGLITE", folder, cache)
+			var pose := placement(row, offset)
+			if template != null and pose.origin.is_finite():
+				var beam := Searchlight.new()
+				beam.name = "Searchlight_%d" % int(row.index)
+				beam.transform = pose
+				beam.set_meta("editor_model", "BIGLITE")
+				beam.set_meta("source_comment", row.get("Comment", "Searchlight"))
+				scenery.add_child(beam)
+				beam.setup(template)
+				searchlights += 1
+			continue
 		# Interactive clams and pearls belong to the editable object population.
 		if object_id == 32 or int(row.get("ObjectType",0)) in [84,85]: continue
 		if int(row.get("AutoCreate", 0)) == 1:
@@ -199,6 +216,7 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 		if template != null: template.free()
 	world.set_meta("scenery_ready", true)
 	world.set_meta("scenery_props", props)
+	world.set_meta("searchlight_count", searchlights)
 	world.set_meta("plant_count", plants)
 	world.set_meta("plant_patches", patches)
 	world.set_meta("scenery_summary", "%d scenery objects · %d plants in %d patches" % [props, plants, patches])
