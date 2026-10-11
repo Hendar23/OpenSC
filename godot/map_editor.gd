@@ -63,7 +63,7 @@ func _ready() -> void:
 	search.text_changed.connect(func(_value: String) -> void: _refresh_list())
 	sidebar.add_child(search)
 	category = OptionButton.new()
-	for name in ["All entities", "Scenery / plants", "Lights", "Wildlife groups", "Creature types", "Object groups", "Object types"]: category.add_item(name)
+	for name in ["All entities", "Scenery / plants", "Lights", "Wildlife groups", "Creature types", "Object groups", "Object types", "Smoke emitters"]: category.add_item(name)
 	category.item_selected.connect(func(_index: int) -> void: _refresh_list())
 	sidebar.add_child(category)
 	entity_list = ItemList.new(); entity_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -73,6 +73,7 @@ func _ready() -> void:
 	var actions := GridContainer.new(); actions.columns = 2; sidebar.add_child(actions)
 	button(actions, "Add model", add_model)
 	button(actions, "Add light", add_light)
+	button(actions, "Add smoke emitter", func() -> void: if loaded: _add_entity("smoke", ""))
 	button(actions, "Add group", add_group)
 	button(actions, "New species", add_species)
 	button(actions, "Add object group", add_object_group)
@@ -281,7 +282,7 @@ func _refresh_list() -> void:
 		if entry.get("deleted", false): continue
 		if category.selected == 1 and entry.kind != "model": continue
 		if category.selected == 2 and entry.kind != "light": continue
-		if category.selected >= 3 and not (category.selected == 5 and entry.kind == "dropoff"): continue
+		if category.selected >= 3 and not ((category.selected == 5 and entry.kind == "dropoff") or (category.selected == 7 and entry.kind == "smoke")): continue
 		if not query.is_empty() and not (str(entry.name) + " " + str(key) + " " + str(entry.get("model", ""))).to_lower().contains(query): continue
 		list_keys.append(key)
 		entity_list.add_item((str(entry.model) + " · " if str(entry.name).begins_with("Plant_") else "") + str(entry.name))
@@ -328,12 +329,16 @@ func select(key: String) -> void:
 	if key.begins_with("object_type:"):
 		species_preview = SpeciesPreview.new(); properties.add_child(species_preview)
 		species_preview.show_object(entry,folder)
-		choice("behavior","Object behavior",["mine","thorium","salvage","clam","pearl"],entry.get("behavior","mine"),["Floating mine","Thorium crystal","Salvage object","Clam","Pearl"])
-		if entry.get("behavior","mine") in ["thorium","salvage","pearl"]:
+		choice("behavior","Object behavior",["mine","thorium","salvage","clam","pearl","rock"],entry.get("behavior","mine"),["Floating mine","Thorium crystal","Salvage object","Clam","Pearl","Rock"])
+		if entry.get("behavior","mine") in ["thorium","salvage","pearl","rock"]:
 			var compatible := CheckBox.new(); compatible.text = "Magnet compatible"; compatible.button_pressed = bool(entry.get("magnet_compatible",entry.get("behavior","") == "salvage"))
 			properties.add_child(compatible); fields.magnet_compatible = compatible
 			var grapple_compatible := CheckBox.new(); grapple_compatible.text = "Grapple compatible"; grapple_compatible.button_pressed = bool(entry.get("grapple_compatible",entry.get("behavior","") == "thorium" or entry.get("id","") == "cigarette_end"))
 			properties.add_child(grapple_compatible); fields.grapple_compatible = grapple_compatible
+			var suckomat := CheckBox.new(); suckomat.text = "Suck-O-Matic compatible" + (" (shards only)" if entry.get("behavior","") == "thorium" else "")
+			suckomat.button_pressed = bool(entry.get("suckomat_compatible",entry.get("behavior","") in ["thorium","pearl"]))
+			suckomat.tooltip_text = "Allows suction and collection. Immovable objects cannot be collected."
+			properties.add_child(suckomat); fields.suckomat_compatible = suckomat
 			var commodity_ids: Array = [""]; var commodity_names: Array = ["None"]
 			for commodity in gameplay_catalogue.get("tables",{}).get("commodity_text",{}).get("records",{}).values():
 				commodity_ids.append(str(commodity.id).to_lower()); commodity_names.append(str(commodity.get("Display name",commodity.id)))
@@ -342,6 +347,8 @@ func select(key: String) -> void:
 			if not commodity_ids.has(commodity_id): commodity_ids.append(commodity_id); commodity_names.append(commodity_id)
 			choice("delivery_commodity","Drop-off commodity",commodity_ids,commodity_id,commodity_names)
 			number("delivery_quantity","Commodity units per delivered object",entry.get("delivery_quantity",delivery.quantity),0,999999,1)
+			if entry.get("behavior","") in ["salvage","rock"]:
+				choice("pickup_commodity","Suck-O-Matic commodity (one unit; None gives no reward)",commodity_ids,str(entry.get("pickup_commodity",entry.get("delivery_commodity",delivery.commodity))),commodity_names)
 		choice("appearance","Appearance",["sprite","model"],entry.appearance,["Billboard image","3D model"])
 		text_field("texture","Image asset (texture ID / BMP name)",entry.texture)
 		text_field("mask","Original transparency mask",entry.mask)
@@ -366,20 +373,28 @@ func select(key: String) -> void:
 			number("maximum_population","Maximum crystal/shard population",entry.get("maximum_population",60),0,5000,1)
 		elif entry.get("behavior","mine") == "clam":
 			text_field("pearl_type","Pearl object type",str(entry.get("pearl_type","pearl")))
-			for row in [["close_distance","Close when sub is nearer than",0.01,10,0.01],["regrowth_seconds","Pearl regrowth (seconds)",1,86400,1],["opening_speed","Opening speed (degrees/second)",1,1000,1],["closing_speed","Closing speed (degrees/second)",1,2000,1],["open_angle","Open angle (degrees)",0,180,1],["closed_angle","Closed angle (degrees)",0,180,1],["pearl_height","Pearl height inside clam",0,10,0.01],["release_distance","Pearl release distance",0.01,10,0.01]]:
+			for row in [["close_distance","Close when sub is nearer than",0.01,10,0.01],["regrowth_seconds","Pearl regrowth (seconds)",1,86400,1],["opening_speed","Opening speed (degrees/second)",1,1000,1],["closing_speed","Closing speed (degrees/second)",1,2000,1],["open_angle","Open angle (degrees)",0,180,1],["closed_angle","Closed angle (degrees)",0,180,1],["pearl_height","Pearl height inside clam",-10,10,0.01],["release_distance","Pearl release distance",0.01,10,0.01]]:
 				number(row[0],row[1],entry.get(row[0],Document.ObjectDefinitions.CLAM[row[0]]),row[2],row[3],row[4])
 		elif entry.get("behavior","mine") == "pearl":
 			number("mass","Pearl mass",entry.get("mass",1),0.01,1000,0.1)
 			text_field("pickup_commodity","Suck-O-Matic commodity",str(entry.get("pickup_commodity","pearls")))
+		elif entry.get("behavior","mine") == "rock":
+			number("mass","Rock mass",entry.get("mass",2.0),0.01,1000,0.1)
+			number("contact_inflict","Collision damage factor",entry.get("contact_inflict",0.8),0,1000,0.01)
+			var fixed := CheckBox.new(); fixed.text = "Immovable"; fixed.button_pressed = bool(entry.get("immovable",false))
+			properties.add_child(fixed); fields.immovable = fixed
 		elif entry.get("behavior","mine") == "salvage":
 			number("mass","Object mass",entry.get("mass",2.0),0.01,1000,0.1)
 			number("spawn_chance","Random drop chance per minute (%)",entry.get("spawn_chance",100.0),0,100,1)
 			number("maximum_population","Maximum population of this type",entry.get("maximum_population",20),0,5000,1)
 		else:
-			number("damage","Explosion damage",entry.damage,0,100000,0.1)
+			number("damage_sustain","Weapon damage multiplier",entry.get("damage_sustain",0.1),0,100,0.01)
+			number("damage","Blast damage at 1 unit (base hull shields)",entry.damage,0,100000,0.1)
 			number("explosion_radius","Explosion radius",entry.explosion_radius,0,1000,0.1)
-			number("blast_force","Blast impulse (N.s)",entry.get("blast_force",300.0),0,100000,10)
-			number("trigger_distance","Trigger distance from submarine centre (0 disables)",entry.trigger_distance,0,1000,0.1)
+			number("blast_force","Blast impulse at 1 unit (N.s)",entry.get("blast_force",300.0),0,100000,10)
+			number("trigger_distance","Extra proximity trigger (0 disables)",entry.trigger_distance,0,1000,0.1)
+			var contact := CheckBox.new(); contact.text = "Detonate on hull contact"; contact.button_pressed = bool(entry.get("trigger_on_contact",true))
+			properties.add_child(contact); fields.trigger_on_contact = contact
 	elif key.begins_with("object_group:"):
 		for i in range(3): number("position_" + str(i),"Position " + ["X","Y","Z"][i],entry.position[i],-50000,50000,0.1)
 		var ids: Array = document.object_types.map(func(item: Dictionary) -> String: return item.id)
@@ -419,7 +434,7 @@ func select(key: String) -> void:
 		number("attack_interval","Time between bites (s)",combat.attack_interval,0.05,60,0.05)
 		number("bite_range","Bite reach beyond body",combat.bite_range,0,100,0.05)
 		number("zapper_range","Zapper range",combat.zapper_range,0,200,0.1)
-		number("zapper_damage","Zapper damage per second",combat.zapper_damage,0,10000,0.5)
+		number("zapper_damage_per_tick","Zapper raw damage per burst tick",combat.zapper_damage_per_tick,0,10000,0.01)
 		number("speed", "Movement speed", entry.speed, 0.05, 30, 0.05)
 		number("animation_speed","Animation speed (×)",entry.get("animation_speed",1.0),0,10,0.1)
 		fields.animation_speed.value_changed.connect(func(value: float) -> void: species_preview.animation_speed = value)
@@ -463,6 +478,13 @@ func select(key: String) -> void:
 				number("facing", "Facing (° clockwise)", fposmod(-rad_to_deg(atan2(pose.basis.z.x,pose.basis.z.z)),360.0), 0, 360, 1)
 			elif entry.kind == "dropoff":
 				number("radius", "Detection radius", entry.radius, 0.01, 1000, 0.01)
+			elif entry.kind == "smoke":
+				var active := CheckBox.new(); active.text = "Enabled"; active.button_pressed = bool(entry.get("enabled",true))
+				properties.add_child(active); fields.enabled = active
+				for setting in Document.SmokeEmitter.DEFAULTS:
+					var caption: String = {"emission_rate":"Puffs per second", "lifetime":"Puff lifetime (seconds)", "start_size":"Starting size", "end_size":"Final size", "rise_speed":"Rise speed (units/s)", "spread":"Random sideways drift (units/s)", "drift_x":"Wind X (units/s)", "drift_z":"Wind Z (units/s)", "opacity":"Opacity"}[setting]
+					var limits: Array = Document.SmokeEmitter.LIMITS[setting]
+					number(setting,caption,entry.get(setting,Document.SmokeEmitter.DEFAULTS[setting]),limits[0],limits[1],0.01)
 			elif entry.kind == "light":
 				for i in range(3): number("rotation_" + str(i), "Rotation " + ["X", "Y", "Z"][i] + " (°)", rad_to_deg(pose.basis.get_euler()[i]), -360, 360, 1)
 				choice("light_type", "Light type", ["beacon", "searchlight"], entry.get("light_type", "beacon"), ["Beacon / flare", "Searchlight"])
@@ -537,9 +559,11 @@ func apply_properties() -> void:
 	var before := document.duplicate(true); var entry := record()
 	entry.name = _value("name")
 	if selected.begins_with("object_type:"):
+		for key in ["immovable","contact_inflict","suckomat_compatible"]:
+			if fields.has(key): entry[key] = _value(key)
 		for key in ["delivery_commodity","delivery_quantity","pearl_type","pearl_height","close_distance","open_angle","closed_angle","opening_speed","closing_speed","regrowth_seconds","release_distance","pickup_commodity"]:
 			if fields.has(key): entry[key] = _value(key)
-		for key in ["behavior","magnet_compatible","grapple_compatible","appearance","texture","mask","model","size","health","damage","explosion_radius","trigger_distance","blast_force","mass","shard_mass","shard_scale_percent","shard1","shard2","shard3","radiation_range","radiation_strength","glow_energy","glow_range","glow_emission","glow_red","glow_green","glow_blue","spawn_chance","maximum_population"]:
+		for key in ["behavior","magnet_compatible","grapple_compatible","appearance","texture","mask","model","size","health","damage","explosion_radius","trigger_distance","trigger_on_contact","damage_sustain","blast_force","mass","shard_mass","shard_scale_percent","shard1","shard2","shard3","radiation_range","radiation_strength","glow_energy","glow_range","glow_emission","glow_red","glow_green","glow_blue","spawn_chance","maximum_population"]:
 			if fields.has(key): entry[key] = _value(key)
 		if entry.behavior == "thorium":
 			for key in Document.ObjectDefinitions.THORIUM:
@@ -547,7 +571,7 @@ func apply_properties() -> void:
 		if entry.behavior == "salvage":
 			for key in Document.ObjectDefinitions.SALVAGE:
 				if not entry.has(key): entry[key] = Document.ObjectDefinitions.SALVAGE[key]
-		for defaults in [Document.ObjectDefinitions.CLAM,Document.ObjectDefinitions.PEARL]:
+		for defaults in [Document.ObjectDefinitions.CLAM,Document.ObjectDefinitions.PEARL,Document.ObjectDefinitions.ROCK]:
 			if entry.behavior == defaults.behavior:
 				for key in defaults:
 					if not entry.has(key): entry[key] = defaults[key]
@@ -590,6 +614,9 @@ func apply_properties() -> void:
 			if entry.kind == "player" and not is_equal_approx(fields.facing.value,fields.facing.get_meta("initial_value")):
 				pose.basis = Basis(Vector3.UP,-deg_to_rad(float(_value("facing"))))
 			if entry.kind == "dropoff": entry.radius = _value("radius")
+			if entry.kind == "smoke":
+				entry.enabled = fields.enabled.button_pressed
+				for key in Document.SmokeEmitter.DEFAULTS: entry[key] = _value(key)
 			if entry.kind == "light":
 				entry.light_type = _value("light_type")
 				var changed := false
@@ -661,6 +688,7 @@ func _add_entity(kind: String, model_id: String) -> void:
 	var before := document.duplicate(true); var key := "Added/" + _new_id()
 	document.entities[key] = {"name": "New light" if kind == "light" else model_id, "kind": kind, "model": model_id, "transform": Document.encode(pose), "solid": kind == "model", "deleted": false, "energy": 1.0, "range": 8.0}
 	if kind == "dropoff": document.entities[key].merge({"name":"New drop-off point","radius":0.5,"city_id":0})
+	if kind == "smoke": document.entities[key].merge({"name":"New smoke emitter","enabled":true}.merged(Document.SmokeEmitter.DEFAULTS))
 	_remember(before); category.select(5 if kind == "dropoff" else 0); _sync(); select(key)
 func duplicate_selection() -> void:
 	if not loaded or record().is_empty(): return

@@ -82,7 +82,7 @@ func _run() -> void:
 	check(game.developer_tabs.get_current_tab_control().name == "Graphics", "Old separate-menu shortcuts no longer switch panels")
 	check(game.get_window().mode == window_mode, "F11 does not switch game out of full screen")
 	root.mode = Window.MODE_WINDOWED
-	for window_size in [Vector2i(1280, 720), Vector2i(1050, 600)]:
+	for window_size in [Vector2i(1280, 720), Vector2i(1920,1080), Vector2i(1050, 600)]:
 		root.size = window_size
 		for tab_name in ["Movement", "Sound", "Graphics", "Equipment", "Weapons", "System"]:
 			game._select_developer_tab(tab_name)
@@ -90,6 +90,13 @@ func _run() -> void:
 			var panel_rect: Rect2 = game.developer_menu.get_global_rect()
 			var viewport_size: Vector2 = game.get_viewport().get_visible_rect().size
 			check(panel_rect.end.y <= viewport_size.y and panel_rect.end.x <= viewport_size.x, "%s menu fits %s" % [tab_name, window_size])
+			if tab_name in ["Movement","Sound"]:
+				var content: Control = game.developer_tabs.get_current_tab_control()
+				content._resize()
+				check(content.get_global_rect().position.y >= game.developer_tabs.get_tab_bar().get_global_rect().end.y,"%s stays below its tab bar after resize at %s" % [tab_name,window_size])
+			if DisplayServer.get_name() != "headless" and tab_name == "Movement" and window_size == Vector2i(1920,1080):
+				await RenderingServer.frame_post_draw
+				root.get_texture().get_image().save_png("res://tests/developer-menu-native-ui.png")
 	key.keycode = KEY_F1
 	game._input(key)
 	game._physics_process(0.0)

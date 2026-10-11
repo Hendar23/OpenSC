@@ -17,6 +17,7 @@ var glow_age := 0.0
 const GLOW_PERIOD := 4.0
 func setup(definition: Dictionary, visual: Node3D, fragment: int, water: float, running: bool) -> void:
 	stats = definition.duplicate(true); shard = fragment; surface_height = water; enabled = running
+	set_meta("damage_sustain",0.05)
 	health = float(stats.health); mass = float(stats.get("mass" if shard == 0 else "shard_mass",2.0 if shard == 0 else 1.0))
 	collision_layer = 9; collision_mask = 11; freeze = not running; continuous_cd = true
 	gravity_scale = 0.0
@@ -119,4 +120,4 @@ func _process(delta: float) -> void:
 		elif material is BaseMaterial3D: material.emission = glow_emission_colour * brightness
 
 func pickup_item() -> String:
-	return "ore" if shard > 0 and enabled and not dead and not is_queued_for_deletion() else ""
+	return "ore" if bool(stats.get("suckomat_compatible",true)) and shard > 0 and enabled and not dead and not is_queued_for_deletion() and not has_meta("delivery_city") else ""

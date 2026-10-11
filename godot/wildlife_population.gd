@@ -271,6 +271,7 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 		fish.configure_ranges(species)
 		fish.mobility = species.mobility
 		fish.configure_health(Document.creature_health(species,gameplay_catalogue))
+		fish.damage_sustain = float(gameplay_catalogue.get("tables",{}).get("creature_stats",{}).get("records",{}).get(str(species.model).to_lower(),{}).get("sustain",1.0))
 		fish.configure_combat(species)
 		fish.death_texture = death_texture; fish.death_sound = death_sound; fish.death_frames = death_frames
 		fish.death_flesh_texture = death_flesh_texture

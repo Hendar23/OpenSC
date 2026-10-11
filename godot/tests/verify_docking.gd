@@ -62,7 +62,7 @@ func _run() -> void:
 	game.pilot.global_position = greeting_port.entry; controller.update_approach()
 	check(controller.message.contains("Do you want to dock?") and controller.message.begins_with(str(greeting_port.name)),"Named docking prompt takes priority over the relay greeting")
 	controller.greeting_remaining = 0; controller.greeted_ports.clear()
-	check(game.pilot.visual.scale.is_equal_approx(Vector3.ONE * 0.8) and game.pilot.get_node("HullCollision").shape is ConvexPolygonShape3D and game.pilot.collision_parts.size() >= 5, "Ship keeps its visual scale and uses separate fitted hull and pod shapes")
+	check(game.pilot.visual.scale.is_equal_approx(Vector3.ONE) and game.pilot.get_node("HullCollision").shape is ConvexPolygonShape3D and game.pilot.collision_parts.size() >= 5, "Ship uses the original visual scale and uses separate fitted hull and pod shapes")
 	game.pilot.movement.settings.forward_speed = 4.6
 	check(is_equal_approx(controller.maximum_docking_speed(), 4.6 * 2.0 / 3.0), "Docking permission uses two-thirds of configured forward speed")
 	game.pilot.movement.settings.forward_speed = 6.0

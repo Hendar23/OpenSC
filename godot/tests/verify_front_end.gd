@@ -59,7 +59,7 @@ func _run() -> void:
 			var species: Dictionary = game.wildlife.definitions[actor.node.get_meta("species")]
 			check(actor.node.mobility == species.mobility and is_equal_approx(actor.node.roam_radius,float(species.roam_radius)),"Menu respects creature mobility and roaming settings")
 	check(game.menu_backdrop.actors.all(func(actor: Dictionary) -> bool: return actor.node.collision_layer == 0 and actor.node.collision_mask == 5),"Menu actors cannot change gameplay collisions")
-	check(not game.front_end.is_button_available("continue") and game.front_end.is_button_available("load") == game.save_games.slots().any(func(slot: Dictionary) -> bool: return slot.valid) and game.front_end.is_button_available("controls") and not game.front_end.is_button_available("audio") and not game.front_end.is_button_available("graphics"),"Controls is available, unimplemented entries are inactive and Load reflects existing saves")
+	check(not game.front_end.is_button_available("continue") and game.front_end.is_button_available("load") == game.save_games.slots().any(func(slot: Dictionary) -> bool: return slot.valid) and game.front_end.is_button_available("controls") and game.front_end.is_button_available("audio") and game.front_end.is_button_available("graphics"),"Controls, Audio and Graphics are available and Load reflects existing saves")
 	check(game.front_end.buttons.website.text == "Website" and game.front_end.menu_config.title_rect[2] == 294 and game.front_end.is_button_available("website") and game.front_end.WEBSITE_URL == "https://github.com/Hendar23/OpenSC","Smaller title and Website label retain the repository link")
 	check(game.front_end.buttons.options.visible and not game.front_end.buttons.controls.visible and not game.front_end.buttons.mods.visible and not game.front_end.buttons.graphics.visible and not game.front_end.buttons.audio.visible,"Main menu groups settings behind Options")
 	check(game.front_end.menu_picture.material is ShaderMaterial and game.front_end.menu_picture.material.get_shader_parameter("corner_radius") == 12.0,"Title card has rounded corners without changing the source artwork")
@@ -70,6 +70,30 @@ func _run() -> void:
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/live-main-menu-preview.png")
 		check(root.get_texture().get_image().get_pixel(10,10).b > 0.1,"Rendered live background is visible behind the menu")
+		game.front_end._activate_button("options"); game.front_end._activate_button("audio")
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png("res://tests/live-audio-menu-preview.png")
+		check(game.menu_backdrop.active and game.menu_backdrop.view.current and root.get_texture().get_image().get_pixel(10,10).b > 0.1,"Audio page preserves the live sea camera and visible background")
+		game.front_end.audio_menu.close_menu(); game.front_end._activate_button("back")
+		game.front_end._activate_button("options"); game.front_end._activate_button("gameplay")
+		check(not game.weapons.auto_aim_enabled,"Zapper auto aim is off for a fresh player")
+		game.front_end.gameplay_menu._toggle()
+		check(game.weapons.auto_aim_enabled,"Gameplay toggle immediately enables weapon auto aim")
+		game.front_end.gameplay_menu._toggle()
+		check(not game.weapons.auto_aim_enabled,"Gameplay toggle immediately disables weapon auto aim")
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png("res://tests/live-gameplay-menu-preview.png")
+		game.front_end.gameplay_menu.close_menu(); game.front_end._activate_button("back")
+		game.front_end._activate_button("options"); game.front_end._activate_button("graphics")
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png("res://tests/live-graphics-menu-preview.png")
+		check(game.front_end.graphics_menu.visible and game.menu_backdrop.active and game.menu_backdrop.view.current,"Graphics keeps the live sea backdrop")
+		var graphics: Node = game.front_end.player_graphics
+		check(not graphics.settings.has("hud_scale") and not game.front_end.graphics_menu.controls.has("hud_scale"),"HUD sizing is automatic rather than a graphics setting")
+		graphics.set_value("shadows",0); game._update_daylight()
+		check(not game.sun.shadow_enabled,"Day/night updates preserve the chosen shadow setting")
+		graphics.set_value("shadows",2)
+		game.front_end.graphics_menu.close_menu(); game.front_end._activate_button("back")
 		game.menu_backdrop.next_pass = 0.0
 		for frame in range(120): game.menu_backdrop._process(0.05)
 		check(game.menu_backdrop.submarine.visible and game.menu_backdrop.wake.particles.size() > 0,"Menu sub cruises past with a live bubble wake")
@@ -79,10 +103,10 @@ func _run() -> void:
 		root.get_texture().get_image().save_png("res://tests/live-menu-submarine-preview.png")
 	var accept := InputEventJoypadButton.new(); accept.pressed = true; accept.button_index = JOY_BUTTON_A
 	game.front_end.buttons.options.grab_focus(); game.front_end._input(accept)
-	check(game.front_end.menu_page == "options" and game.front_end._visible_button_order() == ["controls","graphics","audio","mods","back"] and not game.front_end.buttons.new_game.visible,"Controller opens the four settings entries and Back")
+	check(game.front_end.menu_page == "options" and game.front_end._visible_button_order() == ["controls","graphics","audio","gameplay","mods","back"] and not game.front_end.buttons.new_game.visible,"Controller opens the five settings entries and Back")
 	var down := InputEventJoypadButton.new(); down.pressed = true; down.button_index = JOY_BUTTON_DPAD_DOWN
 	game.front_end._input(down)
-	check(root.gui_get_focus_owner() == game.front_end.buttons.mods,"Options navigation skips unavailable settings and hidden main-menu buttons")
+	check(root.gui_get_focus_owner() == game.front_end.buttons.graphics,"Options navigation reaches Graphics after Controls")
 	if DisplayServer.get_name() != "headless":
 		for frame in range(4): await process_frame
 		await RenderingServer.frame_post_draw

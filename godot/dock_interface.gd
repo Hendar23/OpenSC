@@ -39,7 +39,9 @@ var slot_buttons: Array[Button] = []
 var selection_dot: Texture2D
 var empty_dot: Texture2D
 var mount_dot: Control
-var info_dialog: AcceptDialog
+var info_dialog: Control
+var info_done: Button
+var info_return_focus: Control
 const DockButton = preload("res://dock_button.gd")
 const MENU_SOUNDS := {"over":"OVERBUTT","off":"OFFBUTT","activate":"ACTIVATE","equipment_trade":"SUBCYCLE","commodity_trade":"SELECT","install":"LOAD","repair":"SHIELD","error":"ERROR"}
 signal menu_sound_played(role: String)
@@ -66,7 +68,8 @@ func _ready() -> void:
 	name_field.text_submitted.connect(func(_text: String) -> void: name_dialog.hide(); _confirm_name())
 	overwrite_dialog = ConfirmationDialog.new(); overwrite_dialog.dialog_text = "Replace the saved game in this slot?"; add_child(overwrite_dialog)
 	overwrite_dialog.confirmed.connect(func() -> void: action_requested.emit("save_slot",{"slot":pending_slot,"name":pending_name}))
-	info_dialog = AcceptDialog.new(); info_dialog.title = "Shield Repair"; add_child(info_dialog)
+	info_dialog = Control.new(); info_dialog.name = "ItemInfo"; layout.add_child(info_dialog)
+	info_dialog.size = Vector2(640,480); info_dialog.mouse_filter = Control.MOUSE_FILTER_STOP; info_dialog.hide()
 	var overwrite_input := DialogInput.new(); overwrite_input.handler = func(event: InputEvent) -> void: _dialog_input(overwrite_dialog,event)
 	overwrite_dialog.add_child(overwrite_input)
 	name_dialog.canceled.connect(_restore_slot_focus); overwrite_dialog.canceled.connect(_restore_slot_focus)
@@ -241,7 +244,9 @@ func rebuild(new_page: bool = false) -> void:
 	var focused := get_viewport().gui_get_focus_owner()
 	var focus_name := str(focused.name) if not new_page and focused != null and layout.is_ancestor_of(focused) else ""
 	# A button may still be emitting pressed while its page changes.
-	for child in layout.get_children(): layout.remove_child(child); child.queue_free()
+	for child in layout.get_children():
+		if child == info_dialog: continue
+		layout.remove_child(child); child.queue_free()
 	button_nodes.clear()
 	var data: Dictionary = model.call() if model.is_valid() else {}
 	loaded_city = str(data.get("city","Dock"))
@@ -300,6 +305,8 @@ func rebuild(new_page: bool = false) -> void:
 		(slot_controls[0] if not slot_controls.is_empty() else button_nodes[0]).grab_focus()
 	elif page in ["equipment","goods"] and sale_list != null: sale_list.grab_focus()
 	elif not button_nodes.is_empty(): button_nodes[0].grab_focus()
+	if info_dialog.visible:
+		layout.move_child(info_dialog,-1); info_done.grab_focus()
 	rebuilding = false
 
 func _welcome(text: String, area: Rect2) -> void:
@@ -507,18 +514,60 @@ func _commodity_info() -> void:
 	if not offer.is_empty(): _show_item_info(offer,selected_commodity)
 
 func _show_item_info(offer: Dictionary, item_id: String) -> void:
-	info_dialog.title = str(offer.get("name","Shield Repair"))
-	info_dialog.dialog_text = ""
+	if offer.is_empty(): return
+	info_return_focus = get_viewport().gui_get_focus_owner()
 	for child in info_dialog.get_children():
-		if child.name == "RepairInfo": info_dialog.remove_child(child); child.queue_free()
-	var content := VBoxContainer.new(); content.name = "RepairInfo"; content.custom_minimum_size = Vector2(400,200); info_dialog.add_child(content)
-	var artwork := texture("texture.ui_equipment_info_" + item_id,str(offer.get("info_bitmap","INTROTEX/WSHIELDS.BMP")))
+		info_dialog.remove_child(child); child.queue_free()
+	# Original popup builder 0x41adb0: (34,30), 580x380; its children
+	# use local coordinates. The native artwork extends behind the frame.
+	var content := Control.new(); content.name = "RepairInfo"; content.position = Vector2(34,30); content.size = Vector2(580,380)
+	info_dialog.add_child(content)
+	var art_clip := Control.new(); art_clip.name = "ArtworkClip"; art_clip.position = Vector2(279,20); art_clip.size = Vector2(280,300)
+	art_clip.clip_contents = true; art_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE; content.add_child(art_clip)
+	var artwork := texture("texture.ui_equipment_info_" + item_id,str(offer.get("info_bitmap",""))) if not str(offer.get("info_bitmap","")).is_empty() else null
 	if artwork != null:
-		var image := TextureRect.new(); image.texture = artwork; image.custom_minimum_size.y = 120
-		image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; content.add_child(image)
-	var description := Label.new(); description.text = str(offer.get("description","Restores shields to full strength."))
-	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; content.add_child(description)
-	info_dialog.popup_centered(Vector2i(450,270))
+		var image := TextureRect.new(); image.name = "Artwork"; image.texture = artwork; image.size = artwork.get_size()
+		image.mouse_filter = Control.MOUSE_FILTER_IGNORE; art_clip.add_child(image)
+	var prefix := "TP" if dock_race in [2,4] else "TB"
+	var frame := TextureRect.new(); frame.name = "Frame"; frame.size = content.size; frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var frame_texture := texture("texture.ui_dock_info_" + prefix.to_lower(),"INTROTEX/ENGLISH/" + prefix + "-POP1.BMP")
+	if frame_texture != null:
+		var frame_image := frame_texture.get_image(); frame_image.convert(Image.FORMAT_RGBA8)
+		for y in range(frame_image.get_height()):
+			for x in range(frame_image.get_width()):
+				if frame_image.get_pixel(x,y) == Color.RED: frame_image.set_pixel(x,y,Color.TRANSPARENT)
+		frame.texture = ImageTexture.create_from_image(frame_image)
+	content.add_child(frame)
+	var square_path := str(offer.get("square_bitmap",""))
+	if not square_path.is_empty():
+		var square := texture("texture.ui_equipment_square_" + item_id,square_path)
+		if square != null:
+			var icon := TextureRect.new(); icon.name = "Icon"; icon.texture = square; icon.position = Vector2(30,31); icon.size = square.get_size()
+			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE; content.add_child(icon)
+	for row in [["ItemName",str(offer.get("name","")),Rect2(29,82,218,20),Color.WHITE],
+		["Description",str(offer.get("description","")),Rect2(29,102,218,180),Color.YELLOW]]:
+		var text := Label.new(); text.name = row[0]
+		text.add_theme_font_size_override("font_size",13); text.add_theme_color_override("font_color",row[3])
+		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; text.clip_text = true; text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		text.text = row[1]; content.add_child(text); text.position = row[2].position; text.size = row[2].size
+	info_done = DockButton.new(); info_done.name = "Done"; info_done.position = Vector2(24,313); info_done.size = Vector2(143,52)
+	for state in ["normal","hover","focus","pressed"]: info_done.add_theme_stylebox_override(state,StyleBoxEmpty.new())
+	_piece(info_done,info_done.highlight_art,"ENGLISH/" + prefix + "-DN2",Vector2(89,330))
+	_piece(info_done,info_done.held_art,prefix + "-POPB",Vector2(24,313))
+	info_done.mouse_entered.connect(func() -> void: _enter_button(info_done))
+	info_done.focus_entered.connect(func() -> void: _enter_button(info_done))
+	info_done.mouse_exited.connect(func() -> void: _leave_button(info_done))
+	info_done.focus_exited.connect(func() -> void: _leave_button(info_done))
+	info_done.button_down.connect(func() -> void: info_done.held = true; info_done.queue_redraw(); _play_menu_sound("activate"))
+	info_done.button_up.connect(func() -> void: info_done.held = false; info_done.queue_redraw())
+	info_done.pressed.connect(_close_item_info); content.add_child(info_done)
+	info_done.focus_next = info_done.get_path(); info_done.focus_previous = info_done.get_path()
+	layout.move_child(info_dialog,-1); info_dialog.show(); info_done.grab_focus()
+
+func _close_item_info() -> void:
+	if is_instance_valid(controller_button): controller_button.button_up.emit()
+	controller_button = null; active_button = null; info_dialog.hide()
+	if is_instance_valid(info_return_focus) and info_return_focus.is_visible_in_tree(): info_return_focus.grab_focus()
 
 func _status(data: Dictionary, area: Rect2, compact: bool = false) -> void:
 	var values: Dictionary = data.get("status",{})
@@ -561,7 +610,14 @@ func _input(event: InputEvent) -> void:
 		held_button.button_up.emit()
 		if visible and not held_button.disabled: held_button.pressed.emit()
 		get_viewport().set_input_as_handled(); return
-	if not visible or name_dialog.visible or overwrite_dialog.visible or info_dialog.visible: return
+	if not visible or name_dialog.visible or overwrite_dialog.visible: return
+	if info_dialog.visible:
+		if Bindings.pressed(event,"menu_cancel"): _close_item_info(); get_viewport().set_input_as_handled()
+		elif Bindings.pressed(event,"menu_accept") and not is_instance_valid(controller_button):
+			controller_button = info_done; info_done.button_down.emit(); get_viewport().set_input_as_handled()
+		elif Bindings.pressed(event,"menu_up") or Bindings.pressed(event,"menu_down") or Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right"):
+			info_done.grab_focus(); get_viewport().set_input_as_handled()
+		return
 	var item_list := get_viewport().gui_get_focus_owner() as ItemList
 	if item_list != null and not Bindings.pressed(event,"menu_cancel"):
 		for direction in [["menu_left",SIDE_LEFT],["menu_right",SIDE_RIGHT]]:

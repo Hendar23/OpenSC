@@ -44,13 +44,14 @@ func run() -> void:
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/clam-open.png")
 	var pilot := preload("res://submarine_controller.gd").new(); pilot.remember_settings = false; world.add_child(pilot); pilot.freeze = true; pilot.set_physics_process(false)
-	pilot.position = Vector3(0,0.5,0); clam.player = pilot
+	pilot.position = Vector3(0,float(clam.stats.close_distance) - 0.05,0); clam.player = pilot
 	clam._physics_process(0.2); check(is_equal_approx(clam.angle,10),"Approaching player scares shell shut")
-	pilot.position = Vector3(0,2,0); clam._physics_process(2)
-	var vacuum := preload("res://suck_o_matic.gd").new(); world.add_child(vacuum); vacuum.setup(pilot,folder); vacuum.population = population; vacuum.position = Vector3(0,1.2,0); vacuum.set_physics_process(false)
+	pilot.position = Vector3(0,float(clam.stats.close_distance) + 0.1,0); clam._physics_process(2)
+	var vacuum := preload("res://suck_o_matic.gd").new(); world.add_child(vacuum); vacuum.setup(pilot,folder); vacuum.population = population; vacuum.position = pilot.position + Vector3(0,-0.25,0); vacuum.range_metres = 1.5; vacuum.set_physics_process(false)
 	pilot.active = true; pilot.controls_enabled = true; vacuum.enabled = true
 	await physics_frame; await physics_frame
 	for tick in range(180):
+		if is_instance_valid(clam.pearl): clam._physics_process(1.0 / 60.0)
 		vacuum._physics_process(1.0 / 60.0); await physics_frame
 	check(vacuum.storage == ["pearls"] and not vacuum.enabled,"SOM extracts pearl through open shell and switches off")
 	check(not is_instance_valid(clam.pearl) and clam.remaining == 7200,"Harvest starts recovered two-hour regrowth timer")
@@ -65,7 +66,7 @@ func run() -> void:
 	clam.pearl.pull_towards(clam.global_position + Vector3.UP * 0.6,1,0.2)
 	snapshot = JSON.parse_string(JSON.stringify(population.snapshot())); population.restore_snapshot(snapshot)
 	clam = population.get_children().filter(func(node: Node) -> bool: return node is Clam)[0]; clam.set_physics_process(false)
-	check(is_instance_valid(clam.pearl) and is_equal_approx(clam.pearl.position.y,0.4),"Partially extracted pearl survives save restore")
+	check(is_instance_valid(clam.pearl) and is_equal_approx(clam.pearl.position.y,float(clam.stats.pearl_height) + 0.2),"Partially extracted pearl survives save restore")
 	clam.pearl.pull_towards(Vector3.UP * 2,2,1)
 	check(not is_instance_valid(clam.pearl) and population.snapshot().size() == 2,"Extracted pearl becomes independent physical object")
 	snapshot = JSON.parse_string(JSON.stringify(population.snapshot())); population.restore_snapshot(snapshot)

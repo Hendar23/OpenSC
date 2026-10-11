@@ -18,7 +18,32 @@ func run() -> void:
 	pilot.visual = Node3D.new(); pilot.add_child(pilot.visual)
 	var joy := FakeJoy.new(); pilot.impact_rumble.joy_input = joy
 	var population := Population.new(); root.add_child(population); population.player = pilot
+	check(is_equal_approx(preload("res://original_damage.gd").mine_raw_damage(17.5,2.0),0.25),"Ordinary targets receive original inflict/distance before their sustain")
+	check(is_equal_approx(preload("res://original_damage.gd").mine_raw_damage(17.5,2.0,true),1.0),"Other mines receive the recovered fourfold chain-reaction strength")
+	var resistant := preload("res://floating_mine.gd").new()
+	resistant.setup(preload("res://object_definitions.gd").FLOATING_MINE,Node3D.new(),null,true); population.add_child(resistant)
+	preload("res://original_damage.gd").weapon(resistant,2.5,Vector3.ZERO)
+	check(is_equal_approx(resistant.health,0.25) and not resistant.dead,"Mine health uses the original 0.1 weapon sustain")
+	preload("res://original_damage.gd").weapon(resistant,2.5,Vector3.ZERO)
+	check(is_zero_approx(resistant.health) and not resistant.dead,"Original mine callback detonates below zero shields")
+	preload("res://original_damage.gd").weapon(resistant,0.1,Vector3.ZERO)
+	check(resistant.dead,"Further weapon damage detonates a depleted mine")
+	resistant.free()
 	pilot.position = Vector3.RIGHT
+	await physics_frame; await physics_frame
+	var hull := CollisionShape3D.new(); var hull_shape := SphereShape3D.new(); hull_shape.radius = 0.54; hull.shape = hull_shape; pilot.add_child(hull)
+	var contact := preload("res://floating_mine.gd").new()
+	contact.setup(preload("res://object_definitions.gd").FLOATING_MINE,Node3D.new(),null,true); population.add_child(contact)
+	contact.set_physics_process(false); contact.player = pilot
+	pilot.position = Vector3.RIGHT * 1.2
+	await physics_frame; await physics_frame
+	contact._physics_process(0.0)
+	check(not contact.dead,"Default mine does not use the old centre proximity trigger")
+	pilot.position = Vector3.RIGHT * 0.9
+	await physics_frame; await physics_frame
+	contact._physics_process(0.0)
+	check(contact.dead,"Mine detonates when its sphere touches the actual hull collider")
+	contact.free(); hull.free(); pilot.position = Vector3.RIGHT
 	await physics_frame; await physics_frame
 	population._exploded(Vector3.ZERO,30.0,2.0,300.0)
 	await physics_frame; await physics_frame
@@ -38,12 +63,18 @@ func run() -> void:
 	population._exploded(pilot.position - Vector3.RIGHT,30.0,2.0,300.0)
 	check(joy.calls == 2 and is_equal_approx(pilot.linear_velocity.x,before), "Docking manoeuvres are not interrupted by explosions")
 	pilot.controls_enabled = true; pilot.restore_health()
+	population._exploded(pilot.position - Vector3.RIGHT * 2.0,17.5,3.0,0.0)
+	check(is_equal_approx(pilot.health,91.25),"Original floating mine loses half its one-unit damage at two units")
+	pilot.restore_health(); pilot.hull_rating = 200.0
+	population._exploded(pilot.position - Vector3.RIGHT,17.5,3.0,0.0)
+	check(is_equal_approx(pilot.health,97.5),"Blast damage applies upgraded hull sustain exactly once")
+	pilot.hull_rating = 100.0; pilot.restore_health()
 	for remaining in [65.0,30.0,0.0]:
 		var mine := preload("res://floating_mine.gd").new()
 		var definition: Dictionary = preload("res://object_definitions.gd").FLOATING_MINE.duplicate(true)
 		definition.damage = 35.0; definition.blast_force = 0.0
 		mine.setup(definition,Node3D.new(),null,true); population.add_child(mine)
-		mine.global_position = pilot.global_position
+		mine.global_position = pilot.global_position - Vector3.RIGHT
 		mine.exploded.connect(population._exploded.bind(0.0))
 		mine.detonate()
 		await process_frame; await process_frame

@@ -107,7 +107,12 @@ func _draw() -> void:
 		var item: Dictionary = equipment.current()
 		if not item.is_empty():
 			var icon_index := 0 if item.enabled else 1
-			if item.id in ["magnet","grapple"]: icon_index = 2 if is_instance_valid(equipment.towing_tool().target) else (1 if item.enabled else 0)
+			# Original Suck-O-Matic handler 0x47d4a0 indexes PICKUP1/2 by its active byte.
+			if item.id == "suckomat": icon_index = 1 if item.enabled else 0
+			if item.id in ["magnet","grapple"]:
+				var tool: Node3D = equipment.towing_tool()
+				# Original towing handlers keep state 1 until retraction finishes.
+				icon_index = 2 if is_instance_valid(tool.target) else (1 if item.enabled or tool.retracting else 0)
 			var icon: Texture2D = item.icons[icon_index]
 			if icon != null: draw_texture_rect(icon, rect, false)
 			if item.id == "suckomat" and equipment.counter_digits.size() == 10:

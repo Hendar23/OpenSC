@@ -55,6 +55,6 @@ func run() -> void:
  check(heavy.vertical < corrected.vertical - 0.05,"Heavier cargo needs more nose-up correction")
  check(corrected.speed < empty.speed,"Towing cargo slows forward flight")
  check(corrected.cable < 0.45 and heavy.cable < 0.45,"Towing retains a stable cable length")
- var saved_corrected: Dictionary = await trial(1.5,0.1,true)
+ var saved_corrected: Dictionary = await trial(1.5,0.15,true)
  check(absf(saved_corrected.vertical) < 0.12 and saved_corrected.pitch > 0.0,"Current saved magnet settings also allow gentle nose-up correction to hold height")
  print("Towing flight: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

@@ -64,5 +64,35 @@ func run() -> void:
 	var saved := preload("res://player_progress.gd").restore({"cargo":cargo,"suckomat":["ore"]})
 	check(saved.cargo.ore == 5 and saved.suckomat == ["ore"],"Cargo and device storage survive progress restore")
 	equipment.vacuum.reset(); check(not equipment.vacuum.enabled and equipment.vacuum.storage.is_empty(),"New game clears device")
+	for body in population.get_children(): body.free()
+	var rock := preload("res://rock_body.gd").new()
+	var rock_stats := preload("res://object_definitions.gd").rock_types()[0]
+	var rock_visual := MeshInstance3D.new(); rock_visual.mesh = BoxMesh.new()
+	rock.setup(rock_stats,rock_visual,0,10,true); population.add_child(rock); rock.freeze = true
+	rock.global_position = equipment.vacuum.global_position + Vector3(0,-0.1,0)
+	equipment.vacuum.enabled = true; equipment.vacuum._physics_process(0.016)
+	check(equipment.vacuum.storage.is_empty() and not rock.dead,"Rock suction compatibility defaults off")
+	rock.stats.suckomat_compatible = true
+	equipment.vacuum._physics_process(0.016)
+	check(rock.dead and equipment.vacuum.storage == [preload("res://suck_o_matic.gd").NO_COMMODITY],"Enabling compatibility collects an unrewarded rock into one storage slot")
+	var no_reward_saved := preload("res://player_progress.gd").restore({"suckomat":equipment.vacuum.storage})
+	check(no_reward_saved.suckomat == equipment.vacuum.storage,"Unrewarded collected objects survive saving")
+	var rock_cargo := {}; equipment.vacuum.transfer_to(rock_cargo)
+	check(rock_cargo.is_empty() and equipment.vacuum.storage.is_empty(),"Unrewarded objects clear on docking without creating a commodity")
+	await process_frame
+	var metal := preload("res://salvage_body.gd").new()
+	var metal_stats := preload("res://object_definitions.gd").metal_types()[2]
+	metal_stats.suckomat_compatible = true; metal_stats.pickup_commodity = "copper"
+	var metal_visual := MeshInstance3D.new(); metal_visual.mesh = BoxMesh.new()
+	metal.setup(metal_stats,metal_visual,0,10,true); population.add_child(metal); metal.freeze = true
+	metal.global_position = equipment.vacuum.global_position + Vector3(0,-0.1,0)
+	equipment.vacuum.enabled = true; equipment.vacuum._physics_process(0.016); equipment.vacuum.transfer_to(rock_cargo)
+	check(metal.dead and rock_cargo.get("copper",0) == 1,"Compatible salvage awards the configured suction commodity on docking")
+	var shard := Thorium.new(); shard.shard = 1; shard.stats = {"suckomat_compatible":false}
+	check(shard.pickup_item().is_empty(),"Disabling Thorium compatibility also disables shard suction"); shard.free()
+	var pearl := preload("res://pearl_body.gd").new(); pearl.stats = {"suckomat_compatible":false}
+	check(pearl.pickup_item().is_empty(),"Disabling pearl compatibility disables suction"); pearl.free()
+	var fixed_rock := preload("res://rock_body.gd").new(); fixed_rock.stats = {"immovable":true,"suckomat_compatible":true}
+	check(fixed_rock.pickup_item().is_empty(),"Immovable rocks cannot be sucked away"); fixed_rock.free()
 	world.free()
 	print("Suck-O-Matic: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

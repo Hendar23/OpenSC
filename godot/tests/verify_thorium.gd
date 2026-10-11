@@ -114,11 +114,11 @@ func run() -> void:
 	var sub := preload("res://submarine_controller.gd").new(); sub.remember_settings = false; world.add_child(sub)
 	sub.set_physics_process(false); sub.active = true; sub.controls_enabled = true; sub.freeze = true; sub.position = Vector3(0,0,1)
 	pop.player = sub; pop._update_radiation(1.0)
-	check(sub.health == 95 and sub.radiation_exposed,"Nearby Thorium causes configured shield damage per second")
+	check(is_equal_approx(sub.health,100 - Definitions.THORIUM.radiation_strength) and sub.radiation_exposed,"Nearby Thorium causes configured shield damage per second")
 	sub.position = Vector3(0,0,0.5); pop._update_radiation(1.0)
-	check(is_equal_approx(sub.health,85),"Moving twice as close doubles Thorium radiation damage")
+	check(is_equal_approx(sub.health,100 - 3 * Definitions.THORIUM.radiation_strength),"Moving twice as close doubles Thorium radiation damage")
 	sub.position = Vector3(0,0,Definitions.THORIUM.radiation_range); pop._update_radiation(1.0)
-	check(is_equal_approx(sub.health,85) and not sub.radiation_exposed,"Radiation stops exactly at the configured range boundary")
+	check(is_equal_approx(sub.health,100 - 3 * Definitions.THORIUM.radiation_strength) and not sub.radiation_exposed,"Radiation stops exactly at the configured range boundary")
 	sub.restore_health(100,95); sub.position = Vector3(0,0,1); pop._update_radiation(0)
 	var gauge := preload("res://hud_display.gd").new(); gauge.kind = "shield"; gauge.pilot = sub
 	gauge.radiation_icon = preload("res://clump_loader.gd")._load_texture(pop.asset_folder,"RADIO","RADIOM",{})
@@ -138,10 +138,10 @@ func run() -> void:
 	check(sub.health == 95 and not sub.radiation_exposed,"Shattered Thorium shards cause neither radiation damage nor warning")
 	var inert := pop._create_thorium(Definitions.inert_thorium(),0,Transform3D.IDENTITY); inert.freeze = true
 	pop._update_radiation(1.0)
-	check(is_equal_approx(sub.health,94.5) and sub.radiation_exposed,"Inert Thorium is still radioactive at one tenth strength")
+	check(is_equal_approx(sub.health,95 - Definitions.THORIUM.radiation_strength * 0.1) and sub.radiation_exposed,"Inert Thorium is still radioactive at one tenth strength")
 	var inert_saved := pop.snapshot(); pop.restore_snapshot(JSON.parse_string(JSON.stringify(inert_saved)))
 	inert = pop.get_children().filter(func(body: Node) -> bool: return body is Thorium and body.stats.id == "inert_thorium")[0]
-	check(inert.stats.radiation_strength == 0.5 and inert.shard == 0,"Inert identity and radiation survive save/load")
+	check(is_equal_approx(inert.stats.radiation_strength,Definitions.THORIUM.radiation_strength * 0.1) and inert.shard == 0,"Inert identity and radiation survive save/load")
 	pop._shatter(inert)
 	check(pop.get_children().filter(func(body: Node) -> bool: return body is Thorium and body.stats.id == "inert_thorium" and body.shard > 0).size() == 3,"Inert crystal shatters into three collectible shards")
 	var exported := pop.snapshot()

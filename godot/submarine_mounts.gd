@@ -15,11 +15,13 @@ static func apply(mount: Node3D, visual: Node3D, id: String, path: String = PATH
 	if not values is Dictionary: return
 	var position: Variant = values.get("position",[]); var rotation: Variant = values.get("rotation_degrees",[])
 	if not _vector_valid(position) or not _vector_valid(rotation): return
-	mount.position = Vector3(position[0],position[1],position[2])
+	mount.position = Vector3(position[0],position[1],position[2]) * coordinate_scale(visual)
 	mount.rotation_degrees = Vector3(rotation[0],rotation[1],rotation[2])
 	var size: Variant = values.get("scale",1.0)
 	if (size is float or size is int) and is_finite(float(size)) and float(size) > 0.0:
 		mount.scale = Vector3.ONE * float(size)
+static func coordinate_scale(visual: Node3D) -> float:
+	return 1.25 if profile(visual) == "Original:sub.dff" else 1.0
 static func _vector_valid(value: Variant) -> bool:
 	if not value is Array or value.size() != 3: return false
 	for component in value:
@@ -29,7 +31,8 @@ static func save(visual: Node3D, mounts: Dictionary, path: String = PATH) -> Err
 	var data := read(path); var values := {}
 	for id in mounts:
 		var mount: Node3D = mounts[id]
-		values[id] = {"position":[mount.position.x,mount.position.y,mount.position.z],"rotation_degrees":[mount.rotation_degrees.x,mount.rotation_degrees.y,mount.rotation_degrees.z],"scale":mount.scale.x}
+		var position: Vector3 = mount.position / coordinate_scale(visual)
+		values[id] = {"position":[position.x,position.y,position.z],"rotation_degrees":[mount.rotation_degrees.x,mount.rotation_degrees.y,mount.rotation_degrees.z],"scale":mount.scale.x}
 	data[profile(visual)] = values
 	var file := FileAccess.open(path,FileAccess.WRITE)
 	if file == null: return FileAccess.get_open_error()

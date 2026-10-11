@@ -7,6 +7,7 @@ const Thorium = preload("res://thorium_body.gd")
 const Clam = preload("res://clam.gd")
 const Pearl = preload("res://pearl_body.gd")
 const Salvage = preload("res://salvage_body.gd")
+const Rock = preload("res://rock_body.gd")
 const Explosion = preload("res://mine_explosion.gd")
 const Identity = preload("res://entity_identity.gd")
 const DOCK_SPAWN_MARGIN := 5.0
@@ -24,6 +25,7 @@ var thorium_types: Dictionary = {}
 var salvage_types: Dictionary = {}
 var clam_types: Dictionary = {}
 var pearl_types: Dictionary = {}
+var rock_types: Dictionary = {}
 var thorium_templates: Dictionary = {}
 var initial_thorium: Array = []
 var spawn_elapsed := 0.0
@@ -58,6 +60,9 @@ func setup(folder: String, document: Dictionary, enabled: bool = true) -> void:
 		elif entry.get("behavior","mine") == "salvage":
 			salvage_types[entry.id] = entry.duplicate(true)
 			_thorium_template(entry,0)
+		elif entry.get("behavior","mine") == "rock":
+			rock_types[entry.id] = entry.duplicate(true)
+			_thorium_template(entry,0)
 	var cache := {}
 	if not document.get("object_groups",[]).is_empty() or not thorium_types.is_empty():
 		explosion_frames = preload("res://mine_explosion.gd").load_frames(folder,cache)
@@ -87,7 +92,7 @@ func setup(folder: String, document: Dictionary, enabled: bool = true) -> void:
 					Identity.assign_id(clam,Identity.authored(str(group.id),index))
 				placements.append(center + offset)
 				continue
-			if definition.get("behavior","mine") in ["thorium","salvage","pearl"]:
+			if definition.get("behavior","mine") in ["thorium","salvage","pearl","rock"]:
 				var body := _create_thorium(definition,0,pose)
 				if body != null:
 					body.set_meta("object_group",group.id)
@@ -141,9 +146,9 @@ func _exploded(point: Vector3, damage: float, radius: float, force: float = 300.
 	if not simulating or radius <= 0.0: return
 	if is_instance_valid(player) and player.has_method("receive_explosion"):
 		var distance := point.distance_to(player.global_position)
-		if distance < radius:
-			var falloff := 1.0 - distance / radius
-			player.receive_explosion(point,damage,force * falloff)
+		if distance < radius + float(player.COLLIDER_RADIUS):
+			var falloff := preload("res://original_damage.gd").mine_falloff(distance)
+			player.receive_explosion(point,damage * falloff,force * falloff)
 	if damage <= 0.0: return
 	var sphere := SphereShape3D.new(); sphere.radius = radius
 	var query := PhysicsShapeQueryParameters3D.new(); query.shape = sphere; query.transform.origin = point; query.collision_mask = 10
@@ -154,7 +159,11 @@ func _exploded(point: Vector3, damage: float, radius: float, force: float = 300.
 		if struck.has(body.get_instance_id()) or not body.has_method("take_damage"): continue
 		struck[body.get_instance_id()] = true
 		# Defer to avoid recursive minefield detonations.
-		body.call_deferred("take_damage",damage,point)
+		var raw := preload("res://original_damage.gd").mine_raw_damage(damage,point.distance_to(body.global_position),body is Mine)
+		_mine_damage.call_deferred(body,raw,point)
+
+func _mine_damage(body: Node3D, raw: float, point: Vector3) -> void:
+	if is_instance_valid(body): preload("res://original_damage.gd").weapon(body,raw,point)
 
 func _thorium_template(definition: Dictionary, fragment: int) -> Node3D:
 	var key := JSON.stringify(definition).sha256_text() + ":" + str(fragment)
@@ -173,7 +182,7 @@ func _thorium_template(definition: Dictionary, fragment: int) -> Node3D:
 func _create_thorium(definition: Dictionary, fragment: int, pose: Transform3D) -> RigidBody3D:
 	var template := _thorium_template(definition,fragment)
 	if template == null: return null
-	var body: RigidBody3D = Pearl.new() if definition.get("behavior","") == "pearl" else Salvage.new() if definition.get("behavior","") == "salvage" else Thorium.new()
+	var body: RigidBody3D = Rock.new() if definition.get("behavior","") == "rock" else Pearl.new() if definition.get("behavior","") == "pearl" else Salvage.new() if definition.get("behavior","") == "salvage" else Thorium.new()
 	body.setup(definition,template.duplicate(),fragment,surface_height,simulating)
 	Identity.assign_id(body)
 	add_child(body); body.transform = pose
@@ -250,7 +259,7 @@ static func valid_snapshot(value: Variant) -> bool:
 			if not state.get("pearl_offset") is Array or (not state.pearl_offset.is_empty() and not Document.finite_array(state.pearl_offset,3)): return false
 			if state.has("pearl_id") and state.pearl_offset.is_empty(): return false
 			continue
-		if entry.stats.get("behavior","") not in ["thorium","salvage","pearl"] or not Definitions.numeric(entry.get("shard"),0,3): return false
+		if entry.stats.get("behavior","") not in ["thorium","salvage","pearl","rock"] or not Definitions.numeric(entry.get("shard"),0,3): return false
 		if float(entry.shard) != floorf(float(entry.shard)) or (entry.stats.get("behavior") != "thorium" and entry.shard != 0): return false
 		if not Document.finite_array(entry.get("pose"),12) or not Document.finite_array(entry.get("velocity"),3) or not Document.finite_array(entry.get("spin"),3): return false
 		if not Definitions.numeric(entry.get("health"),0,100000): return false
@@ -284,9 +293,9 @@ func restore_snapshot(entries: Array) -> void:
 			if clam != null:
 				Identity.assign_id(clam,identity)
 				if entry.has("object_group"): clam.set_meta("object_group",entry.object_group)
-				clam.restore_state(entry.clam_state)
+				clam.restore_state(entry.clam_state,float(entry.stats.get("pearl_height",Definitions.CLAM.pearl_height)))
 			continue
-		var definition: Dictionary = pearl_types.get(str(entry.stats.id),salvage_types.get(str(entry.stats.id),thorium_types.get(str(entry.stats.id),entry.stats)))
+		var definition: Dictionary = rock_types.get(str(entry.stats.id),pearl_types.get(str(entry.stats.id),salvage_types.get(str(entry.stats.id),thorium_types.get(str(entry.stats.id),entry.stats))))
 		var body := _create_thorium(definition,int(entry.shard),Document.decode(entry.pose))
 		if body != null:
 			Identity.assign_id(body,identity)
@@ -308,9 +317,11 @@ func _physics_process(delta: float) -> void:
 
 func populate_startup() -> void:
 	if not simulating: return
-	# Original world creation makes twelve attempts per salvage type. These are
+	# Original world creation makes twelve attempts per salvage/loose rock type. These are
 	# independent of the ongoing replenishment budget and per-minute chance.
-	for definition in thorium_types.values() + salvage_types.values():
+	# BIGROCK is absent from the startup table. Rocks never join timed replenishment.
+	var startup_rocks := rock_types.values().filter(func(entry: Dictionary) -> bool: return entry.id in ["small_rock","rock"])
+	for definition in thorium_types.values() + salvage_types.values() + startup_rocks:
 		for attempt in range(12):
 			var point := _random_spawn_point(definition,true)
 			if point.is_empty(): continue

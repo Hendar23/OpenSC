@@ -19,10 +19,6 @@ var model_views: Array[SubViewport] = []
 var slide_tweens: Array[Tween] = [null,null,null,null,null]
 var map_data := Map.new()
 var holder: Control
-var scale_multiplier := 0.5:
-	set(value):
-		scale_multiplier = clampf(value, 0.25, 1.5)
-		if holder != null: _layout()
 var map_zoom := 2.0:
 	set(value):
 		map_zoom = clampf(value,0.5,4.0)
@@ -190,7 +186,9 @@ func _layout() -> void:
 	var viewport := get_viewport().get_visible_rect().size
 	var total := 641.0
 	var fit_scale := (viewport.x - 16.0) / total
-	var scale_factor := minf(minf(2.0, fit_scale) * scale_multiplier, fit_scale)
+	# Preserve the previous 641-pixel HUD at 1280×720, proportionally sized
+	# at higher resolutions and constrained to fit narrow windows.
+	var scale_factor := minf(minf(viewport.x / 1280.0,viewport.y / 720.0),fit_scale)
 	holder.position = Vector2((viewport.x - total * scale_factor) * 0.5, 0)
 	holder.scale = Vector2.ONE * scale_factor
 	var x := 0.0

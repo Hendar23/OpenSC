@@ -35,18 +35,34 @@ var assigning_focus := false
 var menu_config := {}
 var button_order: Array[String] = []
 var controls_menu: CanvasLayer
+var audio_menu: CanvasLayer
+var graphics_menu: CanvasLayer
+var gameplay_menu: CanvasLayer
+var player_graphics: Node
+var menu_theme: Theme
+var effects_audio: Node
+var remember_preferences := true
 var back_shortcut_busy: Callable
 var menu_page := "main"
-const OPTION_BUTTONS := ["controls","graphics","audio","mods","back"]
+const OPTION_BUTTONS := ["controls","graphics","audio","gameplay","mods","back"]
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	effects_audio = preload("res://effects_audio.gd").new()
+	effects_audio.remember_preferences = remember_preferences
+	add_child(effects_audio)
 	audio_tuning.load_settings()
 	progress_pattern.compile("(\\d+) / (\\d+)")
 	loading_layer = CanvasLayer.new(); loading_layer.layer = 10; add_child(loading_layer)
 	menu_layer = CanvasLayer.new(); menu_layer.layer = 11; add_child(menu_layer)
 	loading_layout = _screen(loading_layer)
 	menu_layout = _screen(menu_layer)
+	menu_theme = Theme.new()
+	var font := ThemeDB.fallback_font.duplicate() as FontFile
+	if font != null:
+		font.multichannel_signed_distance_field = true
+		menu_theme.default_font = font
+	menu_layout.theme = menu_theme
 	menu_layout.get_parent().color = Color(0.0,0.01,0.025,0.25)
 	loading_picture = _picture(loading_layout)
 	loading_picture.texture = TITLE_TEXTURE
@@ -82,7 +98,25 @@ func _ready() -> void:
 	version_label.offset_left = 12; version_label.offset_right = 240
 	version_label.offset_top = -30; version_label.offset_bottom = -10
 	controls_menu = preload("res://controls_menu.gd").new(); add_child(controls_menu)
+	controls_menu.layout.theme = menu_theme
 	controls_menu.closed.connect(func() -> void: restore_button_focus("controls"))
+	audio_menu = preload("res://audio_menu.gd").new(); audio_menu.effects = effects_audio; add_child(audio_menu)
+	audio_menu.layout.theme = menu_theme
+	audio_menu.closed.connect(func() -> void:
+		_set_audio_page_visible(false)
+		restore_button_focus("audio"))
+	player_graphics = preload("res://player_graphics.gd").new()
+	player_graphics.remember_preferences = remember_preferences; add_child(player_graphics)
+	graphics_menu = preload("res://graphics_menu.gd").new(); graphics_menu.graphics = player_graphics; add_child(graphics_menu)
+	graphics_menu.layout.theme = menu_theme
+	graphics_menu.closed.connect(func() -> void:
+		_set_audio_page_visible(false)
+		restore_button_focus("graphics"))
+	gameplay_menu = preload("res://gameplay_menu.gd").new(); gameplay_menu.remember_preferences = remember_preferences; add_child(gameplay_menu)
+	gameplay_menu.layout.theme = menu_theme
+	gameplay_menu.closed.connect(func() -> void:
+		_set_audio_page_visible(false)
+		restore_button_focus("gameplay"))
 	menu_layer.hide()
 	get_viewport().size_changed.connect(_layout)
 	_layout()
@@ -101,11 +135,11 @@ func _build_menu() -> void:
 	var rect: Array = menu_config.button_rect
 	var entries: Array = menu_config.buttons.duplicate(true)
 	# Older custom menu layouts still get an entrance and return button.
-	for entry in [{"id":"options","label":"Options"},{"id":"back","label":"Back"}]:
+	for entry in [{"id":"options","label":"Options"},{"id":"gameplay","label":"Gameplay"},{"id":"back","label":"Back"}]:
 		if not entries.any(func(item: Dictionary) -> bool: return item.get("id") == entry.id): entries.append(entry)
 	for entry in entries:
 		var id := str(entry.get("id",""))
-		if id not in ["new_game","load","continue","options","back","controls","mods","audio","graphics","website","exit"] or buttons.has(id): continue
+		if id not in ["new_game","load","continue","options","back","controls","mods","audio","graphics","gameplay","website","exit"] or buttons.has(id): continue
 		var button := Button.new(); button.text = str(entry.get("label",id))
 		button.position = Vector2(rect[0],rect[1] + button_order.size() * float(menu_config.button_spacing))
 		button.size = Vector2(rect[2],rect[3]); button.add_theme_font_size_override("font_size",14)
@@ -114,7 +148,7 @@ func _build_menu() -> void:
 		var hover := normal.duplicate() as StyleBoxFlat; hover.bg_color = Color(0.04,0.23,0.28,0.95)
 		button.add_theme_stylebox_override("normal",normal); button.add_theme_stylebox_override("hover",hover)
 		button.add_theme_stylebox_override("pressed",hover); button.add_theme_stylebox_override("focus",hover)
-		button.set_meta("available",id in ["new_game","options","back","controls","mods","website","exit"])
+		button.set_meta("available",id in ["new_game","options","back","controls","audio","graphics","gameplay","mods","website","exit"])
 		if not button.get_meta("available"): button.tooltip_text = "Not available yet"
 		menu_layout.add_child(button); buttons[id] = button; button_order.append(id)
 		button.mouse_entered.connect(func() -> void: _enter_button(button))
@@ -239,8 +273,21 @@ func _activate_button(id: String) -> void:
 		"back": _set_menu_page("main")
 		"mods": mods_requested.emit()
 		"controls": controls_menu.open_menu()
+		"audio":
+			_set_audio_page_visible(true)
+			audio_menu.open_menu()
+		"graphics":
+			_set_audio_page_visible(true)
+			graphics_menu.open_menu()
+		"gameplay":
+			_set_audio_page_visible(true)
+			gameplay_menu.open_menu()
 		"website": OS.shell_open(WEBSITE_URL)
 		"exit": _exit_after_sound()
+
+func _set_audio_page_visible(open: bool) -> void:
+	for id in button_order:
+		buttons[id].visible = not open and ((id in OPTION_BUTTONS) == (menu_page == "options"))
 
 func _texture(folder: String, relative: String, id: String, built_in: Texture2D = null) -> Texture2D:
 	for replacement in Mods.candidates(id):
@@ -251,6 +298,9 @@ func _texture(folder: String, relative: String, id: String, built_in: Texture2D 
 	return ImageTexture.create_from_image(image) if image != null else null
 
 func show_loading() -> void:
+	if gameplay_menu != null: gameplay_menu.close_menu()
+	if graphics_menu != null: graphics_menu.close_menu()
+	if audio_menu != null: audio_menu.close_menu()
 	if controls_menu != null: controls_menu.close_menu()
 	menu_layer.hide(); loading_layer.show()
 	active_button = null
@@ -284,11 +334,17 @@ func show_menu(resume_available: bool) -> void:
 	assigning_focus = false
 
 func hide_menu() -> void:
+	if gameplay_menu != null: gameplay_menu.close_menu()
+	if graphics_menu != null: graphics_menu.close_menu()
+	if audio_menu != null: audio_menu.close_menu()
 	if controls_menu != null: controls_menu.close_menu()
 	menu_layer.hide()
 	active_button = null
 
 func _input(event: InputEvent) -> void:
+	if gameplay_menu != null and gameplay_menu.visible: return
+	if graphics_menu != null and graphics_menu.visible: return
+	if audio_menu != null and audio_menu.visible: return
 	if controls_menu != null and controls_menu.visible: return
 	if menu_layer.visible:
 		var selected := get_viewport().gui_get_focus_owner() as Button

@@ -22,9 +22,6 @@ func _load_preferences(path: String = "") -> void:
 	var wildlife_density: Variant = config.get_value("view","wildlife_density",game.wildlife_density_slider.value / 100.0)
 	if (wildlife_density is float or wildlife_density is int) and is_finite(float(wildlife_density)):
 		game.wildlife_density_slider.value = clampf(float(wildlife_density) * 100.0,0.0,300.0)
-	var hud_scale: Variant = config.get_value("view", "hud_scale", game.hud_scale_slider.value / 100.0)
-	if (hud_scale is float or hud_scale is int) and is_finite(float(hud_scale)):
-		game.hud_scale_slider.value = clampf(float(hud_scale) * 100.0, game.hud_scale_slider.min_value, game.hud_scale_slider.max_value)
 	var map_zoom: Variant = config.get_value("view","hud_map_zoom",game.hud_map_zoom_slider.value)
 	if (map_zoom is float or map_zoom is int) and is_finite(float(map_zoom)):
 		game.hud_map_zoom_slider.value = clampf(float(map_zoom),game.hud_map_zoom_slider.min_value,game.hud_map_zoom_slider.max_value)
@@ -71,7 +68,9 @@ func _load_preferences(path: String = "") -> void:
 		var setting: Variant = config.get_value("view",key,game.water_controls[key].value)
 		if (setting is float or setting is int) and is_finite(float(setting)):
 			game.water_controls[key].value = clampf(float(setting),game.water_controls[key].min_value,game.water_controls[key].max_value)
+	var legacy_zapper := config.has_section_key("view","zapper_damage_per_second") and not config.has_section_key("view","zapper_damage_per_tick")
 	for key in game.weapon_controls:
+		if legacy_zapper and key in ["range","damage_per_tick","beam_width","animation_speed"]: continue
 		if not config.has_section_key("view","zapper_" + str(key)): continue
 		var setting: Variant = config.get_value("view","zapper_" + str(key))
 		if (setting is float or setting is int) and is_finite(float(setting)):
@@ -129,6 +128,7 @@ func _save_preferences(path: String = "") -> Error:
 	var config := ConfigFile.new(); config.load(path)
 	var view = game._view_settings()
 	for key in view: config.set_value("view",key,view[key])
+	if config.has_section_key("view","hud_scale"): config.erase_section_key("view","hud_scale")
 	config.set_value("settings","unified",true)
 	var result := config.save(path)
 	if result != OK: game._report_settings_error(path,result)
@@ -149,7 +149,6 @@ func _view_settings() -> Dictionary:
 	settings["market_speed"] = game.market_speed_slider.value / 100.0
 	settings["wildlife_density"] = game.wildlife_density_slider.value / 100.0
 	settings["docking_radius"] = game.docking_radius_slider.value
-	settings["hud_scale"] = game.hud_scale_slider.value / 100.0
 	settings["hud_map_zoom"] = game.hud_map_zoom_slider.value
 	settings["map_reveal_radius"] = game.map_reveal_slider.value
 	settings["crt_reflection_strength"] = game.crt_reflection_slider.value / 100.0

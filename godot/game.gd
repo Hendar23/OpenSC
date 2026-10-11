@@ -130,8 +130,6 @@ var cockpit_hud: CanvasLayer
 var equipment: Node3D
 var equipment_controls := {}
 var hud_enabled: Array[bool] = [true,true,true,true,true]
-var hud_scale_slider: HSlider
-var hud_scale_label: Label
 var hud_map_zoom_slider: HSlider
 var hud_map_zoom_label: Label
 var map_reveal_slider: HSlider
@@ -187,7 +185,10 @@ func _ready() -> void:
 
 func _build_interface() -> void:
 	developer_tools._build_interface()
-	front_end = FrontEnd.new(); add_child(front_end)
+	front_end = FrontEnd.new(); front_end.remember_preferences = remember_preferences; add_child(front_end)
+	front_end.player_graphics.changed.connect(func() -> void: _update_hud_settings(); _update_daylight())
+	front_end.gameplay_menu.auto_aim_changed.connect(func(enabled: bool) -> void:
+		if weapons != null: weapons.auto_aim_enabled = enabled)
 	front_end.back_shortcut_busy = func(event: InputEvent) -> bool: return Bindings.pressed(event,"menu_cancel") and (map_open or developer_ui_visible or (dock_interface != null and dock_interface.visible))
 	loading_canvas = front_end.loading_layer
 	loading_label = front_end.loading_status
@@ -357,6 +358,7 @@ func _start_game(folder: String) -> void:
 		var death_flesh := Assets._load_texture(folder,"BEEF2","",{})
 		for fish in world_root.get_node("AmbientFish").get_children():
 			fish.configure_health(float(stats.get(str(fish.get_meta("species","")).to_lower(),{}).get("health",10)))
+			fish.damage_sustain = float(stats.get(str(fish.get_meta("species","")).to_lower(),{}).get("sustain",1.0))
 			fish.death_texture = Assets._load_texture(folder,"BUBBLE","BUBBLEM",{})
 			fish.death_sound = Weapons._sound(folder,"audio.creature.death","SPLAT")
 			fish.death_frames = death_frames
@@ -410,6 +412,7 @@ func _start_game(folder: String) -> void:
 	model.rotation.y = PI
 	pilot.add_child(model)
 	pilot.visual = model
+	pilot.setup_damage_smoke(folder)
 	pilot.fit_collision_to_visual()
 	equipment = Equipment.new()
 	pilot.add_child(equipment)
@@ -419,6 +422,7 @@ func _start_game(folder: String) -> void:
 	# from the cockpit camera. Visibility still belongs to docking.
 	for node in pilot.find_children("*","MeshInstance3D",true,false): node.layers = SUB_RENDER_LAYER
 	weapons = Weapons.new(); pilot.add_child(weapons); weapons.setup(pilot,folder,camera,gameplay_catalogue)
+	weapons.auto_aim_enabled = front_end.gameplay_menu.zapper_auto_aim
 	var weapon_values: Dictionary = weapons.settings.duplicate(); weapon_values.merge(weapon_overrides,true)
 	for key in weapon_controls: weapon_controls[key].set_value_no_signal(weapon_values[key])
 	_update_weapon_settings()
@@ -433,7 +437,7 @@ func _start_game(folder: String) -> void:
 	cockpit_hud.setup_lighting(water_environment,sun)
 	cockpit_hud.natural_light = natural_light
 	_build_expanded_map()
-	_update_hud_scale()
+	_update_hud_settings()
 	for index in range(5):
 		cockpit_hud.set_enabled(index,hud_enabled[index],false)
 	pilot.reset_physics_interpolation()
@@ -751,6 +755,7 @@ func _update_water_environment() -> void:
 func _update_daylight() -> void:
 	var lighting_cycle: RefCounted = menu_backdrop.daylight if menu_backdrop != null and menu_backdrop.active else day_night
 	lighting_cycle.apply(water_environment, sun, surface_material)
+	if front_end != null and front_end.player_graphics != null: front_end.player_graphics.apply_sun(sun)
 	get_tree().call_group("building_searchlights", "set_daylight", lighting_cycle.daylight())
 	# Materials already own distance fog. Engine sky fog would recolour the
 	# sheltered background blue even after its cave exposure was applied.
@@ -770,9 +775,7 @@ func _update_daylight() -> void:
 		clock_label.text = "World time: %02d:%02d" % [minutes / 60, minutes % 60]
 		daylight_controls.time_of_day.set_value_no_signal(day_night.hour)
 
-func _update_hud_scale() -> void:
-	hud_scale_label.text = "HUD size: %.0f%%" % hud_scale_slider.value
-	if cockpit_hud != null: cockpit_hud.scale_multiplier = hud_scale_slider.value / 100.0
+func _update_hud_settings() -> void:
 	if crt_reflection_slider != null:
 		crt_reflection_label.text = "CRT reflection strength: %.0f%%" % crt_reflection_slider.value
 		if cockpit_hud != null: cockpit_hud.crt_reflection_strength = crt_reflection_slider.value / 100.0

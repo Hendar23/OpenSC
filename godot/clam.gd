@@ -59,12 +59,17 @@ func state() -> Dictionary:
 	if not result.pearl_offset.is_empty(): result.pearl_id = preload("res://entity_identity.gd").of(pearl)
 	return result
 
-func restore_state(value: Dictionary) -> void:
+func restore_state(value: Dictionary, saved_height: float = NAN) -> void:
 	angle = float(value.angle); remaining = float(value.remaining)
 	if value.pearl_offset.size() == 3:
 		_grow_pearl()
 		if is_instance_valid(pearl):
-			pearl.global_position = to_global(preload("res://map_document.gd").vector(value.pearl_offset))
+			var offset := preload("res://map_document.gd").vector(value.pearl_offset)
+			# Update a resting pearl when the authored seat height changes,
+			# preserving the actual position of pearls already under suction.
+			if is_finite(saved_height) and offset.is_equal_approx(Vector3(0,saved_height,0)):
+				offset.y = float(stats.pearl_height)
+			pearl.global_position = to_global(offset)
 			if value.has("pearl_id"): preload("res://entity_identity.gd").assign_id(pearl,value.pearl_id)
 	_update_shell()
 

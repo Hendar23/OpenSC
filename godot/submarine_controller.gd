@@ -7,11 +7,13 @@ var dead := false
 var radiation_exposed := false
 var docking_in_progress := false
 const Damage = preload("res://original_damage.gd")
+const FloatingMine = preload("res://floating_mine.gd")
 var hull_rating := 100.0
 var radiation_rating := 0.0
 
 func restore_health(capacity: float = 100.0, remaining: float = 100.0) -> void:
 	radiation_exposed = false
+	if damage_smoke != null: damage_smoke.clear()
 	max_health = maxf(1.0,capacity)
 	health = clampf(remaining,0.0,max_health)
 	dead = health <= 0.0
@@ -32,6 +34,10 @@ func take_damage(amount: float, _source: Vector3 = Vector3.ZERO, feedback: bool 
 		if visual != null: visual.hide()
 		destroyed.emit()
 
+func take_weapon_damage(raw_strength: float, source: Vector3 = Vector3.ZERO) -> void:
+	# take_damage already applies hull protection relative to the base hull.
+	take_damage(raw_strength * Damage.SHIELD_POINTS_PER_RAW * Damage.BASE_SUSTAIN,source)
+
 func receive_radiation(strength: float, delta: float) -> void:
 	radiation_exposed = active and controls_enabled and not dead and is_finite(strength) and strength > 0.0
 	if radiation_exposed and is_finite(delta) and delta > 0.0: take_damage(strength * delta * Damage.radiation_protection(radiation_rating),Vector3.ZERO,false)
@@ -42,7 +48,7 @@ const Bubbles = preload("res://propeller_bubbles.gd")
 const SubAudio = preload("res://submarine_audio.gd")
 const Rumble = preload("res://impact_rumble.gd")
 const HullCollision = preload("res://submarine_collision.gd")
-const VISUAL_SCALE := 0.8
+const VISUAL_SCALE := 1.0
 const COLLIDER_RADIUS := 0.54
 # The legacy radius remains the docking manoeuvre/inertia reference.
 # Physical contact follows the smaller rendered hull and side pods.
@@ -58,6 +64,16 @@ var active := false:
 		if not value and impact_rumble != null: impact_rumble.stop()
 var controls_enabled := true
 var visual: Node3D
+var damage_smoke: Node3D
+
+func setup_damage_smoke(folder: String) -> void:
+	if damage_smoke != null: damage_smoke.free()
+	damage_smoke = preload("res://submarine_damage_smoke.gd").new()
+	damage_smoke.name = "DamageSmoke"; add_child(damage_smoke)
+	damage_smoke.setup(visual,folder)
+	health_changed.connect(damage_smoke.set_health)
+	damage_smoke.set_health(health,max_health)
+
 var angles := Vector3.ZERO
 var propeller_speeds := Vector3.ZERO
 var pod_rotation_power := 0.0
@@ -247,7 +263,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		apply_impact_damage.call_deferred(impact.damage_speed,impact.inflict)
 
 func impact_damage(speed: float, inflict: float = -1.0) -> float:
-	if not is_finite(speed) or not is_finite(inflict) or speed <= float(movement.settings.impact_damage_threshold): return 0.0
+	if not is_finite(speed) or not is_finite(inflict) or speed <= (float(movement.settings.impact_damage_threshold) if inflict < 0 else 0.0): return 0.0
 	# The original terrain gate is checked before the hit, not a health clamp.
 	if inflict < 0 and health <= max_health * 0.04: return 0.0
 	var damage := Damage.terrain(speed,mass) if inflict < 0 else Damage.object_contact(speed,inflict)
@@ -308,10 +324,12 @@ func _contact_impact(state: PhysicsDirectBodyState3D) -> Dictionary:
 		var impulse_speed := state.get_contact_impulse(index).length() / maxf(1.0, mass)
 		strongest = maxf(strongest, maxf(closing, impulse_speed))
 		var inflict := -1.0
-		if body is RigidBody3D and body.get("stats") is Dictionary:
+		if (body is RigidBody3D or body is FloatingMine) and body.get("stats") is Dictionary:
 			var stats: Dictionary = body.get("stats")
 			if stats.get("behavior","") == "thorium": inflict = 0.00006 if stats.get("id","") == "inert_thorium" else 0.0006
 			elif stats.get("behavior","") in ["salvage","pearl"]: inflict = 0.1
+			elif stats.get("behavior","") == "rock": inflict = float(stats.get("contact_inflict",0.8))
+			elif body is FloatingMine: inflict = 0.5
 		# Object damage uses centre-to-centre relative closing speed, rather
 		# than solver impulses (which also contain restitution and constraints).
 		var speed := closing

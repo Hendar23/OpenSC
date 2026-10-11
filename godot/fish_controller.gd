@@ -54,6 +54,7 @@ var lure_centers: Array[Vector3] = []
 signal damaged(amount: float)
 signal died
 const Death = preload("res://creature_death.gd")
+var damage_sustain := 1.0
 var max_health := 10.0
 var health := 10.0
 var dead := false
@@ -84,6 +85,9 @@ func receive_sub_push(sub_velocity: Vector3, sub_radius: float) -> void:
 
 func configure_health(value: float) -> void:
 	max_health = maxf(0.1,value); health = max_health
+
+func take_weapon_damage(raw_strength: float, source: Vector3 = Vector3.ZERO) -> void:
+	take_damage(raw_strength * damage_sustain,source)
 
 func take_damage(amount: float, _source: Vector3 = Vector3.ZERO) -> void:
 	if dead or amount <= 0 or not is_finite(amount): return

@@ -13,6 +13,7 @@ func _run() -> void:
 	Mods.initialize(false)
 	var editor := Editor.new(); editor.remember_preferences = false; root.add_child(editor)
 	await process_frame
+	editor.game_folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
 	editor._set_mode(true)
 	var map: HBoxContainer = editor.map_editor
 	for frame in range(1800):
@@ -100,13 +101,13 @@ func _run() -> void:
 	map.fields.animation_speed.value = 2.5
 	map.fields.food_role.select(Document.FOOD_ROLES.find("predator")); map.fields.has_zapper.button_pressed = true
 	map.fields.bite_damage.value = 7; map.fields.attack_interval.value = 0.5
-	map.fields.zapper_range.value = 6; map.fields.zapper_damage.value = 12
+	map.fields.zapper_range.value = 6; map.fields.zapper_damage_per_tick.value = 12
 	check(map.fields.has("flee_range") and map.fields.has("attack_range") and not map.fields.has("detection"),"Creature editor exposes separate flee and attack detection ranges")
 	map.fields.flee_range.value = 2; map.fields.attack_range.value = 9
 	check(is_equal_approx(map.species_preview.animation_speed,2.5),"Animation speed updates the creature preview")
 	map.apply_properties()
 	check(is_equal_approx(map.record().animation_speed,2.5) and Document.valid(map.document),"Animation speed is saved in valid species settings")
-	check(map.record().food_role == "predator" and map.record().has_zapper and map.record().bite_damage == 7 and map.record().attack_interval == 0.5 and map.record().zapper_range == 6 and map.record().zapper_damage == 12,"Editor stores configurable wildlife role, bites and optional zapper")
+	check(map.record().food_role == "predator" and map.record().has_zapper and map.record().bite_damage == 7 and map.record().attack_interval == 0.5 and map.record().zapper_range == 6 and map.record().zapper_damage_per_tick == 12,"Editor stores configurable wildlife role, bites and optional zapper")
 	var turtle_index: int = map.models.find("TURTLE")
 	map.fields.model.select(turtle_index); map.fields.model.item_selected.emit(turtle_index)
 	check(str(map.species_preview.model.get_meta("asset_source")).ends_with("TURTLE.DFF"),"Changing the model updates the preview before applying")
@@ -138,7 +139,7 @@ func _run() -> void:
 	check(Document.save(map.document, path) == OK, "Map saves to JSON")
 	var restored := Document.load_path(path)
 	check(not restored.is_empty() and restored.species[-1].health == 45.0,"Creature health survives saving and loading the map")
-	check(restored.species[-1].food_role == "predator" and restored.species[-1].has_zapper and restored.species[-1].zapper_damage == 12,"Combat settings survive saving and loading")
+	check(restored.species[-1].food_role == "predator" and restored.species[-1].has_zapper and restored.species[-1].zapper_damage_per_tick == 12,"Combat settings survive saving and loading")
 	check(restored.species[-1].flee_range == 2 and restored.species[-1].attack_range == 9 and not restored.species[-1].has("detection"),"Independent perception ranges survive saving and loading")
 	check(not restored.is_empty() and restored.entities.size() == map.document.entities.size() and restored.groups.size() == map.document.groups.size() and restored.species[-1].name == "Turtle" and Document.decode(restored.entities[key].transform).is_equal_approx(Document.decode(map.document.entities[key].transform)), "Map properties survive a JSON round trip")
 	var invalid: Dictionary = map.document.duplicate(true)
@@ -196,6 +197,20 @@ func _run() -> void:
 	map.select("object_type:pearl")
 	check(map.fields.has("mass") and map.fields.has("pickup_commodity"),"Pearl physics and collected commodity are editable")
 	check(not map.fields.has("health"),"Invulnerable pearls do not expose unused health")
+	map.select("object_type:rock")
+	check(map.fields.has("immovable") and map.fields.has("mass") and map.fields.has("contact_inflict") and map.fields.has("grapple_compatible"),"Rock mobility, collision and towing are editable")
+	check(map.fields.has("suckomat_compatible") and not map.fields.suckomat_compatible.button_pressed and map.fields.has("pickup_commodity"),"Rock editor exposes independent suction compatibility and reward")
+	check(not map.fields.has("spawn_chance") and not map.fields.has("health"),"Rocks do not expose unimplemented spawning or damageable health")
+	map.fields.mass.value = 3.51; map.fields.immovable.button_pressed = true; map.apply_properties()
+	check(is_equal_approx(map.record().mass,3.51) and map.record().immovable and Document.valid(map.document),"Rock properties apply to valid maps")
+	map.add_object_group()
+	check(map.record().type == "rock" and map.record().name == "New rock group","Adding a group uses the selected rock type")
+	check(map.fields.has("group_rotation_1"),"Placed rocks expose orientation controls")
+	map.select("object_type:rock"); map.fields.suckomat_compatible.button_pressed = true; map.apply_properties()
+	Document.save(map.document,path)
+	check(Document.load_path(path).object_types.any(func(type: Dictionary) -> bool: return type.id == "rock" and type.suckomat_compatible and type.pickup_commodity == ""),"Suction compatibility and no-reward choice survive map export")
+	var invalid_suction: Dictionary = map.document.duplicate(true); invalid_suction.object_types[0].suckomat_compatible = "yes"
+	check(not Document.valid(invalid_suction),"Invalid suction compatibility is rejected")
 	var mine_types: Array = map.document.object_types.filter(func(type: Dictionary) -> bool: return type.get("behavior", "mine") == "mine")
 	check(not mine_types.is_empty(),"Mine fixture is available")
 	if not mine_types.is_empty():

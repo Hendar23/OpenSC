@@ -32,7 +32,7 @@ func _run() -> void:
 	weapon.update_fire(false,0); pilot.rotation = Vector3.ZERO
 	var target := Fish.new(); var fish_model := Assets.load_clump(folder.path_join("CLUMPS/ANGEL.DFF"),PackedStringArray(),true)
 	target.setup(fish_model,start + Vector3(0,0,-2),AABB(Vector3.ONE * -10,Vector3.ONE * 20),10,0.35,123)
-	world.add_child(target); target.set_physics_process(false); target.configure_health(10)
+	world.add_child(target); target.set_physics_process(false); target.configure_health(10); target.damage_sustain = 0.2
 	target.death_texture = Assets._load_texture(folder,"BUBBLE","BUBBLEM",{}); target.death_sound = Weapons._sound(folder,"audio.creature.death","SPLAT")
 	target.death_frames = preload("res://creature_death.gd").load_gore(folder)
 	await physics_frame; await physics_frame
@@ -53,7 +53,7 @@ func _run() -> void:
 	weapon.hit_blood._process(1.0)
 	check(weapon.hit_blood.particles.is_empty(),"Hit blood fades and cleans up after release")
 	weapon.configure({"gore_amount":0.0})
-	weapon.update_fire(true,0.01)
+	weapon.update_fire(true,0.04)
 	check(weapon.hit_blood.particles.is_empty() and target.health < 9.0,"Zero gore suppresses hit blood while retaining damage")
 	target.health = 9.0; weapon.configure({"gore_amount":20.0})
 	target.position = start + Vector3(0,0,-6)
@@ -66,6 +66,9 @@ func _run() -> void:
 	check(target.health == 9 and weapon.last_hit == null,"A creature outside the default cone is not targeted")
 	weapon.configure({"auto_aim_cone":60.0})
 	weapon.update_fire(true,0)
+	check(weapon.last_hit == null,"Player auto aim is Off by default even with a wide developer cone")
+	weapon.auto_aim_enabled = true
+	weapon.update_fire(true,0)
 	check(weapon.last_hit == target,"A wider cone locks onto a nearby off-axis creature")
 	weapon.configure({"auto_aim_cone":0.0})
 	weapon.update_fire(true,0)
@@ -77,13 +80,14 @@ func _run() -> void:
 	var ribbon_arrays: Array = weapon.beam.mesh.surface_get_arrays(0)
 	var ribbon_vertices: PackedVector3Array = ribbon_arrays[Mesh.ARRAY_VERTEX]
 	var ribbon_uvs: PackedVector2Array = ribbon_arrays[Mesh.ARRAY_TEX_UV]
+	check(ribbon_vertices.size() == 22,"Original beam uses eleven vertex pairs and ten segments")
 	var tip := (ribbon_vertices[-2] + ribbon_vertices[-1]) * 0.5
 	check(is_equal_approx(weapon.beam_start.distance_to(weapon.beam_end),8.0) and tip.is_equal_approx(weapon.beam_end - weapon.beam_start),"Distorted visual and damage beam end at configured range")
 	check(((ribbon_vertices[0] + ribbon_vertices[1]) * 0.5).is_zero_approx(),"Ribbon starts at muzzle")
-	check(weapon.material.texture_repeat and ribbon_uvs[-1].y > 8.0 / weapon.settings.beam_width,"Lightning repeats along bent, tapered beam")
+	check(weapon.material.texture_repeat and ribbon_uvs[-1].y > 8.0 / weapon.settings.beam_width,"Lightning repeats along the original constant-width ribbon")
 	check(is_zero_approx(ribbon_uvs[0].y),"Repeated lightning stays anchored to muzzle")
 	var bent := false
-	for index in range(1,48):
+	for index in range(1,10):
 		var center := (ribbon_vertices[index * 2] + ribbon_vertices[index * 2 + 1]) * 0.5
 		if center.cross(tip.normalized()).length() > 0.01: bent = true
 	check(bent,"Beam has lateral bends rather than a straight centerline")
@@ -104,12 +108,20 @@ func _run() -> void:
 	var short_vertices: PackedVector3Array = short_arrays[Mesh.ARRAY_VERTEX]
 	check(((short_vertices[-2] + short_vertices[-1]) * 0.5).is_equal_approx(weapon.beam_end - weapon.beam_start),"Scenery shortens distorted beam at collision")
 	check(is_zero_approx(short_arrays[Mesh.ARRAY_TEX_UV][0].y),"Shortened beam retains muzzle texture phase")
-	weapon._process(0.05)
+	weapon._process(0.08)
 	check(weapon.impact.texture != spark,"Terrain spark cycles animation frames while firing")
 	wall.queue_free(); await process_frame; await physics_frame
 	if DisplayServer.get_name() != "headless":
 		weapon.update_fire(true,0); weapon._process(0.05); await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/zapper-beam-preview.png")
+	# The same elapsed time must produce identical damage at 25 and 60 Hz.
+	target.health = 100; weapon.update_fire(false,0)
+	for frame in range(60): weapon.update_fire(true,1.0 / 60)
+	var sixty_hz: float = target.health
+	target.health = 100; weapon.update_fire(false,0)
+	for frame in range(25): weapon.update_fire(true,1.0 / 25)
+	check(is_equal_approx(target.health,sixty_hz) and is_equal_approx(target.health,87.5),"Raw zapper tick damage is independent of Godot frame rate")
+	target.health = 9; weapon.update_fire(false,0)
 	var deaths := []; target.died.connect(func() -> void: deaths.append(true))
 	preload("res://creature_death.gd").settings.chunk_lifetime = 1.0
 	weapon.update_fire(true,1.0)

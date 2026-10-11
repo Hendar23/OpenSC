@@ -5,6 +5,10 @@ var dead := false
 var shard := 0
 var surface_height := 0.0
 var enabled := true
+func pickup_item() -> String:
+ if not bool(stats.get("suckomat_compatible",false)) or not enabled or dead or is_queued_for_deletion() or has_meta("delivery_city") or bool(stats.get("immovable",false)): return ""
+ var commodity := str(stats.get("pickup_commodity",stats.get("delivery_commodity","")))
+ return commodity if not commodity.is_empty() else preload("res://suck_o_matic.gd").NO_COMMODITY
 func setup(definition: Dictionary, visual: Node3D, _fragment: int, water: float, running: bool) -> void:
  stats = definition.duplicate(true); surface_height = water; enabled = running
  name = str(stats.id).capitalize(); health = float(stats.health); mass = float(stats.mass)

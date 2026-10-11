@@ -88,18 +88,6 @@ func _build_interface() -> void:
 	game.wildlife_density_slider.value_changed.connect(func(_value: float) -> void: game._update_wildlife_density())
 	game.wildlife_density_slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
 	game._update_wildlife_density()
-	game.hud_scale_label = Label.new()
-	game.graphics_controls.add_child(game.hud_scale_label)
-	game.hud_scale_slider = HSlider.new(); game.hud_scale_slider.scrollable = false
-	game.hud_scale_slider.min_value = 25.0
-	game.hud_scale_slider.max_value = 150.0
-	game.hud_scale_slider.step = 1.0
-	game.hud_scale_slider.value = 50.0
-	game.hud_scale_slider.focus_mode = Control.FOCUS_NONE
-	game.graphics_controls.add_child(game.hud_scale_slider)
-	game.hud_scale_slider.value_changed.connect(func(_value: float) -> void: game._update_hud_scale())
-	game.hud_scale_slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
-	game._update_hud_scale()
 	game.hud_map_zoom_label = Label.new()
 	game.graphics_controls.add_child(game.hud_map_zoom_label)
 	game.hud_map_zoom_slider = HSlider.new(); game.hud_map_zoom_slider.scrollable = false
@@ -109,7 +97,7 @@ func _build_interface() -> void:
 	game.hud_map_zoom_slider.value = 2.0
 	game.hud_map_zoom_slider.focus_mode = Control.FOCUS_NONE
 	game.graphics_controls.add_child(game.hud_map_zoom_slider)
-	game.hud_map_zoom_slider.value_changed.connect(func(_value: float) -> void: game._update_hud_scale())
+	game.hud_map_zoom_slider.value_changed.connect(func(_value: float) -> void: game._update_hud_settings())
 	game.hud_map_zoom_slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
 	game.crt_reflection_label = Label.new()
 	game.graphics_controls.add_child(game.crt_reflection_label)
@@ -120,9 +108,9 @@ func _build_interface() -> void:
 	game.crt_reflection_slider.value = 25.0
 	game.crt_reflection_slider.focus_mode = Control.FOCUS_NONE
 	game.graphics_controls.add_child(game.crt_reflection_slider)
-	game.crt_reflection_slider.value_changed.connect(func(_value: float) -> void: game._update_hud_scale())
+	game.crt_reflection_slider.value_changed.connect(func(_value: float) -> void: game._update_hud_settings())
 	game.crt_reflection_slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
-	game._update_hud_scale()
+	game._update_hud_settings()
 	game.map_reveal_label = Label.new()
 	game.graphics_controls.add_child(game.map_reveal_label)
 	game.map_reveal_slider = HSlider.new(); game.map_reveal_slider.scrollable = false
@@ -132,7 +120,7 @@ func _build_interface() -> void:
 	game.map_reveal_slider.value = 10.0
 	game.map_reveal_slider.focus_mode = Control.FOCUS_NONE
 	game.graphics_controls.add_child(game.map_reveal_slider)
-	game.map_reveal_slider.value_changed.connect(func(_value: float) -> void: game._update_hud_scale())
+	game.map_reveal_slider.value_changed.connect(func(_value: float) -> void: game._update_hud_settings())
 	game.map_reveal_slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
 	var reset_map := Button.new()
 	reset_map.text = "Reset fog of war"
@@ -151,7 +139,7 @@ func _build_interface() -> void:
 		if game.cockpit_hud != null: game.cockpit_hud.map_data.reveal_all()
 	)
 	map_actions.add_child(reveal_map)
-	game._update_hud_scale()
+	game._update_hud_settings()
 	game.fog_button = CheckButton.new()
 	game.fog_button.text = "Underwater fog"
 	game.fog_button.button_pressed = true
@@ -353,7 +341,7 @@ func _build_equipment_controls() -> void:
 func _build_weapon_controls() -> void:
 	var scroll = ScrollContainer.new(); scroll.name = "Weapons"; scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; game.developer_tabs.add_child(scroll)
 	var tab := VBoxContainer.new(); tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL; scroll.add_child(tab)
-	for row in [["auto_aim_cone","Auto aim cone (degrees, full width; 0 = off)",0.0,120.0,1.0],["range","Zapper range",0.5,15.0,0.25],["damage_per_second","Zapper damage per second",0.0,50.0,0.5],["beam_width","Beam width",0.02,0.6,0.01],["animation_speed","Lightning animation speed",1.0,40.0,1.0],["volume_db","Zapper volume (dB)",-60.0,0.0,1.0],["gore_amount","Gore particles per death",0.0,100.0,1.0],["gore_settle_speed","Gore settling speed",0.1,5.0,0.1],["gore_lifetime","Gore lifetime (seconds)",0.2,10.0,0.1],["chunk_lifetime","Chunk lifetime before fading (seconds)",2.0,300.0,1.0]]:
+	for row in [["auto_aim_cone","Auto aim cone (degrees, full width; 0 = off)",0.0,120.0,1.0],["range","Zapper range",0.5,15.0,0.25],["damage_per_tick","Zapper raw damage per tick (25 ticks/s)",0.0,10.0,0.1],["beam_width","Beam width",0.02,0.6,0.01],["animation_speed","Lightning animation speed",1.0,40.0,1.0],["volume_db","Zapper volume (dB)",-60.0,0.0,1.0],["gore_amount","Gore particles per death",0.0,100.0,1.0],["gore_settle_speed","Gore settling speed",0.1,5.0,0.1],["gore_lifetime","Gore lifetime (seconds)",0.2,10.0,0.1],["chunk_lifetime","Chunk lifetime before fading (seconds)",2.0,300.0,1.0]]:
 		var key: String = row[0]; var caption: String = row[1]
 		var label := Label.new(); tab.add_child(label)
 		var slider = HSlider.new(); slider.scrollable = false; slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]; slider.value = Weapons.DEFAULTS[key]; slider.focus_mode = Control.FOCUS_NONE; tab.add_child(slider); game.weapon_controls[key] = slider

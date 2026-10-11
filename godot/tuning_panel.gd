@@ -40,12 +40,13 @@ var embedded := false
 func setup(state: RefCounted, in_tabs: bool = false, graphics_rows: VBoxContainer = null) -> void:
 	embedded = in_tabs
 	movement = state
-	set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	offset_left = -390
-	offset_right = -18
-	offset_top = 18
-	offset_bottom = 630
+	if not embedded:
+		set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+		grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		offset_left = -390
+		offset_right = -18
+		offset_top = 18
+		offset_bottom = 630
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]: margin.add_theme_constant_override("margin_" + side, 12)
 	add_child(margin)
@@ -124,7 +125,6 @@ func setup(state: RefCounted, in_tabs: bool = false, graphics_rows: VBoxContaine
 
 func _resize() -> void:
 	if embedded:
-		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		return
 	offset_bottom = minf(710.0, get_viewport_rect().size.y - 18.0)
 

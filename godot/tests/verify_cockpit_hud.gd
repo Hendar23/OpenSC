@@ -44,12 +44,10 @@ func _run() -> void:
 	game.pilot.freeze = true
 	var hud: CanvasLayer = game.cockpit_hud
 	check(hud.instruments.size() == 5 and hud.model_views.is_empty(), "Five original sprite instruments are the default")
-	game.hud_scale_slider.value = 50.0
 	var viewport_size: Vector2 = root.get_visible_rect().size
-	var old_scale := minf(2.0, (viewport_size.x - 16.0) / 641.0)
-	check(is_equal_approx(hud.holder.scale.x, old_scale * 0.5) and is_equal_approx(hud.holder.position.x + 641.0 * hud.holder.scale.x * 0.5, viewport_size.x * 0.5) and is_zero_approx(hud.holder.position.y), "HUD is half size and stays centred at the top")
-	game.hud_scale_slider.value = 75.0
-	check(is_equal_approx(hud.holder.scale.x, old_scale * 0.75), "Graphics HUD slider updates instrument size live")
+	var expected_scale := minf(minf(viewport_size.x / 1280.0,viewport_size.y / 720.0),(viewport_size.x - 16.0) / 641.0)
+	check(is_equal_approx(hud.holder.scale.x, expected_scale) and is_equal_approx(hud.holder.position.x + 641.0 * hud.holder.scale.x * 0.5, viewport_size.x * 0.5) and is_zero_approx(hud.holder.position.y), "HUD scales automatically with resolution and stays centred at the top")
+	check(not game.front_end.player_graphics.settings.has("hud_scale"),"No adjustable HUD scale remains")
 	game.hud_map_zoom_slider.value = 3.0
 	check(is_equal_approx(hud.displays[2].map_span,140.0 / 3.0), "Minimap zoom updates the live terrain display")
 	for i in range(5):
@@ -114,9 +112,8 @@ func _run() -> void:
 	check(game._export_all_settings(path) == OK, "HUD and light settings export")
 	key(KEY_2); game.equipment_controls.light_range.value = 10.0
 	game._load_preferences(path)
-	check(is_equal_approx(game.cockpit_hud.scale_multiplier, 0.75), "HUD scale reloads from the combined export")
+	check(is_equal_approx(hud.holder.scale.x,expected_scale), "Settings reload preserves automatic HUD sizing")
 	check(is_equal_approx(game.cockpit_hud.map_zoom,3.0), "Minimap zoom reloads from the combined export")
-	game.hud_scale_slider.value = 50.0
 	game.hud_map_zoom_slider.value = 2.0
 	check(not hud.instruments[1].visible and is_equal_approx(equipment.lamp.spot_range, 24.0), "Exported HUD visibility and lights reload")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

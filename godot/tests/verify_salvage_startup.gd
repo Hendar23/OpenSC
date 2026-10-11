@@ -20,7 +20,7 @@ func run() -> void:
 	population.random.seed = 42
 	await physics_frame; await physics_frame
 	population.populate_startup()
-	check(population.get_child_count() == 72,"Twelve startup attempts per each of six types on unobstructed terrain")
+	check(population.get_child_count() == 96,"Twelve startup attempts per each of six salvage and two rock types on unobstructed terrain")
 	for definition in population.thorium_types.values() + population.salvage_types.values():
 		var items: Array = population.get_children().filter(func(body: Node) -> bool: return body.stats.id == definition.id)
 		check(items.size() == 12,"Startup ignores later cap and chance: " + str(definition.id))
@@ -30,7 +30,7 @@ func run() -> void:
 			check(items.any(func(body: Node3D) -> bool: return body.position.y > -19) and items.all(func(body: Node3D) -> bool: return is_equal_approx(body.position.y,-19.47) or (body.position.y >= -14.471 and body.position.y <= -10.719)),"Other salvage uses terrain or recovered height range: " + str(definition.id))
 	check(population.get_children().any(func(body: Node3D) -> bool: return Vector2(body.position.x,body.position.z).length() > 100),"Startup covers distant map areas")
 	var saved: Array = JSON.parse_string(JSON.stringify(population.snapshot())); population.restore_snapshot(saved)
-	check(population.snapshot().size() == 72,"Save/load restores startup population without generating another batch")
+	check(population.snapshot().size() == 96,"Save/load restores startup population without generating another batch")
 	population.restore_snapshot([])
 	population.world_bounds = AABB(Vector3(100,-30,100),Vector3(99,60,99))
 	var crystal: Dictionary = population.thorium_types.thorium; crystal.maximum_population = 6

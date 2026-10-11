@@ -1,7 +1,7 @@
 extends "res://salvage_body.gd"
 var clam: Node3D
 func pickup_item() -> String:
-	if dead or has_meta("delivery_city"): return ""
+	if not bool(stats.get("suckomat_compatible",true)) or not enabled or dead or is_queued_for_deletion() or has_meta("delivery_city"): return ""
 	if is_instance_valid(clam) and not clam.fully_open(): return ""
 	return str(stats.get("pickup_commodity","pearls"))
 

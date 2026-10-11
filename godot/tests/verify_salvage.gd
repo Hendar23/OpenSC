@@ -33,7 +33,7 @@ func run() -> void:
  for body in pop.get_children():
   check(body is Salvage and body.mass == metals.filter(func(definition: Dictionary) -> bool: return definition.id == body.stats.id)[0].mass,"Original mass: " + str(body.stats.id))
   check(body.get_child(1) is CollisionShape3D and body.collision_layer == 9 and body.get_meta("metal_tow_target",false),"Solid model collision and metal targeting metadata: " + str(body.stats.id))
-  check(not body.has_method("pickup_item") and body.get_node_or_null("ThoriumGlow") == null,"Metal cannot be vacuumed and has no Thorium glow")
+  check(body.pickup_item().is_empty() and body.get_node_or_null("ThoriumGlow") == null,"Metal cannot be vacuumed by default and has no Thorium glow")
  for tick in range(100): await physics_frame
  check(pop.get_children().all(func(body: Node3D) -> bool: return body.position.y < 0 and body.position.y > -6),"Metal objects fall through the water")
  var item: RigidBody3D = pop.get_child(0); item.apply_central_impulse(Vector3(4,0,0))

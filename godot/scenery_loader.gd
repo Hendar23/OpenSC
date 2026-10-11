@@ -3,6 +3,7 @@ extends RefCounted
 const Assets = preload("res://clump_loader.gd")
 const PulseLight = preload("res://pulse_light.gd")
 const Searchlight = preload("res://searchlight.gd")
+const SmokeEmitter = preload("res://smoke_emitter.gd")
 
 # Serialized fields are always present; the row mask says which values are
 # initialized. Runtime pointers and each matrix's fourth lanes are garbage.
@@ -167,6 +168,14 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 		var model_name := ""
 		var solid := true
 		var object_id := int(row.get("ObjectID", -1))
+		# Factory generators are type 0x31 in the executable. ROCK is only
+		# their database editor placeholder, not the rendered object.
+		if int(row.get("ObjectType",0)) == 49 and int(row.get("MissionID",0)) == 2 and int(row.get("AutoCreate",0)) == 1:
+			var smoke := SmokeEmitter.new()
+			smoke.name = "SmokeEmitter_%d" % int(row.index)
+			scenery.add_child(smoke); smoke.transform = placement(row,offset)
+			smoke.configure(folder,{})
+			continue
 		# Startup explicitly creates LIGHTCONE for these dormant database markers;
 		# their editor clump is LITEBEEM, but the runtime uses BIGLITE.
 		if int(row.get("MissionID", 0)) == 2 and object_id == 1:
@@ -247,7 +256,13 @@ static func _place_prop(parent: Node3D, row: Dictionary, name: String, offset: V
 		instance.set_meta("city_name", str(row.get("CityName", "Dock")).strip_edges())
 	parent.add_child(instance)
 	if solid: _add_prop_collision(instance)
+	add_model_motion(instance,name)
 	return true
+
+static func add_model_motion(instance: Node3D, model_name: String) -> void:
+	if model_name.to_upper() != "AQUATRAZ" or instance.has_node("SceneryRotation"): return
+	var motion := preload("res://scenery_rotation.gd").new()
+	motion.name = "SceneryRotation"; instance.add_child(motion)
 
 static func _add_prop_collision(instance: Node3D) -> void:
 	var faces := PackedVector3Array()

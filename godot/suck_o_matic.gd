@@ -2,6 +2,7 @@ extends Node3D
 signal item_collected(item: String)
 
 const CAPACITY := 5
+const NO_COMMODITY := "@none"
 var pilot: Node3D
 var population: Node3D
 var enabled := false
@@ -26,7 +27,8 @@ func reset() -> void:
 	if audio != null: audio.stop()
 
 func transfer_to(cargo: Dictionary) -> void:
-	for item in storage: cargo[item] = int(cargo.get(item,0)) + 1
+	for item in storage:
+		if item != NO_COMMODITY: cargo[item] = int(cargo.get(item,0)) + 1
 	storage.clear()
 
 func _physics_process(delta: float) -> void:

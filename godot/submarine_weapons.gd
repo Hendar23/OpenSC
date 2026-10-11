@@ -5,8 +5,9 @@ const AudioLoop = preload("res://audio_loop.gd")
 const LegacyAudio = preload("res://legacy_audio.gd")
 const Mods = preload("res://mod_registry.gd")
 const Creature = preload("res://fish_controller.gd")
-const DEFAULTS := {"auto_aim_cone":30.0,"range":4.0,"damage_per_second":10.0,"beam_width":0.18,"animation_speed":20.0,"volume_db":-16.0,"gore_amount":20.0,"gore_settle_speed":1.0,"gore_lifetime":2.0,"chunk_lifetime":60.0}
+const DEFAULTS := {"auto_aim_cone":30.0,"range":2.5,"damage_per_tick":2.5,"beam_width":0.08,"animation_speed":12.5,"volume_db":-16.0,"gore_amount":20.0,"gore_settle_speed":1.0,"gore_lifetime":2.0,"chunk_lifetime":60.0}
 var settings := DEFAULTS.duplicate()
+var auto_aim_enabled := false
 var pilot: Node3D
 var camera: Camera3D
 var muzzle: Node3D
@@ -17,6 +18,7 @@ var audio: AudioStreamPlayer
 var icon: Texture2D
 var firing := false
 var elapsed := 0.0
+var damage_clock := 0.0
 var beam_start := Vector3.ZERO
 var beam_end := Vector3.ZERO
 var selected := 0
@@ -110,10 +112,13 @@ func update_fire(held: bool, delta: float) -> void:
 	firing = held and not mounted.is_empty() and settings.range > 0
 	beam.visible = firing; spark.visible = firing
 	if not firing:
-		blood_cooldown = 0.0
+		blood_cooldown = 0.0; damage_clock = 0.0
 		impact.hide(); last_hit = null
 		if audio.playing: audio.stop()
 		return
+	damage_clock += maxf(0.0,delta) * preload("res://original_damage.gd").TICKS_PER_SECOND
+	var damage_ticks := int(floor(damage_clock + 0.000001))
+	damage_clock = maxf(0.0,damage_clock - damage_ticks)
 	if not audio.playing and audio.stream != null: audio.play()
 	if pilot.submarine_audio != null: audio.volume_db = settings.volume_db + float(pilot.submarine_audio.tuning.settings.master_volume)
 	beam_start = muzzle.get_node("Emitter").global_position
@@ -128,7 +133,7 @@ func update_fire(held: bool, delta: float) -> void:
 		impact.global_position = beam_end - forward * 0.025
 		if last_hit.has_method("take_damage"):
 			var previous_health: float = last_hit.health if last_hit is Creature else 0.0
-			last_hit.take_damage(settings.damage_per_second * delta,beam_start)
+			preload("res://original_damage.gd").weapon(last_hit,settings.damage_per_tick * damage_ticks,beam_start)
 			if last_hit is Creature and last_hit.health < previous_health and blood_cooldown <= 0.0:
 				hit_blood.emit_hit(beam_end,hit.normal,last_hit.death_frames,settings.gore_amount,settings.gore_lifetime,settings.gore_settle_speed)
 				blood_cooldown = 0.15
@@ -145,21 +150,16 @@ func _process(delta: float) -> void:
 	if direction.length_squared() < 0.00001: beam.hide(); return
 	var side := direction.cross(camera.global_position - (beam_start + beam_end) * 0.5).normalized()
 	if side.length_squared() < 0.01: side = pilot.global_basis.x
-	_build_ribbon(direction,side,int(elapsed * settings.animation_speed))
+	_build_ribbon(direction,side,int(elapsed * preload("res://original_damage.gd").TICKS_PER_SECOND))
 
-# Broad bends and small kinks flicker with the original sprites. The damage ray
+# Recovered ten-segment ribbon: fixed endpoints, +/-0.1 lateral jitter. The damage ray
 # stays straight and both endpoints remain attached to the muzzle and hit point.
 func _build_ribbon(direction: Vector3, side: Vector3, tick: int) -> void:
-	const SEGMENTS := 48
-	var amplitude := minf(direction.length() * 0.12,float(settings.beam_width) * 2.0)
+	const SEGMENTS := 10
 	var points := PackedVector3Array()
 	for index in range(SEGMENTS + 1):
 		var t := float(index) / SEGMENTS
-		var coarse := t * 8.0
-		var cell := int(floor(coarse))
-		var bend := lerpf(_crackle(cell,tick),_crackle(cell + 1,tick),coarse - cell)
-		var kink := _crackle(index + 19,tick) * 0.2
-		points.append(direction * t + side * (bend + kink) * amplitude * sin(t * PI))
+		points.append(direction * t + side * _crackle(index,tick) * 0.1)
 	points[0] = Vector3.ZERO; points[SEGMENTS] = direction
 	var vertices := PackedVector3Array()
 	var uvs := PackedVector2Array()
@@ -168,10 +168,9 @@ func _build_ribbon(direction: Vector3, side: Vector3, tick: int) -> void:
 	var aspect := float(frame.get_height()) / maxf(1.0,float(frame.get_width())) if frame != null else 1.0
 	var distance := 0.0
 	for index in range(SEGMENTS + 1):
-		var t := float(index) / SEGMENTS
-		var width := maxf(0.001,float(settings.beam_width) * lerpf(1.0,0.3,t))
+		var width := maxf(0.001,float(settings.beam_width))
 		if index > 0:
-			# Arc length preserves square tiles around bends and along the taper.
+			# Arc length preserves square texture tiles around bends.
 			distance += points[index].distance_to(points[index - 1]) / (width * aspect)
 		vertices.append(points[index] - side * width * 0.5)
 		vertices.append(points[index] + side * width * 0.5)
@@ -192,7 +191,7 @@ func _crackle(index: int, tick: int) -> float:
 
 # The slider specifies the full cone width; zero restores straight firing.
 func _aim_direction(forward: Vector3) -> Vector3:
-	if settings.auto_aim_cone <= 0.0: return forward
+	if not auto_aim_enabled or settings.auto_aim_cone <= 0.0: return forward
 	var sphere := SphereShape3D.new(); sphere.radius = settings.range
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.shape = sphere; query.transform.origin = beam_start

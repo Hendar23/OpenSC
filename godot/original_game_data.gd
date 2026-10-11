@@ -74,16 +74,16 @@ static func _import(folder: String, fingerprints: Dictionary) -> Dictionary:
 			_put(records,id,row)
 		var table_id: String = "object_types" if name == "objects" else name.to_lower()
 		result.tables["database." + table_id] = {"source":INPUTS[2] + ":" + name,"records":records}
-	# These are provisional OpenSC combat rules, not recovered executable code.
+	# Weapon constants are recovered from SC.EXE; shield and sustain come from OBJECTS.CSV.
 	_import_city_radio(result,language)
 	_import_city_descriptions(result,language)
-	result.tables["weapon_tuning"] = {"source":"OpenSC provisional combat defaults","records":{"zapper":preload("res://submarine_weapons.gd").DEFAULTS.duplicate()}}
+	result.tables["weapon_tuning"] = {"source":"SC.EXE recovered zapper constants","records":{"zapper":preload("res://submarine_weapons.gd").DEFAULTS.duplicate()}}
 	var stats := {}
 	for record in result.tables.get("objects",{}).get("records",{}).values():
 		var model := str(record.get("dff","none")).to_lower()
 		if model != "none" and not stats.has(model) and float(record.get("shield",0)) > 0:
-			stats[model] = {"health":float(record.shield),"source_object":record.id}
-	result.tables["creature_stats"] = {"source":"Original object shield values used as provisional creature health","records":stats}
+			stats[model] = {"health":float(record.shield),"sustain":float(record.get("sustain",1)),"source_object":record.id}
+	result.tables["creature_stats"] = {"source":"Original raw shield values and damage-sustaining factors","records":stats}
 	return result
 
 static func _import_city_radio(catalogue: Dictionary, language: Dictionary) -> void:

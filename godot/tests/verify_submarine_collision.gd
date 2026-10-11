@@ -34,7 +34,7 @@ func _run() -> void:
 	check(occupied(space,Vector3(-0.22,-0.01,-0.10)),"Right pod has solid collision")
 	check(not occupied(space,Vector3(0.24,0,0.28)),"Empty space beside the stern stays clear of collision")
 	check(not occupied(space,Vector3(-0.24,0,-0.28)),"Empty space beside the bow stays clear of collision")
-	check(is_equal_approx(pilot.collision_height(),0.459277),"Surface and minimap clearance follow the fitted model height")
+	check(is_equal_approx(pilot.collision_height(),0.459277 / 0.8),"Surface and minimap clearance follow the fitted model height")
 	pilot.movement.tilt = PI / 2.0
 	pilot._update_animation(1.0 / 60.0); pilot._sync_pod_collisions()
 	for part in pilot.collision_parts:

@@ -19,7 +19,7 @@ const DEFAULTS := {
 	"pitch_acceleration": 90.0, "pitch_speed": 45.0,
 	"upright_strength": 4.0, "upright_damping": 3.0,
 	"propeller_spin_down": 0.7, "bubble_rate": 5.0,
-	"impact_damage_threshold": 0.75, "impact_damage_scale": 1.0
+	"impact_damage_threshold": 0.5, "impact_damage_scale": 1.0
 }
 var settings: Dictionary = DEFAULTS.duplicate()
 var defaults: Dictionary = DEFAULTS.duplicate()

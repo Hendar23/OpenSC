@@ -18,11 +18,12 @@ const ROWS := [
 func setup(sound: Node, in_tabs: bool = false) -> void:
 	embedded = in_tabs
 	audio = sound
-	set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	offset_left = -450
-	offset_right = -18
-	offset_top = 18
+	if not embedded:
+		set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+		grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		offset_left = -450
+		offset_right = -18
+		offset_top = 18
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]: margin.add_theme_constant_override("margin_" + side, 12)
 	add_child(margin)
@@ -168,8 +169,7 @@ func _row(parent: VBoxContainer, row: Array) -> void:
 	if key == "loop_blend_ms": slider.drag_ended.connect(func(_changed: bool) -> void: audio.rebuild_loops())
 
 func _resize() -> void:
-	if embedded: set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	else: offset_bottom = minf(800.0, get_viewport_rect().size.y - 18.0)
+	if not embedded: offset_bottom = minf(800.0, get_viewport_rect().size.y - 18.0)
 func stop_preview() -> void:
 	preview_button.button_pressed = false
 	audio.preview = false

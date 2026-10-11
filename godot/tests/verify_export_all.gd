@@ -36,7 +36,7 @@ func _run() -> void:
 	game.plant_controls.enabled.button_pressed = false
 	game.water_controls.caustics_strength.value = 0.8; game.water_controls.wave_height.value = 0.075
 	game.water_controls.surface_shine.value = 0.65
-	game.weapon_controls.range.value = 5.5; game.weapon_controls.damage_per_second.value = 7.5
+	game.weapon_controls.range.value = 5.5; game.weapon_controls.damage_per_tick.value = 7.5
 	game.weapon_controls.gore_amount.value = 45; game.weapon_controls.chunk_lifetime.value = 120
 	game.weapon_controls.gore_settle_speed.value = 3.0; game.weapon_controls.gore_lifetime.value = 7.0
 	game.natural_light_controls.sun_depth.value = 18.0; game.natural_light_controls.sun_falloff.value = 9.0
@@ -60,7 +60,7 @@ func _run() -> void:
 	complete = true
 	for key in game.water_controls: complete = complete and is_equal_approx(float(exported.get_value("view",key)),game.water_controls[key].value)
 	check(complete,"All caustic and surface wave settings export")
-	check(exported.get_value("view","zapper_range") == 5.5 and exported.get_value("view","zapper_damage_per_second") == 7.5,"Zapper tuning exports")
+	check(exported.get_value("view","zapper_range") == 5.5 and exported.get_value("view","zapper_damage_per_tick") == 7.5,"Zapper tuning exports")
 	check(exported.get_value("view","zapper_gore_amount") == 45 and exported.get_value("view","zapper_chunk_lifetime") == 120,"Gore and debris lifetime export")
 	check(is_equal_approx(exported.get_value("view","zapper_gore_settle_speed"),3.0) and is_equal_approx(exported.get_value("view","zapper_gore_lifetime"),7.0),"Gore settling and disappearance settings export")
 	check(exported.get_value("view","sun_depth") == 18 and exported.get_value("view","sun_falloff") == 9,"Sunlight depth and falloff export")
@@ -72,7 +72,7 @@ func _run() -> void:
 	game.wildlife_density_slider.value = 0.0
 	game.crt_reflection_slider.value = 0.0
 	game._load_preferences(path)
-	check(game.weapons.settings.range == 5.5 and game.weapons.settings.damage_per_second == 7.5,"Zapper tuning reloads into the live weapon")
+	check(game.weapons.settings.range == 5.5 and game.weapons.settings.damage_per_tick == 7.5,"Zapper tuning reloads into the live weapon")
 	check(is_equal_approx(game.water_visuals.settings.caustics_strength,0.8) and is_equal_approx(game.water_visuals.surface.get_shader_parameter("wave_height"),0.075),"Water tuning reloads into the live shaders")
 	check(is_equal_approx(game.plant_controls.strength.value,0.25) and not game.plant_controls.enabled.button_pressed and not game.plant_current.materials[0].get_shader_parameter("sway_enabled"),"Plant current settings reload into the live world")
 	check(is_equal_approx(game.plant_current.settings.wash_strength,0.9),"Propeller wash tuning reloads")
