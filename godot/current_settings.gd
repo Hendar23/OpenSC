@@ -1,7 +1,6 @@
 extends RefCounted
 static func path(filename: String) -> String:
-	if OS.has_feature("editor"):
-		return "res://".path_join(filename)
+	# Source runs and exports both keep preferences outside the game files.
 	var destination := preload("res://player_storage.gd").root_path().path_join("settings").path_join(filename)
 	preload("res://player_storage.gd").ensure_parent(destination)
 	if not FileAccess.file_exists(destination):

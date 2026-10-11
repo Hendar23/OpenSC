@@ -2,7 +2,12 @@ extends SceneTree
 
 func _initialize() -> void: call_deferred("run")
 func run() -> void:
-	var source := preload("res://modern_model.gd").load_model("res://../Other resources/bubbles/free_bubble_kit.glb")
+	var args := OS.get_cmdline_user_args()
+	if args.size() != 1:
+		push_error("Supply the source bubble kit GLB after --")
+		quit(1); return
+	var source := preload("res://modern_model.gd").load_model(args[0])
+	if source == null: quit(1); return
 	var node := source.find_child("Object_11", true, false) as MeshInstance3D
 	if node == null: push_error("Bubble variant not found"); quit(1); return
 	var arrays := node.mesh.surface_get_arrays(0)

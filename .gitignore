@@ -1,9 +1,5 @@
-# Original game data and reference material stay local.
+# Original game data used by development checks is supplied locally.
 /Original Sub Culture/
-/Sub Culture/
-/OST/
-/Reference Material/
-/Other resources/
 /Extracted Original Data/
 
 # Conversions of original game models/textures are generated locally.
@@ -22,19 +18,11 @@ __pycache__/
 /godot/tests/capture_world.gd.uid
 /godot/tests/*-fixtures/
 /godot/tests/*-test.cfg
-/Screenshots/
 
-# Backups and personal documents.
+# Temporary files and backups.
 *.7z
 *.bak
 *.gdoc
-/To Do*
-/ToDo*
-/TODO*
-/README.draft.md
-/PROJECT_BRIEF.md
-/opensubculture_saved_settings.cfg
-/opensubculture_settings.cfg
 
 # Local credentials/configuration.
 .env
@@ -43,7 +31,5 @@ __pycache__/
 export_credentials.cfg
 /dist/
 
-/Mods/custom-jackfish/models/
-/Mods/custom-jackfish/textures/
 /Mods/clownfish/models/
 /Mods/clownfish/textures/
