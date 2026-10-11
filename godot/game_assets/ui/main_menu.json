@@ -15,7 +15,7 @@
     {"id": "controls", "label": "Controls"},
     {"id": "graphics", "label": "Graphics"},
     {"id": "audio", "label": "Audio"},
-    {"id": "gameplay", "label": "Gameplay"},
+    {"id": "gameplay", "label": "General"},
     {"id": "mods", "label": "Mods"},
     {"id": "website", "label": "Website"},
     {"id": "exit", "label": "Exit"},

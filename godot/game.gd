@@ -53,6 +53,8 @@ var plant_controls := {}
 var front_end: Node
 var has_started_game := false
 var menu_backdrop: Node3D
+var sun_shafts: Node3D
+var sun_shafts_brightness_slider: HSlider
 const DEFAULT_VISIBILITY = preload("res://developer_tools.gd").DEFAULT_VISIBILITY
 
 var pilot: RigidBody3D
@@ -137,9 +139,12 @@ var map_reveal_label: Label
 var crt_reflection_slider: HSlider
 var crt_reflection_label: Label
 var market_speed_slider: HSlider
+var dock_zapper_damage_slider: HSlider
 var market_ui_elapsed := 0.0
 
 func _ready() -> void:
+	events.mission_available.connect(func(id: String, available: bool) -> void: preload("res://mailbox.gd").set_mission_available(player_progress,id,available))
+	events.mission_completed.connect(func(id: String, score: float) -> void: preload("res://mailbox.gd").mission_completed(player_progress,id,score))
 	# Keep menus, settings and market quotes responsive while the physical
 	# world is paused. Gameplay subtrees explicitly use PAUSABLE below.
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -189,6 +194,10 @@ func _build_interface() -> void:
 	front_end.player_graphics.changed.connect(func() -> void: _update_hud_settings(); _update_daylight())
 	front_end.gameplay_menu.auto_aim_changed.connect(func(enabled: bool) -> void:
 		if weapons != null: weapons.auto_aim_enabled = enabled)
+	front_end.gameplay_menu.wildlife_limit_changed.connect(func(limit: int) -> void:
+		if wildlife != null: wildlife.set_active_limit(limit))
+	front_end.gameplay_menu.sun_shafts_changed.connect(func(enabled: bool) -> void:
+		if is_instance_valid(sun_shafts): sun_shafts.set_enabled(enabled))
 	front_end.back_shortcut_busy = func(event: InputEvent) -> bool: return Bindings.pressed(event,"menu_cancel") and (map_open or developer_ui_visible or (dock_interface != null and dock_interface.visible))
 	loading_canvas = front_end.loading_layer
 	loading_label = front_end.loading_status
@@ -365,6 +374,7 @@ func _start_game(folder: String) -> void:
 			fish.death_flesh_texture = death_flesh
 	else:
 		wildlife = Wildlife.new()
+		wildlife.max_active = front_end.gameplay_menu.wildlife_limit
 		wildlife.gameplay_catalogue = gameplay_catalogue
 		wildlife.name = "AmbientFish"
 		world_root.add_child(wildlife)
@@ -374,6 +384,10 @@ func _start_game(folder: String) -> void:
 		wildlife.setup(world_root, folder, map_data,true)
 	object_population = preload("res://object_population.gd").new()
 	world_root.process_mode = Node.PROCESS_MODE_PAUSABLE
+	if wildlife != null:
+		var defence := preload("res://dock_defence.gd").new(); defence.name = "DockDefence"
+		defence.damage_per_tick = dock_zapper_damage_slider.value
+		world_root.add_child(defence); defence.setup(world_root,wildlife)
 	object_population.name = "MapObjects"; world_root.add_child(object_population)
 	object_population.setup(folder,map_data)
 	water_visuals.materials.clear()
@@ -485,6 +499,10 @@ func _start_game(folder: String) -> void:
 	_update_water_environment()
 	menu_backdrop = preload("res://menu_backdrop.gd").new()
 	add_child(menu_backdrop); menu_backdrop.setup(self)
+	sun_shafts = preload("res://sun_shafts.gd").new()
+	world_root.add_child(sun_shafts); sun_shafts.setup(self)
+	sun_shafts.brightness = sun_shafts_brightness_slider.value / 100.0
+	sun_shafts.set_enabled(front_end.gameplay_menu.sun_shafts_enabled)
 	front_end.progress_bar.value = 95.0
 	if show_start_menu and DisplayServer.get_name() != "headless":
 		for frame in range(600):
@@ -569,6 +587,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if get_tree().paused or not pilot_mode or world_loading or map_open or (dock_interface != null and dock_interface.visible): return
 	if pilot.dead: return
 	if not developer_ui_visible and docking.stage == Docking.Stage.IDLE:
+		if Bindings.pressed(event,"rear_camera_toggle") and cockpit_hud != null:
+			cockpit_hud.set_rear_camera_enabled(not cockpit_hud.rear_camera_enabled)
+			get_viewport().set_input_as_handled(); return
 		if Bindings.pressed(event,"bottom_camera_toggle") and cockpit_hud != null:
 			cockpit_hud.set_bottom_camera_enabled(not cockpit_hud.bottom_camera_enabled)
 			get_viewport().set_input_as_handled(); return
@@ -945,13 +966,16 @@ func _dock_ui_model() -> Dictionary:
 	var standing: String = player_progress.standing.get(str(port.get("race",1)),"neutral")
 	var description_id := "%s%d.%s" % [city.get("description_key",""),player_progress.campaign_stage,standing]
 	var description: String = gameplay_catalogue.get("tables",{}).get("city_descriptions",{}).get("records",{}).get(description_id,{}).get("text","")
-	return {"city":port.get("name","Dock"),"city_id":city_id,"title_bitmap":city.get("title_bitmap",""),"welcome":description,"standing":{"bad":"Hostile","neutral":"Neutral","good":"Friendly"}.get(standing,"Neutral"),"mission":player_progress.mission,"status":player_progress.status.duplicate(),"race":port.get("race",1),"repair_offer":preload("res://equipment_shop.gd").shield_repair(gameplay_catalogue,city_id,player_progress.campaign_stage),"offers":preload("res://equipment_shop.gd").offers(gameplay_catalogue,city_id,player_progress.campaign_stage),"installed":preload("res://equipment_shop.gd").installed(equipment,weapons),"hold":player_progress.hold.duplicate(),"commodity_offers":preload("res://commodity_market.gd").offers(gameplay_catalogue,player_progress,city_id),"cargo":player_progress.cargo.duplicate(),"slots":save_games.slots() if dock_interface != null and dock_interface.page in ["save","load"] else []}
+	return {"city":port.get("name","Dock"),"city_id":city_id,"title_bitmap":city.get("title_bitmap",""),"welcome":description,"standing":{"bad":"Hostile","neutral":"Neutral","good":"Friendly"}.get(standing,"Neutral"),"mission":player_progress.mission,"status":player_progress.status.duplicate(),"race":port.get("race",1),"repair_offer":preload("res://equipment_shop.gd").shield_repair(gameplay_catalogue,city_id,player_progress.campaign_stage),"offers":preload("res://equipment_shop.gd").offers(gameplay_catalogue,city_id,player_progress.campaign_stage),"installed":preload("res://equipment_shop.gd").installed(equipment,weapons),"hold":player_progress.hold.duplicate(),"commodity_offers":preload("res://commodity_market.gd").offers(gameplay_catalogue,player_progress,city_id),"cargo":player_progress.cargo.duplicate(),"mail":preload("res://mailbox.gd").messages(gameplay_catalogue,player_progress,int(city_id) if not city_id.is_empty() else 0),"slots":save_games.slots() if dock_interface != null and dock_interface.page in ["save","load"] else []}
 
 func _save_snapshot(name: String) -> Dictionary:
 	return session._save_snapshot(name)
 
 func _dock_ui_action(action: String, payload: Dictionary) -> void:
 	match action:
+		"read_mail":
+			if docking.stage != Docking.Stage.DOCKED: return
+			preload("res://mailbox.gd").mark_read(player_progress,str(payload.get("id","")))
 		"buy_commodity","sell_commodity":
 			if docking.stage != Docking.Stage.DOCKED: return
 			var city_id := str(int(docking.current.node.get_meta("city_id")))

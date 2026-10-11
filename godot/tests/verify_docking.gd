@@ -47,6 +47,12 @@ func _run() -> void:
 	check(audio.players.values().all(func(p: AudioStreamPlayer) -> bool: return not p.playing), "Idle docking audio is silent")
 	check(controller.ports.size() == 6, "Six original city ports registered")
 	for port in controller.ports:
+		var local_inside: Vector3 = port.node.to_local(port.inside)
+		var underside: float = local_inside.y - game.pilot.surface_clearance(Basis(Vector3.RIGHT,PI))
+		if str(port.node.get_meta("editor_model")) == "AQUATRAZ":
+			check(is_equal_approx(snappedf(underside,0.001),-0.364),"Aquatraz rests above its raised interior floor")
+		else:
+			check(is_equal_approx(snappedf(underside,0.001),0.054),"City dock descends to its own base with hull clearance")
 		var city: Dictionary = game.gameplay_catalogue.tables.city_info.records[str(int(port.node.get_meta("city_id")))]
 		check(port.name == city.name and port.greeting_radius == 20.0 and not port.greeting.is_empty(),"Dock receives its original proper name and approach greeting")
 	var greeting_port: Dictionary = controller.ports[0]

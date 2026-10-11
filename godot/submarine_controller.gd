@@ -23,7 +23,7 @@ func take_damage(amount: float, _source: Vector3 = Vector3.ZERO, feedback: bool 
 	if dead or not active or not controls_enabled or not is_finite(amount) or amount <= 0.0: return
 	var loss := minf(health,amount * Damage.sustain(hull_rating) / Damage.BASE_SUSTAIN)
 	health -= loss
-	if feedback and impact_rumble != null: impact_rumble.damage(loss,max_health)
+	if feedback and health > 0.0 and impact_rumble != null: impact_rumble.damage(loss,max_health)
 	health_changed.emit(health,max_health)
 	if health <= 0.0:
 		dead = true; controls_enabled = false; active = false
@@ -32,6 +32,7 @@ func take_damage(amount: float, _source: Vector3 = Vector3.ZERO, feedback: bool 
 		if submarine_audio != null: submarine_audio.silence()
 		if bubbles != null: bubbles.clear()
 		if visual != null: visual.hide()
+		if impact_rumble != null: impact_rumble.destruction()
 		destroyed.emit()
 
 func take_weapon_damage(raw_strength: float, source: Vector3 = Vector3.ZERO) -> void:
@@ -277,7 +278,8 @@ func receive_explosion(source: Vector3, damage: float, impulse: float) -> void:
 	var direction := global_position - source
 	if direction.length_squared() < 0.00001: direction = Vector3.UP
 	if impulse > 0.0: apply_central_impulse(direction.normalized() * impulse)
-	take_damage(damage,source)
+	take_damage(damage,source,false)
+	if not dead and impact_rumble != null and (damage > 0.0 or impulse > 0.0): impact_rumble.explosion()
 
 func surface_clearance(orientation: Basis) -> float:
 	var highest := -INF

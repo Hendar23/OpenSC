@@ -57,11 +57,11 @@ func run() -> void:
 	check(joy.calls == 2 and is_equal_approx(pilot.linear_velocity.x,before), "Zero blast impulse disables movement independently of damage feedback")
 	population._exploded(pilot.position - Vector3.RIGHT,0.0,2.0,300.0)
 	await physics_frame; await physics_frame
-	check(pilot.linear_velocity.x > before + 1.2 and joy.calls == 2, "Zero damage still allows force without damage rumble")
+	check(pilot.linear_velocity.x > before + 1.2 and joy.calls == 3, "A blast push produces strong feedback even when damage is disabled")
 	pilot.controls_enabled = false
 	before = pilot.linear_velocity.x
 	population._exploded(pilot.position - Vector3.RIGHT,30.0,2.0,300.0)
-	check(joy.calls == 2 and is_equal_approx(pilot.linear_velocity.x,before), "Docking manoeuvres are not interrupted by explosions")
+	check(joy.calls == 3 and is_equal_approx(pilot.linear_velocity.x,before), "Docking manoeuvres are not interrupted by explosions")
 	pilot.controls_enabled = true; pilot.restore_health()
 	population._exploded(pilot.position - Vector3.RIGHT * 2.0,17.5,3.0,0.0)
 	check(is_equal_approx(pilot.health,91.25),"Original floating mine loses half its one-unit damage at two units")
@@ -69,6 +69,12 @@ func run() -> void:
 	population._exploded(pilot.position - Vector3.RIGHT,17.5,3.0,0.0)
 	check(is_equal_approx(pilot.health,97.5),"Blast damage applies upgraded hull sustain exactly once")
 	pilot.hull_rating = 100.0; pilot.restore_health()
+	var defaults: Dictionary = preload("res://object_definitions.gd").FLOATING_MINE
+	before = pilot.linear_velocity.x
+	population._exploded(pilot.position - Vector3.RIGHT,float(defaults.damage),float(defaults.explosion_radius),float(defaults.blast_force))
+	await physics_frame; await physics_frame
+	check(pilot.linear_velocity.x > before + 4.5,"Default mine restores a strong physical blast push on the submarine")
+	pilot.restore_health()
 	for remaining in [65.0,30.0,0.0]:
 		var mine := preload("res://floating_mine.gd").new()
 		var definition: Dictionary = preload("res://object_definitions.gd").FLOATING_MINE.duplicate(true)

@@ -35,9 +35,17 @@ func _run() -> void:
 	var resting := part.global_position
 	burst._process(30)
 	check(part.global_position.is_equal_approx(resting) and material.albedo_color.a == 1,"Settled fragments remain still and opaque during their lifetime")
+	var lower_floor := floor_body.duplicate() as StaticBody3D; lower_floor.position.y = -3.5; world.add_child(lower_floor)
+	# Docking disables the closed lid's collision while the port is open.
+	floor_body.collision_layer = 0
+	await physics_frame; await physics_frame
+	burst._process(0.21)
+	check(not piece.settled and part.global_position.y < resting.y,"Debris resumes sinking when a dock lid opens beneath it")
+	for frame in range(360): burst._process(1.0 / 60)
+	check(piece.settled and part.global_position.y < -2.7 and part.global_position.y > -3,"Released debris settles on the floor inside the open dock")
 	burst.age = 60.5; burst._process(0)
 	check(is_equal_approx(material.albedo_color.a,0.5),"Fragments only fade after the configured hold time")
 	burst.age = 61; burst._process(0); await process_frame
 	check(not is_instance_valid(burst),"Expired debris is removed")
 	world.queue_free(); await process_frame
-	print("Creature debris: 11 checks, %d failures" % failures); quit(1 if failures else 0)
+	print("Creature debris: 13 checks, %d failures" % failures); quit(1 if failures else 0)

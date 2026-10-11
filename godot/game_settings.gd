@@ -16,6 +16,9 @@ func _load_preferences(path: String = "") -> void:
 	var config := ConfigFile.new()
 	if config.load(path) != OK: return
 	game.loading_preferences = true
+	var ray_brightness: Variant = config.get_value("view","sun_ray_brightness",game.sun_shafts_brightness_slider.value / 100.0)
+	if (ray_brightness is float or ray_brightness is int) and is_finite(float(ray_brightness)):
+		game.sun_shafts_brightness_slider.value = clampf(float(ray_brightness) * 100.0,0.0,500.0)
 	var market_speed: Variant = config.get_value("view","market_speed",game.market_speed_slider.value / 100.0)
 	if (market_speed is float or market_speed is int) and is_finite(float(market_speed)):
 		game.market_speed_slider.value = clampf(float(market_speed) * 100.0,game.market_speed_slider.min_value,game.market_speed_slider.max_value)
@@ -36,7 +39,7 @@ func _load_preferences(path: String = "") -> void:
 		game.fog_slider.value = clampf(float(value), MIN_VISIBILITY, MAX_VISIBILITY)
 	var enabled: Variant = config.get_value("view", "fog_enabled", game.fog_button.button_pressed)
 	if enabled is bool: game.fog_button.button_pressed = enabled
-	for row in [["fog_start", game.fog_start_slider, 5.0], ["fog_curve", game.fog_curve_slider, 1.8], ["docking_radius", game.docking_radius_slider, Docking.APPROACH_RADIUS]]:
+	for row in [["dock_zapper_damage_per_tick", game.dock_zapper_damage_slider, preload("res://dock_defence.gd").DAMAGE], ["fog_start", game.fog_start_slider, 5.0], ["fog_curve", game.fog_curve_slider, 1.8], ["docking_radius", game.docking_radius_slider, Docking.APPROACH_RADIUS]]:
 		var setting: Variant = config.get_value("view", row[0], row[1].value)
 		if (setting is float or setting is int) and is_finite(float(setting)):
 			row[1].value = clampf(float(setting), row[1].min_value, row[1].max_value)
@@ -146,7 +149,9 @@ func _view_settings() -> Dictionary:
 	var settings = {"fog_visibility": game.fog_visibility, "fog_enabled": game.fog_button.button_pressed, "fog_start": game.fog_start_slider.value, "fog_curve": game.fog_curve_slider.value}
 	settings.merge(game.day_night.settings())
 	settings.merge(game.natural_light.settings)
+	settings["sun_ray_brightness"] = game.sun_shafts_brightness_slider.value / 100.0
 	settings["market_speed"] = game.market_speed_slider.value / 100.0
+	settings["dock_zapper_damage_per_tick"] = game.dock_zapper_damage_slider.value
 	settings["wildlife_density"] = game.wildlife_density_slider.value / 100.0
 	settings["docking_radius"] = game.docking_radius_slider.value
 	settings["hud_map_zoom"] = game.hud_map_zoom_slider.value

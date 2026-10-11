@@ -26,6 +26,7 @@ func _begin_new_game() -> void:
 	game._reset_loaded_world()
 	game.object_population.populate_startup()
 	game.cockpit_hud.set_bottom_camera_enabled(false)
+	game.cockpit_hud.set_rear_camera_enabled(false)
 	game.day_night.hour = 10.0
 	game.player_progress = PlayerProgress.restore()
 	game._update_daylight()
@@ -107,7 +108,7 @@ func _save_snapshot(name: String) -> Dictionary:
 	for item in game.weapons.mounted: arms.append(item.id)
 	var explored = game.cockpit_hud.map_data.explored.duplicate() as Image
 	explored.convert(Image.FORMAT_L8)
-	return {"version":game.save_games.VERSION,"name":name.left(64),"saved_at":Time.get_datetime_string_from_system(),"dock":{"id":int(game.docking.current.node.get_meta("city_id")),"name":game.docking.current.name},"pose":MapDocument.encode(game.pilot.global_transform),"hour":game.day_night.hour,"equipment":items,"weapons":arms,"equipment_selected":game.equipment.current().get("id",""),"weapon_selected":game.weapons.current().get("id",""),"explored":Marshalls.raw_to_base64(explored.get_data()),"map_signature":game._map_signature(),"mods":Mods.active_ids(),"progress":game.player_progress.duplicate(true),"objects":game.object_population.snapshot()}
+	return {"version":game.save_games.VERSION,"name":name.left(64),"saved_at":Time.get_datetime_string_from_system(),"dock":{"id":int(game.docking.current.node.get_meta("city_id")),"name":game.docking.current.name},"pose":MapDocument.encode(game.pilot.global_transform),"hour":game.day_night.hour,"equipment":items,"weapons":arms,"equipment_selected":game.equipment.current().get("id",""),"weapon_selected":game.weapons.current().get("id",""),"explored":Marshalls.raw_to_base64(explored.get_data()),"map_signature":game._map_signature(),"mods":Mods.active_ids(),"progress":game.player_progress.duplicate(true),"objects":game.object_population.snapshot(),"mines":game.object_population.mines.snapshot()}
 
 func _load_saved_game(slot: int) -> bool:
 	if game.loading_save or game.world_loading: return false
@@ -163,6 +164,8 @@ func _load_saved_game(slot: int) -> bool:
 	else: game.cockpit_hud.map_data.reset_exploration()
 	game.has_started_game = true; game.front_end.can_resume = true
 	if data.has("objects"): game.object_population.restore_snapshot(data.objects)
+	if data.has("mines"): game.object_population.mines.restore(data.mines)
+	else: game.object_population.mines.populate_startup()
 	game.player_progress = PlayerProgress.restore(data.get("progress",{}))
 	game._collect_city_deliveries(int(game.docking.current.node.get_meta("city_id")))
 	game.equipment.vacuum.storage.assign(game.player_progress.suckomat)

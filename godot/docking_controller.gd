@@ -64,6 +64,8 @@ func setup(player: RigidBody3D, world: Node3D, folder: String = "", follow_view:
 		var box := boxes[0]
 		for index in range(1, boxes.size()): box = box.merge(boxes[index])
 		var center := box.get_center()
+		var floor_height := _interior_floor(node, Transform3D.IDENTITY, center, box.position.y)
+		var inside: Vector3 = node.to_global(Vector3(center.x, floor_height, center.z)) + Vector3.UP * (pilot.surface_clearance(Basis(Vector3.RIGHT, PI)) + 0.05)
 		var entry: Vector3 = node.to_global(Vector3(center.x, box.end.y, center.z)) + Vector3.UP * (pilot.COLLIDER_RADIUS + 0.6)
 		entry.y = minf(entry.y, pilot.surface_height - pilot.surface_clearance(Basis.IDENTITY) - pilot.safe_margin)
 		var race := int(node.get_meta("race_id", 1))
@@ -72,7 +74,7 @@ func setup(player: RigidBody3D, world: Node3D, folder: String = "", follow_view:
 			portraits[race] = Radio.portrait(folder, race)
 			distorted[race] = Radio.distorted_portrait(folder,race)
 		ports.append({"node": node, "meshes": meshes, "entry": entry,
-			"inside": node.to_global(Vector3(center.x, box.position.y + 0.5, center.z)) + Vector3.UP * pilot.collision_height(),
+			"inside": inside,
 			"name": node.get_meta("city_name"), "race": race, "portrait": portraits[race],"distorted_portrait":distorted[race],
 			"collision": node.get_node("SceneryCollision"),"greeting_radius":float(city.get("greeting_radius",0.0)),"greeting":str(radio_messages.get(str(city.get("greeting_neutral","")),""))})
 	update_approach()
@@ -81,6 +83,19 @@ static func _bounds(node: Node3D, pose: Transform3D, boxes: Array[AABB]) -> void
 	if node is MeshInstance3D: boxes.append(pose * node.mesh.get_aabb())
 	for child in node.get_children():
 		if child is Node3D: _bounds(child, pose * child.transform, boxes)
+
+static func _interior_floor(node: Node3D, pose: Transform3D, center: Vector3, lowest: float) -> float:
+	# Aquatraz has a raised interior floor above its exterior base. Ordinary
+	# docks are open underneath, so their base bounds supply the resting plane.
+	var floor_height := lowest
+	if node is MeshInstance3D:
+		var faces: PackedVector3Array = node.mesh.get_faces()
+		for index in range(0, faces.size(), 3):
+			var hit: Variant = Geometry3D.ray_intersects_triangle(Vector3(center.x, lowest - 1.0, center.z), Vector3.UP, pose * faces[index], pose * faces[index + 1], pose * faces[index + 2])
+			if hit != null and hit.y < center.y: floor_height = maxf(floor_height, hit.y)
+	for child in node.get_children():
+		if child is Node3D: floor_height = maxf(floor_height, _interior_floor(child, pose * child.transform, center, lowest))
+	return floor_height
 
 func maximum_docking_speed() -> float:
 	return float(pilot.movement.settings.forward_speed) * DOCK_SPEED_FRACTION

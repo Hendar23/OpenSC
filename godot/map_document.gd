@@ -27,7 +27,9 @@ static func empty() -> Dictionary:
 	return {"schema_version": 1, "seed": 8675309, "entities": {}, "species": [], "groups": [], "object_types": [ObjectDefinitions.FLOATING_MINE.duplicate(true), ObjectDefinitions.THORIUM.duplicate(true), ObjectDefinitions.inert_thorium()] + ObjectDefinitions.metal_types() + [ObjectDefinitions.CIGARETTE.duplicate(true),ObjectDefinitions.CLAM.duplicate(true),ObjectDefinitions.PEARL.duplicate(true)] + ObjectDefinitions.rock_types(), "object_groups": []}
 static func creature_health(species: Dictionary, catalogue: Dictionary) -> float:
 	var stats: Dictionary = catalogue.get("tables",{}).get("creature_stats",{}).get("records",{}).get(str(species.get("model","")).to_lower(),{})
-	return maxf(0.1,float(species.get("health",stats.get("health",10.0))))
+	# Three-times original durability for the stronger zapper. Authored health
+	# is already the final value shown in the editor and must not be scaled again.
+	return maxf(0.1,float(species.get("health",float(stats.get("health",10.0)) * 3.0)))
 static func vector(values: Array) -> Vector3:
 	return Vector3(float(values[0]), float(values[1]), float(values[2]))
 static func array(point: Vector3) -> Array:
@@ -203,6 +205,13 @@ static func apply_entities(world: Node3D, folder: String, data: Dictionary) -> v
 		if entry.get("deleted", false):
 			if node != null: node.free()
 			continue
+		# Legacy light names depended on the scenery child count. New scenery
+		# loaders can change those names; a saved light still owns its placement.
+		if node == null and entry.kind == "light" and str(key).begins_with("Scenery/"):
+			var parent := world.get_node_or_null(NodePath(str(key).get_base_dir()))
+			if parent != null:
+				node = Searchlight.new() if entry.get("light_type") == "searchlight" else PulseLight.new()
+				node.name = str(key).get_file(); parent.add_child(node)
 		if node == null and str(key).begins_with("Added/"):
 			if not world.has_node("Added"):
 				var added := Node3D.new(); added.name = "Added"; world.add_child(added)
@@ -215,7 +224,7 @@ static func apply_entities(world: Node3D, folder: String, data: Dictionary) -> v
 				node.set_meta("editor_model", entry.model)
 				if entry.get("solid", true): Scenery._add_prop_collision(node)
 		if node == null: continue
-		if entry.kind == "light" and ((entry.get("light_type") == "searchlight") != (node is Searchlight)):
+		if entry.kind == "light" and ((entry.get("light_type") == "searchlight" and not node is Searchlight) or (entry.get("light_type") != "searchlight" and not node is PulseLight)):
 			var replacement: Node3D = Searchlight.new() if entry.get("light_type") == "searchlight" else PulseLight.new()
 			var parent := node.get_parent(); var original_name := node.name
 			node.free(); replacement.name = original_name; parent.add_child(replacement); node = replacement

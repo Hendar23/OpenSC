@@ -34,6 +34,7 @@ var surface_height := 0.0
 var view_camera: Camera3D
 var random := RandomNumberGenerator.new()
 var dock_spawn_exclusions: Array[Dictionary] = []
+var mines = preload("res://mine_population.gd").new()
 
 func setup(folder: String, document: Dictionary, enabled: bool = true) -> void:
 	simulating = enabled
@@ -106,6 +107,7 @@ func setup(folder: String, document: Dictionary, enabled: bool = true) -> void:
 			mine.set_meta("object_group",group.id); mine.exploded.connect(_exploded.bind(float(definition.get("blast_force",300.0)))); placements.append(mine.home)
 		template.free()
 	initial_thorium = snapshot()
+	mines.setup(self,types)
 static func appearance(definition: Dictionary, folder: String, cache: Dictionary = {}) -> Node3D:
 	# A model.mine mod replaces the default billboard without needing a map edit.
 	var model_id := str(definition.model).to_lower().trim_prefix("model.")
@@ -132,6 +134,7 @@ static func appearance(definition: Dictionary, folder: String, cache: Dictionary
 	return sprite
 
 func reset_population() -> void:
+	mines.clear_generated()
 	restore_snapshot(initial_thorium)
 	spawn_elapsed = 0.0
 	for mine in get_children():
@@ -317,6 +320,7 @@ func _physics_process(delta: float) -> void:
 
 func populate_startup() -> void:
 	if not simulating: return
+	mines.populate_startup()
 	# Original world creation makes twelve attempts per salvage/loose rock type. These are
 	# independent of the ongoing replenishment budget and per-minute chance.
 	# BIGROCK is absent from the startup table. Rocks never join timed replenishment.
@@ -376,6 +380,7 @@ func _clear_of_docks(position: Vector3, item_radius: float) -> bool:
 	return true
 
 func _exit_tree() -> void:
+	mines.close()
 	for template in thorium_templates.values(): template.free()
 
 func _update_radiation(delta: float) -> void:

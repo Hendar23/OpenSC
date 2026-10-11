@@ -45,10 +45,12 @@ func setup(player: Node3D, folder: String) -> void:
 	lamp.light_color = Color(1.0, 0.97, 0.9)
 	lamp.spot_attenuation = 0.5
 	# Dock walls and terrain must occlude the beam, including during launch.
-	# Small biases suit the original world's metre-scale geometry.
+	# Legacy smoothed normals can run almost tangent to a terrain face.
+	# Normal bias alone then leaves distant faces shadowing themselves; use
+	# depth bias as well. Thin dock walls still occlude the beam.
 	lamp.shadow_enabled = true
-	lamp.shadow_bias = 0.01
-	lamp.shadow_normal_bias = 0.02
+	lamp.shadow_bias = 4.0
+	lamp.shadow_normal_bias = 1.0
 	mount.add_child(lamp)
 	var icons: Array[Texture2D] = []
 	for file in ["DEEPWP1", "DEEPWP2"]:

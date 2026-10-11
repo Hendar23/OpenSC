@@ -64,6 +64,12 @@ func run() -> void:
  check(game.object_population.snapshot().any(func(entry: Dictionary) -> bool: return entry.get("delivery_city",-1) == city),"Accepted salvage remains in the saved world until docking at its city")
  magnet.enabled = true; magnet._attach(coin)
  check(magnet.target == null,"Accepted salvage cannot be delivered twice")
+ coin.set_meta("grapple_tow_target",true)
+ game.equipment.grapple.enabled = true; game.equipment.grapple._attach(coin)
+ check(game.equipment.grapple.target == null,"The grapple cannot reclaim accepted salvage")
+ coin.stats.suckomat_compatible = true
+ check(coin.pickup_item().is_empty(),"The Suck-o-matic cannot reclaim accepted salvage")
+ game.equipment.grapple.enabled = false
  magnet.enabled = false
  game.save_games.folder = "res://tests/delivery-save-fixture"
  game.docking.current = game.docking.ports[1]; game.docking.stage = game.Docking.Stage.DOCKED
@@ -73,6 +79,9 @@ func run() -> void:
  check(sessions == [false,true] and docks.is_empty() and accepted.size() == 1 and collected.is_empty(),"Loading publishes restored-session state without replaying docking or delivery events")
  check(game.player_progress.pending_deliveries[str(city)].copper == 2 and game.player_progress.cargo.is_empty(),"Loading at another city preserves the delivery without collecting it")
  check(game.object_population.snapshot().any(func(entry: Dictionary) -> bool: return entry.get("delivery_city",-1) == city),"Loading at another city also preserves the physical delivered object")
+ # Loading a docked save pauses the world. Simulate resuming before the
+ # next docking arrival rather than calling its update while still paused.
+ paused = false
  game.docking.current = game.docking.ports[0]; game.docking.stage = game.Docking.Stage.DOCKED; game.dock_interface_active = false; game._process(0)
  check(game.player_progress.cargo.get("copper",0) == 2 and not game.player_progress.pending_deliveries.has(str(city)),"Docking transfers the saved delivery to the sub's trade inventory")
  check(not game.object_population.snapshot().any(func(entry: Dictionary) -> bool: return entry.get("delivery_city",-1) == city),"Docking at the receiving city removes its accepted objects")

@@ -135,12 +135,13 @@ func _build_menu() -> void:
 	var rect: Array = menu_config.button_rect
 	var entries: Array = menu_config.buttons.duplicate(true)
 	# Older custom menu layouts still get an entrance and return button.
-	for entry in [{"id":"options","label":"Options"},{"id":"gameplay","label":"Gameplay"},{"id":"back","label":"Back"}]:
+	for entry in [{"id":"options","label":"Options"},{"id":"gameplay","label":"General"},{"id":"back","label":"Back"}]:
 		if not entries.any(func(item: Dictionary) -> bool: return item.get("id") == entry.id): entries.append(entry)
 	for entry in entries:
 		var id := str(entry.get("id",""))
 		if id not in ["new_game","load","continue","options","back","controls","mods","audio","graphics","gameplay","website","exit"] or buttons.has(id): continue
 		var button := Button.new(); button.text = str(entry.get("label",id))
+		if id == "gameplay": button.text = "General"
 		button.position = Vector2(rect[0],rect[1] + button_order.size() * float(menu_config.button_spacing))
 		button.size = Vector2(rect[2],rect[3]); button.add_theme_font_size_override("font_size",14)
 		var normal := StyleBoxFlat.new(); normal.bg_color = Color(0.01,0.05,0.07,0.82)
@@ -167,6 +168,7 @@ func _update_title_mask() -> void:
 
 func _set_menu_page(next_page: String) -> void:
 	menu_page = next_page
+	menu_picture.visible = menu_page == "main"
 	active_button = null
 	var area: Array = menu_config.button_rect
 	var row := 0

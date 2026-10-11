@@ -1,6 +1,7 @@
 extends Button
 # Original artwork is drawn over the matching part of the screen background.
 var highlight_art: Array = []
+var normal_art: Array = []
 var held_art: Array = []
 var highlighted := false
 var held := false
@@ -11,6 +12,7 @@ func _has_point(point: Vector2) -> bool:
 
 func _draw() -> void:
 	if disabled: return
+	for piece in normal_art: draw_texture_rect(piece.texture,piece.rect,false)
 	if highlighted or held:
 		for piece in highlight_art: draw_texture_rect(piece.texture,piece.rect,false)
 	if held:

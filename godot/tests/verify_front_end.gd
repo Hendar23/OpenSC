@@ -1,4 +1,5 @@
 extends SceneTree
+const Searchlight = preload("res://searchlight.gd")
 const Game = preload("res://game.gd")
 const Mods = preload("res://mod_registry.gd")
 var checks := 0
@@ -160,7 +161,15 @@ func _run() -> void:
 	var generation: int = game.menu_backdrop.generation
 	var hour: float = game.day_night.hour
 	var actor_position: Vector3 = game.menu_backdrop.actors[0].node.global_position
+	var light_states := []
+	for entry in game.menu_backdrop.animated_lights:
+		var light: Node3D = entry.node
+		light_states.append({"node":light,"value":light.angle if light is Searchlight else light.elapsed,"mode":entry.mode})
+	check(not light_states.is_empty(),"Menu includes map light animations")
 	for frame in range(10): await physics_frame
+	for entry in light_states:
+		var light: Node3D = entry.node
+		check(not is_equal_approx(entry.value,light.angle if light is Searchlight else light.elapsed),"Map light animates while gameplay is paused")
 	check(game.pilot.global_position.is_equal_approx(pilot_position) and is_equal_approx(game.day_night.hour,hour),"Menu freezes submarine physics and the gameplay clock")
 	check(not game.menu_backdrop.actors[0].node.global_position.is_equal_approx(actor_position),"Decorative fish keep swimming while gameplay is paused")
 	game.day_night.enabled = false
@@ -172,6 +181,7 @@ func _run() -> void:
 	game.day_night.enabled = true
 	game.front_end._input(event)
 	check(game.menu_backdrop.actors.all(func(actor: Dictionary) -> bool: return not actor.node.is_physics_processing()),"Menu fish stop simulating when gameplay resumes")
+	check(light_states.all(func(entry: Dictionary) -> bool: return entry.node.process_mode == entry.mode),"Closing menu restores map light processing modes")
 	check(not paused and not game.front_end.menu_layer.visible,"Start resumes the current game")
 	check(game.world_root == original_world and game.camera.global_transform.is_equal_approx(camera_pose),"Menu reuses the loaded world and restores the gameplay view")
 	game.front_end._input(event)

@@ -15,15 +15,42 @@ func check(condition: bool, description: String) -> void:
 		push_error("FAIL: " + description)
 
 func _run() -> void:
+	preload("res://mod_registry.gd").initialize(false)
 	var editor := Editor.new()
 	editor.remember_preferences = false
 	root.add_child(editor)
 	await process_frame
+	editor._load_folder(ProjectSettings.globalize_path("res://../Original Sub Culture"))
 	check(editor.catalog.values().filter(func(entry: Dictionary) -> bool: return entry.kind == "model" and not entry.has("mod_asset")).size() == 139, "All supplied 3D assets indexed")
 	check(editor.asset_names.size() > 1000, "Image, audio and text assets indexed alongside models")
 	check(editor.model != null, "Initial asset preview loads")
 	check(is_equal_approx(editor.animation_speed.value, 0.5), "Editor defaults to preferred half-speed animation")
 	check(editor.viewport.own_world_3d, "Editor preview uses an independent scene")
+	check(editor.hitbox_button.visible and not editor.hitbox_button.button_pressed and editor.hitbox_preview == null,"Model hitboxes are available and off by default")
+	editor._select_asset(editor.filtered_names.find("TURTLE.DFF"))
+	editor.hitbox_button.button_pressed = true
+	check(editor.hitbox_preview != null and editor.hitbox_preview.visible,"Hitbox toggle draws the turtle collision hull")
+	var hull := preload("res://model_hitbox.gd").fitted_hull(editor.model)
+	check(editor.hitbox_preview.get_meta("hitbox_points") == hull.points,"Viewer uses the same fitted hull as swimming wildlife")
+	check(editor.hitbox_preview.mesh.surface_get_primitive_type(0) == Mesh.PRIMITIVE_LINES,"Hitbox is drawn as a wireframe so the model stays visible")
+	check(editor.hitbox_preview.get_parent() == editor.stage and editor.hitbox_preview.material_override.no_depth_test,"Overlay remains visible through the model and is kept out of its geometry")
+	var framed: float = editor.base_distance
+	editor._frame_model()
+	check(is_equal_approx(editor.base_distance,framed),"Showing hitboxes does not alter model framing")
+	if DisplayServer.get_name() != "headless":
+		for frame in range(5): await process_frame
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png("res://tests/resource-hitbox-preview.png")
+	editor.hitbox_button.button_pressed = false
+	check(not editor.hitbox_preview.visible,"Hitbox toggle hides the overlay")
+	editor.hitbox_button.button_pressed = true
+	var old_overlay: Node = editor.hitbox_preview
+	editor._select_asset(editor.filtered_names.find("JACKFISH.DFF"))
+	check(not is_instance_valid(old_overlay) and editor.hitbox_preview != null and editor.hitbox_preview.visible,"Changing models replaces the overlay and retains the toggle")
+	editor._clear_selection()
+	check(editor.hitbox_preview == null and not editor.hitbox_button.visible,"Clearing selection frees the overlay and hides the control")
+	editor.hitbox_button.button_pressed = false
+	editor._select_asset(editor.filtered_names.find("TURTLE.DFF"))
 	editor.category.select(1)
 	editor._filter_assets()
 	check(editor.filtered_names.size() == 5, "Plants filter contains all bushes and reeds")

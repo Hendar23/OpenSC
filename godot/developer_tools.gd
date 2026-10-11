@@ -226,6 +226,19 @@ func _build_interface() -> void:
 	system.add_child(game.market_speed_slider)
 	game.market_speed_slider.value_changed.connect(func(value: float) -> void: market_speed_label.text = "Market speed: %.0f%%" % value)
 	market_speed_label.text = "Market speed: %.0f%%" % game.market_speed_slider.value
+	var dock_damage_label := Label.new(); system.add_child(dock_damage_label)
+	game.dock_zapper_damage_slider = HSlider.new(); game.dock_zapper_damage_slider.name = "DockZapperDamage"
+	game.dock_zapper_damage_slider.scrollable = false; game.dock_zapper_damage_slider.focus_mode = Control.FOCUS_NONE
+	game.dock_zapper_damage_slider.min_value = 0; game.dock_zapper_damage_slider.max_value = 50; game.dock_zapper_damage_slider.step = 0.25
+	game.dock_zapper_damage_slider.value = preload("res://dock_defence.gd").DAMAGE
+	system.add_child(game.dock_zapper_damage_slider)
+	game.dock_zapper_damage_slider.value_changed.connect(func(value: float) -> void:
+		dock_damage_label.text = "Dock zapper damage per tick: %.2f" % value
+		if is_instance_valid(game.world_root):
+			var defence: Node = game.world_root.get_node_or_null("DockDefence")
+			if defence != null: defence.damage_per_tick = value
+	)
+	dock_damage_label.text = "Dock zapper damage per tick: %.2f" % game.dock_zapper_damage_slider.value
 	game.docking_radius_label = Label.new()
 	system.add_child(game.docking_radius_label)
 	game.docking_radius_slider = HSlider.new(); game.docking_radius_slider.scrollable = false
@@ -301,6 +314,16 @@ func _build_daylight_controls() -> void:
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; game.graphics_controls.add_child(hint)
 
 func _build_natural_light_controls() -> void:
+	var rays_label := Label.new(); rays_label.text = "Sun ray brightness: 100%"
+	game.graphics_controls.add_child(rays_label)
+	var rays := HSlider.new(); rays.name = "SunRayBrightness"
+	rays.min_value = 0; rays.max_value = 500; rays.step = 5; rays.value = 100
+	rays.scrollable = false; rays.focus_mode = Control.FOCUS_NONE
+	game.graphics_controls.add_child(rays); game.sun_shafts_brightness_slider = rays
+	rays.value_changed.connect(func(value: float) -> void:
+		rays_label.text = "Sun ray brightness: %d%%" % int(value)
+		if is_instance_valid(game.sun_shafts): game.sun_shafts.brightness = value / 100.0)
+	rays.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
 	for row in [["sun_depth","Sunlight fade begins at depth",0.0,100.0,0.5],["sun_falloff","Sunlight falloff distance",0.5,100.0,0.5],["cave_ambient","Cave ambient light",0.0,0.5,0.005]]:
 		var key: String = row[0]; var caption: String = row[1]
 		var label = Label.new(); game.graphics_controls.add_child(label)

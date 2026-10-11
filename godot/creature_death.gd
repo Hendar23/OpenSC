@@ -11,6 +11,7 @@ var gore_frames: Array[Texture2D] = []
 var gore_lifetime := 2.0
 var gore_settle_speed := 1.0
 var chunk_fade_time := 60.0
+var support_check_elapsed := 0.0
 
 static func load_gore(folder: String) -> Array[Texture2D]:
 	var frames: Array[Texture2D] = []; var cache := {}
@@ -93,9 +94,9 @@ func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, bloo
 	if bubble_texture != null:
 		bubbles = CPUParticles3D.new(); bubbles.amount = 24; bubbles.lifetime = 1.2; bubbles.one_shot = true; bubbles.explosiveness = 1.0; bubbles.direction = Vector3.UP; bubbles.spread = 180
 		bubbles.initial_velocity_min = 0.5; bubbles.initial_velocity_max = 2.0; bubbles.gravity = Vector3(0,1,0); bubbles.scale_amount_min = 0.04; bubbles.scale_amount_max = 0.11
-		var quad := QuadMesh.new(); quad.size = Vector2.ONE
-		var material := preload("res://natural_light.gd").billboard_material(bubble_texture)
-		quad.material = material; bubbles.mesh = quad; add_child(bubbles); bubbles.emitting = true
+		bubbles.mesh = preload("res://bubble_visual.gd").death_mesh(bubble_texture)
+		bubbles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(bubbles); bubbles.emitting = true
 	if sound != null:
 		explosion_audio = AudioStreamPlayer3D.new(); explosion_audio.stream = sound; explosion_audio.pitch_scale = random.randf_range(0.9,1.1); explosion_audio.max_distance = 35; add_child(explosion_audio); preload("res://explosion_audio.gd").apply(explosion_audio,0.0,"wildlife_splat_volume"); explosion_audio.play()
 
@@ -106,6 +107,11 @@ func _collect_meshes(node: Node, result: Array[MeshInstance3D]) -> void:
 func _process(delta: float) -> void:
 	preload("res://explosion_audio.gd").apply(explosion_audio,0.0,"wildlife_splat_volume")
 	age += delta
+	# Resting fragments still need support checks: dock doors can move away.
+	# Throttle these rays rather than simulating every resting piece each frame.
+	support_check_elapsed += delta
+	var check_support := support_check_elapsed >= 0.2
+	if check_support: support_check_elapsed = fmod(support_check_elapsed,0.2)
 	for particle in gore:
 		particle.velocity *= exp(-1.8 * delta * gore_settle_speed); particle.velocity.y -= delta * 0.15 * gore_settle_speed
 		particle.node.position += particle.velocity * delta
@@ -120,10 +126,23 @@ func _process(delta: float) -> void:
 		if age >= chunk_fade_time + 1.0:
 			piece.node.hide()
 			continue
+		if piece.settled and check_support and not _chunk_supported(piece.node): piece.settled = false
 		if not piece.settled: _move_chunk(piece,delta)
 		if piece.material is StandardMaterial3D: piece.material.albedo_color.a = clampf(chunk_fade_time + 1.0 - age,0,1)
 		elif piece.material is ShaderMaterial: piece.material.set_shader_parameter("opacity",clampf(chunk_fade_time + 1.0 - age,0,1))
 	if age >= lifetime: queue_free()
+
+func _support_height(part: MeshInstance3D) -> float:
+	var box := part.mesh.get_aabb(); var bottom := 0.0
+	for corner in range(8): bottom = minf(bottom,(part.global_basis * box.get_endpoint(corner)).y)
+	return -bottom + 0.005
+
+func _chunk_supported(part: MeshInstance3D) -> bool:
+	var foot := part.global_position - Vector3.UP * _support_height(part)
+	var ray := PhysicsRayQueryParameters3D.create(foot + Vector3.UP * 0.02,foot - Vector3.UP * 0.03,1)
+	ray.hit_back_faces = true
+	var hit := get_world_3d().direct_space_state.intersect_ray(ray)
+	return not hit.is_empty() and hit.normal.y > 0.25
 
 func _move_chunk(piece: Dictionary, delta: float) -> void:
 	var part: MeshInstance3D = piece.node
@@ -132,9 +151,7 @@ func _move_chunk(piece: Dictionary, delta: float) -> void:
 	var next: Vector3 = previous + piece.velocity * delta
 	part.rotation += piece.spin * delta * exp(-age)
 	# Support height uses the rotated fragment, so it rests on the floor.
-	var box := part.mesh.get_aabb(); var bottom := 0.0
-	for corner in range(8): bottom = minf(bottom,(part.global_basis * box.get_endpoint(corner)).y)
-	var support := -bottom + 0.005
+	var support := _support_height(part)
 	var space := get_world_3d().direct_space_state
 	var motion := PhysicsRayQueryParameters3D.create(previous,next,1); motion.hit_back_faces = true
 	var hit := space.intersect_ray(motion)

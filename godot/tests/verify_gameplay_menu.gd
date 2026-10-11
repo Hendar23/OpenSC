@@ -16,20 +16,35 @@ func _run() -> void:
 	var menu: CanvasLayer = front.gameplay_menu
 	check(menu.visible and menu.toggle.has_focus() and not front.buttons.gameplay.visible,"Gameplay opens focused without overlapping Options")
 	check(not menu.zapper_auto_aim and menu.toggle.text.ends_with("Off"),"Zapper auto aim defaults Off")
+	check(front.buttons.gameplay.text == "General" and menu.sun_shafts_enabled,"General options defaults sun shafts On")
 	check(menu.layout.theme == front.menu_theme and menu.get_child(0).color.a == 0,"Gameplay matches menu fonts and preserves the live sea")
+	if DisplayServer.get_name() != "headless":
+		for frame in range(5): await process_frame
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png("res://tests/gameplay-wildlife-cap.png")
 	paused = true; press(menu,"menu_accept")
 	check(menu.zapper_auto_aim and menu.toggle.text.ends_with("On"),"Controller confirm enables auto aim while paused")
 	press(menu,"menu_left"); check(not menu.zapper_auto_aim,"Left/right can toggle auto aim")
+	press(menu,"menu_down"); check(menu.wildlife_button.has_focus(),"Down selects wildlife cap")
+	check(menu.wildlife_limit == 80,"Active wildlife defaults to a cap below 100")
+	press(menu,"menu_left"); check(menu.wildlife_limit == 60,"Controller left lowers the cap")
+	press(menu,"menu_right"); check(menu.wildlife_limit == 80,"Controller right raises the cap")
+	press(menu,"menu_down"); check(menu.sun_shafts_button.has_focus(),"Down selects sun shafts")
+	press(menu,"menu_accept"); check(not menu.sun_shafts_enabled,"Sun shafts toggle works while paused")
 	press(menu,"menu_down"); check(menu.back.has_focus(),"Down selects Back")
 	press(menu,"menu_accept"); check(not menu.visible and front.buttons.gameplay.has_focus(),"Back restores Gameplay option focus")
 	paused = false
 	var path := "res://tests/gameplay-preferences-test.cfg"
 	var config := ConfigFile.new(); config.set_value("audio","effects_volume",175); config.save(path)
 	menu.settings_path = path; menu.remember_preferences = true; menu._toggle()
+	menu._cycle_wildlife_limit()
 	config.load(path)
 	check(config.get_value("gameplay","zapper_auto_aim",false) == true,"Auto aim choice saves automatically")
+	check(config.get_value("gameplay","wildlife_limit",0) == 100,"Wildlife cap saves automatically")
 	check(config.get_value("audio","effects_volume") == 175,"Gameplay saving preserves other preferences")
 	var restored := Gameplay.new(); restored.settings_path = path; front.add_child(restored)
 	check(restored.zapper_auto_aim,"Gameplay choice loads on next launch")
+	check(restored.wildlife_limit == 100,"Wildlife cap loads on next launch")
+	check(not restored.sun_shafts_enabled,"Sun shafts choice saves and loads")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	front.free(); print("Gameplay menu: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

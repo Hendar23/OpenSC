@@ -1,4 +1,6 @@
 extends Node3D
+const PulseLight = preload("res://pulse_light.gd")
+const Searchlight = preload("res://searchlight.gd")
 
 # Separate menu actors reuse loaded visuals and the normal fish controller.
 const Fish = preload("res://fish_controller.gd")
@@ -11,6 +13,7 @@ var menu_population: Node3D
 var group_count := 0
 var generation := 0
 var hidden: Array[Dictionary] = []
+var animated_lights: Array[Dictionary] = []
 var submarine: Node3D
 var wake: Node3D
 var propeller_audio: AudioStreamPlayer3D
@@ -96,6 +99,10 @@ func open() -> void:
 	if active: return
 	_refresh_wildlife()
 	active = true; show(); hidden.clear()
+	for light in game.world_root.find_children("*", "Node3D", true, false):
+		if light is PulseLight or light is Searchlight:
+			animated_lights.append({"node":light,"mode":light.process_mode})
+			light.process_mode = Node.PROCESS_MODE_ALWAYS
 	for node in [game.pilot,game.cockpit_hud,game.canvas,game.particles,game.world_root.get_node_or_null("AmbientFish")]:
 		if node != null:
 			hidden.append({"node":node,"visible":node.visible}); node.hide()
@@ -110,6 +117,9 @@ func open() -> void:
 func close() -> void:
 	if not active: return
 	active = false; hide(); wake.clear()
+	for entry in animated_lights:
+		if is_instance_valid(entry.node): entry.node.process_mode = entry.mode
+	animated_lights.clear()
 	propeller_audio.stop()
 	for actor in actors: actor.node.set_physics_process(false)
 	for entry in hidden:

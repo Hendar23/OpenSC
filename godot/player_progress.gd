@@ -4,7 +4,10 @@ const DEFAULT_STATUS := {"hull_strength":100,"top_speed":100,"shields":100,"radi
 
 static func restore(saved: Variant = {}) -> Dictionary:
 	var result := {"campaign_stage":1,"mission":"None","standing":{},"status":DEFAULT_STATUS.duplicate(),"hold":{},"cargo":{},"suckomat":[],"pending_deliveries":{},"markets":{}}
-	if not saved is Dictionary: return result
+	if not saved is Dictionary: saved = {}
+	result.mail = preload("res://mailbox.gd").restore(saved.get("mail",{}))
+	var jobs: Variant = saved.get("campaign_jobs",0)
+	result.campaign_jobs = clampi(int(jobs),0,999) if (jobs is int or jobs is float) and is_finite(float(jobs)) else 0
 	result.markets = preload("res://commodity_market.gd").restore(saved.get("markets",{}))
 	result.economy = {"production_elapsed":0.0,"trader_elapsed":0.0}
 	var clock: Variant = saved.get("economy",{})

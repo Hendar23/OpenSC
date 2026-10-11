@@ -15,6 +15,7 @@ var definitions := {}
 var model_bounds := {}
 var random_groups: Array[Dictionary] = []
 var streaming := false
+var max_active := 80 # Gameplay only; map previews retain their full population. Zero is unlimited.
 var density := 1.0
 var visibility_range := 30.0
 var view_camera: Camera3D
@@ -155,6 +156,28 @@ func _visible_spawn(point: Vector3, center: Vector3, body_radius: float = 0.0) -
 func _activation_margin() -> float:
 	return 4.0 + player.global_position.distance_to(view_camera.global_position) if is_instance_valid(player) and is_instance_valid(view_camera) else 4.0
 
+func set_active_limit(value: int) -> void:
+	max_active = maxi(0,value)
+	if streaming and world != null: _stream_update()
+
+func _limit_activity(center: Vector3, viewer: Vector3, planes: Array, activation: float, retirement: float, initial: bool) -> void:
+	var candidates: Array[Dictionary] = []
+	for fish in get_children():
+		if fish.dead: continue
+		var distance_squared: float = fish.global_position.distance_squared_to(center)
+		var awake := bool(fish.get_meta("wildlife_awake",true))
+		var eligible: bool = distance_squared <= pow(retirement + fish.radius,2) if awake else distance_squared <= activation * activation and (initial or not _visible_spawn(fish.global_position,center,fish.radius))
+		if eligible:
+			# Small preference for already active fish avoids swapping at the cutoff.
+			candidates.append({"fish":fish,"priority":distance_squared * (0.85 if awake else 1.0)})
+		else:
+			_set_awake(fish,false); _update_activity(fish,viewer,planes)
+	candidates.sort_custom(func(a: Dictionary,b: Dictionary) -> bool: return a.priority < b.priority)
+	for index in range(candidates.size()):
+		var fish: Node3D = candidates[index].fish
+		_set_awake(fish,max_active == 0 or index < max_active)
+		_update_activity(fish,viewer,planes)
+
 func _stream_update(initial: bool = false) -> void:
 	var center: Vector3 = player.global_position if is_instance_valid(player) else world.get_meta("player_spawn",world.get_meta("bounds").get_center())
 	# A small band outside the fog prepares creatures before they are visible.
@@ -165,13 +188,8 @@ func _stream_update(initial: bool = false) -> void:
 	var viewer := view_camera.global_position if is_instance_valid(view_camera) else center
 	var planes: Array = view_camera.get_frustum() if is_instance_valid(view_camera) else []
 	if streaming:
-		for fish in get_children():
-			if fish.dead: continue
-			var distance: float = fish.global_position.distance_to(center)
-			if distance > retirement + fish.radius: _set_awake(fish,false)
-			elif not bool(fish.get_meta("wildlife_awake",true)) and distance <= activation and (initial or not _visible_spawn(fish.global_position,center,fish.radius)):
-				_set_awake(fish,true)
-			_update_activity(fish,viewer,planes)
+		_limit_activity(center,viewer,planes,activation,retirement,initial)
+	var awake_count := active_count()
 	for state in random_groups:
 		var group: Dictionary = state.group
 		var home := Document.vector(group.position)
@@ -186,9 +204,11 @@ func _stream_update(initial: bool = false) -> void:
 				spawned_groups.erase(group.id)
 			continue
 		if state.attempted or budget <= 0: continue
+		if streaming and max_active > 0 and awake_count >= max_active: continue
 		if streaming and (home.distance_to(center) > activation or (not initial and _visible_spawn(home,center))): continue
 		var random := RandomNumberGenerator.new(); random.seed = int(state.seed)
 		state.members = _spawn_group(group,random,streaming and not initial,streaming)
+		awake_count += state.members.size()
 		state.attempted = true; budget -= 1
 	world.set_meta("ambient_fish_count",active_count())
 
@@ -216,7 +236,11 @@ func _set_awake(fish: Node3D, awake: bool) -> void:
 
 func _update_activity(fish: Node3D, viewer: Vector3, planes: Array) -> void:
 	var awake: bool = not fish.dead and bool(fish.get_meta("wildlife_awake",true))
-	var in_range := viewer.distance_squared_to(fish.global_position) <= pow(visibility_range + fish.radius,2)
+	var distance_squared := viewer.distance_squared_to(fish.global_position)
+	var in_range := distance_squared <= pow(visibility_range + fish.radius,2)
+	# Close poses follow every rendered frame; distant poses retain their clock
+	# but upload at 30/15 Hz. Physics, aiming and collisions keep their rate.
+	fish.animation_interval = 0.0 if distance_squared <= 100.0 else (1.0 / 30.0 if distance_squared <= 400.0 else 1.0 / 15.0)
 	var on_screen := in_range
 	for plane in planes:
 		if plane.distance_to(fish.global_position) > fish.radius: on_screen = false; break
@@ -228,6 +252,7 @@ func _update_activity(fish: Node3D, viewer: Vector3, planes: Array) -> void:
 
 func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visible: bool = false, limit_to_visible_range: bool = false) -> Array[Node3D]:
 	var members: Array[Node3D] = []
+	var shoal := preload("res://wildlife_shoal.gd").new()
 	if not templates.has(group.species): return members
 	var species: Dictionary = definitions[group.species].duplicate(true)
 	species.merge(group.get("overrides",{}),true)
@@ -235,7 +260,9 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 	var box: AABB = model_bounds[group.species]
 	var home := Document.vector(group.position)
 	var player_position: Vector3 = player.global_position if is_instance_valid(player) else world.get_meta("player_spawn",home)
-	for member in range(random.randi_range(int(group.count_min),int(group.count_max))):
+	var count := random.randi_range(int(group.count_min),int(group.count_max))
+	if streaming and limit_to_visible_range and max_active > 0: count = mini(count,maxi(0,max_active - active_count()))
+	for member in range(count):
 		var size := random.randf_range(float(species.scale_min), float(species.scale_max)) / 100.0
 		var radius := maxf(0.08, box.size.length() * 0.5 * size)
 		var point := Vector3(INF, INF, INF)
@@ -278,6 +305,7 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 		if fish.mobility == "crawling": fish.configure_crawler(box.size * size)
 		fish.population = self
 		fish.group_members = members
+		fish.shoal = shoal
 		fish._choose_goal()
 		add_child(fish)
 		if fish.mobility == "crawling": fish._ground_on_terrain(1.0)

@@ -789,18 +789,19 @@
       ]
     },
     "Scenery/Light_33": {
-      "deleted": false,
-      "energy": 0.699999988079071,
+      "deleted": true,
+      "energy": 1.0,
       "flare_size": 2.0,
       "flash_off_time": 2.0,
-      "flash_on_time": 0.2,
+      "flash_on_time": 0.5,
       "kind": "light",
       "light_mode": "flashing",
+      "light_type": "beacon",
       "model": "",
       "name": "Light_33",
       "pulse_minimum": 0.2,
       "pulse_period": 2.4,
-      "range": 4.0,
+      "range": 1.0,
       "solid": false,
       "transform": [
         1.0,
@@ -1259,7 +1260,7 @@
       ]
     },
     "Scenery/Light_58": {
-      "deleted": false,
+      "deleted": true,
       "energy": 1.0,
       "flare_size": 4.0,
       "flash_off_time": 1.0,
@@ -1288,7 +1289,7 @@
       ]
     },
     "Scenery/Light_59": {
-      "deleted": false,
+      "deleted": true,
       "energy": 1.0,
       "flare_size": 4.0,
       "flash_off_time": 1.0,
@@ -1371,7 +1372,7 @@
       ]
     },
     "Scenery/Light_67": {
-      "deleted": false,
+      "deleted": true,
       "energy": 1.0,
       "flare_size": 4.0,
       "flash_off_time": 1.0,
@@ -1400,13 +1401,14 @@
       ]
     },
     "Scenery/Light_68": {
-      "deleted": false,
+      "deleted": true,
       "energy": 1.0,
       "flare_size": 4.0,
       "flash_off_time": 1.0,
       "flash_on_time": 0.5,
       "kind": "light",
       "light_mode": "flashing",
+      "light_type": "beacon",
       "model": "",
       "name": "Light_68",
       "pulse_minimum": 0.2,
@@ -1423,12 +1425,17 @@
         0.0,
         0.0,
         1.0,
-        316.179046630859,
+        311.641448974609,
         152.983856201172,
-        255.919387817383
+        252.796325683594
       ]
     },
     "Scenery/Light_69": {
+      "beam_brightness": 0.55,
+      "beam_length": 2.4336,
+      "beam_softness": 0.65,
+      "beam_width": 0.9,
+      "day_brightness": 0.2,
       "deleted": false,
       "energy": 1.0,
       "flare_size": 4.0,
@@ -1436,12 +1443,15 @@
       "flash_on_time": 0.5,
       "kind": "light",
       "light_mode": "flashing",
+      "light_type": "beacon",
       "model": "",
       "name": "Light_69",
       "pulse_minimum": 0.2,
       "pulse_period": 2.4,
       "range": 1.0,
       "solid": false,
+      "sweep_angle": 45.0,
+      "sweep_speed": 15.0,
       "transform": [
         1.0,
         0.0,
@@ -1452,13 +1462,13 @@
         0.0,
         0.0,
         1.0,
-        316.179046630859,
-        152.983856201172,
-        255.919387817383
+        311.830230712891,
+        153.464202880859,
+        253.519882202148
       ]
     },
     "Scenery/Light_70": {
-      "deleted": false,
+      "deleted": true,
       "energy": 1.0,
       "flare_size": 4.0,
       "flash_off_time": 1.0,
@@ -1487,7 +1497,7 @@
       ]
     },
     "Scenery/Light_71": {
-      "deleted": false,
+      "deleted": true,
       "energy": 1.0,
       "flare_size": 4.0,
       "flash_off_time": 1.0,
@@ -9656,78 +9666,6 @@
   },
   "object_groups": [
     {
-      "count": 10.0,
-      "id": "entity_260326431",
-      "name": "Aquatraz mines 1",
-      "position": [
-        335.930419921875,
-        157.180709838867,
-        188.578002929688
-      ],
-      "radius": 6.0,
-      "type": "floating_mine"
-    },
-    {
-      "count": 10.0,
-      "id": "entity_92552918",
-      "name": "Aquatraz mines 2",
-      "position": [
-        327.279602050781,
-        157.180709838867,
-        184.130493164063
-      ],
-      "radius": 6.0,
-      "type": "floating_mine"
-    },
-    {
-      "count": 10.0,
-      "id": "entity_109712683",
-      "name": "Aquatraz mines 4",
-      "position": [
-        345.004913330078,
-        158.991851806641,
-        200.971862792969
-      ],
-      "radius": 6.0,
-      "type": "floating_mine"
-    },
-    {
-      "count": 10.0,
-      "id": "entity_51561402",
-      "name": "Aquatraz mines 3",
-      "position": [
-        348.198028564453,
-        158.991851806641,
-        193.147277832031
-      ],
-      "radius": 6.0,
-      "type": "floating_mine"
-    },
-    {
-      "count": 10.0,
-      "id": "entity_73894838",
-      "name": "Aquatraz mines 5",
-      "position": [
-        335.268341064453,
-        158.991851806641,
-        198.69775390625
-      ],
-      "radius": 6.0,
-      "type": "floating_mine"
-    },
-    {
-      "count": 10.0,
-      "id": "entity_98777326",
-      "name": "Aquatraz mines 6",
-      "position": [
-        326.869476318359,
-        158.991851806641,
-        194.942504882813
-      ],
-      "radius": 6.0,
-      "type": "floating_mine"
-    },
-    {
       "count": 1.0,
       "id": "original_clam_0",
       "initial_delay": 0.0,
@@ -9893,7 +9831,7 @@
     {
       "appearance": "sprite",
       "behavior": "mine",
-      "blast_force": 25.0,
+      "blast_force": 600.0,
       "damage": 17.5,
       "damage_sustain": 0.1,
       "delivery_commodity": "",
@@ -10208,14 +10146,20 @@
   "seed": 8675309.0,
   "species": [
     {
+      "animation_speed": 1.0,
+      "attack_interval": 1.0,
       "attack_range": 7.0,
-      "count_max": 18.0,
-      "count_min": 4.0,
+      "bite_damage": 5.0,
+      "bite_range": 0.15,
+      "count_max": 20.0,
+      "count_min": 10.0,
       "flee_range": 3.5,
+      "food_role": "prey",
       "group_behaviour": "shoaling",
       "groups_max": 24.0,
       "groups_min": 12.0,
-      "health": 5.0,
+      "has_zapper": false,
+      "health": 15.0,
       "id": "angel",
       "mobility": "swimming",
       "model": "ANGEL",
@@ -10231,7 +10175,9 @@
       "startle_duration": 0.3,
       "startle_speed_multiplier": 5.0,
       "startle_turn_speed": 720.0,
-      "turn_speed": 60.0
+      "turn_speed": 60.0,
+      "zapper_damage_per_tick": 0.1,
+      "zapper_range": 1.0
     },
     {
       "animation_speed": 1.0,
@@ -10299,14 +10245,14 @@
       "bite_damage": 5.0,
       "bite_range": 0.15,
       "count_max": 30.0,
-      "count_min": 10.0,
+      "count_min": 20.0,
       "flee_range": 3.0,
       "food_role": "prey",
       "group_behaviour": "shoaling",
       "groups_max": 24.0,
       "groups_min": 12.0,
       "has_zapper": false,
-      "health": 2.0,
+      "health": 6.0,
       "id": "silver",
       "mobility": "swimming",
       "model": "SILVER",
@@ -10317,7 +10263,7 @@
       "roam_radius": 10.0,
       "scale_max": 100.0,
       "scale_min": 60.0,
-      "spawn_chance": 40.0,
+      "spawn_chance": 60.0,
       "speed": 1.3,
       "startle_duration": 0.3,
       "startle_speed_multiplier": 5.0,
@@ -10340,7 +10286,7 @@
       "groups_max": 12.0,
       "groups_min": 6.0,
       "has_zapper": false,
-      "health": 20.0,
+      "health": 60.0,
       "id": "stingray",
       "mobility": "swimming",
       "model": "STINGRAY",
@@ -10399,7 +10345,7 @@
       "groups_max": 12.0,
       "groups_min": 3.0,
       "has_zapper": false,
-      "health": 15.0,
+      "health": 45.0,
       "id": "angler",
       "mobility": "swimming",
       "model": "ANGLER",
@@ -10460,7 +10406,7 @@
       "group_behaviour": "solitary",
       "groups_max": 12.0,
       "groups_min": 6.0,
-      "health": 100.0,
+      "health": 300.0,
       "id": "entity_239941389",
       "mobility": "swimming",
       "model": "TURTLE",
@@ -10525,7 +10471,7 @@
       "groups_max": 12.0,
       "groups_min": 6.0,
       "has_zapper": false,
-      "health": 20.0,
+      "health": 60.0,
       "id": "entity_221936598",
       "mobility": "crawling",
       "model": "CRAB",
@@ -10661,7 +10607,7 @@
       "group_behaviour": "shoaling",
       "groups_max": 8.0,
       "groups_min": 3.0,
-      "health": 15.0,
+      "health": 45.0,
       "id": "entity_35995130",
       "mobility": "swimming",
       "model": "BIGEEL",

@@ -103,18 +103,7 @@ func _hit_feedback(hit: Dictionary) -> void:
 func _show_weapon(start: Vector3, end: Vector3) -> void:
 	if weapon == null:
 		# Share the player's animated, repeating crackle ribbon without its input or mounting logic.
-		weapon = load("res://submarine_weapons.gd").new()
-		weapon.pilot = fish; weapon.frames = fish.population.zapper_frames
-		weapon.settings.beam_width = 0.08
-		weapon.beam = MeshInstance3D.new(); weapon.beam.top_level = true; weapon.beam.mesh = ArrayMesh.new()
-		weapon.beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		weapon.material = StandardMaterial3D.new()
-		weapon.material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		weapon.material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		weapon.material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		weapon.material.cull_mode = BaseMaterial3D.CULL_DISABLED; weapon.material.texture_repeat = true
-		weapon.beam.material_override = weapon.material; weapon.add_child(weapon.beam)
-		weapon.impact = Sprite3D.new(); weapon.add_child(weapon.impact); weapon.impact.hide()
+		weapon = preload("res://submarine_weapons.gd").create_arc(fish,fish.population.zapper_frames)
 		add_child(weapon); weapon.set_physics_process(false)
 		sound = AudioStreamPlayer3D.new(); sound.stream = fish.population.zapper_sound
 		sound.volume_db = -16; sound.unit_size = 3; sound.max_distance = 30; add_child(sound)

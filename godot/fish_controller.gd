@@ -27,6 +27,7 @@ var flee_range := 4.0
 var mobility := "swimming"
 var population: Node3D
 var group_members: Array[Node3D] = []
+var shoal := preload("res://wildlife_shoal.gd").new()
 var defense_timer := 0.0
 var startle_duration := 0.3
 var startle_speed_multiplier := 2.8
@@ -44,7 +45,13 @@ var crawl_turn_sign := 1.0
 var crawl_probe_timer := 0.0
 var playback_rate := ANIMATION_SPEED
 var animation_speed := 1.0
-var visual_animation_enabled := true
+var animation_interval := 0.0
+var animation_elapsed := 0.0
+var animation_refresh := true
+var visual_animation_enabled := true:
+	set(value):
+		if value and not visual_animation_enabled: animation_refresh = true
+		visual_animation_enabled = value
 var offscreen_delta := 0.0
 var ground_initialized := false
 var walks_sideways := false
@@ -109,8 +116,12 @@ func _ready() -> void:
 	meshes = animation.meshes
 	animation.apply(animation_time)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if animation == null or not is_physics_processing() or not visual_animation_enabled: return
+	animation_elapsed += delta
+	if not animation_refresh and animation_elapsed < animation_interval: return
+	animation_refresh = false
+	animation_elapsed = fmod(animation_elapsed,animation_interval) if animation_interval > 0.0 else 0.0
 	var between_ticks := Engine.get_physics_interpolation_fraction() / float(Engine.physics_ticks_per_second)
 	animation.apply(animation_time + between_ticks * playback_rate)
 	_update_lure()
@@ -232,9 +243,16 @@ func setup(visual: Node3D, point: Vector3, world_bounds: AABB, surface: float, b
 	animation = CreatureAnimation.new(visual)
 	meshes = animation.meshes
 	_setup_creature_details(visual)
+	_fit_collision(visual,collider)
 	_choose_goal()
 	animation.apply(animation_time)
 	_update_orientation()
+
+func _fit_collision(visual: Node3D, collider: CollisionShape3D) -> void:
+	# The diagonal radius remains a conservative spawning/visibility bound.
+	# Physical contacts and weapon hits follow the model's convex silhouette.
+	var hull := preload("res://model_hitbox.gd").fitted_hull(visual)
+	if hull != null: collider.shape = hull
 
 func _setup_creature_details(visual: Node3D) -> void:
 	var model_id := str(visual.get_meta("asset_id","model." + str(visual.get_meta("asset_source","")).get_file().get_basename())).to_lower()
@@ -310,21 +328,9 @@ func _physics_process(delta: float) -> void:
 	if turn_timer <= 0.0 or goal_distance < arrival_distance: _choose_goal()
 	var desired := (goal - position).normalized()
 	if group_behaviour != "solitary" and not group_members.is_empty():
-		var center := Vector3.ZERO
-		var alignment := Vector3.ZERO
-		var separation := Vector3.ZERO
-		var active_members := 0
-		var shared_goal := goal
-		for other in group_members:
-			if other.dead or not other.get_meta("wildlife_awake",true): continue
-			if active_members == 0: shared_goal = other.goal
-			active_members += 1
-			center += other.position
-			alignment += other.direction
-			var away: Vector3 = position - other.position
-			if away.length_squared() > 0.001 and away.length() < radius * 3.0: separation += away.normalized()
-		center /= maxi(1,active_members)
-		desired = ((shared_goal - position).normalized() + (center - position).normalized() * 0.6 + separation * 1.5 + alignment.normalized() * (1.0 if group_behaviour == "schooling" else 0.0)).normalized()
+		shoal.refresh(group_members)
+		var separation := shoal.separation(position,radius)
+		desired = ((shoal.goal - position).normalized() + (shoal.center - position).normalized() * 0.6 + separation * 1.5 + shoal.alignment * (1.0 if group_behaviour == "schooling" else 0.0)).normalized()
 	defense_timer = maxf(0.0, defense_timer - delta)
 	startle_timer = maxf(0.0, startle_timer - delta)
 	startle_cooldown = maxf(0.0, startle_cooldown - delta)
@@ -373,7 +379,6 @@ func _physics_process(delta: float) -> void:
 	_steer(desired, delta, maxf(turn_speed, startle_turn_speed) if startle_timer > 0.0 else turn_speed)
 	playback_rate = animation_speed * (walking_animation_rate if mobility == "crawling" else ANIMATION_SPEED) * (speed / maxf(swim_speed, 0.001) if escaping else 1.0)
 	animation_time += delta * playback_rate
-	if animation != null and visual_animation_enabled: animation.apply(animation_time)
 	velocity = direction * speed + pushed_velocity
 	pushed_velocity = pushed_velocity.move_toward(Vector3.ZERO,delta * 8.0)
 	if mobility == "crawling": _move_crawler(delta,speed)

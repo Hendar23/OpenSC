@@ -29,6 +29,8 @@ var details: Label
 var asset_title: Label
 var folder_dialog: FileDialog
 var auto_rotate: CheckButton
+var hitbox_button: CheckButton
+var hitbox_preview: MeshInstance3D
 var animation_button: Button
 var animation_speed: HSlider
 var animation_speed_label: Label
@@ -172,6 +174,12 @@ func _build_interface() -> void:
 	frame.focus_mode = Control.FOCUS_NONE
 	frame.pressed.connect(_frame_model)
 	toolbar.add_child(frame)
+	hitbox_button = CheckButton.new()
+	hitbox_button.text = "Hitbox"
+	hitbox_button.focus_mode = Control.FOCUS_NONE
+	hitbox_button.tooltip_text = "Show the fitted model hull used by swimming wildlife. Other object types may use specialised gameplay shapes."
+	hitbox_button.toggled.connect(_show_hitbox)
+	toolbar.add_child(hitbox_button)
 	auto_rotate = CheckButton.new()
 	auto_rotate.text = "Auto orbit"
 	auto_rotate.focus_mode = Control.FOCUS_NONE
@@ -409,6 +417,8 @@ func _select_asset(index: int) -> void:
 		return
 	model = loaded
 	stage.add_child(model)
+	hitbox_button.visible = true
+	_show_hitbox(hitbox_button.button_pressed)
 	_collect_animated_meshes(model)
 	animation_playing = creature_animation.has_animation()
 	_update_animation_controls()
@@ -419,6 +429,9 @@ func _select_asset(index: int) -> void:
 	if model.has_meta("asset_mod"): details.text += "\nReplacement from: " + str(model.get_meta("asset_mod"))
 
 func _clear_selection() -> void:
+	if hitbox_preview != null:
+		hitbox_preview.free(); hitbox_preview = null
+	hitbox_button.hide()
 	creature_animation = null
 	animated_meshes.clear()
 	animation_time = 0.0
@@ -435,6 +448,32 @@ func _clear_selection() -> void:
 	animation_bar.visible = false
 	dragging = false
 	_update_animation_controls()
+
+func _show_hitbox(enabled: bool) -> void:
+	if model == null: return
+	if enabled and hitbox_preview == null:
+		var hull := preload("res://model_hitbox.gd").fitted_hull(model)
+		if hull == null: return
+		hitbox_preview = MeshInstance3D.new()
+		hitbox_preview.name = "HitboxPreview"
+		var faces := hull.get_debug_mesh().get_faces()
+		var lines := PackedVector3Array()
+		for triangle in range(0,faces.size(),3):
+			for edge in range(3):
+				lines.append(faces[triangle + edge])
+				lines.append(faces[triangle + (edge + 1) % 3])
+		var arrays := []; arrays.resize(Mesh.ARRAY_MAX); arrays[Mesh.ARRAY_VERTEX] = lines
+		var wire := ArrayMesh.new(); wire.add_surface_from_arrays(Mesh.PRIMITIVE_LINES,arrays)
+		hitbox_preview.mesh = wire
+		hitbox_preview.set_meta("hitbox_points",hull.points)
+		hitbox_preview.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.albedo_color = Color(0.1,1.0,0.65)
+		material.no_depth_test = true
+		hitbox_preview.material_override = material
+		stage.add_child(hitbox_preview)
+	if hitbox_preview != null: hitbox_preview.visible = enabled
 
 func _frame_model() -> void:
 	if model == null: return

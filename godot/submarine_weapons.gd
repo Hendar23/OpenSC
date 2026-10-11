@@ -31,6 +31,22 @@ var last_hit: Node3D
 var hit_blood: Node3D
 var blood_cooldown := 0.0
 
+# Environmental and wildlife zappers share the player's crackle renderer.
+static func create_arc(owner_body: Node3D, textures: Array[Texture2D]) -> Node3D:
+	var arc = load("res://submarine_weapons.gd").new()
+	arc.pilot = owner_body; arc.frames = textures
+	arc.beam = MeshInstance3D.new(); arc.beam.top_level = true; arc.beam.mesh = ArrayMesh.new()
+	arc.beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	arc.material = StandardMaterial3D.new()
+	arc.material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	arc.material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	arc.material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	arc.material.cull_mode = BaseMaterial3D.CULL_DISABLED; arc.material.texture_repeat = true
+	arc.beam.material_override = arc.material; arc.add_child(arc.beam); arc.beam.hide()
+	arc.impact = Sprite3D.new(); arc.add_child(arc.impact); arc.impact.hide()
+	arc.set_physics_process(false)
+	return arc
+
 func setup(player: Node3D, folder: String, view: Camera3D, catalogue: Dictionary) -> void:
 	pilot = player; camera = view; name = "MountedWeapons"
 	if catalogue.get("tables",{}).has("weapon_tuning"):

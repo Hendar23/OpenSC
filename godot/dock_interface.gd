@@ -38,7 +38,13 @@ var shop_offer_id := "shield"
 var slot_buttons: Array[Button] = []
 var selection_dot: Texture2D
 var empty_dot: Texture2D
+var commodity_dot: Texture2D
+var commodity_empty_dot: Texture2D
 var mount_dot: Control
+var equipment_preview: TextureRect
+# Original 0x4407b0 uses the tables at 0x4e3d80/0x4e3e20.
+# Coordinates below are relative to 2SUB's original (201,66) image origin.
+const MOUNT_POINTS := {3:[Vector2(196,78)],5:[Vector2(116,48),Vector2(234,40)],9:[Vector2(217,63)]}
 var info_dialog: Control
 var info_done: Button
 var info_return_focus: Control
@@ -52,6 +58,13 @@ var controller_button: Button
 var rebuilding := false
 var dock_race := 1
 var art_cache := {}
+var mail_view := "welcome"
+var selected_mail := ""
+var mail_list: ItemList
+var mail_body: RichTextLabel
+var mail_button: Button
+var mail_rows: Array = []
+var mail_city := ""
 
 class DialogInput extends Node:
 	var handler: Callable
@@ -139,6 +152,9 @@ func button(action: String, area: Rect2, text: String = "", payload: Dictionary 
 		elif action == "commodity_info": _commodity_info()
 		elif action == "equipment_slot": action_requested.emit(action,{"slot":payload.slot,"item":selected_hold})
 		elif action == "use_repair": action_requested.emit(action,{"item":selected_hold})
+		elif action == "mailbox":
+			mail_view = "welcome" if mail_view == "list" else "list"
+			rebuild(); mail_button.grab_focus()
 		else: action_requested.emit(action,payload))
 	return node
 func _button_texture(relative: String) -> Texture2D:
@@ -241,6 +257,7 @@ func open(next_page: String = "home") -> void:
 	status = ""; show(); rebuild(true); Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 func rebuild(new_page: bool = false) -> void:
 	rebuilding = true; active_button = null
+	mail_list = null; mail_body = null; mail_button = null
 	var focused := get_viewport().gui_get_focus_owner()
 	var focus_name := str(focused.name) if not new_page and focused != null and layout.is_ancestor_of(focused) else ""
 	# A button may still be emitting pressed while its page changes.
@@ -249,6 +266,8 @@ func rebuild(new_page: bool = false) -> void:
 		layout.remove_child(child); child.queue_free()
 	button_nodes.clear()
 	var data: Dictionary = model.call() if model.is_valid() else {}
+	if mail_city != str(data.get("city_id","")):
+		mail_city = str(data.get("city_id","")); mail_view = "welcome"; selected_mail = ""
 	loaded_city = str(data.get("city","Dock"))
 	var race := int(data.get("race",1)); dock_race = race; var prefix := "P" if race == 2 else "R" if race == 4 else "B"
 	text_colour = Color(0.2,0.95,1) if race == 2 else Color(1,0.8,0.15)
@@ -275,8 +294,7 @@ func rebuild(new_page: bool = false) -> void:
 		if entry is Dictionary and entry.get("action") is String: button(entry.action,rect(entry.get("rect")),str(entry.get("text","")))
 	match page:
 		"home":
-			var welcome := str(data.get("welcome",""))
-			_welcome(welcome if not welcome.is_empty() else "Welcome to %s." % loaded_city,rect(pages.home.welcome))
+			_mail_panel(data)
 			_status(data,rect(pages.home.status))
 		"equipment":
 			_equipment_shop(data)
@@ -303,11 +321,89 @@ func rebuild(new_page: bool = false) -> void:
 	if restored != null: restored.grab_focus()
 	elif page in ["save","load"]:
 		(slot_controls[0] if not slot_controls.is_empty() else button_nodes[0]).grab_focus()
-	elif page in ["equipment","goods"] and sale_list != null: sale_list.grab_focus()
 	elif not button_nodes.is_empty(): button_nodes[0].grab_focus()
 	if info_dialog.visible:
 		layout.move_child(info_dialog,-1); info_done.grab_focus()
 	rebuilding = false
+
+func _mail_texture(name: String) -> Texture2D:
+	var key := "mail:" + name
+	if not art_cache.has(key):
+		var source := _button_texture(name)
+		if source == null: return null
+		var image := source.get_image(); image.convert(Image.FORMAT_RGBA8)
+		# These sprites use pure red as a colour key, rather than an alpha channel.
+		for y in range(image.get_height()):
+			for x in range(image.get_width()):
+				var colour := image.get_pixel(x,y)
+				if colour.r > 0.95 and colour.g < 0.05 and colour.b < 0.05: image.set_pixel(x,y,Color.TRANSPARENT)
+		art_cache[key] = ImageTexture.create_from_image(image)
+	return art_cache[key]
+
+func _mail_panel(data: Dictionary) -> void:
+	mail_rows = data.get("mail",[])
+	# Original dock home (0x41e8d0) only offers mail when there is mail,
+	# and omits it at Aquatraz and the Refinery.
+	if mail_rows.is_empty() or str(data.get("city_id","")) in ["5","6"]:
+		mail_view = "welcome"
+		var welcome := str(data.get("welcome",""))
+		_welcome(welcome if not welcome.is_empty() else "Welcome to %s." % loaded_city,rect(pages.home.welcome))
+		return
+	var prefix := "P" if dock_race == 2 else "B" if dock_race == 1 else ""
+	mail_button = button("mailbox",Rect2(100,203,112,26),"Mailbox")
+	var normal := _mail_texture("ENGLISH/" + prefix + "MAILN")
+	if normal != null:
+		mail_button.text = ""
+		mail_button.normal_art.append({"texture":normal,"rect":Rect2(Vector2.ZERO,normal.get_size())})
+		for pair in [[mail_button.highlight_art,"MAILL"],[mail_button.held_art,"MAILL2"]]:
+			var image := _mail_texture("ENGLISH/" + prefix + pair[1])
+			if image != null: pair[0].append({"texture":image,"rect":Rect2(Vector2.ZERO,image.get_size())})
+	mail_button.focus_neighbor_bottom = mail_button.get_path_to(button_nodes[0])
+	button_nodes[0].focus_neighbor_top = button_nodes[0].get_path_to(mail_button)
+	var unread := 0
+	for row in mail_rows:
+		if not row.get("read",false): unread += 1
+	if unread > 0:
+		var count := label("%d Unread %s" % [unread,"Mail" if unread == 1 else "Mails"],Rect2(289,218,220,17),12)
+		count.name = "UnreadMail"
+		for position in [Vector2(269,218),Vector2(232,12)]:
+			var envelope := TextureRect.new(); envelope.texture = _mail_texture(prefix + "LETTERL")
+			envelope.position = position; envelope.mouse_filter = Control.MOUSE_FILTER_IGNORE; layout.add_child(envelope)
+	if mail_view == "welcome":
+		var welcome := str(data.get("welcome",""))
+		_welcome(welcome if not welcome.is_empty() else "Welcome to %s." % loaded_city,Rect2(100,81,412,119))
+	elif mail_view == "list":
+		mail_list = _item_list("Mailbox",Rect2(100,81,412,120))
+		for row in mail_rows:
+			mail_list.add_item(("# " if row.get("read",false) else "+ ") + str(row.subject))
+			var index := mail_list.item_count - 1
+			mail_list.set_item_metadata(index,row.id)
+			if str(row.id) == selected_mail: mail_list.select(index)
+		mail_list.item_selected.connect(_read_mail)
+		mail_list.item_activated.connect(_read_mail)
+		mail_list.focus_neighbor_bottom = mail_list.get_path_to(mail_button)
+		mail_button.focus_neighbor_top = mail_button.get_path_to(mail_list)
+		if mail_rows.is_empty(): label("No mail.",Rect2(100,81,412,24),13)
+	else:
+		var message := {}
+		for row in mail_rows:
+			if str(row.id) == selected_mail: message = row; break
+		label(str(message.get("subject","")),Rect2(100,81,412,21),13).name = "MailSubject"
+		mail_body = RichTextLabel.new(); mail_body.name = "MailBody"
+		mail_body.text = str(message.get("body","")); mail_body.bbcode_enabled = false
+		mail_body.position = Vector2(100,102); mail_body.size = Vector2(412,98)
+		mail_body.add_theme_font_size_override("normal_font_size",13); mail_body.add_theme_color_override("default_color",text_colour)
+		mail_body.add_theme_stylebox_override("focus",StyleBoxEmpty.new())
+		mail_body.focus_mode = Control.FOCUS_ALL; layout.add_child(mail_body)
+		mail_body.focus_neighbor_bottom = mail_body.get_path_to(mail_button)
+		mail_button.focus_neighbor_top = mail_button.get_path_to(mail_body)
+
+func _read_mail(index: int) -> void:
+	if index < 0 or index >= mail_rows.size(): return
+	selected_mail = str(mail_rows[index].id)
+	action_requested.emit("read_mail",{"id":selected_mail})
+	_play_menu_sound("activate"); mail_view = "read"; rebuild()
+	mail_body.grab_focus()
 
 func _welcome(text: String, area: Rect2) -> void:
 	var scroll := ScrollContainer.new(); scroll.name = "CityWelcome"
@@ -352,12 +448,17 @@ func _equipment_shop(data: Dictionary) -> void:
 	label(status,Rect2(210,184,230,13),10,true)
 	# The original two-view submarine illustration shares the slot highlight.
 	var picture := TextureRect.new(); picture.texture = texture("texture.ui_equipment_sub","INTROTEX/2SUB.BMP")
+	equipment_preview = picture
 	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var area := rect(settings.preview); picture.position = area.position; picture.size = area.size; layout.add_child(picture)
-	mount_dot = Panel.new(); mount_dot.name = "MountPosition"
-	var dot := StyleBoxFlat.new(); dot.bg_color = Color.YELLOW; dot.set_corner_radius_all(4)
-	mount_dot.add_theme_stylebox_override("panel",dot); mount_dot.size = Vector2(7,7); mount_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE; layout.add_child(mount_dot)
+	mount_dot = Control.new(); mount_dot.name = "MountPosition"
+	mount_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE; layout.add_child(mount_dot)
+	for index in range(2):
+		var marker := Panel.new(); marker.name = "Marker%d" % index
+		var dot := StyleBoxFlat.new(); dot.bg_color = Color.YELLOW; dot.set_corner_radius_all(4)
+		marker.add_theme_stylebox_override("panel",dot); marker.size = Vector2(7,7)
+		marker.mouse_filter = Control.MOUSE_FILTER_IGNORE; mount_dot.add_child(marker)
 	var use := button("use_repair",area); use.name = "UseShieldRepair"
 	slot_buttons.clear()
 	var installed: Dictionary = data.get("installed",{})
@@ -387,6 +488,18 @@ func _equipment_shop(data: Dictionary) -> void:
 		node.focus_neighbor_bottom = node.get_path_to(slot_buttons[index + 5] if index < 5 else button_nodes[0])
 	sale_list.focus_neighbor_bottom = sale_list.get_path_to(buy); hold_list.focus_neighbor_bottom = hold_list.get_path_to(sell)
 	sale_list.focus_neighbor_right = sale_list.get_path_to(slot_buttons[0]); hold_list.focus_neighbor_left = hold_list.get_path_to(slot_buttons[4])
+	var done := layout.get_node("home") as Button
+	var goods := layout.get_node("goods") as Button
+	done.focus_neighbor_right = done.get_path_to(goods)
+	goods.focus_neighbor_left = goods.get_path_to(done)
+	for pair in [[sale_info,buy,sale_list,done],[info,sell,hold_list,goods]]:
+		var first: Control = pair[0]; var second: Control = pair[1]
+		first.focus_neighbor_right = first.get_path_to(second)
+		second.focus_neighbor_left = second.get_path_to(first)
+		for control: Control in [first,second]:
+			control.focus_neighbor_top = control.get_path_to(pair[2])
+			control.focus_neighbor_bottom = control.get_path_to(pair[3])
+		pair[3].focus_neighbor_top = pair[3].get_path_to(first)
 	_update_shop_selection(data)
 
 func _commodity_shop(data: Dictionary) -> void:
@@ -394,8 +507,8 @@ func _commodity_shop(data: Dictionary) -> void:
 	var settings: Dictionary = pages.goods
 	sale_list = _item_list("Commodities",rect(settings.list))
 	sale_list.add_theme_constant_override("v_separation",0)
-	sale_list.fixed_icon_size = Vector2i(1,16)
-	var spacer_image := Image.create(1,16,false,Image.FORMAT_RGBA8)
+	sale_list.fixed_icon_size = Vector2i(8,16)
+	var spacer_image := Image.create(8,16,false,Image.FORMAT_RGBA8)
 	spacer_image.fill(Color.TRANSPARENT)
 	var spacer := ImageTexture.create_from_image(spacer_image)
 	var index := 0
@@ -412,7 +525,7 @@ func _commodity_shop(data: Dictionary) -> void:
 		index += 1
 	sale_list.item_selected.connect(func(row: int) -> void: selected_commodity = str(sale_list.get_item_metadata(row)); _update_commodity_selection(model.call()))
 	if sale_list.item_count > 0 and sale_list.get_selected_items().is_empty():
-		sale_list.select(0); selected_commodity = str(sale_list.get_item_metadata(0))
+		sale_list.select(0)
 	var buy := button("buy_commodity",rect(settings.buy)); buy.name = "BuyCommodity"
 	var sell := button("sell_commodity",rect(settings.sell)); sell.name = "SellCommodity"
 	var info := button("commodity_info",rect(settings.info)); info.name = "CommodityInfo"
@@ -450,24 +563,52 @@ func _update_commodity_selection(data: Dictionary) -> void:
 	(layout.get_node("BuyCommodity") as Button).disabled = int(offer.get("buy_price",0)) <= 0 or int(offer.get("stock",0)) <= 0 or int(data.get("status",{}).get("credits",0)) < int(offer.get("buy_price",0))
 	(layout.get_node("SellCommodity") as Button).disabled = int(offer.get("sell_price",0)) <= 0 or int(data.get("cargo",{}).get(selected_commodity,0)) <= 0
 	(layout.get_node("CommodityInfo") as Button).disabled = offer.is_empty()
+	_ensure_selection_dot()
+	if commodity_dot == null:
+		var dot_image := Image.create(8,16,false,Image.FORMAT_RGBA8); dot_image.fill(Color.TRANSPARENT)
+		commodity_empty_dot = ImageTexture.create_from_image(dot_image)
+		dot_image.blit_rect(selection_dot.get_image(),Rect2i(0,0,8,8),Vector2i(0,4))
+		commodity_dot = ImageTexture.create_from_image(dot_image)
+	for index in sale_list.item_count:
+		sale_list.set_item_icon(index,commodity_dot if str(sale_list.get_item_metadata(index)) == selected_commodity else commodity_empty_dot)
 
 func _mount_highlight(slot: int) -> void:
-	if mount_dot == null: return
-	mount_dot.visible = slot in [3,5,9]
-	var area := rect(pages.equipment.preview)
-	var points := {9:Vector2(0.82,0.4),5:Vector2(0.77,0.25),3:Vector2(0.83,0.74)}
-	mount_dot.position = area.position + area.size * points.get(slot,Vector2.ZERO) - Vector2(3.5,3.5)
+	if not is_instance_valid(mount_dot) or not is_instance_valid(equipment_preview): return
+	mount_dot.visible = MOUNT_POINTS.has(slot)
+	if not mount_dot.visible or equipment_preview.texture == null: return
+	# Follow KEEP_ASPECT_CENTERED's drawn image, including its letterboxing.
+	var image_size := equipment_preview.texture.get_size()
+	var fit := minf(equipment_preview.size.x / image_size.x,equipment_preview.size.y / image_size.y)
+	var drawn_size := image_size * fit
+	mount_dot.position = equipment_preview.position + (equipment_preview.size - drawn_size) * 0.5
+	mount_dot.size = drawn_size
+	var points: Array = MOUNT_POINTS[slot]
+	for index in range(mount_dot.get_child_count()):
+		var marker := mount_dot.get_child(index) as Control
+		marker.visible = index < points.size()
+		if marker.visible: marker.position = points[index] / Vector2(245,92) * drawn_size - marker.size * 0.5
 
 func _item_list(node_name: String, area: Rect2) -> ItemList:
 	var list := ItemList.new(); list.name = node_name; list.position = area.position; list.size = area.size
 	list.allow_reselect = true; list.fixed_icon_size = Vector2i(8,8); list.add_theme_font_size_override("font_size",11)
 	list.add_theme_constant_override("v_separation",4)
-	list.add_theme_color_override("font_color",text_colour); list.add_theme_color_override("font_selected_color",Color.WHITE)
+	list.add_theme_color_override("font_color",text_colour); list.add_theme_color_override("font_selected_color",text_colour)
 	list.add_theme_stylebox_override("panel",StyleBoxEmpty.new()); list.add_theme_stylebox_override("focus",StyleBoxEmpty.new())
 	var selected := StyleBoxFlat.new(); selected.bg_color = Color.TRANSPARENT
 	list.add_theme_stylebox_override("selected",selected); list.add_theme_stylebox_override("selected_focus",selected)
+	# The ItemList selection is the navigation cursor, not the committed item.
+	list.focus_entered.connect(func() -> void: list.add_theme_color_override("font_selected_color",Color.WHITE))
+	list.focus_exited.connect(func() -> void: list.add_theme_color_override("font_selected_color",text_colour))
 	layout.add_child(list); return list
 
+func _ensure_selection_dot() -> void:
+	if selection_dot != null: return
+	var image := Image.create(8,8,false,Image.FORMAT_RGBA8); image.fill(Color.TRANSPARENT)
+	empty_dot = ImageTexture.create_from_image(image)
+	for y in range(8):
+		for x in range(8):
+			if Vector2(x - 3.5,y - 3.5).length() <= 3.5: image.set_pixel(x,y,Color.YELLOW)
+	selection_dot = ImageTexture.create_from_image(image)
 
 func _update_shop_selection(data: Dictionary) -> void:
 	var offers: Dictionary = data.get("offers",{"shield":data.get("repair_offer",{})})
@@ -482,19 +623,15 @@ func _update_shop_selection(data: Dictionary) -> void:
 	layout.get_node("UseShieldRepair").disabled = selected_hold not in ["shield","hullstr","radoff"] or not preload("res://equipment_shop.gd").upgrade_available(data,selected_hold)
 	layout.get_node("PurchasePrice").text = "Cost %d" % int(sale.price) if not sale.is_empty() else ""
 	layout.get_node("ResalePrice").text = "SellPrice %d" % int(held.sell_price) if not held.is_empty() else ""
-	if selection_dot == null:
-		var image := Image.create(8,8,false,Image.FORMAT_RGBA8); image.fill(Color.TRANSPARENT)
-		empty_dot = ImageTexture.create_from_image(image)
-		for y in range(8):
-			for x in range(8):
-				if Vector2(x - 3.5,y - 3.5).length() <= 3.5: image.set_pixel(x,y,Color.YELLOW)
-		selection_dot = ImageTexture.create_from_image(image)
+	_ensure_selection_dot()
 	for list in [sale_list,hold_list]:
+		var copies := {}
 		for index in range(list.item_count):
 			var id := str(list.get_item_metadata(index))
 			var offer: Dictionary = offers.get(id,{})
 			var number := int(data.get("hold",{}).get(id,0))
-			var chosen: bool = selected_sale == id if list == sale_list else list.get_selected_items().has(index)
+			var copy := int(copies.get(id,0)); copies[id] = copy + 1
+			var chosen: bool = selected_sale == id if list == sale_list else selected_hold == id and copy == selected_hold_copy
 			list.set_item_icon(index,selection_dot if chosen else empty_dot)
 			list.set_item_text(index,str(offer.get("name",id)) + (" ×%d" % number if list == hold_list and number > 1 and id != "shield" else ""))
 	var slot: int = held.get("slot",0)
@@ -611,6 +748,15 @@ func _input(event: InputEvent) -> void:
 		if visible and not held_button.disabled: held_button.pressed.emit()
 		get_viewport().set_input_as_handled(); return
 	if not visible or name_dialog.visible or overwrite_dialog.visible: return
+	if page == "home" and mail_view != "welcome" and Bindings.pressed(event,"menu_cancel"):
+		mail_view = "list" if mail_view == "read" else "welcome"
+		rebuild(); mail_button.grab_focus(); get_viewport().set_input_as_handled(); return
+	if page == "home" and mail_view == "read" and get_viewport().gui_get_focus_owner() == mail_body:
+		if Bindings.pressed(event,"menu_up") or Bindings.pressed(event,"menu_down"):
+			mail_body.get_v_scroll_bar().value += -36 if Bindings.pressed(event,"menu_up") else 36
+			get_viewport().set_input_as_handled(); return
+		if Bindings.pressed(event,"menu_accept") or Bindings.pressed(event,"menu_right") or Bindings.pressed(event,"menu_left"):
+			mail_button.grab_focus(); get_viewport().set_input_as_handled(); return
 	if info_dialog.visible:
 		if Bindings.pressed(event,"menu_cancel"): _close_item_info(); get_viewport().set_input_as_handled()
 		elif Bindings.pressed(event,"menu_accept") and not is_instance_valid(controller_button):
@@ -630,11 +776,24 @@ func _input(event: InputEvent) -> void:
 			var chosen := item_list.get_selected_items()
 			var index: int = chosen[0] + int(direction[1]) if not chosen.is_empty() else 0
 			if index >= 0 and index < item_list.item_count:
-				item_list.select(index); item_list.ensure_current_is_visible(); item_list.item_selected.emit(index)
+				item_list.select(index); item_list.ensure_current_is_visible()
 			else:
 				var next := item_list.find_valid_focus_neighbor(SIDE_TOP if direction[1] < 0 else SIDE_BOTTOM)
 				if next != null: next.grab_focus()
 			get_viewport().set_input_as_handled(); return
+		if Bindings.pressed(event,"menu_accept"):
+			var chosen := item_list.get_selected_items()
+			if item_list == mail_list:
+				if not chosen.is_empty(): _read_mail(chosen[0])
+			elif item_list.item_count > 0:
+				# Commit the current row before moving to its action buttons.
+				# Keeping the list selection preserves the transaction target.
+				var index: int = chosen[0] if not chosen.is_empty() else 0
+				item_list.select(index); item_list.item_selected.emit(index)
+				var action_name := "CommodityInfo" if page == "goods" else "SaleInfo" if item_list == sale_list else "HoldInfo"
+				var action := layout.get_node(action_name) as Button
+				if not action.disabled: action.grab_focus()
+			get_viewport().set_input_as_handled()
 		return
 	if Bindings.pressed(event,"menu_cancel"):
 		if page == "load": action_requested.emit("close",{})

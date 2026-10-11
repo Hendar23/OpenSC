@@ -39,6 +39,11 @@ func _ready() -> void:
 
 func configure(texture: Texture2D) -> void:
 	material.albedo_texture = texture
+	var model := preload("res://bubble_visual.gd").replacement()
+	if model != null: instances.mesh = model
+	else:
+		var quad := QuadMesh.new(); quad.size = Vector2.ONE; quad.material = material
+		instances.mesh = quad
 
 func clear() -> void:
 	particles.clear()

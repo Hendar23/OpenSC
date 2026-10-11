@@ -100,6 +100,11 @@ func run() -> void:
 	game.object_population._shatter(broken)
 	for body in game.object_population.get_children():
 		if body is Thorium: body.freeze = true
+	var mail_before: Array = game._dock_ui_model().mail
+	check(not mail_before.is_empty(),"Original mailbox available in dock model")
+	var mail_id: String = mail_before[0].id
+	game._dock_ui_action("read_mail",{"id":mail_id})
+	check(game.player_progress.mail.received[mail_id].read,"Dock action marks delivered mail read")
 	var snapshot: Dictionary = game._save_snapshot("Test dock")
 	snapshot.progress.status.hull_strength = 180
 	snapshot.progress.status.radiation_shield = 60
@@ -184,6 +189,7 @@ func run() -> void:
 	for index in range(mini(4,restored_objects.size())):
 		check(preload("res://map_document.gd").decode(restored_objects[index].pose).is_equal_approx(preload("res://map_document.gd").decode(snapshot.objects[index].pose)),"Saved Thorium position restored %d" % index)
 	check(restored,"Saved game reloads")
+	check(game.player_progress.mail.received[mail_id].read,"Mailbox read flags survive full saved-game restoration")
 	check(game.world_root == loaded_world and game.pilot.visual == loaded_sub and game.cockpit_hud.map_data == loaded_map and not game.loading_canvas.visible,"Save loads reuse the existing world, submarine and map renderer without a loading screen")
 	check(not is_instance_valid(debris) and not mine.dead and mine.health == mine.stats.health and mine.visible and mine.collision_layer == 8,"Save loading clears debris and restores detonated mines")
 	check(game.pilot.velocity == Vector3.ZERO and not game.pilot.pending_reset,"Save loading clears motion without a pending spawn teleport")

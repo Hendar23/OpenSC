@@ -58,6 +58,7 @@ static func _import(folder: String, fingerprints: Dictionary) -> Dictionary:
 	for name in ["WEAPTXT.CSV","TRADETXT.CSV"]:
 		if language.has(name): result.tables["equipment_text" if name == "WEAPTXT.CSV" else "commodity_text"] = _csv_table(language[name],INPUTS[1] + ":" + name)
 	if language.has("ENGLISH.TXT"): result.tables["mission_text"] = _mission_text(language["ENGLISH.TXT"])
+	result.tables["mail_messages"] = preload("res://mailbox.gd").import_messages(str(language.get("ENGLISH.TXT","")),csv_rows(str(archive.get("MISSION1.CSV",""))))
 	var file := FileAccess.open(folder.path_join(INPUTS[2]),FileAccess.READ)
 	var tables := Database.decode_database(file.get_buffer(file.get_length()),true) if file != null else {}
 	if tables.is_empty(): result.warnings.append("No scenery/mission database could be decoded.")

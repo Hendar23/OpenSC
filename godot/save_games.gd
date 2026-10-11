@@ -41,6 +41,7 @@ static func valid(data: Variant) -> bool:
 	if not data.get("explored") is String: return false
 	if not data.get("equipment_selected","") is String or not data.get("weapon_selected","") is String: return false
 	if data.has("objects") and not preload("res://object_population.gd").valid_snapshot(data.objects): return false
+	if data.has("mines") and not preload("res://mine_population.gd").valid_snapshot(data.mines): return false
 	var bytes := Marshalls.base64_to_raw(data.explored)
 	return bytes.size() == preload("res://hud_map.gd").RESOLUTION * preload("res://hud_map.gd").RESOLUTION
 func write(slot: int, snapshot: Dictionary) -> Error:

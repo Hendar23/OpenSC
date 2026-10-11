@@ -44,6 +44,19 @@ func run() -> void:
   var button: Button = ui.layout.get_node(name)
   check(button.highlight_art.size() == 1 and button.held_art.size() == 1,"Equipment button state artwork: " + name)
  check(ui.layout.get_node("SaleInfo").position == Vector2(27,361),"Sale info overlay aligns with original background")
+ for slot in [3,5,9]:
+  ui._mount_highlight(slot)
+  check(ui.mount_dot.visible and ui.mount_dot.get_child(0).visible,"Supported equipment has a mount marker")
+  check(ui.mount_dot.get_child(1).visible == (slot == 5),"Lights highlight both submarine views; underside equipment uses side view")
+  await capture("equipment-mount-%d" % slot)
+ var image := ui.equipment_preview
+ var original_size: Vector2 = image.size
+ image.size = Vector2(245,92); ui._mount_highlight(5)
+ check((ui.mount_dot.position + ui.mount_dot.get_child(0).position + Vector2(3.5,3.5)).is_equal_approx(image.position + Vector2(116,48)),"Unscaled light marker follows original image pixels")
+ image.size = Vector2(490,300); ui._mount_highlight(3)
+ check((ui.mount_dot.position + ui.mount_dot.get_child(0).position + Vector2(3.5,3.5)).is_equal_approx(image.position + Vector2(392,214)),"Marker follows image scaling and vertical letterboxing")
+ image.size = original_size; ui._mount_highlight(0)
+ check(not ui.mount_dot.visible,"Non-mountable items hide equipment markers")
  var done: Button = ui.layout.get_node("home")
  check(done.highlight_art[0].rect.position + done.position == Vector2(82,434) and done.held_art[0].rect.position + done.position == Vector2(22,418),"Equipment Done overlay alignment")
  done.mouse_entered.emit(); done.button_down.emit()

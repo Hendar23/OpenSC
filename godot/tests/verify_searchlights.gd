@@ -100,5 +100,44 @@ func verify_occlusion(game: Node3D) -> void:
 	blocker.hide(); lamp.shadow_enabled = true
 	var open := await snapshot(viewport)
 	check(open.get_pixelv(pixel).v - shadowed.get_pixelv(pixel).v > 0.2, "Removing the obstruction restores the beam")
+	# A steep receiver must not shadow itself into stripes. Isolate the lamp
+	# from the hull, and compare against the same surface without shadows.
+	var lamp_parent := lamp.get_parent()
+	lamp.reparent(world)
+	# Legacy terrain can have lighting normals almost tangent to the faces.
+	# Normal bias alone then barely separates a face from its own shadow map.
+	var arrays := wall.mesh.surface_get_arrays(0)
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	for index in normals.size(): normals[index] = Vector3(-1,0,0.01).normalized()
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	var smooth_mesh := ArrayMesh.new(); smooth_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+	wall.mesh = smooth_mesh
+	camera.position = Vector3(0, 0, 6); camera.look_at(Vector3(0, 0, -2))
+	# Player graphics uses 1024 for Low, 2048 for Medium and 4096 for High.
+	for atlas in [1024,2048]:
+		viewport.positional_shadow_atlas_size = atlas
+		for distance in [5.0,10.0,16.0]:
+			lamp.spot_range = 18; lamp.light_energy = 6; lamp.spot_angle = 45
+			wall.position.z = lamp.global_position.z - distance
+			camera.position = wall.position + Vector3(0,0,6); camera.look_at(wall.position)
+			for angle in [60,80]:
+				wall.rotation.y = deg_to_rad(angle)
+				lamp.shadow_enabled = true
+				var sloped := await snapshot(viewport)
+				sloped.save_png("res://tests/headlight-steep-%d-%d-%d.png" % [atlas,distance,angle])
+				lamp.shadow_enabled = false
+				var reference := await snapshot(viewport)
+				var lit_pixels := 0
+				var acne_pixels := 0
+				for y in range(512):
+					for x in range(512):
+						var expected := reference.get_pixel(x, y).v
+						if expected > 0.15:
+							lit_pixels += 1
+							if expected - sloped.get_pixel(x, y).v > 0.06: acne_pixels += 1
+				print("Headlight atlas=",atlas," distance=",distance," slope=",angle,": ",acne_pixels," / ",lit_pixels)
+				check(lit_pixels > 200 and acne_pixels < lit_pixels * 0.01, "Steep receivers stay free of stripes at atlas %d distance %d slope %d" % [atlas,distance,angle])
+	lamp.shadow_enabled = true
+	lamp.reparent(lamp_parent)
 	game.pilot.reparent(game)
 	viewport.queue_free(); await process_frame

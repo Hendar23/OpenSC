@@ -56,10 +56,27 @@ func run() -> void:
 	check(hud.bottom_camera_enabled and game.first_person == was_first_person and not game.map_open,"Controller chord toggles the feed without altering the main view")
 	game._unhandled_input(y)
 	check(not hud.bottom_camera_enabled,"Repeating the chord returns to the minimap")
+	var b := InputEventJoypadButton.new(); b.device = 77; b.button_index = JOY_BUTTON_B; b.pressed = true
+	check(Bindings.pressed(b,"rear_camera_toggle") and not Bindings.pressed(b,"equipment_toggle") and not Bindings.pressed(b,"dock_decline"),"Rear camera chord suppresses ordinary B actions")
+	game._unhandled_input(b)
+	check(hud.rear_camera_enabled and not hud.bottom_camera_enabled and hud.bottom_view.get_camera_3d() == hud.rear_camera,"RB+B selects the rear camera in the shared feed")
+	check(hud.displays[2].camera_feed != null and hud.rear_camera.cull_mask & game.SUB_RENDER_LAYER == 0,"Rear feed replaces the map without the hull blocking it")
+	var rear_pose := Transform3D(Basis.from_euler(Vector3(0.4,-0.8,0.2)),old_pose.origin)
+	game.pilot.global_transform = rear_pose; game.pilot.reset_physics_interpolation(); hud._update_rear_camera()
+	check((-hud.rear_camera.global_basis.z).dot(rear_pose.basis.z) > 0.999 and hud.rear_camera.global_basis.y.dot(rear_pose.basis.y) > 0.999,"Rear camera looks astern and follows submarine pitch and roll")
+	game.pilot.global_transform = old_pose; game.pilot.reset_physics_interpolation()
+	hud.hide()
+	check(hud.bottom_view.render_target_update_mode == SubViewport.UPDATE_DISABLED,"Hidden rear feed stops rendering")
+	hud.show()
+	game._unhandled_input(y)
+	check(hud.bottom_camera_enabled and not hud.rear_camera_enabled and hud.bottom_view.get_camera_3d() == hud.bottom_camera,"Down camera replaces rear camera without a second render")
+	game._unhandled_input(b)
+	game._unhandled_input(b)
+	check(not hud.rear_camera_enabled and hud.displays[2].camera_feed == null,"Repeating RB+B restores the minimap")
 	shoulder.pressed = false; Bindings.track_event(shoulder)
-	hud.set_bottom_camera_enabled(true)
+	hud.set_rear_camera_enabled(true)
 	await game._begin_new_game()
-	check(not hud.bottom_camera_enabled and hud.displays[2].camera_feed == null and hud.bottom_view.render_target_update_mode == SubViewport.UPDATE_DISABLED,"New Game restores the minimap and disables bottom-camera rendering")
+	check(not hud.bottom_camera_enabled and not hud.rear_camera_enabled and hud.displays[2].camera_feed == null and hud.bottom_view.render_target_update_mode == SubViewport.UPDATE_DISABLED,"New Game restores the minimap and disables camera rendering")
 	if DisplayServer.get_name() != "headless":
 		hud.set_bottom_camera_enabled(true)
 		for frame in range(8): await process_frame
@@ -72,5 +89,10 @@ func run() -> void:
 			for z in range(0,image.get_height(),8):
 				var brightness := image.get_pixel(x,z).get_luminance(); minimum = minf(minimum,brightness); maximum = maxf(maximum,brightness)
 		check(maximum - minimum > 0.01,"Feed renders visible world detail")
+		hud.set_rear_camera_enabled(true)
+		for frame in range(8): await process_frame
+		await RenderingServer.frame_post_draw
+		hud.bottom_view.get_texture().get_image().save_png("res://tests/rear-camera-feed.png")
+		root.get_texture().get_image().save_png("res://tests/rear-camera-hud.png")
 	game.queue_free(); await process_frame
 	print("Bottom camera: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

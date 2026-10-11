@@ -33,5 +33,24 @@ func run() -> void:
 	check(fish.animation_time == time and fish.offscreen_delta > 0,"Distant offscreen AI batches short physics ticks")
 	fish.position = Vector3(0,0,1); fish._physics_process(1.0/60.0)
 	check(fish.animation_time > time and fish.offscreen_delta == 0,"Nearby wildlife retains full-rate reactions")
+	var members: Array[Node3D] = []
+	for index in range(120):
+		var extra := Fish.new()
+		extra.setup(Node3D.new(),Vector3(0.1 * index,0,0),AABB(Vector3.ONE * -100,Vector3.ONE * 200),100,0.2,index)
+		extra.population = pop; pop.add_child(extra); members.append(extra)
+	pop.set_active_limit(40)
+	check(pop.active_count() == 40,"Crowded wildlife is capped immediately")
+	check(members[0].get_meta("wildlife_awake",true) and not members.back().get_meta("wildlife_awake",true),"Nearest wildlife has priority over distant wildlife")
+	check(members.back().process_mode == Node.PROCESS_MODE_DISABLED and not members.back().is_physics_processing(),"Excess wildlife has no processing cost")
+	await physics_frame
+	check(members.back().get_child(0).disabled,"Excess wildlife has collisions disabled")
+	pop.set_simulating(false); pop.set_simulating(true)
+	check(pop.active_count() <= 40,"Docking or pause changes do not bypass the cap")
+	pop.set_active_limit(60)
+	check(pop.active_count() == 60,"Raising the cap restores eligible dormant wildlife")
+	pop.set_active_limit(0); pop._stream_update(true)
+	check(pop.active_count() == 121,"Unlimited restores the full eligible population")
+	pop.streaming = false; pop.set_active_limit(40)
+	check(pop.active_count() == 121,"Gameplay cap does not restrict editor previews")
 	world.queue_free(); await process_frame
 	print("Wildlife activity: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)
