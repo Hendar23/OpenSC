@@ -25,6 +25,7 @@ __pycache__/
 *.gdoc
 
 # Local credentials/configuration.
+/.local/
 .env
 .env.*
 !.env.example

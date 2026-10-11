@@ -1,9 +1,10 @@
 @echo off
 setlocal
 set "OSC_GODOT=%GODOT_PATH%"
+if not defined OSC_GODOT if exist "%~dp0.local\godot-path.txt" set /p "OSC_GODOT="<"%~dp0.local\godot-path.txt"
 if not defined OSC_GODOT for /f "delims=" %%G in ('where godot 2^>nul') do if not defined OSC_GODOT set "OSC_GODOT=%%G"
 if not defined OSC_GODOT (
-  echo Godot was not found. Set GODOT_PATH to your Godot executable, or launch asset_editor.tscn from Godot.
+  echo Godot was not found. Set GODOT_PATH or put its executable path in .local\godot-path.txt.
   pause
   exit /b 1
 )
