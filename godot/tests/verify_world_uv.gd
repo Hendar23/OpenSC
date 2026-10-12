@@ -4,10 +4,12 @@ func _initialize() -> void: call_deferred("_run")
 func _run() -> void:
 	var folder := preload("res://asset_paths.gd").find_game_folder()
 	var world := await World.load_world(folder.path_join("DATA/SCEN1.BSP"),self,func(_message: String) -> void: pass)
-	var roof := world.get_node("Material_60") as MeshInstance3D
-	var arrays := roof.mesh.surface_get_arrays(0)
-	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+	var vertices := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	for roof in world.get_children():
+		if roof.get_meta("terrain_material",-1) != 60: continue
+		var arrays: Array = roof.mesh.surface_get_arrays(0)
+		vertices.append_array(arrays[Mesh.ARRAY_VERTEX]); uvs.append_array(arrays[Mesh.ARRAY_TEX_UV])
 	var edges := {}
 	for index in range(0,vertices.size(),3):
 		for pair in [Vector2i(0,1),Vector2i(1,2),Vector2i(2,0)]:

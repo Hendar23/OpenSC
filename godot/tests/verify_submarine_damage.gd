@@ -18,7 +18,8 @@ func run() -> void:
 	var gauge: Control = game.cockpit_hud.displays[4]
 	check(range(8).all(func(index: int) -> bool: return gauge.shield_segment_state(index) == "blue"),"An undamaged sub has eight blue shield segments")
 	await physics_frame
-	game.object_population._exploded(game.pilot.global_position,30.0,0.2,0.0)
+	# The recovered inverse-distance blast has a 10x cap at the hull centre.
+	game.object_population._exploded(game.pilot.global_position,3.0,0.2,0.0)
 	await process_frame; await process_frame
 	check(is_equal_approx(game.pilot.health,70.0),"Explosion overlapping the real hull damages it only once")
 	check(game._dock_ui_model().status.shields == 70 and game._dock_ui_model().status.hull_strength == 100,"Dock status follows current shield health and maximum hull strength")
@@ -40,7 +41,7 @@ func run() -> void:
 	check(not game.first_person and game.camera.cull_mask & game.SUB_RENDER_LAYER != 0,"Destruction leaves cockpit view for third person")
 	var wreck: Node3D = game.world_root.get_node_or_null("SubmarineWreck")
 	check(wreck != null and wreck.pieces.size() > 8 and wreck.gore.is_empty(),"The actual sub and mounted equipment become textured metal pieces without blood")
-	check(wreck.pieces.all(func(piece: Dictionary) -> bool: return piece.velocity.length() <= 2.51),"Submarine fragments use a gentler burst to remain near the wreck")
+	check(wreck.pieces.all(func(piece: Dictionary) -> bool: return piece.velocity.y >= 1.5 and piece.velocity.length() <= 7.0),"Mechanical fragments scatter with an upward blast kick")
 	check(wreck.bubbles != null and wreck.bubbles.amount == 96 and wreck.bubbles.lifetime > 2.0,"Destruction releases a substantial burst of rising bubbles")
 	check(game.world_root.get_node_or_null("MineExplosion") != null and not game.pilot.visual.visible and not game.weapons.visible,"Original explosion animation replaces the intact submarine")
 	check(range(8).all(func(index: int) -> bool: return gauge.shield_segment_state(index) == "empty"),"Destroyed sub has no remaining health segments")

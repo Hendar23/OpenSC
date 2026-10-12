@@ -33,6 +33,10 @@ var scene: Node3D
 var world: Node3D
 var camera: Camera3D
 var objects: Node3D
+var terrain_navigation_map: RefCounted
+var submarine_traffic: Node
+var traffic: Node
+var context_additions: Array[Button] = []
 var population: Node3D
 var markers: Node3D
 var selection_outline: MeshInstance3D
@@ -63,7 +67,7 @@ func _ready() -> void:
 	search.text_changed.connect(func(_value: String) -> void: _refresh_list())
 	sidebar.add_child(search)
 	category = OptionButton.new()
-	for name in ["All entities", "Scenery / plants", "Lights", "Wildlife groups", "Creature types", "Object groups", "Object types", "Smoke emitters"]: category.add_item(name)
+	for name in ["All entities", "Scenery / plants", "Lights", "Wildlife groups", "Creature types", "Objects", "Object types", "NPC types", "NPCs"]: category.add_item(name)
 	category.item_selected.connect(func(_index: int) -> void: _refresh_list())
 	sidebar.add_child(category)
 	entity_list = ItemList.new(); entity_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -71,14 +75,15 @@ func _ready() -> void:
 	entity_list.item_activated.connect(func(_index: int) -> void: frame_selection())
 	sidebar.add_child(entity_list)
 	var actions := GridContainer.new(); actions.columns = 2; sidebar.add_child(actions)
-	button(actions, "Add model", add_model)
-	button(actions, "Add light", add_light)
-	button(actions, "Add smoke emitter", func() -> void: if loaded: _add_entity("smoke", ""))
-	button(actions, "Add group", add_group)
-	button(actions, "New species", add_species)
-	button(actions, "Add object group", add_object_group)
-	button(actions, "New object type", add_object_type)
-	button(actions, "Add drop-off point", func() -> void: if loaded: _add_entity("dropoff", ""))
+	context_button(actions,"Add model",add_model,[0,1])
+	context_button(actions,"Add light",add_light,[2])
+	context_button(actions,"Add group",add_group,[3])
+	context_button(actions,"New species",add_species,[4])
+	context_button(actions,"Add object",add_object,[5])
+	context_button(actions,"New object type",new_object_type,[6])
+	context_button(actions,"New NPC type",new_npc_type,[7])
+	context_button(actions,"Add NPC",add_npc,[8])
+	context_button(actions,"Add drop-off point",func() -> void: if loaded: _add_entity("dropoff",""),[5])
 	button(actions, "Duplicate", duplicate_selection)
 	button(actions, "Delete", delete_selection)
 	button(actions, "Undo", undo)
@@ -91,10 +96,13 @@ func _ready() -> void:
 	button(toolbar, "Snap to seabed", snap_to_floor)
 	button(toolbar, "Use current view for menu", capture_menu_camera)
 	button(toolbar, "View menu camera", view_menu_camera)
-	var preview := CheckButton.new(); preview.text = "Simulate wildlife"
+	var preview := CheckButton.new(); preview.text = "Simulate wildlife / NPCs"
 	preview.toggled.connect(func(on: bool) -> void:
 		simulating = on
 		if population != null: population.set_simulating(on)
+		if traffic != null: traffic.set_simulating(on)
+		if on and submarine_traffic == null: _start_submarine_preview()
+		if submarine_traffic != null: submarine_traffic.set_simulating(on)
 	)
 	toolbar.add_child(preview)
 	button(toolbar, "Reload map", reload_map)
@@ -134,6 +142,9 @@ func _ready() -> void:
 	export_dialog.filters = PackedStringArray(["*.json ; Map document"])
 	export_dialog.file_selected.connect(func(path: String) -> void: status.text = "Map exported." if Document.save(document, path) == OK else "Could not export map.")
 	add_child(export_dialog)
+func context_button(parent: Node, text: String, action: Callable, categories: Array) -> void:
+	var control := button(parent,text,action); control.set_meta("categories",categories)
+	control.visible = category.selected in categories; context_additions.append(control)
 func button(parent: Node, text: String, action: Callable) -> Button:
 	var control := Button.new(); control.text = text; control.focus_mode = Control.FOCUS_NONE
 	control.pressed.connect(action); parent.add_child(control); return control
@@ -176,7 +187,10 @@ func open(game_folder: String) -> void:
 			if not Document.load_path(entry.path).is_empty(): save_path = entry.path; break
 		# Preserve original entries omitted from an override document for editing.
 		for key in base_entities:
-			if not document.entities.has(key): document.entities[key] = base_entities[key].duplicate(true)
+			if not document.entities.has(key):
+				document.entities[key] = Document.EntityTypes.effective(baseline,base_entities[key])
+				for ref in ["entity_type","npc_type"]: document.entities[key].erase(ref)
+	Document.EntityTypes.migrate(document)
 	preload("res://object_definitions.gd").ensure(document)
 	world.get_node("AmbientFish").free()
 	for file in DirAccess.get_files_at(folder.path_join("CLUMPS")):
@@ -229,6 +243,10 @@ func _marker_material(color: Color) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new(); material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.albedo_color = color; material.no_depth_test = true; return material
 func _sync() -> void:
+	if is_instance_valid(submarine_traffic): submarine_traffic.free()
+	submarine_traffic = null
+	if is_instance_valid(traffic): traffic.free()
+	traffic = null
 	for key in base_nodes:
 		if world.get_node_or_null(NodePath(key)) == null:
 			var restored: Node3D = base_nodes[key].duplicate()
@@ -245,6 +263,8 @@ func _sync() -> void:
 	population = Wildlife.new(); population.name = "AmbientFish"; world.add_child(population)
 	population.gameplay_catalogue = gameplay_catalogue
 	population.simulating = simulating; population.setup(world, folder, document)
+	traffic = preload("res://ground_traffic.gd").new(); traffic.simulating = simulating; world.add_child(traffic); traffic.setup(world,folder)
+	if simulating: _start_submarine_preview()
 	if objects != null: objects.free()
 	objects = preload("res://object_population.gd").new(); objects.name = "MapObjects"; world.add_child(objects)
 	objects.setup(folder,document,false)
@@ -274,15 +294,18 @@ func _marker(key: String, point: Vector3, color: Color) -> void:
 	marker.mesh = mesh; marker.material_override = _marker_material(color); marker.position = point
 	marker.set_meta("entity_key", key); markers.add_child(marker)
 func _refresh_list() -> void:
+	for control in context_additions: control.visible = category.selected in control.get_meta("categories")
 	if document.is_empty(): return
 	entity_list.clear(); list_keys.clear()
 	var query := search.text.to_lower()
 	for key in document.entities:
-		var entry: Dictionary = document.entities[key]
+		var entry: Dictionary = Document.EntityTypes.effective(document,document.entities[key])
 		if entry.get("deleted", false): continue
-		if category.selected == 1 and entry.kind != "model": continue
+		var turret := str(entry.get("model","")) == "TURRET"
+		var npc := str(entry.get("model","")) in Document.GroundVehicle.MODELS + Document.Trader.MODELS + Document.Pirate.PIRATE_MODELS + Document.Patrol.PATROL_MODELS
+		if category.selected == 1 and (entry.kind != "model" or turret or npc): continue
 		if category.selected == 2 and entry.kind != "light": continue
-		if category.selected >= 3 and not ((category.selected == 5 and entry.kind == "dropoff") or (category.selected == 7 and entry.kind == "smoke")): continue
+		if category.selected >= 3 and not ((category.selected == 5 and (entry.kind in ["dropoff","smoke","bubbles"] or turret)) or (category.selected == 8 and npc)): continue
 		if not query.is_empty() and not (str(entry.name) + " " + str(key) + " " + str(entry.get("model", ""))).to_lower().contains(query): continue
 		list_keys.append(key)
 		entity_list.add_item((str(entry.model) + " · " if str(entry.name).begins_with("Plant_") else "") + str(entry.name))
@@ -298,15 +321,21 @@ func _refresh_list() -> void:
 	if category.selected in [0,5]:
 		for group in document.get("object_groups",[]):
 			if not query.is_empty() and not str(group.name).to_lower().contains(query): continue
-			list_keys.append("object_group:" + group.id); entity_list.add_item("Object group: " + str(group.name))
+			list_keys.append("object_group:" + group.id); entity_list.add_item(str(group.name))
 	if category.selected == 6:
 		for entry in document.get("object_types",[]):
 			if not query.is_empty() and not str(entry.name).to_lower().contains(query): continue
 			list_keys.append("object_type:" + entry.id); entity_list.add_item(str(entry.name))
+	for prefix in (["entity_type"] if category.selected == 6 else ["npc_type"] if category.selected == 7 else []):
+		for entry in document.get(prefix + "s",[]):
+			if not query.is_empty() and not str(entry.name).to_lower().contains(query): continue
+			list_keys.append(prefix + ":" + entry.id); entity_list.add_item(str(entry.name))
 	var index := list_keys.find(selected)
 	if index >= 0: entity_list.select(index)
 func record(key: String = "") -> Dictionary:
 	if key.is_empty(): key = selected
+	if key.begins_with("entity_type:") or key.begins_with("npc_type:"):
+		return Document.EntityTypes.find_type(document,key.get_slice(":",0),key.get_slice(":",1))
 	if key.begins_with("object_group:") or key.begins_with("object_type:"):
 		for entry in document.get("object_groups" if key.begins_with("object_group:") else "object_types",[]):
 			if entry.id == key.get_slice(":",1): return entry
@@ -325,8 +354,11 @@ func select(key: String) -> void:
 	for child in properties.get_children(): child.free()
 	var entry := record()
 	if entry.is_empty(): return
+	entry = Document.EntityTypes.effective(document,entry)
 	text_field("name", "Name", str(entry.name))
-	if key.begins_with("object_type:"):
+	if key.begins_with("entity_type:") or key.begins_with("npc_type:"):
+		shared_type_fields(entry)
+	elif key.begins_with("object_type:"):
 		species_preview = SpeciesPreview.new(); properties.add_child(species_preview)
 		species_preview.show_object(entry,folder)
 		choice("behavior","Object behavior",["mine","thorium","salvage","clam","pearl","rock"],entry.get("behavior","mine"),["Floating mine","Thorium crystal","Salvage object","Clam","Pearl","Rock"])
@@ -469,22 +501,21 @@ func select(key: String) -> void:
 			choice("response", "Response to submarine", Document.RESPONSES, species.response)
 		else:
 			if entry.kind == "model":
-				var original: Node3D = base_nodes.get(key)
-				if entry.has("dock") or (original != null and original.has_meta("city_id")): label("Dock model: " + str(entry.model))
-				else: choice("model", "3D model", models, str(entry.model))
+				if entry.has("entity_type") or entry.has("npc_type"):
+					instance_type_fields(entry)
+				else:
+					var original: Node3D = base_nodes.get(key)
+					if entry.has("dock") or (original != null and original.has_meta("city_id")): label("Dock model: " + str(entry.model))
+					else: choice("model", "3D model", models.filter(func(id: String) -> bool: return id not in Document.GroundVehicle.MODELS + Document.Trader.MODELS + Document.Pirate.PIRATE_MODELS + Document.Patrol.PATROL_MODELS + ["TURRET"]), str(entry.model))
 				for i in range(3): number("rotation_" + str(i), "Rotation " + ["X", "Y", "Z"][i] + " (°)", rad_to_deg(pose.basis.get_euler()[i]), -360, 360, 1)
 				for i in range(3): number("scale_" + str(i), "Scale " + ["X", "Y", "Z"][i], pose.basis.get_scale()[i], 0.01, 100, 0.01)
 			elif entry.kind == "player":
 				number("facing", "Facing (° clockwise)", fposmod(-rad_to_deg(atan2(pose.basis.z.x,pose.basis.z.z)),360.0), 0, 360, 1)
 			elif entry.kind == "dropoff":
 				number("radius", "Detection radius", entry.radius, 0.01, 1000, 0.01)
-			elif entry.kind == "smoke":
-				var active := CheckBox.new(); active.text = "Enabled"; active.button_pressed = bool(entry.get("enabled",true))
-				properties.add_child(active); fields.enabled = active
-				for setting in Document.SmokeEmitter.DEFAULTS:
-					var caption: String = {"emission_rate":"Puffs per second", "lifetime":"Puff lifetime (seconds)", "start_size":"Starting size", "end_size":"Final size", "rise_speed":"Rise speed (units/s)", "spread":"Random sideways drift (units/s)", "drift_x":"Wind X (units/s)", "drift_z":"Wind Z (units/s)", "opacity":"Opacity"}[setting]
-					var limits: Array = Document.SmokeEmitter.LIMITS[setting]
-					number(setting,caption,entry.get(setting,Document.SmokeEmitter.DEFAULTS[setting]),limits[0],limits[1],0.01)
+			elif entry.kind in ["smoke","bubbles"]:
+				instance_type_fields(entry)
+				toggle_field("enabled","Enabled",bool(entry.get("enabled",true)))
 			elif entry.kind == "light":
 				for i in range(3): number("rotation_" + str(i), "Rotation " + ["X", "Y", "Z"][i] + " (°)", rad_to_deg(pose.basis.get_euler()[i]), -360, 360, 1)
 				choice("light_type", "Light type", ["beacon", "searchlight"], entry.get("light_type", "beacon"), ["Beacon / flare", "Searchlight"])
@@ -504,6 +535,96 @@ func select(key: String) -> void:
 				fields.light_type.item_selected.connect(func(_index: int) -> void: _update_light_fields())
 				_update_light_fields()
 	_refresh_list(); _update_outline()
+func toggle_field(key: String, caption: String, value: bool) -> void:
+	var control := CheckBox.new(); control.text = caption; control.button_pressed = value
+	properties.add_child(control); fields[key] = control
+
+func shared_type_fields(entry: Dictionary) -> void:
+	if entry.family == "vehicle": choice("model","Vehicle model",Document.GroundVehicle.MODELS,entry.model)
+	elif entry.family == "trader": choice("model","Submarine model",Document.Trader.MODELS,entry.model)
+	elif entry.family == "patrol": choice("model","Submarine model",Document.Patrol.PATROL_MODELS,entry.model)
+	elif entry.family == "pirate": choice("model","Submarine model",Document.Pirate.PIRATE_MODELS,entry.model)
+	elif entry.family == "turret": label("Model: TURRET")
+	var captions := {"turret_health":"Health (raw shield units)","turret_sustain":"Damage received multiplier","turret_range":"Activation range","turret_turn_speed":"Gun rotation (degrees/s)","npc_speed":"Driving speed (units/s)","npc_wait_min":"Minimum stop (seconds)","npc_wait_max":"Maximum stop (seconds)","npc_health":"Health (raw shield units)","npc_sustain":"Damage received multiplier","npc_respawn_delay":"Respawn delay (seconds)","emission_rate":"Puffs per second","lifetime":"Puff lifetime (seconds)","start_size":"Starting size","end_size":"Final size","rise_speed":"Rise speed (units/s)","spread":"Random sideways drift (units/s)","drift_x":"Wind X (units/s)","drift_z":"Wind Z (units/s)","opacity":"Opacity","npc_detection":"Detection range","npc_attack_range":"Missile range","npc_fire_interval":"Shot interval (seconds)"}
+	if entry.family == "bubbles":
+		captions.emission_rate = "Bubbles per second"
+		captions.lifetime = "Bubble lifetime (seconds)"
+	for key in Document.EntityTypes.defaults(entry.family):
+		# All submarine replacements now wait for player docking, without a timer.
+		if entry.family in ["trader","pirate","patrol"] and key in ["npc_respawn","npc_respawn_delay"]: continue
+		if key in ["turret_homing","npc_respawn","npc_armed"]:
+			toggle_field(key,"Homing missiles" if key == "turret_homing" else "Armed faction patrol" if key == "npc_armed" else "Respawn when destroyed (out of sight)",entry.get(key,false)); continue
+		var limits: Array = [0.01 if key == "turret_health" else 0,100000]
+		if entry.family == "vehicle": limits = Document.GroundVehicle.LIMITS[key]
+		elif entry.family == "trader": limits = Document.Trader.LIMITS[key]
+		elif entry.family == "pirate": limits = Document.Pirate.PIRATE_LIMITS[key]
+		elif entry.family == "bubbles": limits = Document.BubbleStream.LIMITS[key]
+		elif entry.family == "patrol": limits = Document.Patrol.PATROL_LIMITS[key]
+		elif entry.family == "smoke": limits = Document.SmokeEmitter.LIMITS[key]
+		number(key,"Cruising speed (units/s)" if key == "npc_speed" and entry.family in ["trader","pirate","patrol"] else captions[key],entry.get(key,Document.EntityTypes.defaults(entry.family)[key]),limits[0],limits[1],0.01)
+
+func instance_type_fields(entry: Dictionary) -> void:
+	var ref := "npc_type" if entry.has("npc_type") else "entity_type"
+	var current := Document.EntityTypes.find_type(document,ref,str(entry[ref]))
+	var candidates: Array = document[Document.EntityTypes.collection(current.family)].filter(func(type: Dictionary) -> bool: return type.family == current.family)
+	choice(ref,"NPC type" if ref == "npc_type" else "Object type",candidates.map(func(type: Dictionary) -> String: return type.id),entry[ref],candidates.map(func(type: Dictionary) -> String: return type.name))
+	button(properties,"Edit shared type",func() -> void:
+		category.select(7 if ref == "npc_type" else 6); select(ref + ":" + str(_value(ref)))
+	)
+	if current.family == "turret":
+		toggle_field("turret_armed","Always hostile",entry.get("turret_armed",false))
+		number("turret_faction","Faction (0: none, 1: Bohine, 2: Procha, 3: pirate)",entry.get("turret_faction",0),0,5,1)
+	elif current.family == "vehicle":
+		number("npc_radius","Local operating radius",entry.get("npc_radius",8),2,30,0.1)
+		number("npc_faction","Faction (0: none, 1: Bohine, 2: Procha)",entry.get("npc_faction",1),0,5,1)
+
+	elif current.family in ["trader","patrol"]:
+		number("npc_faction","Faction (1: Bohine, 2: Procha)",entry.get("npc_faction",1),1,2,1)
+
+func type_dialog(title: String, names: Array, action: Callable) -> void:
+	var dialog := AcceptDialog.new(); dialog.title = title
+	var option := OptionButton.new()
+	for name in names: option.add_item(str(name))
+	dialog.add_child(option)
+	dialog.confirmed.connect(func() -> void: action.call(option.selected); dialog.queue_free())
+	dialog.canceled.connect(dialog.queue_free); add_child(dialog); dialog.popup_centered(Vector2i(380,140))
+
+func new_object_type() -> void:
+	if not loaded: return
+	type_dialog("New object type",["Gun turret","Homing gun turret","Smoke emitter","Salvage / mine / clam / rock","Bubble stream"],func(index: int) -> void:
+		if index == 3: add_object_type()
+		else: create_shared_type("bubbles" if index == 4 else "smoke" if index == 2 else "turret","" if index in [2,4] else "TURRET",index == 1)
+	)
+
+func new_npc_type() -> void:
+	if not loaded: return
+	type_dialog("New NPC type",["Trader car","Tech truck","Bohine trader submarine","Procha trader submarine","Pirate submarine","Pirate submarine 2","Pirate submarine 3","Patrol shuttle","Prison submarine","Bohine combat patrol","Procha combat patrol"],func(index: int) -> void: create_shared_type("vehicle" if index < 2 else "trader" if index < 4 else "pirate" if index < 7 else "patrol",(Document.GroundVehicle.MODELS + Document.Trader.MODELS + Document.Pirate.PIRATE_MODELS + Document.Patrol.PATROL_MODELS)[index]))
+
+func create_shared_type(family: String, model: String, homing: bool = false) -> void:
+	var before := document.duplicate(true)
+	var type := Document.EntityTypes.defaults(family,model)
+	type.merge({"id":_new_id(),"name":"New bubble stream" if family == "bubbles" else "New smoke emitter" if family == "smoke" else "New NPC type" if family in ["vehicle","trader","pirate","patrol"] else "New gun turret","family":family,"kind":family if family in ["smoke","bubbles"] else "model","model":model})
+	if family == "turret": type.turret_homing = homing
+	document[Document.EntityTypes.collection(family)].append(type)
+	_remember(before); category.select(7 if family in ["vehicle","trader","pirate","patrol"] else 6); select(Document.EntityTypes.reference_key(family) + ":" + type.id)
+
+func add_object() -> void:
+	if not loaded: return
+	var candidates: Array = document.entity_types + document.object_types
+	var names: Array = candidates.map(func(type: Dictionary) -> String: return type.name)
+	type_dialog("Add object",names,func(index: int) -> void:
+		var type: Dictionary = candidates[index]
+		if type.has("family"): _add_entity(type.kind,type.model,type)
+		else: select("object_type:" + type.id); add_object_group()
+	)
+
+func add_npc() -> void:
+	if not loaded: return
+	if document.npc_types.is_empty(): status.text = "Create an NPC type first."; return
+	type_dialog("Add NPC",document.npc_types.map(func(type: Dictionary) -> String: return type.name),func(index: int) -> void:
+		var type: Dictionary = document.npc_types[index]; _add_entity(type.kind,type.model,type)
+	)
+
 func _update_light_fields() -> void:
 	var mode: String = _value("light_mode")
 	var searchlight: bool = _value("light_type") == "searchlight"
@@ -558,7 +679,9 @@ func apply_properties() -> void:
 	if not loaded or record().is_empty(): return
 	var before := document.duplicate(true); var entry := record()
 	entry.name = _value("name")
-	if selected.begins_with("object_type:"):
+	if selected.begins_with("entity_type:") or selected.begins_with("npc_type:"):
+		for key in Document.EntityTypes.defaults(entry.family).keys() + (["model"] if entry.family in ["vehicle","trader","pirate","patrol"] else []): entry[key] = _value(key)
+	elif selected.begins_with("object_type:"):
 		for key in ["immovable","contact_inflict","suckomat_compatible"]:
 			if fields.has(key): entry[key] = _value(key)
 		for key in ["delivery_commodity","delivery_quantity","pearl_type","pearl_height","close_distance","open_angle","closed_angle","opening_speed","closing_speed","regrowth_seconds","release_distance","pickup_commodity"]:
@@ -603,6 +726,8 @@ func apply_properties() -> void:
 			else: entry.erase("overrides")
 		else:
 			var pose := Document.decode(entry.transform); pose.origin = point
+			for key in ["entity_type","npc_type","turret_armed","turret_faction","npc_radius","npc_faction"]:
+				if fields.has(key): entry[key] = _value(key)
 			if entry.kind == "model":
 				if fields.has("model"): entry.model = _value("model")
 				var euler := Vector3(deg_to_rad(_value("rotation_0")), deg_to_rad(_value("rotation_1")), deg_to_rad(_value("rotation_2")))
@@ -614,9 +739,8 @@ func apply_properties() -> void:
 			if entry.kind == "player" and not is_equal_approx(fields.facing.value,fields.facing.get_meta("initial_value")):
 				pose.basis = Basis(Vector3.UP,-deg_to_rad(float(_value("facing"))))
 			if entry.kind == "dropoff": entry.radius = _value("radius")
-			if entry.kind == "smoke":
+			if entry.kind in ["smoke","bubbles"]:
 				entry.enabled = fields.enabled.button_pressed
-				for key in Document.SmokeEmitter.DEFAULTS: entry[key] = _value(key)
 			if entry.kind == "light":
 				entry.light_type = _value("light_type")
 				var changed := false
@@ -667,19 +791,20 @@ func add_object_group() -> void:
 	var type_name := "object"
 	for entry in document.object_types:
 		if entry.id == type_id: type_name = str(entry.name).to_lower(); break
-	document.object_groups.append({"id":id,"name":"New %s group" % type_name,"type":type_id,"position":Document.array(_new_position()),"count":1,"radius":5.0})
+	document.object_groups.append({"id":id,"name":"New %s" % type_name,"type":type_id,"position":Document.array(_new_position()),"count":1,"radius":5.0})
 	_remember(before); category.select(5); _sync(); select("object_group:" + id)
 func add_model() -> void:
 	if not loaded: return
 	# Select a model in the list below, then add it; plants are convenient defaults.
 	var dialog := AcceptDialog.new(); dialog.title = "Add a model"
 	var option := OptionButton.new()
-	for id in models: option.add_item(id)
+	for id in models:
+		if id not in Document.GroundVehicle.MODELS + Document.Trader.MODELS + Document.Pirate.PIRATE_MODELS + Document.Patrol.PATROL_MODELS + ["TURRET"]: option.add_item(id)
 	option.select(maxi(0, models.find("BUSH1"))); dialog.add_child(option)
 	dialog.confirmed.connect(func() -> void: _add_entity("model", option.get_item_text(option.selected)); dialog.queue_free())
 	dialog.canceled.connect(dialog.queue_free); add_child(dialog); dialog.popup_centered(Vector2i(360, 140))
 func add_light() -> void: if loaded: _add_entity("light", "")
-func _add_entity(kind: String, model_id: String) -> void:
+func _add_entity(kind: String, model_id: String, type: Dictionary = {}) -> void:
 	var pose := Transform3D(Basis.IDENTITY, _new_position())
 	if kind == "model":
 		var template := Document.load_model(model_id, folder)
@@ -689,11 +814,31 @@ func _add_entity(kind: String, model_id: String) -> void:
 	document.entities[key] = {"name": "New light" if kind == "light" else model_id, "kind": kind, "model": model_id, "transform": Document.encode(pose), "solid": kind == "model", "deleted": false, "energy": 1.0, "range": 8.0}
 	if kind == "dropoff": document.entities[key].merge({"name":"New drop-off point","radius":0.5,"city_id":0})
 	if kind == "smoke": document.entities[key].merge({"name":"New smoke emitter","enabled":true}.merged(Document.SmokeEmitter.DEFAULTS))
-	_remember(before); category.select(5 if kind == "dropoff" else 0); _sync(); select(key)
+	if kind == "model" and model_id.to_upper() == "TURRET": document.entities[key].merge(Document.GunTurret.DEFAULTS)
+	if kind == "model" and model_id.to_upper() in Document.Pirate.PIRATE_MODELS:
+		document.entities[key].merge(Document.Pirate.PIRATE_DEFAULTS)
+	if kind == "model" and model_id.to_upper() in Document.Trader.MODELS:
+		document.entities[key].merge(Document.Trader.DEFAULTS)
+		document.entities[key].npc_faction = 1 if model_id == "TRADSHUT" else 2
+	if kind == "model" and model_id.to_upper() in Document.GroundVehicle.MODELS:
+		document.entities[key].merge(Document.GroundVehicle.DEFAULTS)
+		document.entities[key].npc_faction = 1 if model_id == "TRADCAR" else 2
+		document.entities[key].npc_speed = 0.4 if model_id == "TRADCAR" else 0.3
+	if not type.is_empty():
+		if type.family == "patrol": document.entities[key].npc_faction = 2 if model_id == "TECH2SUB" else 1
+		for stat in Document.EntityTypes.defaults(type.family): document.entities[key].erase(stat)
+		document.entities[key][Document.EntityTypes.reference_key(type.family)] = type.id
+	Document.EntityTypes.migrate(document)
+	var target_category: int = {"light":2,"smoke":5,"bubbles":5,"dropoff":5}.get(kind,category.selected)
+	if model_id == "TURRET": target_category = 5
+	elif model_id in Document.GroundVehicle.MODELS + Document.Trader.MODELS + Document.Pirate.PIRATE_MODELS + Document.Patrol.PATROL_MODELS: target_category = 8
+	_remember(before); category.select(target_category); _sync(); select(key)
 func duplicate_selection() -> void:
 	if not loaded or record().is_empty(): return
 	var before := document.duplicate(true); var entry := record().duplicate(true); var id := _new_id(); entry.name += " copy"
-	if selected.begins_with("object_type:"): entry.id = id; document.object_types.append(entry); selected = "object_type:" + id
+	if selected.begins_with("entity_type:") or selected.begins_with("npc_type:"):
+		entry.id = id; document[Document.EntityTypes.collection(entry.family)].append(entry); selected = selected.get_slice(":",0) + ":" + id
+	elif selected.begins_with("object_type:"): entry.id = id; document.object_types.append(entry); selected = "object_type:" + id
 	elif selected.begins_with("object_group:"): entry.id = id; entry.position[0] += 2.0; document.object_groups.append(entry); selected = "object_group:" + id
 	elif selected.begins_with("species:"): entry.id = id; document.species.append(entry); selected = "species:" + id
 	elif selected.begins_with("group:"): entry.id = id; entry.position[0] += 2.0; document.groups.append(entry); selected = "group:" + id
@@ -706,7 +851,14 @@ func delete_selection() -> void:
 	if not loaded or record().is_empty(): return
 	if selected == "player_spawn": status.text = "Move the player spawn instead of deleting it."; return
 	var before := document.duplicate(true)
-	if selected.begins_with("object_type:"):
+	if selected.begins_with("entity_type:") or selected.begins_with("npc_type:"):
+		var ref := selected.get_slice(":",0)
+		if document.entities.values().any(func(item: Dictionary) -> bool: return item.get(ref) == record().id and not item.get("deleted",false)):
+			status.text = "Remove or reassign this type's instances first."; return
+		for item in document.entities.values():
+			if item.get(ref) == record().id: item.erase(ref)
+		document[Document.EntityTypes.collection(record().family)].erase(record())
+	elif selected.begins_with("object_type:"):
 		if document.object_groups.any(func(group: Dictionary) -> bool: return group.type == record().id): status.text = "Remove or reassign this object type's groups first."; return
 		document.object_types.erase(record())
 	elif selected.begins_with("object_group:"): document.object_groups.erase(record())
@@ -727,7 +879,7 @@ func randomise() -> void:
 func point(key: String = "") -> Vector3:
 	if key.is_empty(): key = selected
 	var entry := record(key)
-	if entry.is_empty() or key.begins_with("species:") or key.begins_with("object_type:"): return Vector3(INF, INF, INF)
+	if entry.is_empty() or key.begins_with("species:") or key.begins_with("object_type:") or key.begins_with("entity_type:") or key.begins_with("npc_type:"): return Vector3(INF, INF, INF)
 	return Document.vector(entry.position) if key.begins_with("group:") or key.begins_with("object_group:") else Document.decode(entry.transform).origin
 func _move(point_value: Vector3) -> void:
 	var entry := record()
@@ -745,16 +897,17 @@ func snap_to_floor() -> void:
 	_remember(document.duplicate(true)); _move(hit.position); _sync(); select(selected)
 func frame_selection() -> void:
 	if not point().is_finite(): return
-	var distance := maxf(8.0, float(record().get("radius", 0.0)) * 2.0)
+	var distance := maxf(8.0, float(record().get("npc_radius",record().get("radius", 0.0))) * 2.0)
 	camera.position = point() + Vector3(0, distance * 0.5, distance); camera.look_at(point()); yaw = camera.rotation.y; pitch = camera.rotation.x
 func _update_outline() -> void:
 	if selection_outline == null: return
 	selection_outline.visible = point().is_finite()
 	_apply_visibility()
 	if not selection_outline.visible: return
-	var radius := float(record().get("radius", 1.0))
+	var radius := float(record().get("npc_radius",record().get("radius", 1.0)))
 	var mesh := ImmediateMesh.new(); mesh.surface_begin(Mesh.PRIMITIVE_LINES)
 	for plane_index in range(3):
+		if record().has("npc_radius") and plane_index != 2: continue
 		for step in range(48):
 			for angle in [step * TAU / 48.0, (step + 1) * TAU / 48.0]:
 				var vertex := Vector3.ZERO; vertex[plane_index] = cos(angle) * radius; vertex[(plane_index + 1) % 3] = sin(angle) * radius; mesh.surface_add_vertex(vertex)
@@ -810,3 +963,11 @@ func _process(delta: float) -> void:
 	if not is_visible_in_tree() or not loaded or not fly: return
 	var input := Vector3(Bindings.strength("turn_right") - Bindings.strength("turn_left"), Bindings.strength("thrust_up") - Bindings.strength("thrust_down"), Bindings.strength("thrust_reverse") - Bindings.strength("thrust_forward"))
 	camera.position += camera.basis * input.normalized() * fly_speed * (3.0 if Bindings.strength("editor_fast") > 0.5 else 1.0) * delta
+
+func _start_submarine_preview() -> void:
+	if world == null: return
+	if terrain_navigation_map == null:
+		terrain_navigation_map = preload("res://hud_map.gd").new(); terrain_navigation_map.setup(world)
+	terrain_navigation_map.actor_markers.clear()
+	submarine_traffic = preload("res://submarine_traffic.gd").new(); submarine_traffic.simulating = simulating; world.add_child(submarine_traffic)
+	submarine_traffic.setup(world,folder,preload("res://submarine_traffic.gd").describe_ports(world),terrain_navigation_map)

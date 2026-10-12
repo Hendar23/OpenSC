@@ -4,6 +4,22 @@ const RESOLUTION := 512
 var bounds: AABB
 var texture: ImageTexture
 var markers: Array[Dictionary] = []
+var actor_markers: Array[Node3D] = []
+var npc_view_span := Vector2(70,70.0 * 82.0 / 128.0)
+const CITY_DISCOVERY_RANGE := 12.0
+var discovered_cities := {}
+
+func discover_cities(point: Vector3) -> void:
+	for marker in markers:
+		if Vector2(point.x - marker.position.x,point.z - marker.position.z).length() <= CITY_DISCOVERY_RANGE:
+			discovered_cities[str(marker.get("id",marker.name))] = true
+
+func city_known(marker: Dictionary) -> bool:
+	return discovered_cities.has(str(marker.get("id",marker.name)))
+
+func npc_in_range(observer: Vector3, point: Vector3) -> bool:
+	return absf(observer.x - point.x) <= npc_view_span.x * 0.5 and absf(observer.z - point.z) <= npc_view_span.y * 0.5
+
 var height_samples := PackedFloat32Array()
 var scenery_baked := false
 var surface_height := INF
@@ -20,6 +36,7 @@ var exploration_texture: ImageTexture
 var last_explored := Vector2(INF,INF)
 var last_explored_height := INF
 func initialize_exploration() -> void:
+	discovered_cities.clear()
 	# Exploration belongs to this game, independently of saved preferences.
 	explored = Image.create(RESOLUTION,RESOLUTION,false,Image.FORMAT_L8)
 	explored.fill(Color.BLACK)
@@ -28,6 +45,7 @@ func initialize_exploration() -> void:
 	last_explored_height = INF
 
 func explore(point: Vector3) -> void:
+	discover_cities(point)
 	if explored == null: return
 	var position := Vector2(point.x,point.z)
 	if position.distance_squared_to(last_explored) < 0.25 and absf(point.y - last_explored_height) < 0.25: return
@@ -68,6 +86,7 @@ func _visible_from(observer: Vector3, x: int, y: int) -> bool:
 	return true
 
 func reset_exploration() -> void:
+	discovered_cities.clear()
 	if explored == null: return
 	explored.fill(Color.BLACK)
 	exploration_texture.update(explored)
@@ -75,6 +94,7 @@ func reset_exploration() -> void:
 	last_explored_height = INF
 
 func reveal_all() -> void:
+	for marker in markers: discovered_cities[str(marker.get("id",marker.name))] = true
 	if explored == null: return
 	explored.fill(Color.WHITE)
 	exploration_texture.update(explored)
@@ -114,7 +134,7 @@ func bake_world(world: Node3D, tree: SceneTree) -> void:
 		var ancestor: Node = source
 		var excluded := false
 		while ancestor != world and ancestor != null:
-			if str(ancestor.name) in ["AmbientFish", "Wildlife", "PulseLights"]: excluded = true; break
+			if ancestor.has_node("Trader") or ancestor.has_node("GroundVehicle") or str(ancestor.name) in ["AmbientFish", "Wildlife", "PulseLights"]: excluded = true; break
 			ancestor = ancestor.get_parent()
 		if excluded: continue
 		var copy := MeshInstance3D.new()
@@ -236,7 +256,7 @@ func setup(world: Node3D, clearance: float = 1.1) -> void:
 	texture = ImageTexture.create_from_image(image)
 	for node in world.find_children("*", "Node3D", true, false):
 		if node.has_meta("city_id"):
-			markers.append({"position": node.global_position, "name": str(node.get_meta("city_name", "Dock"))})
+			markers.append({"id":int(node.get_meta("city_id")),"position": node.global_position, "name": str(node.get_meta("city_name", "Dock"))})
 
 func uv(point: Vector3) -> Vector2:
 	return Vector2((point.x - bounds.position.x) / bounds.size.x, (point.z - bounds.position.z) / bounds.size.z)

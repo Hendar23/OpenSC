@@ -1,10 +1,11 @@
 extends RefCounted
 
-const DEFAULT_STATUS := {"hull_strength":100,"top_speed":100,"shields":100,"radiation_shield":0,"credits":0}
+const DEFAULT_STATUS := {"hull_strength":100,"top_speed":100,"shields":100,"radiation_shield":0,"credits":0,"zapper_upgrade":0}
 
 static func restore(saved: Variant = {}) -> Dictionary:
 	var result := {"campaign_stage":1,"mission":"None","standing":{},"status":DEFAULT_STATUS.duplicate(),"hold":{},"cargo":{},"suckomat":[],"pending_deliveries":{},"markets":{}}
 	if not saved is Dictionary: saved = {}
+	result.missions = preload("res://mission_state.gd").restore(saved.get("missions",{}))
 	result.mail = preload("res://mailbox.gd").restore(saved.get("mail",{}))
 	var jobs: Variant = saved.get("campaign_jobs",0)
 	result.campaign_jobs = clampi(int(jobs),0,999) if (jobs is int or jobs is float) and is_finite(float(jobs)) else 0
@@ -36,6 +37,7 @@ static func restore(saved: Variant = {}) -> Dictionary:
 	result.status.hull_strength = clampi(result.status.hull_strength,100,200)
 	result.status.radiation_shield = clampi(result.status.radiation_shield,0,100)
 	result.status.shields = clampi(result.status.shields,0,100)
+	result.status.zapper_upgrade = clampi(result.status.zapper_upgrade,0,1)
 	if saved.get("hold") is Dictionary:
 		for id in saved.hold:
 			var count: Variant = saved.hold[id]

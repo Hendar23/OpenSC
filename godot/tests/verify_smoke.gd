@@ -27,10 +27,10 @@ func _run() -> void:
 		var smoke: Node3D = map.world.get_node(NodePath(key))
 		var index := int(key.get_slice("_",1))
 		var rows: Array = database.Objects.filter(func(row: Dictionary) -> bool: return int(row.index) == index)
-		check(rows.size() == 1 and smoke.transform.is_equal_approx(Document.Scenery.placement(rows[0],map.world.get_meta("database_offset"))),"Factory smoke retains original database transform")
+		check(rows.size() == 1 and smoke.global_transform.is_equal_approx(Document.decode(map.document.entities[key].transform)),"Factory smoke retains authored map transform")
 		check(smoke.textures.size() == 3 and smoke.textures.all(func(texture: Texture2D) -> bool: return texture != null),"Original masked smoke textures load")
-	map.category.select(7); map._refresh_list()
-	check(map.list_keys.size() == 2,"Smoke category lists factory emitters")
+	map.category.select(5); map._refresh_list()
+	check(keys.all(func(key: String) -> bool: return key in map.list_keys),"Objects lists factory emitters")
 	if DisplayServer.get_name() != "headless":
 		var target: Vector3 = map.world.get_node(NodePath(keys[0])).global_position
 		map.camera.global_position = target + Vector3(7,3,8)
@@ -41,18 +41,21 @@ func _run() -> void:
 		for frame in range(6): await process_frame
 		await RenderingServer.frame_post_draw
 		map.viewport.get_texture().get_image().save_png("res://../dist/factory-smoke-preview.png")
-	map.select(keys[0]); map.fields.emission_rate.value = 8; map.fields.drift_x.value = 0.4; map.fields.opacity.value = 0.7
+	map.select(keys[0]); var type_id: String = map.record().entity_type
+	check(map.fields.has("entity_type") and not map.fields.has("emission_rate"),"Smoke placement links to its shared type")
+	map.select("entity_type:" + type_id); map.fields.emission_rate.value = 8; map.fields.drift_x.value = 0.4; map.fields.opacity.value = 0.7
 	map.apply_properties()
 	var smoke: Node3D = map.world.get_node(NodePath(keys[0]))
 	check(smoke.tuning.emission_rate == 8 and is_equal_approx(smoke.tuning.opacity,0.7),"Editor properties update live emitter")
+	check(keys.all(func(key: String) -> bool: return map.world.get_node(key).tuning.emission_rate == 8),"Shared smoke settings reach both factory emitters")
 	var path := "res://tests/smoke-roundtrip.json"
 	check(Document.save(map.document,path) == OK,"Smoke settings save")
 	var saved := Document.load_path(path)
-	check(saved.entities[keys[0]].emission_rate == 8 and saved.entities[keys[0]].drift_x == 0.4,"Smoke settings survive map load")
-	var invalid := saved.duplicate(true); invalid.entities[keys[0]].lifetime = -1
+	check(Document.EntityTypes.effective(saved,saved.entities[keys[0]]).emission_rate == 8 and Document.EntityTypes.effective(saved,saved.entities[keys[0]]).drift_x == 0.4,"Smoke settings survive map load")
+	var invalid := saved.duplicate(true); Document.EntityTypes.find_type(invalid,"entity_type",type_id).lifetime = -1
 	check(not Document.valid(invalid),"Invalid smoke settings rejected")
-	map.duplicate_selection()
-	check(map.world.get_node(NodePath(map.selected)) is Smoke and map.record().emission_rate == 8,"Duplicate retains smoke settings")
+	map.select(keys[0]); map.duplicate_selection()
+	check(map.world.get_node(NodePath(map.selected)) is Smoke and Document.EntityTypes.effective(map.document,map.record()).emission_rate == 8,"Duplicate retains smoke settings")
 	map.delete_selection(); map.undo()
 	check(map.world.get_node_or_null(NodePath(map.selected)) != null or map.document.entities.values().any(func(entry: Dictionary) -> bool: return entry.kind == "smoke" and entry.name.ends_with("copy") and not entry.deleted),"Undo restores deleted smoke")
 	map._add_entity("smoke","")

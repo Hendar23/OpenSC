@@ -254,6 +254,8 @@ func _attach(body: Node) -> void:
   clamp_joint.call("set_flag_" + axis,Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT,true)
   for parameter in [Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT,Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT,Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT,Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT]: clamp_joint.call("set_param_" + axis,parameter,0.0)
  pilot.add_collision_exception_with(target); target.sleeping = false
+ delivery_point = null; declined_point = null
+ _update_delivery_point()
  _play(clamp_audio)
 func release() -> void:
  delivery_point = null; declined_point = null
@@ -309,13 +311,16 @@ func _physics_process(delta: float) -> void:
   if head.to_global(head_socket).distance_to(global_position) > head_socket.length() * 2.0 + 0.02:
    head.remove_collision_exception_with(pilot)
  _draw_chain()
+ _update_delivery_point()
+func _update_delivery_point() -> void:
  delivery_point = null
  if is_instance_valid(target):
   if is_instance_valid(declined_point) and not declined_point.contains_point(target.global_position): declined_point = null
   for point in drop_points:
    if is_instance_valid(point) and point.contains_point(target.global_position):
-    if point != declined_point: delivery_point = point
-    break
+    if point != declined_point:
+     delivery_point = point
+     break
 func decline_delivery() -> void:
  declined_point = delivery_point; delivery_point = null
 func _exit_tree() -> void:

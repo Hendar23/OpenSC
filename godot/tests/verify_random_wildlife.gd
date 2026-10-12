@@ -22,6 +22,7 @@ func _run() -> void:
 		await physics_frame
 	game.set_process(false); game.set_physics_process(false); game.pilot.active = false
 	var pop: Node3D = game.wildlife; pop.set_simulating(false); pop.set_physics_process(false)
+	game.world_root.get_node("ActorActivity").set_physics_process(false); pop.activity = null
 	check(pop.streaming and pop.random_groups.size() > 70,"Random groups are distributed throughout the map")
 	check(pop.get_child_count() > 0 and pop.spawned_groups.size() < pop.random_groups.size(),"Only nearby groups are active in the game")
 	var safe := true
@@ -37,6 +38,7 @@ func _run() -> void:
 	check(is_equal_approx(pop._activation_margin(),24.0),"Activation prepares wildlife beyond the camera offset")
 	game.pilot.global_position = old_player_position; game.camera.global_transform = old_camera_pose; pop.visibility_range = old_visibility
 	# Keep the population comparison independent of exported visibility defaults.
+	pop.max_active = 0
 	pop.visibility_range = 18.0; pop.session_seed = 444; pop.reroll(false)
 	var visible_distance: float = pop.visibility_range
 	var nearby_count: int = pop.get_child_count()
@@ -70,11 +72,9 @@ func _run() -> void:
 		distant.global_position = game.pilot.global_position + Vector3(pop.visibility_range + 10.0,0,0)
 		pop.set_simulating(true)
 		pop._stream_update()
-		check(state.members.size() == retained_count and not distant.visible and not distant.is_physics_processing() and distant.collision_mask == 0,"A distant creature is retained with rendering, simulation and collision stopped")
-		var sleeping_position := distant.global_position
-		var sleeping_animation: float = distant.animation_time
+		check(state.members.size() < retained_count and (not is_instance_valid(distant) or not distant.is_inside_tree()),"An individual leaving view is discarded independently of its nearby shoal")
 		await physics_frame; await physics_frame
-		check(distant.global_position == sleeping_position and distant.animation_time == sleeping_animation and distant.get_child(0).disabled,"Dormant creatures retain their position and animation without active collision shapes")
+		check(not is_instance_valid(distant) or distant.position == Vector3.ZERO,"A recycled representation retains no offscreen world position")
 		pop.set_simulating(false)
 		for fish in state.members:
 			if fish.get_meta("wildlife_awake",true): fish._physics_process(1.0 / 60.0)
@@ -82,7 +82,7 @@ func _run() -> void:
 	var old_members: Array = state.members.duplicate()
 	var old_seed: int = state.seed
 	game.pilot.global_position = home + Vector3(1000,0,0); pop._stream_update()
-	check(state.members.is_empty() and not state.attempted and pop.get_child_count() == 0 and old_members.all(func(fish) -> bool: return not is_instance_valid(fish)),"Leaving random groups frees their creature nodes rather than accumulating dormant bodies")
+	check(state.members.is_empty() and not state.attempted and pop.get_child_count() == 0 and old_members.all(func(fish) -> bool: return not is_instance_valid(fish) or not fish.is_inside_tree()),"Leaving random groups removes every individual from the world")
 	check(state.seed != old_seed,"Returning random groups use a fresh member roll")
 	game.pilot.global_position = home + Vector3(pop.visibility_range + 3.0,0,0)
 	pop._stream_update()

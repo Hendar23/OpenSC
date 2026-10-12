@@ -8,6 +8,11 @@ const Creature = preload("res://fish_controller.gd")
 const DEFAULTS := {"auto_aim_cone":30.0,"range":2.5,"damage_per_tick":2.5,"beam_width":0.08,"animation_speed":12.5,"volume_db":-16.0,"gore_amount":20.0,"gore_settle_speed":1.0,"gore_lifetime":2.0,"chunk_lifetime":60.0}
 var settings := DEFAULTS.duplicate()
 var auto_aim_enabled := false
+var upgraded := false
+var secondary_emitter: Marker3D
+var secondary_arc: Node3D
+var standard_emitter := Vector3.ZERO
+var upgraded_emitters: Array[Vector3] = []
 var pilot: Node3D
 var camera: Camera3D
 var muzzle: Node3D
@@ -16,6 +21,8 @@ var material: StandardMaterial3D
 var frames: Array[Texture2D] = []
 var audio: AudioStreamPlayer
 var icon: Texture2D
+var standard_icon: Texture2D
+var upgraded_icon: Texture2D
 var firing := false
 var elapsed := 0.0
 var damage_clock := 0.0
@@ -65,9 +72,13 @@ func setup(player: Node3D, folder: String, view: Camera3D, catalogue: Dictionary
 	if socket != null: muzzle.transform = player.global_transform.affine_inverse() * socket.global_transform; muzzle.basis = muzzle.basis.orthonormalized()
 	preload("res://submarine_mounts.gd").apply(muzzle,player.visual,"zapper")
 	var emitter := Marker3D.new(); emitter.name = "Emitter"; emitter.position = Vector3(0,bounds.get_center().y,bounds.position.z - 0.002); muzzle.add_child(emitter)
+	standard_emitter = emitter.position
+	upgraded_emitters = _emitter_tips(housing,bounds)
+	secondary_emitter = Marker3D.new(); secondary_emitter.name = "SecondEmitter"; secondary_emitter.position = upgraded_emitters[1]; muzzle.add_child(secondary_emitter)
 	var cache := {}
 	for index in range(1,4): frames.append(Assets._load_texture(folder,"ZAPPER%d" % index,"ZAPPER%dM" % index,cache))
 	icon = _icon(folder,catalogue)
+	standard_icon = icon; upgraded_icon = _icon(folder,catalogue,"ELECTRI2")
 	mounted.append({"id":"zapper","name":"Zapper","icon":icon})
 	available.assign(mounted)
 	beam = MeshInstance3D.new(); beam.name = "ZapperBeam"; beam.top_level = true; beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -75,6 +86,8 @@ func setup(player: Node3D, folder: String, view: Camera3D, catalogue: Dictionary
 	material = StandardMaterial3D.new(); material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED; material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD; material.cull_mode = BaseMaterial3D.CULL_DISABLED; material.no_depth_test = false
 	material.texture_repeat = true
 	beam.material_override = material; add_child(beam); beam.hide()
+	secondary_arc = create_arc(player,frames); secondary_arc.name = "SecondZapperArc"; secondary_arc.camera = view; add_child(secondary_arc)
+	secondary_arc.set_physics_process(false)
 	for name in ["SPARK1","SPARK"]:
 		var texture := Assets._load_texture(folder,name,name + "M",cache)
 		if texture != null: impact_frames.append(texture)
@@ -90,10 +103,10 @@ static func _sound(folder: String, id: String, sample: String) -> AudioStream:
 		if stream != null: return stream
 	return LegacyAudio.load_file(folder.path_join("WAVES/" + sample + ".RAW"))
 
-func _icon(folder: String, catalogue: Dictionary) -> Texture2D:
+func _icon(folder: String, catalogue: Dictionary, hud_name: String = "") -> Texture2D:
 	var record: Dictionary = catalogue.get("tables",{}).get("equipment",{}).get("records",{}).get("zapper",{})
 	# Sq Pic is the shop illustration. ELECTRIC.RAS is the cockpit icon.
-	var name: String = str(record.get("HUD Pic","ELECTRIC")).to_upper()
+	var name: String = str(record.get("HUD Pic","ELECTRIC")).to_upper() if hud_name.is_empty() else hud_name
 	var image: Image
 	for replacement in Mods.candidates("texture." + name):
 		image = Assets._replacement_image(replacement.path)
@@ -115,6 +128,41 @@ func cycle(amount: int) -> void:
 func current() -> Dictionary:
 	return {} if mounted.is_empty() else mounted[selected]
 
+static func _emitter_tips(housing: Node3D, bounds: AABB) -> Array[Vector3]:
+	# ELECTRIC's pointed electrodes extend sideways and upward from the bases.
+	# Their tips are the outermost vertices, not the forward faces of the bases.
+	var tips: Array[Vector3] = [Vector3.ZERO,Vector3.ZERO]
+	var counts := [0,0]
+	if housing != null:
+		for entry in Equipment._meshes(housing,Transform3D.IDENTITY):
+			for surface in range(entry.mesh.get_surface_count()):
+				for vertex in entry.mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]:
+					var point: Vector3 = entry.pose * vertex
+					var side := 0 if point.x < bounds.get_center().x else 1
+					var edge: float = bounds.position.x if side == 0 else bounds.end.x
+					if absf(point.x - edge) > 0.0001: continue
+					tips[side] += point; counts[side] += 1
+	for side in range(2):
+		tips[side] = tips[side] / counts[side] if counts[side] > 0 else Vector3(bounds.get_center().x,bounds.get_center().y,bounds.position.z)
+	return tips
+
+# 0x45eca0 message 0x23: one permanent upgrade, range 2.5 -> 5.
+# 0x45dd30 applies damage once (2.5 -> 5), then draws the second arc.
+func set_upgraded(enabled: bool) -> void:
+	upgraded = enabled
+	icon = upgraded_icon if enabled else standard_icon
+	for item in available: item.icon = icon
+	if muzzle == null: return
+	muzzle.get_node("Emitter").position = upgraded_emitters[0] if enabled else standard_emitter
+	if not enabled and secondary_arc != null:
+		secondary_arc.firing = false; secondary_arc.beam.hide()
+
+func effective_range() -> float:
+	return float(settings.range) * (2.0 if upgraded else 1.0)
+
+func effective_damage() -> float:
+	return float(settings.damage_per_tick) * (2.0 if upgraded else 1.0)
+
 func _held() -> bool:
 	preload("res://input_bindings.gd").install()
 	return preload("res://input_bindings.gd").strength("weapon_fire") > 0.5
@@ -127,6 +175,9 @@ func update_fire(held: bool, delta: float) -> void:
 	blood_cooldown = maxf(0.0,blood_cooldown - delta)
 	firing = held and not mounted.is_empty() and settings.range > 0
 	beam.visible = firing; spark.visible = firing
+	if secondary_arc != null:
+		secondary_arc.firing = firing and upgraded
+		secondary_arc.beam.visible = secondary_arc.firing
 	if not firing:
 		blood_cooldown = 0.0; damage_clock = 0.0
 		impact.hide(); last_hit = null
@@ -139,7 +190,7 @@ func update_fire(held: bool, delta: float) -> void:
 	if pilot.submarine_audio != null: audio.volume_db = settings.volume_db + float(pilot.submarine_audio.tuning.settings.master_volume)
 	beam_start = muzzle.get_node("Emitter").global_position
 	var forward := _aim_direction(-muzzle.global_basis.z.normalized())
-	beam_end = beam_start + forward * settings.range
+	beam_end = beam_start + forward * effective_range()
 	var query := PhysicsRayQueryParameters3D.create(beam_start,beam_end,13,[pilot.get_rid()]); query.hit_back_faces = true
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	last_hit = hit.get("collider")
@@ -149,11 +200,16 @@ func update_fire(held: bool, delta: float) -> void:
 		impact.global_position = beam_end - forward * 0.025
 		if last_hit.has_method("take_damage"):
 			var previous_health: float = last_hit.health if last_hit is Creature else 0.0
-			preload("res://original_damage.gd").weapon(last_hit,settings.damage_per_tick * damage_ticks,beam_start)
+			preload("res://original_damage.gd").weapon(last_hit,effective_damage() * damage_ticks,beam_start,pilot)
 			if last_hit is Creature and last_hit.health < previous_health and blood_cooldown <= 0.0:
 				hit_blood.emit_hit(beam_end,hit.normal,last_hit.death_frames,settings.gore_amount,settings.gore_lifetime,settings.gore_settle_speed)
 				blood_cooldown = 0.15
 	spark.global_position = beam_start
+	if secondary_arc != null and secondary_arc.firing:
+		secondary_arc.beam_start = secondary_emitter.global_position
+		secondary_arc.beam_end = beam_end
+		secondary_arc.settings.beam_width = settings.beam_width
+		secondary_arc.settings.animation_speed = settings.animation_speed
 
 func _process(delta: float) -> void:
 	if beam == null or not firing: return
@@ -208,7 +264,7 @@ func _crackle(index: int, tick: int) -> float:
 # The slider specifies the full cone width; zero restores straight firing.
 func _aim_direction(forward: Vector3) -> Vector3:
 	if not auto_aim_enabled or settings.auto_aim_cone <= 0.0: return forward
-	var sphere := SphereShape3D.new(); sphere.radius = settings.range
+	var sphere := SphereShape3D.new(); sphere.radius = effective_range()
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.shape = sphere; query.transform.origin = beam_start
 	query.collision_mask = 8; query.exclude = [pilot.get_rid()]
@@ -218,7 +274,7 @@ func _aim_direction(forward: Vector3) -> Vector3:
 		var target: Node3D = entry.collider
 		if not target.has_method("take_damage") or bool(target.get("dead")) or not bool(target.get_meta("weapon_target",true)): continue
 		var offset := target.global_position - beam_start
-		if offset.length_squared() < 0.00001 or offset.length() > settings.range: continue
+		if offset.length_squared() < 0.00001 or offset.length() > effective_range(): continue
 		var direction := offset.normalized()
 		var alignment := forward.dot(direction)
 		if alignment < best_dot: continue

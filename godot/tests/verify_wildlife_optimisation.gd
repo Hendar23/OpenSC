@@ -27,6 +27,19 @@ func run() -> void:
 	await physics_frame
 	members[2].set_meta("wildlife_awake",false); shoal.refresh(members)
 	check(shoal.positions.size() == 2 and shoal.center == Vector3(1,0,0),"Next tick refreshes and excludes sleeping members")
+	var large_group: Array[Node3D] = []
+	for index in range(64):
+		var member := Fish.new()
+		member.position = Vector3((index % 8) * 1.1 - 4.0,0,(index / 8) * 1.1 - 4.0)
+		large_group.append(member)
+	var large_shoal := Shoal.new(); large_shoal.refresh(large_group)
+	for point in [Vector3(-2.01,0,-2.01),Vector3(1.99,0,1.99)]:
+		var expected := Vector3.ZERO
+		for member in large_group:
+			var away: Vector3 = point - member.position
+			if away.length_squared() > 0.001 and away.length_squared() < 9.0: expected += away.normalized()
+		check(large_shoal.separation(point,1.0).is_equal_approx(expected),"Large shoal separation matches full search across cell boundaries")
+	for member in large_group: member.free()
 	var fish = members[0]
 	var population := preload("res://wildlife_population.gd").new()
 	population._update_activity(fish,fish.global_position + Vector3(0,0,5),[])

@@ -1,24 +1,24 @@
 extends SceneTree
-const Editor = preload("res://asset_editor.gd")
 const Document = preload("res://map_document.gd")
 const Mods = preload("res://mod_registry.gd")
-const Game = preload("res://game.gd")
 var checks := 0
 var failures := 0
-func _initialize() -> void: call_deferred("_run")
+func _initialize() -> void:
+	var storage = preload("res://player_storage.gd")
+	storage.root_override = "res://tests/cache-traffic-fixtures"
+	storage.ensure_parent(storage.preferences_path())
+	var config := ConfigFile.new()
+	config.set_value("game", "folder", ProjectSettings.globalize_path("res://../Original Sub Culture"))
+	config.save(storage.preferences_path())
+	call_deferred("_run")
 func check(condition: bool, message: String) -> void:
 	checks += 1
 	if not condition: failures += 1; push_error(message)
 func _run() -> void:
 	Mods.initialize(false)
-	var editor := Editor.new(); editor.remember_preferences = false; root.add_child(editor)
-	await process_frame
-	editor.game_folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
-	editor._set_mode(true)
-	var map: HBoxContainer = editor.map_editor
-	for frame in range(1800):
-		if map.loaded or (not map.loading and not map.document.is_empty()): break
-		await physics_frame
+	var map := preload("res://map_editor.gd").new()
+	root.add_child(map)
+	await map.open(ProjectSettings.globalize_path("res://../Original Sub Culture"))
 	check(map.loaded, "Map mode loads terrain and original scenery")
 	if not map.loaded: quit(1); return
 	check(map.document.entities.size() > 380 and map.document.species.size() >= 8 and map.document.groups.is_empty(), "Scenery and creature types load without the removed fixed wildlife groups")
@@ -204,7 +204,7 @@ func _run() -> void:
 	map.fields.mass.value = 3.51; map.fields.immovable.button_pressed = true; map.apply_properties()
 	check(is_equal_approx(map.record().mass,3.51) and map.record().immovable and Document.valid(map.document),"Rock properties apply to valid maps")
 	map.add_object_group()
-	check(map.record().type == "rock" and map.record().name == "New rock group","Adding a group uses the selected rock type")
+	check(map.record().type == "rock" and map.record().name == "New rock","Adding an object uses the selected rock type")
 	check(map.fields.has("group_rotation_1"),"Placed rocks expose orientation controls")
 	map.select("object_type:rock"); map.fields.suckomat_compatible.button_pressed = true; map.apply_properties()
 	Document.save(map.document,path)
@@ -218,7 +218,28 @@ func _run() -> void:
 		check(map.fields.has("health") and not map.fields.has("grapple_compatible") and not map.fields.has("delivery_commodity"),"Mines expose damageable health without unsupported towing or delivery controls")
 	map.choice("missing_model_fixture","Model",["ANGEL","JACKFISH"],"custom_fish")
 	check(map._value("missing_model_fixture") == "custom_fish","An unavailable model ID survives dropdown creation without becoming the first original model")
-	editor.queue_free(); await process_frame
+	map.category.select(6); map.select("entity_type:bubble_stream")
+	check(map.fields.has("emission_rate") and map.fields.has("rise_speed") and map.fields.has("lifetime") and map.fields.has("opacity"),"Bubble template exposes emitter settings under Object types")
+	map.fields.emission_rate.value = 5; map.apply_properties()
+	var bubble_type := Document.EntityTypes.find_type(map.document,"entity_type","bubble_stream")
+	map._add_entity("bubbles","",bubble_type)
+	var bubble_key: String = map.selected
+	check(map.category.selected == 5 and map.record().entity_type == "bubble_stream","Placed bubble stream belongs to Objects and references its shared type")
+	check(map.fields.has("enabled") and not map.fields.has("emission_rate"),"Bubble placement has an enable switch without shadowing template tuning")
+	var bubble_node = map.world.get_node(NodePath(bubble_key))
+	check(bubble_node is Document.BubbleStream and bubble_node.tuning.emission_rate == 5,"Shared bubble settings reach the placed emitter")
+	map.category.select(8); map._refresh_list()
+	check(map.list_keys.has("Added/OriginalPatrol_2") and map.list_keys.has("Added/OriginalPatrol_4"),"Prison and combat ship instances appear under NPCs")
+	map.category.select(7); map.select("npc_type:patrol_tech2sub")
+	check(map.fields.has("npc_armed") and map.fields.npc_armed.button_pressed and map.fields.has("npc_attack_range"),"Combat patrol template exposes weapons and navigation settings")
+	var patrol_type := Document.EntityTypes.find_type(map.document,"npc_type","patrol_tech2sub")
+	map._add_entity("model","TECH2SUB",patrol_type)
+	check(map.category.selected == 8 and map.record().npc_faction == 2 and map.record().npc_type == patrol_type.id,"Adding a Procha patrol preserves faction and shared NPC reference")
+	check(Document.valid(map.document),"Extended editor document remains valid")
+	Document.save(map.document,path)
+	var additions := Document.load_path(path)
+	check(additions.entities[bubble_key].entity_type == "bubble_stream" and additions.npc_types.any(func(type: Dictionary) -> bool: return type.id == "patrol_tech2sub" and type.npc_armed),"Bubble and patrol types and placements survive save/reload")
+	map.queue_free(); await process_frame
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	print("Map editor verification: %d checks, %d failures" % [checks, failures])
 	quit(1 if failures else 0)

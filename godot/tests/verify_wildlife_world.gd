@@ -49,8 +49,14 @@ func _run() -> void:
 	check(game.world_root.get_node_or_null(NodePath(removed)) == null and game.world_root.has_node("Added/test_light"), "Map removals and added light affect the game world")
 	check(game.docking.ports.size() == 7 and game.docking.ports.any(func(port: Dictionary) -> bool: return port.name == "Test dock"), "Duplicated docks retain working docking components")
 	check(game.object_population.get_child_count() == 3 and game.object_population.player == game.pilot,"Runtime loads authored mine groups and links player proximity")
-	check(game.object_population.get_children().all(func(mine: Node3D) -> bool: return mine.stats.damage == 30 and mine.armed),"Runtime mines use shared type stats and are armed")
+	check(game.object_population.get_children().all(func(mine: Node3D) -> bool: return mine.stats.damage == preload("res://object_definitions.gd").FLOATING_MINE.damage and mine.armed),"Runtime mines use shared type stats and are armed")
 	var pop: Node3D = game.wildlife
+	# Authored groups are spawn instructions; approach their location to instantiate them.
+	game.world_root.get_node("ActorActivity").set_physics_process(false); pop.activity = null
+	game.set_process(false); game.set_physics_process(false); pop.set_physics_process(false)
+	game.pilot.global_position = Document.vector(home)
+	game.camera.global_position = Document.vector(home) + Vector3(0,0,4)
+	game.camera.look_at(Document.vector(home)); pop.reroll(false)
 	check(pop.get_child_count() >= 2 and pop.get_child_count() <= 4 and pop.spawned_groups == [data.groups[0].id], "Only the eligible group spawns and respects population range")
 	var model_scale: float = pop.templates[data.species[0].id].scale.x
 	check(pop.get_children().all(func(fish: Node3D) -> bool: return fish.get_child(1).scale.x >= model_scale * 0.4 and fish.get_child(1).scale.x <= model_scale * 0.6), "Per-creature scale falls inside the authored range")

@@ -306,10 +306,13 @@ func show_loading() -> void:
 	if controls_menu != null: controls_menu.close_menu()
 	menu_layer.hide(); loading_layer.show()
 	active_button = null
-	progress_bar.value = 0.0; loading_status.text = "Loading…"
+	progress_bar.value = 0.0; loading_status.text = "Loading"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func update_progress(message: String) -> void:
+	loading_status.text = "Converting assets" if message.begins_with("Converting assets") else "Loading"
+	# Keep conversion and cached-loading captions separate from stage progress.
+	message = message.replace("Converting assets: environment textures", "Loading environment textures").replace("Converting assets: environment:", "Loading environment:")
 	var fraction := 0.0
 	var match := progress_pattern.search(message)
 	if match != null: fraction = float(match.get_string(1)) / maxf(1.0,float(match.get_string(2)))

@@ -39,6 +39,15 @@ func take_weapon_damage(raw_strength: float, source: Vector3 = Vector3.ZERO) -> 
 	# take_damage already applies hull protection relative to the base hull.
 	take_damage(raw_strength * Damage.SHIELD_POINTS_PER_RAW * Damage.BASE_SUSTAIN,source)
 
+func receive_projectile_hit(raw_strength: float, point: Vector3, impulse: Vector3) -> void:
+	if dead or not active or not controls_enabled: return
+	if not is_finite(raw_strength) or raw_strength < 0 or not point.is_finite() or not impulse.is_finite(): return
+	receive_towing_impulse(impulse,point - global_position)
+	# Apply hull protection once and issue one impact pulse. Fatal hits retain
+	# the stronger destruction pulse issued by take_damage.
+	take_damage(raw_strength * Damage.SHIELD_POINTS_PER_RAW * Damage.BASE_SUSTAIN,point,false)
+	if not dead and impact_rumble != null and not impulse.is_zero_approx(): impact_rumble.impact(impulse.length() / maxf(1,mass))
+
 func receive_radiation(strength: float, delta: float) -> void:
 	radiation_exposed = active and controls_enabled and not dead and is_finite(strength) and strength > 0.0
 	if radiation_exposed and is_finite(delta) and delta > 0.0: take_damage(strength * delta * Damage.radiation_protection(radiation_rating),Vector3.ZERO,false)

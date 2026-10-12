@@ -1,12 +1,12 @@
 extends RefCounted
 
-const ITEMS := ["shield", "hullstr", "radoff", "deep_sea_lights", "suckomat", "zapper", "magnet", "grapple"]
-const UPGRADES := {"hullstr":{"stat":"hull_strength","maximum":200},"radoff":{"stat":"radiation_shield","maximum":100}}
+const ITEMS := ["shield", "hullstr", "radoff", "deep_sea_lights", "suckomat", "zapper", "magnet", "grapple", "zapperup"]
+const UPGRADES := {"hullstr":{"stat":"hull_strength","maximum":200},"radoff":{"stat":"radiation_shield","maximum":100},"zapperup":{"stat":"zapper_upgrade","maximum":1,"increment":1}}
 
 static func upgrade_available(progress: Dictionary, id: String) -> bool:
 	if not UPGRADES.has(id): return true
 	var upgrade: Dictionary = UPGRADES[id]
-	return int(progress.status[upgrade.stat]) < int(upgrade.maximum)
+	return int(progress.status.get(upgrade.stat,0)) < int(upgrade.maximum)
 
 static func use_item(progress: Dictionary, pilot: Node, id: String) -> String:
 	if id == "shield": return consume_repair(progress,pilot)
@@ -14,7 +14,7 @@ static func use_item(progress: Dictionary, pilot: Node, id: String) -> String:
 	if pilot.dead: return "The submarine is destroyed."
 	if not upgrade_available(progress,id): return "Upgrade already at maximum."
 	var upgrade: Dictionary = UPGRADES[id]
-	progress.status[upgrade.stat] = mini(int(upgrade.maximum),int(progress.status[upgrade.stat]) + 20)
+	progress.status[upgrade.stat] = mini(int(upgrade.maximum),int(progress.status.get(upgrade.stat,0)) + int(upgrade.get("increment",20)))
 	progress.hold[id] -= 1
 	if progress.hold[id] == 0: progress.hold.erase(id)
 	pilot.hull_rating = float(progress.status.hull_strength)
@@ -22,15 +22,15 @@ static func use_item(progress: Dictionary, pilot: Node, id: String) -> String:
 	return ""
 const SLOTS := {"zapper":9,"deep_sea_lights":5,"suckomat":3,"magnet":3,"grapple":3}
 
-static func shield_repair(catalogue: Dictionary, city_id: String, stage: int) -> Dictionary:
-	return offer(catalogue,city_id,stage,"shield")
+static func shield_repair(catalogue: Dictionary, city_id: String, stage: int, testing: bool = false) -> Dictionary:
+	return offer(catalogue,city_id,stage,"shield",testing)
 
-static func offers(catalogue: Dictionary, city_id: String, stage: int) -> Dictionary:
+static func offers(catalogue: Dictionary, city_id: String, stage: int, testing: bool = false) -> Dictionary:
 	var result := {}
-	for id in ITEMS: result[id] = offer(catalogue,city_id,stage,id)
+	for id in ITEMS: result[id] = offer(catalogue,city_id,stage,id,testing)
 	return result
 
-static func offer(catalogue: Dictionary, city_id: String, stage: int, id: String) -> Dictionary:
+static func offer(catalogue: Dictionary, city_id: String, stage: int, id: String, testing: bool = false) -> Dictionary:
 	var source_id := "lights" if id == "deep_sea_lights" else id
 	var tables: Dictionary = catalogue.get("tables",{})
 	var text: Dictionary = tables.get("equipment_text",{}).get("records",{}).get(source_id,{})
@@ -39,7 +39,16 @@ static func offer(catalogue: Dictionary, city_id: String, stage: int, id: String
 	var prices: Dictionary = tables.get("equipment_prices.%d" % pricing_stage,{}).get("records",{}).get(source_id,{})
 	var city_record: Dictionary = tables.get("city_info",{}).get("records",{}).get(city_id,{})
 	var city := str(city_record.get("shop_price_key",str(city_record.get("name","")).get_slice(" ",0)))
-	return {"id":id,"name":text.get("name",id.capitalize()),"description":text.get("Description","Restores shields to full strength."),"available":not city.is_empty() and prices.has(city + " buy") and int(prices[city + " buy"]) > 0,"price":maxi(0,int(prices.get(city + " buy",0))),"sell_price":maxi(0,int(prices.get(city + " sell",0))),"maximum":maxi(1,int(definition.get("Maximum",1))),"slot":SLOTS.get(id,0),"square_bitmap":"INTROTEX/" + str(definition.get("Sq Pic","sqshld")).to_upper() + ".BMP","info_bitmap":"INTROTEX/" + str(definition.get("Info Pic","wshields")).to_upper() + ".BMP"}
+	if testing:
+		prices = prices.duplicate()
+		if int(prices.get(city + " buy",0)) <= 0:
+			var fallback := 0
+			for level in [4,3,1]:
+				var record: Dictionary = tables.get("equipment_prices.%d" % level,{}).get("records",{}).get(source_id,{})
+				for key in record:
+					if str(key).ends_with(" buy") and int(record[key]) > 0: fallback = int(record[key]) if fallback == 0 else mini(fallback,int(record[key]))
+			prices[city + " buy"] = maxi(1,fallback)
+	return {"id":id,"name":text.get("name",id.capitalize()),"description":text.get("Description","Restores shields to full strength."),"available":(testing or not city.is_empty()) and prices.has(city + " buy") and int(prices[city + " buy"]) > 0,"price":maxi(0,int(prices.get(city + " buy",0))),"sell_price":maxi(0,int(prices.get(city + " sell",0))),"maximum":maxi(1,int(definition.get("Maximum",1))),"slot":SLOTS.get(id,0),"square_bitmap":"INTROTEX/" + str(definition.get("Sq Pic","sqshld")).to_upper() + ".BMP","info_bitmap":"INTROTEX/" + str(definition.get("Info Pic","wshields")).to_upper() + ".BMP"}
 
 static func buy(progress: Dictionary, offer: Dictionary) -> String:
 	if not offer.get("available",false): return str(offer.name) + " is not sold at this station."

@@ -2,6 +2,7 @@ extends SceneTree
 const Game = preload("res://game.gd")
 const Document = preload("res://map_document.gd")
 const Pulse = preload("res://pulse_light.gd")
+const Searchlight = preload("res://searchlight.gd")
 var checks := 0
 var failures := 0
 func check(ok: bool, message: String) -> void:
@@ -49,5 +50,15 @@ func run() -> void:
    root.get_texture().get_image().save_png("res://tests/light69-off.png")
  for deleted in ["Scenery/Light_59","Scenery/Light_62","Scenery/Light_63","Scenery/Light_68","Scenery/Light_71"]:
   check(not game.world_root.has_node(NodePath(deleted)),"Deleted excess light stays deleted: " + deleted)
+ var map_lights := []
+ for node in game.world_root.find_children("*","Node3D",true,false):
+  if node is Pulse or node is Searchlight:
+   for other in map_lights:
+    check(node.global_position.distance_to(other.global_position) > 0.001,"Map lights do not stack: %s / %s" % [node.name,other.name])
+   map_lights.append(node)
+ check(map_lights.size() == 21,"Map keeps eleven distinct beacons and ten searchlights")
+ Document.apply_entities(game.world_root,game.game_folder,data)
+ for number in [23,29,30,34,36,42,28,46,47,50,51,53,31,43]:
+  check(not game.world_root.has_node("Scenery/Light_%d" % number),"Duplicate stays removed after reapplying map: %d" % number)
  game.queue_free(); await process_frame
  print("Saved lights: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

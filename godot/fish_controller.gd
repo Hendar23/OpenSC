@@ -26,6 +26,11 @@ var attack_range := 8.0
 var flee_range := 4.0
 var mobility := "swimming"
 var population: Node3D
+var mission_owner := ""
+var ambient_clock := 0.0
+var ambient_goal := Vector3.ZERO
+var ambient_blocked := false
+var ambient_mode := false
 var group_members: Array[Node3D] = []
 var shoal := preload("res://wildlife_shoal.gd").new()
 var defense_timer := 0.0
@@ -43,6 +48,8 @@ var ground_span := Vector2(0.2,0.2)
 var crawl_stuck_time := 0.0
 var crawl_turn_sign := 1.0
 var crawl_probe_timer := 0.0
+var support_cache := {}
+var support_frame := -100
 var playback_rate := ANIMATION_SPEED
 var animation_speed := 1.0
 var animation_interval := 0.0
@@ -80,6 +87,71 @@ func configure_combat(species: Dictionary) -> void:
 	configure_ranges(species)
 	combat = preload("res://wildlife_combat.gd").new()
 	combat.configure(self,species); add_child(combat)
+
+func clear_ambient_state() -> void:
+	# Pool resources, never the identity or history of an offscreen creature.
+	position = Vector3.ZERO; home = Vector3.ZERO; goal = Vector3.ZERO
+	velocity = Vector3.ZERO; pushed_velocity = Vector3.ZERO; group_members = []
+	shoal = preload("res://wildlife_shoal.gd").new()
+	defense_timer = 0; startle_timer = 0; startle_cooldown = 0; fleeing = false
+	avoidance_timer = 0; avoidance = Vector3.ZERO; offscreen_delta = 0
+	ground_initialized = false; ground_normal = Vector3.UP; crawl_stuck_time = 0
+	crawl_probe_timer = 0; support_cache.clear(); support_frame = -100
+	ambient_clock = 0; ambient_goal = Vector3.ZERO; ambient_blocked = false; ambient_mode = false; last_push_frame = -1
+	health = max_health; dead = false; animation_time = 0; animation_refresh = true
+	set_meta("spawn_position",Vector3.ZERO); set_meta("spawn_group","")
+	if has_meta("entity_id"): remove_meta("entity_id")
+	if combat != null:
+		combat._stop_weapon(); combat.target = null; combat.threat = null
+		combat.bite_timer = 0; combat.blood_timer = 0; combat.zap_clock = 0; combat.zap_ticks_left = 0
+		if is_instance_valid(combat.blood): combat.blood.free(); combat.blood = null
+
+func revive_ambient(point: Vector3, seed_value: int) -> void:
+	position = point; home = point; rng.seed = seed_value
+	direction = Vector3.FORWARD.rotated(Vector3.UP,rng.randf_range(-PI,PI))
+	animation_time = rng.randf_range(0,8); animation_elapsed = 0
+	collision_layer = 8; collision_mask = 7; animation_refresh = true
+	_choose_goal(); _update_orientation()
+
+func _advance_ambient(delta: float) -> void:
+	# Far visible wildlife is scenery: shared school goals, no body solver or combat.
+	defense_timer = maxf(0,defense_timer - delta)
+	startle_timer = maxf(0,startle_timer - delta); startle_cooldown = maxf(0,startle_cooldown - delta)
+	pushed_velocity = pushed_velocity.move_toward(Vector3.ZERO,delta * 8.0)
+	fleeing = false
+	ambient_clock -= delta; turn_timer -= delta
+	if ambient_clock <= 0:
+		ambient_clock = rng.randf_range(0.35,0.55)
+		if turn_timer <= 0 or position.distance_squared_to(goal) < 1: _choose_goal()
+		ambient_goal = goal
+		if group_behaviour != "solitary" and not group_members.is_empty():
+			shoal.refresh(group_members)
+			ambient_goal = shoal.goal + (home - shoal.center) * 0.3
+		var ahead := (ambient_goal - position).normalized()
+		var query := PhysicsRayQueryParameters3D.create(global_position,global_position + direction * (radius + swim_speed * 0.8),1)
+		query.hit_back_faces = true
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		ambient_blocked = not hit.is_empty()
+		if not hit.is_empty():
+			ambient_goal = position + (ahead + Vector3(hit.normal) * 2).normalized() * 4
+			goal = ambient_goal; turn_timer = 1
+		if mobility == "crawling":
+			var contact: Dictionary = population.floor_contact(global_position)
+			if not contact.is_empty():
+				ground_normal = contact.normal
+				global_position.y = float(contact.position.y) + ground_clearance / maxf(0.3,ground_normal.y)
+	var desired := (ambient_goal - position).normalized()
+	if mobility == "crawling": desired.y = 0; desired = desired.normalized()
+	_steer(desired,delta,turn_speed)
+	velocity = direction * (0.0 if ambient_blocked else swim_speed)
+	if mobility == "crawling": velocity.y = -Vector2(ground_normal.x,ground_normal.z).dot(Vector2(velocity.x,velocity.z)) / maxf(0.3,ground_normal.y)
+	position += velocity * delta
+	position.x = clampf(position.x,bounds.position.x + radius,bounds.end.x - radius)
+	position.z = clampf(position.z,bounds.position.z + radius,bounds.end.z - radius)
+	position.y = clampf(position.y,bounds.position.y + radius,surface_height - radius - 0.2)
+	_update_orientation()
+	playback_rate = animation_speed * (walking_animation_rate if mobility == "crawling" else ANIMATION_SPEED)
+	animation_time += delta * playback_rate
 
 func receive_sub_push(sub_velocity: Vector3, sub_radius: float) -> void:
 	if dead or not get_meta("wildlife_awake",true): return
@@ -154,6 +226,16 @@ func _crawler_contact(point: Vector3) -> Dictionary:
 	var center: Dictionary = population.floor_contact(point)
 	if center.is_empty(): return {}
 	var normal := Vector3(center.normal)
+	var frame := Engine.get_physics_frames()
+	var distant: bool = population.streaming and is_instance_valid(population.player) and global_position.distance_squared_to(population.player.global_position) > 64.0
+	# Keep the centre and collision sweep live. Reuse corner support only on
+	# an unchanged plane after a tiny move, outside the player's close view.
+	if distant and not support_cache.is_empty() and frame - support_frame < 6:
+		var shift: Vector3 = point - support_cache.point
+		var cached_normal: Vector3 = support_cache.normal
+		var slope := -(cached_normal.x * shift.x + cached_normal.z * shift.z) / maxf(cached_normal.y,0.3)
+		if shift.length_squared() < 0.01 and direction.dot(support_cache.direction) > 0.995 and normal.dot(support_cache.center_normal) > 0.999 and absf(float(center.position.y) - float(support_cache.center_height) - slope) < 0.01:
+			return {"height":float(support_cache.height) + slope,"normal":cached_normal}
 	var supports := [{"offset":Vector3.ZERO,"height":float(center.position.y)}]
 	var forward := Vector3(direction.x,0,direction.z).normalized()
 	var side := Vector3(forward.z,0,-forward.x)
@@ -174,6 +256,8 @@ func _crawler_contact(point: Vector3) -> Dictionary:
 	for support in supports:
 		var offset: Vector3 = support.offset
 		height = maxf(height,float(support.height) + (normal.x * offset.x + normal.z * offset.z) / maxf(normal.y,0.3))
+	support_frame = frame
+	support_cache = {"point":point,"height":height,"normal":normal,"center_normal":center.normal,"center_height":center.position.y,"direction":direction}
 	return {"height":height,"normal":normal}
 
 func _crawler_step(point: Vector3) -> Dictionary:
@@ -310,7 +394,13 @@ func _choose_goal() -> void:
 	turn_timer = rng.randf_range(3.0, 7.0)
 
 func _physics_process(delta: float) -> void:
-	if dead: return
+	if dead or delta <= 0.0: return
+	if population != null and population.streaming and not population.detailed(self):
+		if not ambient_mode and combat != null:
+			combat._stop_weapon(); combat.target = null; combat.threat = null
+		ambient_mode = true
+		_advance_ambient(delta); return
+	ambient_mode = false
 	# Offscreen wildlife still roams, but need not run expensive steering and
 	# terrain probes at 60 Hz. Close creatures retain full-rate reactions.
 	if not visual_animation_enabled and population != null and population.streaming and is_instance_valid(population.player) and global_position.distance_squared_to(population.player.global_position) > pow(maxf(maxf(attack_range,flee_range),3.0) + radius,2):
@@ -345,8 +435,17 @@ func _physics_process(delta: float) -> void:
 		elif combat.alive(combat.target):
 			desired = (combat.target.global_position - global_position).normalized()
 			speed *= 1.3; engaged = true
-	if population != null and is_instance_valid(population.player):
-		var offset: Vector3 = population.player.global_position - global_position
+	var submarine: Node3D = null
+	if population != null:
+		var nearest := INF
+		var candidates: Array = population.nearby_submarines(global_position,maxf(attack_range,maxf(flee_range * 1.25,radius + 0.8)))
+		for candidate in candidates:
+			if candidate.get_world_3d() != get_world_3d(): continue
+			if candidate.dead or not candidate.active or not candidate.controls_enabled: continue
+			var distance: float = global_position.distance_squared_to(candidate.global_position)
+			if distance < nearest: nearest = distance; submarine = candidate
+	if submarine != null:
+		var offset: Vector3 = submarine.global_position - global_position
 		if response == "defend" and offset.length() < radius + 0.8: defense_timer = 3.0
 		if response == "flee":
 			# Hysteresis prevents repeated startles at the detection boundary.
@@ -364,9 +463,9 @@ func _physics_process(delta: float) -> void:
 		else:
 			fleeing = false; startle_timer = 0.0
 		if offset.length() < attack_range:
-			if (response == "attack" or (response == "defend" and defense_timer > 0.0)) and not bool(population.player.get("dead")) and bool(population.player.get("active")) and bool(population.player.get("controls_enabled")):
+			if (response == "attack" or (response == "defend" and defense_timer > 0.0)) and not bool(submarine.get("dead")) and bool(submarine.get("active")) and bool(submarine.get("controls_enabled")):
 				desired = offset.normalized(); speed = swim_speed * 1.3; engaged = true
-				if combat != null: combat.target = population.player
+				if combat != null: combat.target = submarine
 	else:
 		fleeing = false; startle_timer = 0.0
 	# A frightened fish can leave its usual roaming area instead of turning
@@ -382,7 +481,13 @@ func _physics_process(delta: float) -> void:
 	velocity = direction * speed + pushed_velocity
 	pushed_velocity = pushed_velocity.move_toward(Vector3.ZERO,delta * 8.0)
 	if mobility == "crawling": _move_crawler(delta,speed)
-	else: move_and_slide()
+	else:
+		# move_and_slide integrates the engine tick, not this accumulated AI step.
+		# Scale only for the call, then expose velocity in units/second again.
+		var time_scale := delta / maxf(get_physics_process_delta_time(),0.000001)
+		velocity *= time_scale
+		move_and_slide()
+		velocity /= time_scale
 	if mobility != "crawling" and get_slide_collision_count() > 0:
 		var normal := get_slide_collision(0).get_normal()
 		avoidance = (direction + normal * 2.0).normalized()

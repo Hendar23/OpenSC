@@ -86,6 +86,10 @@ var folder_prompt: ConfirmationDialog
 var folder_dialog: FileDialog
 var export_all_dialog: FileDialog
 var export_all_button: Button
+var testing_all_equipment := false
+var bounty_radio_queue: Array[Dictionary] = []
+var bounty_port: Dictionary = {}
+var bounty_remaining := 0.0
 var export_all_message: Label
 var fog_button: CheckButton
 var fog_slider: HSlider
@@ -140,6 +144,9 @@ var crt_reflection_slider: HSlider
 var crt_reflection_label: Label
 var market_speed_slider: HSlider
 var dock_zapper_damage_slider: HSlider
+var turret_system: Node
+var submarine_traffic: Node
+var ground_traffic: Node
 var market_ui_elapsed := 0.0
 
 func _ready() -> void:
@@ -390,7 +397,7 @@ func _start_game(folder: String) -> void:
 		world_root.add_child(defence); defence.setup(world_root,wildlife)
 	object_population.name = "MapObjects"; world_root.add_child(object_population)
 	object_population.setup(folder,map_data)
-	water_visuals.materials.clear()
+	water_visuals.reset_materials()
 	water_visuals.attach(world_root)
 	if wildlife != null:
 		for template in wildlife.templates.values(): water_visuals.attach(template)
@@ -407,6 +414,19 @@ func _start_game(folder: String) -> void:
 		pilot.health_changed.connect(_submarine_health_changed)
 		pilot.destroyed.connect(_submarine_destroyed)
 	else: pilot.movement.load_settings(remember_preferences)
+	turret_system = preload("res://turret_system.gd").new(); turret_system.name = "TurretSystem"
+	world_root.add_child(turret_system)
+	preload("res://entity_identity.gd").assign_id(pilot,"player")
+	turret_system.events = events
+	turret_system.setup(world_root,folder,pilot,func(faction: int) -> bool: return faction > 0 and player_progress.standing.get(str(faction),"neutral") == "bad")
+	ground_traffic = preload("res://ground_traffic.gd").new(); ground_traffic.name = "GroundTraffic"; world_root.add_child(ground_traffic)
+	ground_traffic.events = events
+	ground_traffic.setup(world_root,folder,pilot,func(faction: int) -> void:
+		if faction <= 0: return
+		player_progress.standing[str(faction)] = "bad"
+		for turret in turret_system.turrets:
+			if int(turret.tuning.turret_faction) == faction: turret.activate(60)
+	)
 	var selected_tab: StringName = developer_tabs.get_current_tab_control().name if tuning_panel != null and developer_tabs.get_current_tab_control() != null else &"Movement"
 	for child in bubble_controls.get_children(): child.free()
 	if tuning_panel != null: tuning_panel.free()
@@ -457,6 +477,8 @@ func _start_game(folder: String) -> void:
 	pilot.reset_physics_interpolation()
 	submarine_bubble_texture = Assets._load_texture(folder,"BUBBLE","BUBBLEM",{})
 	pilot.bubbles.configure(submarine_bubble_texture)
+	if camera.get_node_or_null("ExplosionShake") == null:
+		var shake := preload("res://explosion_camera_shake.gd").new(); shake.name = "ExplosionShake"; shake.observer = pilot; camera.add_child(shake)
 	submarine_explosion_frames = SessionExplosion.load_frames(folder)
 	submarine_explosion_sound = Weapons._sound(folder,"audio.submarine.explosion","EXPLODE1")
 	pilot.submarine_audio.setup(pilot, folder)
@@ -478,6 +500,25 @@ func _start_game(folder: String) -> void:
 	docking.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(docking)
 	docking.setup(pilot, world_root, folder, camera,gameplay_catalogue)
+	submarine_traffic = preload("res://submarine_traffic.gd").new(); submarine_traffic.name = "SubmarineTraffic"; world_root.add_child(submarine_traffic)
+	submarine_traffic.events = events
+	submarine_traffic.setup(world_root,folder,docking.ports,cockpit_hud.map_data,pilot,func(faction: int) -> void:
+		player_progress.standing[str(faction)] = "bad"
+		for turret in turret_system.turrets:
+			if int(turret.tuning.turret_faction) == faction: turret.activate(60)
+	)
+	while not submarine_traffic.navigation_ready:
+		submarine_traffic.build_graph(128)
+		await get_tree().process_frame
+	submarine_traffic.pirate_defeated.connect(_pirate_bounty)
+	submarine_traffic.enable_roaming_pirates(folder,map_data)
+	var activity := preload("res://actor_activity.gd").new()
+	activity.name = "ActorActivity"; activity.game = self
+	activity.submarines = submarine_traffic; activity.ground = ground_traffic
+	activity.turrets = turret_system
+	world_root.add_child(activity)
+	activity.refresh_views(); activity.update_actors(0.0)
+	if wildlife != null: wildlife.activity = activity
 	save_games.city_names.clear()
 	for port in docking.ports: save_games.city_names[int(port.node.get_meta("city_id"))] = str(port.name)
 	_update_docking_radius()
@@ -498,6 +539,8 @@ func _start_game(folder: String) -> void:
 	particles._rebuild()
 	_update_water_environment()
 	menu_backdrop = preload("res://menu_backdrop.gd").new()
+	activity.refresh_views(); activity.update_actors(0.0)
+	if wildlife != null: wildlife._stream_update(true)
 	add_child(menu_backdrop); menu_backdrop.setup(self)
 	sun_shafts = preload("res://sun_shafts.gd").new()
 	world_root.add_child(sun_shafts); sun_shafts.setup(self)
@@ -677,6 +720,8 @@ func _physics_process(_delta: float) -> void:
 
 func _process(delta: float) -> void:
 	var in_dock_menu: bool = docking != null and docking.stage == Docking.Stage.DOCKED and dock_interface_active and dock_interface.visible and dock_interface.page != "load"
+	if in_dock_menu and is_instance_valid(submarine_traffic):
+		submarine_traffic.replenish_docked(delta)
 	if pilot_mode and not world_loading and not front_end.menu_layer.visible and (not get_tree().paused or in_dock_menu):
 		preload("res://commodity_market.gd").advance(gameplay_catalogue,player_progress,delta * market_speed_slider.value / 100.0)
 		market_ui_elapsed += delta
@@ -714,8 +759,15 @@ func _process(delta: float) -> void:
 	if docking_prompt != null:
 		docking_prompt.text = docking.message
 		if _delivery_prompt_active(): docking_prompt.text = "CITY DROP POINT : Do you want attached object to be automatically retrieved? (Y/N)"
+		var bounty_visible := false
+		if docking.stage == docking.Stage.IDLE and docking.nearby.is_empty() and not _delivery_prompt_active():
+			if bounty_remaining <= 0 and not bounty_radio_queue.is_empty():
+				bounty_port = bounty_radio_queue.pop_front(); bounty_remaining = 7.0
+			if bounty_remaining > 0:
+				bounty_remaining = maxf(0,bounty_remaining - delta); bounty_visible = true
+				docking_prompt.text = "%s: CITY RELAY BEACON : Thank you for your assistance. 1000 credit bounty paid." % bounty_port.name
 		docking_prompt.visible = not docking_prompt.text.is_empty()
-		docking_portrait.update_signal(docking.portrait_texture() if docking_prompt.visible else null,docking.distorted_portrait_texture(),docking.radio_static,delta)
+		docking_portrait.update_signal(bounty_port.portrait if bounty_visible else docking.portrait_texture() if docking_prompt.visible else null,bounty_port.distorted_portrait if bounty_visible else docking.distorted_portrait_texture(),docking.radio_static,delta)
 	if developer_ui_visible:
 		var state: RefCounted = pilot.movement
 		telemetry.text = "Speed: %.2f · Vertical: %.2f units/s\nPod tilt: %.1f° · Hull pitch: %.1f°\nDocking limit: %.2f units/s" % [state.velocity.length(), state.velocity.y, rad_to_deg(state.tilt), rad_to_deg(asin(clampf(-pilot.global_basis.z.y, -1.0, 1.0))), docking.maximum_docking_speed()]
@@ -966,7 +1018,7 @@ func _dock_ui_model() -> Dictionary:
 	var standing: String = player_progress.standing.get(str(port.get("race",1)),"neutral")
 	var description_id := "%s%d.%s" % [city.get("description_key",""),player_progress.campaign_stage,standing]
 	var description: String = gameplay_catalogue.get("tables",{}).get("city_descriptions",{}).get("records",{}).get(description_id,{}).get("text","")
-	return {"city":port.get("name","Dock"),"city_id":city_id,"title_bitmap":city.get("title_bitmap",""),"welcome":description,"standing":{"bad":"Hostile","neutral":"Neutral","good":"Friendly"}.get(standing,"Neutral"),"mission":player_progress.mission,"status":player_progress.status.duplicate(),"race":port.get("race",1),"repair_offer":preload("res://equipment_shop.gd").shield_repair(gameplay_catalogue,city_id,player_progress.campaign_stage),"offers":preload("res://equipment_shop.gd").offers(gameplay_catalogue,city_id,player_progress.campaign_stage),"installed":preload("res://equipment_shop.gd").installed(equipment,weapons),"hold":player_progress.hold.duplicate(),"commodity_offers":preload("res://commodity_market.gd").offers(gameplay_catalogue,player_progress,city_id),"cargo":player_progress.cargo.duplicate(),"mail":preload("res://mailbox.gd").messages(gameplay_catalogue,player_progress,int(city_id) if not city_id.is_empty() else 0),"slots":save_games.slots() if dock_interface != null and dock_interface.page in ["save","load"] else []}
+	return {"city":port.get("name","Dock"),"city_id":city_id,"title_bitmap":city.get("title_bitmap",""),"welcome":description,"standing":{"bad":"Hostile","neutral":"Neutral","good":"Friendly"}.get(standing,"Neutral"),"mission":player_progress.mission,"status":player_progress.status.duplicate(),"race":port.get("race",1),"repair_offer":preload("res://equipment_shop.gd").shield_repair(gameplay_catalogue,city_id,player_progress.campaign_stage,testing_all_equipment),"offers":preload("res://equipment_shop.gd").offers(gameplay_catalogue,city_id,player_progress.campaign_stage,testing_all_equipment),"installed":preload("res://equipment_shop.gd").installed(equipment,weapons),"hold":player_progress.hold.duplicate(),"commodity_offers":preload("res://commodity_market.gd").offers(gameplay_catalogue,player_progress,city_id),"cargo":player_progress.cargo.duplicate(),"mail":preload("res://mailbox.gd").messages(gameplay_catalogue,player_progress,int(city_id) if not city_id.is_empty() else 0),"slots":save_games.slots() if dock_interface != null and dock_interface.page in ["save","load"] else []}
 
 func _save_snapshot(name: String) -> Dictionary:
 	return session._save_snapshot(name)
@@ -1009,6 +1061,7 @@ func _dock_ui_action(action: String, payload: Dictionary) -> void:
 			var id := str(payload.get("item","shield"))
 			var previous_count := int(player_progress.hold.get(id,0))
 			var result := preload("res://equipment_shop.gd").use_item(player_progress,pilot,id)
+			weapons.set_upgraded(player_progress.status.zapper_upgrade == 1)
 			dock_interface.transaction_feedback(result,"repair",int(player_progress.hold.get(id,0)) < previous_count)
 			if int(player_progress.hold.get(id,0)) < previous_count: events.item_used.emit(id)
 		"launch":
@@ -1041,3 +1094,14 @@ func _submarine_destroyed() -> void:
 	equipment.reset_towing()
 	weapons.hide(); equipment.hide()
 	_set_camera_mode(false)
+
+func _pirate_bounty(point: Vector3) -> void:
+	var nearest: Dictionary = {}
+	var distance := INF
+	for port in docking.ports:
+		var candidate: float = point.distance_squared_to(port.node.global_position)
+		if candidate < distance: distance = candidate; nearest = port
+	if nearest.is_empty(): return
+	player_progress.status.credits += 1000
+	bounty_radio_queue.append(nearest)
+	if dock_interface_active: dock_interface.rebuild()

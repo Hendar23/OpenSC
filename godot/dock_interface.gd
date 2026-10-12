@@ -620,7 +620,7 @@ func _update_shop_selection(data: Dictionary) -> void:
 	layout.get_node("SaleInfo").disabled = sale.is_empty()
 	layout.get_node("HoldInfo").disabled = held.is_empty()
 	layout.get_node("SellShieldRepair").disabled = held.is_empty() or int(held.get("sell_price",0)) <= 0
-	layout.get_node("UseShieldRepair").disabled = selected_hold not in ["shield","hullstr","radoff"] or not preload("res://equipment_shop.gd").upgrade_available(data,selected_hold)
+	layout.get_node("UseShieldRepair").disabled = selected_hold not in ["shield","hullstr","radoff","zapperup"] or not preload("res://equipment_shop.gd").upgrade_available(data,selected_hold)
 	layout.get_node("PurchasePrice").text = "Cost %d" % int(sale.price) if not sale.is_empty() else ""
 	layout.get_node("ResalePrice").text = "SellPrice %d" % int(held.sell_price) if not held.is_empty() else ""
 	_ensure_selection_dot()
@@ -682,7 +682,7 @@ func _show_item_info(offer: Dictionary, item_id: String) -> void:
 			var icon := TextureRect.new(); icon.name = "Icon"; icon.texture = square; icon.position = Vector2(30,31); icon.size = square.get_size()
 			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE; content.add_child(icon)
 	for row in [["ItemName",str(offer.get("name","")),Rect2(29,82,218,20),Color.WHITE],
-		["Description",str(offer.get("description","")),Rect2(29,102,218,180),Color.YELLOW]]:
+		["Description",str(offer.get("description","")).replace("@",","),Rect2(29,102,218,180),Color.YELLOW]]:
 		var text := Label.new(); text.name = row[0]
 		text.add_theme_font_size_override("font_size",13); text.add_theme_color_override("font_color",row[3])
 		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; text.clip_text = true; text.mouse_filter = Control.MOUSE_FILTER_IGNORE

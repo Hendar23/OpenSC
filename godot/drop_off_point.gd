@@ -1,4 +1,5 @@
 extends Area3D
+const VERTICAL_STRETCH := 4.0
 var radius := 0.5
 var city_id := 0
 func configure(detection_radius: float, destination: int) -> void:
@@ -10,8 +11,8 @@ func configure(detection_radius: float, destination: int) -> void:
 	if shape == null:
 		shape = CollisionShape3D.new(); shape.name = "DetectionShape"; add_child(shape)
 	var sphere := SphereShape3D.new(); sphere.radius = radius; shape.shape = sphere
-	shape.scale = Vector3(1,2,1)
+	shape.scale = Vector3(1,VERTICAL_STRETCH,1)
 func contains_point(point: Vector3) -> bool:
 	var offset := point - global_position
-	offset.y *= 0.5
+	offset.y /= VERTICAL_STRETCH
 	return offset.length() <= radius

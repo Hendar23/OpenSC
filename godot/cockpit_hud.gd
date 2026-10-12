@@ -22,6 +22,7 @@ var holder: Control
 var map_zoom := 2.0:
 	set(value):
 		map_zoom = clampf(value,0.5,4.0)
+		map_data.npc_view_span = Vector2(140.0 / map_zoom,140.0 / map_zoom * 82.0 / 128.0)
 		for display in displays:
 			if display.kind == "map": display.map_span = 140.0 / map_zoom
 var pilot: Node3D

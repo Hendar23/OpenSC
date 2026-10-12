@@ -37,12 +37,13 @@ func perceive(delta: float) -> void:
 
 static func alive(body: Node3D) -> bool:
 	if not is_instance_valid(body) or body.is_queued_for_deletion() or bool(body.get("dead")): return false
+	if body.is_in_group("npc_submarines"): return bool(body.get("active"))
 	if not body.get_meta("wildlife_awake",true): return false
 	return body.is_physics_processing()
 
 func attack(delta: float) -> void:
 	blood_timer = maxf(0,blood_timer - delta)
-	if fish.population != null and target == fish.population.player:
+	if is_instance_valid(target) and fish.population != null and (target == fish.population.player or target.is_in_group("npc_submarines")):
 		if not is_instance_valid(target) or not bool(target.get("active")) or not bool(target.get("controls_enabled")) or fish.response not in ["attack","defend"] or (fish.response == "defend" and fish.defense_timer <= 0) or fish.global_position.distance_to(target.global_position) >= fish.attack_range:
 			target = null
 	if not alive(target) or fish.fleeing or fish.startle_timer > 0:
@@ -90,7 +91,10 @@ func attack(delta: float) -> void:
 	if hit.get("collider") != target:
 		_stop_weapon(); return
 	bite_timer = float(settings.attack_interval)
-	target.take_damage(float(settings.bite_damage),fish.global_position)
+	if target.has_method("take_damage_from"):
+		target.take_damage_from(float(settings.bite_damage),fish.global_position,fish)
+	else:
+		target.take_damage(float(settings.bite_damage),fish.global_position)
 	_hit_feedback(hit)
 
 func _hit_feedback(hit: Dictionary) -> void:

@@ -3,6 +3,15 @@ extends RefCounted
 # Some original 8-bit textures use RLE8; others have incorrect bfSize fields.
 # Decode from actual bytes rather than rewriting or converting the game files.
 static func load_image(path: String) -> Image:
+	var cache := preload("res://asset_cache.gd")
+	var key := cache.key("image", [path])
+	var cached := cache.load_resource(key) as Image
+	if cached != null: return cached
+	var image := _load_image(path)
+	if image != null and not image.is_empty(): cache.save_resource(key, image)
+	return image
+
+static func _load_image(path: String) -> Image:
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null: return null
 	var data := file.get_buffer(file.get_length())

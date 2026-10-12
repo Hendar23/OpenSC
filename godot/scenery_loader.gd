@@ -8,11 +8,17 @@ const SmokeEmitter = preload("res://smoke_emitter.gd")
 # Serialized fields are always present; the row mask says which values are
 # initialized. Runtime pointers and each matrix's fourth lanes are garbage.
 static func read_database(path: String) -> Dictionary:
+	var cache := preload("res://asset_cache.gd")
+	var cache_key := cache.key("scenery-database", [path])
+	var cached := cache.load_data(cache_key)
+	if not cached.is_empty(): return cached
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		push_warning("Scenery database is unavailable: " + path)
 		return {}
-	return decode_database(file.get_buffer(file.get_length()))
+	var result := decode_database(file.get_buffer(file.get_length()))
+	if not result.is_empty(): cache.save_data(cache_key, result)
+	return result
 
 static func decode_database(data: PackedByteArray, read_all: bool = false) -> Dictionary:
 	if not Assets._has_tag(data, 0, "Dive"):
@@ -156,6 +162,7 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 		patches += 1
 		progress.call("Restoring plant patches: %d / 10" % patches)
 		await tree.process_frame
+	await _startup_decor(scenery,world,folder,cache,tree)
 	for row in tables.get("Objects", []):
 		if int(row.get("MissionID",0)) != 2 or int(row.get("ObjectID",-1)) != 8: continue
 		var point := preload("res://drop_off_point.gd").new()
@@ -217,6 +224,22 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 	for row in tables.get("Lights", []):
 		var pose := placement(row, offset)
 		_add_light(scenery, pose.origin, float(row.get("intensity", 1.0)), maxf(1.0, float(row.get("radius", 1.0))), folder)
+	# Startup 0x42b9d0 creates these dormant database markers explicitly.
+	# Append after beacons so legacy child-count-based light names stay stable.
+	for row in tables.get("Objects", []):
+		if int(row.get("MissionID",0)) != 2 or int(row.get("ObjectID",-1)) not in [4,11,12]: continue
+		if str(row.get("clump","")).to_upper() != "TURRET": continue
+		# Prefer dedicated defences over overlapping generic database props.
+		# Remove after beacon naming so existing map light IDs remain stable.
+		for generic in tables.get("Objects", []):
+			if int(generic.get("AutoCreate",0)) != 1 or str(generic.get("clump","")) != "TURRET": continue
+			if placement(generic,offset).origin.distance_squared_to(placement(row,offset).origin) >= 0.25: continue
+			var duplicate := scenery.get_node_or_null("TURRET_%d" % int(generic.index))
+			if duplicate != null: duplicate.free(); props -= 1
+		if _place_prop(scenery,row,"TURRET",offset,folder,cache,true): props += 1
+	for row in tables.get("Objects", []):
+		if int(row.get("MissionID",0)) == 2 and int(row.get("ObjectID",-1)) == 31 and str(row.get("clump","")) in ["TRADCAR","TECHTRUK"]:
+			if _place_prop(scenery,row,str(row.clump),offset,folder,cache,true): props += 1
 	for row in tables.get("Scenarios", []):
 		if int(row.get("ID", 0)) == 1:
 			world.set_meta("player_spawn", Vector3(float(row.PlayerX), float(row.PlayerY), float(row.PlayerZ)) + offset)
@@ -247,6 +270,7 @@ static func _place_prop(parent: Node3D, row: Dictionary, name: String, offset: V
 	if template == null: return false
 	var instance := template.duplicate() as Node3D
 	instance.name = "%s_%d" % [name, int(row.index)]
+	preload("res://entity_identity.gd").assign_id(instance,preload("res://entity_identity.gd").authored("original/" + ("cities" if row.has("CityID") else "objects"),int(row.index)))
 	instance.set_meta("editor_model", name)
 	instance.transform = pose * template.transform
 	instance.set_meta("source_comment", row.get("Comment", row.get("CityName", "")))
@@ -256,7 +280,12 @@ static func _place_prop(parent: Node3D, row: Dictionary, name: String, offset: V
 		instance.set_meta("city_name", str(row.get("CityName", "Dock")).strip_edges())
 	parent.add_child(instance)
 	if solid: _add_prop_collision(instance)
+	if name.to_upper() == "TURRET":
+		var marker := int(row.get("ObjectID",-1))
+		preload("res://gun_turret.gd").install(instance,{"turret_homing":marker in [11,12],"turret_armed":marker == 12,"turret_faction":int(row.get("param2",0)) if marker in [11,12] else 0})
 	add_model_motion(instance,name)
+	if name.to_upper() in ["TRADCAR","TECHTRUK"]:
+		preload("res://ground_vehicle.gd").install(instance,{"npc_faction":1 if name == "TRADCAR" else 2,"npc_speed":0.4 if name == "TRADCAR" else 0.3})
 	return true
 
 static func add_model_motion(instance: Node3D, model_name: String) -> void:
@@ -330,3 +359,27 @@ static func _add_light(parent: Node3D, point: Vector3, energy: float, radius: fl
 	light.light_color = Color(0.48, 0.8, 0.68)
 	light.configure(folder, {"energy": clampf(energy, 0.0, 2.0), "range": clampf(radius, 1.0, 12.0)})
 	parent.add_child(light)
+
+static func _startup_decor(parent: Node3D, world: Node3D, folder: String, cache: Dictionary, tree: SceneTree) -> void:
+	# 0x42b9d0: 50 bubble streams, 25 reeds and 25 BUSH4 placement attempts.
+	var rng := RandomNumberGenerator.new(); rng.seed = 421902
+	var bounds: AABB = world.get_meta("bounds")
+	var surface := float(world.get_meta("surface_height"))
+	for kind in ["BUBBLESTREAM","REED","BUSH4"]:
+		for attempt in range(50 if kind == "BUBBLESTREAM" else 25):
+			var x := rng.randf_range(bounds.position.x,bounds.end.x)
+			var z := rng.randf_range(bounds.position.z,bounds.end.z)
+			var query := PhysicsRayQueryParameters3D.create(Vector3(x,surface - 0.05,z),Vector3(x,bounds.position.y - 1,z),1)
+			query.hit_back_faces = true
+			var hit := world.get_world_3d().direct_space_state.intersect_ray(query)
+			if hit.is_empty() or absf(Vector3(hit.normal).y) < 0.4 or hit.position.y > surface - 0.3: continue
+			var node: Node3D
+			if kind == "BUBBLESTREAM": node = preload("res://bubble_stream.gd").new()
+			else:
+				var template := _template(kind,folder,cache)
+				if template == null: continue
+				node = template.duplicate(); node.set_meta("editor_model",kind)
+			node.name = "Startup_%s_%d" % [kind,attempt]; parent.add_child(node)
+			node.position = hit.position + Vector3.UP * 0.03; node.rotation.y = rng.randf() * TAU
+			if kind == "BUBBLESTREAM": node.configure(folder,{})
+			if attempt % 8 == 0: await tree.process_frame

@@ -57,6 +57,14 @@ func run() -> void:
 	check(fish.health < health,"Resuming restores dock defence")
 	port.set_meta("city_id",5); defence._stop(state); health = fish.health; defence._physics_process(0.04)
 	check(fish.health < health and not state.arcs[0].firing,"Aquatraz retains original damage without ordinary dock spike arcs")
+	var activity := preload("res://actor_activity.gd").new(); world.add_child(activity); activity.set_physics_process(false)
+	var distant_camera := Camera3D.new(); world.add_child(distant_camera); distant_camera.far = 20
+	distant_camera.global_position = port.global_position + Vector3.RIGHT * 100
+	activity.cameras.append(distant_camera); activity.refresh_views(); population.activity = activity
+	health = fish.health; defence._physics_process(0.04)
+	check(fish.health == health and state.target == null,"Distant docks suspend acquisition and damage")
+	distant_camera.global_position = port.global_position; activity.refresh_views(); defence._physics_process(0.04)
+	check(fish.health < health,"Dock defence resumes within camera range")
 	port.set_meta("city_id",0); fish.configure_health(0.1); fish.damage_sustain = 1.0; defence._physics_process(0.04)
 	check(fish.dead and not state.arcs[0].firing,"Fatal zap uses creature death and stops arcs")
 	world.free()

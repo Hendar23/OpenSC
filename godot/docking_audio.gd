@@ -13,8 +13,10 @@ var submarine_audio: Node
 var sequence_active := false
 var doors_active := false
 var applied_blend := -1.0
+var spatial_origin: Node3D
 
-func setup(sound: Node, folder: String) -> void:
+func setup(sound: Node, folder: String, origin: Node3D = null) -> void:
+	spatial_origin = origin
 	submarine_audio = sound
 	tuning = sound.tuning
 	for child in get_children(): child.free()
@@ -23,7 +25,9 @@ func setup(sound: Node, folder: String) -> void:
 	sequence_active = false
 	doors_active = false
 	for role in SAMPLES:
-		var player := AudioStreamPlayer.new()
+		var player = AudioStreamPlayer3D.new() if origin != null else AudioStreamPlayer.new()
+		if player is AudioStreamPlayer3D:
+			player.max_distance = 35.0; player.unit_size = 3.0
 		player.name = role
 		player.volume_db = -80.0
 		add_child(player)
@@ -53,19 +57,20 @@ func set_phase(active: bool, moving_doors: bool, finished: bool = false) -> void
 	sequence_active = active
 	doors_active = moving_doors
 	_update_gains()
+	_update_positions()
 	_update_loops()
-	var doors: AudioStreamPlayer = players.get("doors")
+	var doors = players.get("doors")
 	if doors != null and doors.stream != null:
 		if started_doors: doors.play()
 		elif not moving_doors: doors.stop()
 	if finished:
-		var player: AudioStreamPlayer = players.get("door_stop")
+		var player = players.get("door_stop")
 		if player != null and player.stream != null: player.play()
 		door_finished.emit()
 
 func _update_loops() -> void:
 	for role in ["sequence"]:
-		var player: AudioStreamPlayer = players.get(role)
+		var player = players.get(role)
 		if player == null or player.stream == null: continue
 		var active := sequence_active if role == "sequence" else doors_active
 		if active and not player.playing: player.play()
@@ -78,7 +83,13 @@ func _update_gains() -> void:
 		var solo: bool = is_instance_valid(submarine_audio) and not submarine_audio.solo_role.is_empty()
 		players[role].volume_db = -80.0 if gain <= -60.0 or float(tuning.settings.master_volume) <= -60.0 or solo else gain + float(tuning.settings.master_volume)
 
+func _update_positions() -> void:
+	if not is_instance_valid(spatial_origin): return
+	for player in players.values():
+		if player is AudioStreamPlayer3D: player.global_position = spatial_origin.global_position
+
 func _process(_delta: float) -> void:
+	_update_positions()
 	if tuning == null: return
 	if applied_blend != float(tuning.settings.loop_blend_ms): rebuild_loops()
 	_update_gains()

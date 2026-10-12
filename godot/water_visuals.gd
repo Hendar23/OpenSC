@@ -4,6 +4,9 @@ const PlantShader = preload("res://plant_current.gdshader")
 var settings := DEFAULTS.duplicate()
 var texture: NoiseTexture2D
 var materials := {}
+var caustic_passes: Array[Dictionary] = []
+var caustics_active := true
+var sun_above_water := true
 var surface: ShaderMaterial
 static var globals_registered := false
 
@@ -35,6 +38,7 @@ func fog(visibility: float, start: float, curve: float) -> void:
 
 func configure(values: Dictionary) -> void:
 	settings.merge(values,true)
+	_update_caustics()
 	for key in ["caustics_strength","caustics_size","caustics_speed","caustics_depth","wave_speed","wave_direction"]:
 		RenderingServer.global_shader_parameter_set("osc_" + key,deg_to_rad(float(settings[key])) if key == "wave_direction" else settings[key])
 	if surface != null:
@@ -42,9 +46,23 @@ func configure(values: Dictionary) -> void:
 			surface.set_shader_parameter(key,deg_to_rad(float(settings[key])) if key == "wave_direction" else settings[key])
 
 func lighting(height: float, direction: Vector3) -> void:
+	sun_above_water = direction.y > 0.01
+	_update_caustics()
 	RenderingServer.global_shader_parameter_set("osc_water_height",height)
 	RenderingServer.global_shader_parameter_set("osc_sun_direction",direction)
 	if surface != null: surface.set_shader_parameter("sun_direction",direction)
+
+func reset_materials() -> void:
+	materials.clear(); caustic_passes.clear()
+
+func _update_caustics() -> void:
+	var enabled := float(settings.caustics_strength) > 0.0 and sun_above_water
+	if enabled == caustics_active: return
+	caustics_active = enabled
+	for binding in caustic_passes:
+		for owner_ref in binding.owners:
+			var owner: Material = owner_ref.get_ref()
+			if owner != null: owner.next_pass = binding.overlay if enabled else binding.overlay.next_pass
 
 func attach(node: Node) -> void:
 	if node is MeshInstance3D and node.mesh != null:
@@ -68,7 +86,12 @@ func attach(node: Node) -> void:
 				if plant:
 					overlay.set_shader_parameter("alpha_cutout",original.get_shader_parameter("has_texture"))
 					overlay.set_shader_parameter("alpha_texture",original.get_shader_parameter("albedo_texture"))
-				overlay.next_pass = material.next_pass; material.next_pass = overlay
+				overlay.next_pass = material.next_pass
+				var owners := [weakref(material)]
+				material.set_meta("caustics_owners",owners)
+				material.set_meta("caustics_overlay",overlay)
+				caustic_passes.append({"owners":owners,"overlay":overlay})
+				material.next_pass = overlay if caustics_active else overlay.next_pass
 				material.set_meta("caustics_attached",true)
 			node.set_surface_override_material(index,material)
 			if node.material_override != null:
@@ -78,6 +101,7 @@ func attach(node: Node) -> void:
 func sync_plants(current: RefCounted) -> void:
 	for patch in current.patches:
 		for material in patch.materials.duplicate():
-			if material.next_pass != null and material.next_pass.shader == preload("res://caustics.gdshader"):
-				patch.materials.append(material.next_pass); current.materials.append(material.next_pass)
+			var overlay: Material = material.get_meta("caustics_overlay",null)
+			if overlay != null:
+				patch.materials.append(overlay); current.materials.append(overlay)
 	current.configure({})

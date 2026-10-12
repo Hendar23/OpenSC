@@ -20,3 +20,9 @@ static func assign_id(entity: Node, identity: String = "") -> String:
 static func of(entity: Node) -> String:
 	var identity: Variant = entity.get_meta("entity_id","")
 	return str(identity) if valid(identity) else assign_id(entity)
+
+static func actor(model: Node, controller: Node, collider: Node = null) -> String:
+	var identity := of(model)
+	assign_id(controller,identity)
+	if collider != null: assign_id(collider,identity)
+	return identity

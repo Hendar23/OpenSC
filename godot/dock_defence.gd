@@ -17,7 +17,7 @@ func setup(world: Node3D, wildlife: Node3D) -> void:
 		if not node.has_meta("city_id"): continue
 		ports.append({"node":node,"target":null,"arcs":[],"sound":null})
 
-static func eligible(fish: Node3D) -> bool:
+static func eligible(fish: Variant) -> bool:
 	return is_instance_valid(fish) and not fish.is_queued_for_deletion() and not fish.dead and fish.is_physics_processing() and fish.get_meta("wildlife_awake",true) and not fish.get_meta("dock_zapper_immune",false) and int(fish.get_meta("original_object_id",0)) != 73 and str(fish.get_meta("species","")).to_lower() != "taggedfish"
 
 func _target(port: Node3D) -> Node3D:
@@ -26,7 +26,7 @@ func _target(port: Node3D) -> Node3D:
 	var selected: Node3D
 	# The original sphere query includes each target's body radius. This small
 	# capped population scan avoids querying colliders belonging to the dock.
-	for fish in population.get_children():
+	for fish in population.nearby_creatures(center,RANGE,true):
 		if not eligible(fish): continue
 		var distance := center.distance_squared_to(fish.global_position)
 		if distance >= pow(RANGE + fish.radius,2) or distance >= nearest: continue
@@ -44,6 +44,9 @@ func _physics_process(delta: float) -> void:
 		clock = maxf(0.0,clock - 1.0)
 		for state in ports:
 			if not is_instance_valid(state.node): continue
+			if population.activity != null and not population.activity.nearby(state.node.to_global(SEARCH_CENTER),RANGE,2.0):
+				_stop(state)
+				continue
 			state.target = _target(state.node)
 			if eligible(state.target): preload("res://original_damage.gd").weapon(state.target,damage_per_tick,state.node.global_position)
 	for state in ports:

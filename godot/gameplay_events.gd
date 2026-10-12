@@ -2,6 +2,7 @@ extends RefCounted
 ## Completed player actions. Restoring state must not replay these actions.
 ## Mission rules can subscribe without coupling themselves to menus or physics.
 signal session_started(restored: bool)
+signal entity_destroyed(entity_id: String, attacker_id: String)
 signal city_docked(city_id: int)
 signal delivery_accepted(entity_id: String, city_id: int, commodity: String, quantity: int)
 signal deliveries_collected(city_id: int, goods: Dictionary)

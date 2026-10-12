@@ -1,6 +1,7 @@
 extends Node
 signal docked
 
+const Access = preload("res://dock_access.gd")
 const Morph = preload("res://morph_animation.gd")
 const Radio = preload("res://docking_radio.gd")
 const Transit = preload("res://transit_motion.gd")
@@ -15,6 +16,7 @@ var pilot: RigidBody3D
 var ports: Array[Dictionary] = []
 var nearby: Dictionary = {}
 var current: Dictionary = {}
+var launch_pending := false
 var elapsed := 0.0
 var saved_collision_mask := 13
 var message := ""
@@ -125,6 +127,8 @@ func update_approach() -> void:
 	elif nearby.node == declined_port:
 		nearby = {}
 		message = ""
+	elif Access.owner(nearby) != null and Access.owner(nearby) != self:
+		message = "%s: CITY DOCKING PAD : Dock currently in use. Please wait." % nearby.name
 	elif pilot.velocity.length() > maximum_docking_speed():
 		message = _radio_line(nearby, "warning", "CITY DOCKING PAD : Approach too fast to dock. Slow down.")
 	else: message = _radio_line(nearby, "prompt", "CITY DOCKING PAD : Do you want to dock? (Y/N)")
@@ -174,6 +178,9 @@ func decline_docking() -> void:
 
 func request_docking() -> bool:
 	if stage == Stage.DOCKED:
+		if not Access.acquire(current,self):
+			launch_pending = true; message = "Dock currently in use. Please wait."; return false
+		launch_pending = false
 		_prepare_transit_settings()
 		# Reveal behind the closed hatch before it starts opening.
 		pilot.reveal_visual()
@@ -196,6 +203,7 @@ func request_docking() -> bool:
 		message = "Face the docking position and level the submarine before docking with turning disabled."
 		current = {}
 		return false
+	if not Access.acquire(current,self): current = {}; return false
 	saved_collision_mask = pilot.collision_mask
 	greeting_remaining = 0.0
 	pilot.active = false
@@ -237,7 +245,9 @@ func _transition(next_stage: Stage) -> void:
 		Stage.OPEN, Stage.EXIT_OPEN: message = "Opening docking port…"
 		Stage.DESCEND: message = "Docking at %s…" % current.name
 		Stage.CLOSE, Stage.EXIT_CLOSE: message = "Closing docking port…"
-		Stage.DOCKED: message = "Docked at %s — Press Y to undock" % current.name
+		Stage.DOCKED:
+			Access.release(current,self)
+			message = "Docked at %s — Press Y to undock" % current.name
 		Stage.ASCEND: message = "Leaving %s…" % current.name
 	if stage in [Stage.SETTLE, Stage.ALIGN, Stage.APPROACH, Stage.OPEN, Stage.DESCEND, Stage.CLOSE]:
 		message = _radio_line(current, "docking", "CITY DOCKING PAD : Automatic docking in progress")
@@ -265,6 +275,7 @@ func _transition(next_stage: Stage) -> void:
 			# Hand control back here rather than approaching sideways.
 			_restore_pilot()
 			if audio != null: audio.stop()
+			Access.release(current,self)
 			stage = Stage.IDLE
 			current = {}
 			message = "Face the docking position before docking with turning disabled."
@@ -302,13 +313,18 @@ func _travel_limits(direction: Vector3) -> Vector2:
 
 func _physics_process(delta: float) -> void:
 	if bool(pilot.get("dead")):
+		if Access.owner(current) == self:
+			Access.open(current,0); current.collision.collision_layer = 1; Access.release(current,self)
+			stage = Stage.IDLE; current = {}; pilot.docking_in_progress = false
 		nearby = {}; message = ""; greeting_remaining = 0.0
 		return
 	if stage == Stage.IDLE:
 		greeting_remaining = maxf(0.0,greeting_remaining - delta)
 		update_approach()
 		return
-	if stage == Stage.DOCKED: return
+	if stage == Stage.DOCKED:
+		if launch_pending: request_docking()
+		return
 	if stage == Stage.SETTLE:
 		_settle(delta)
 		_animate_pilot(delta)
@@ -354,6 +370,7 @@ func _physics_process(delta: float) -> void:
 		Stage.EXIT_CLOSE:
 			current.collision.collision_layer = 1
 			_restore_pilot()
+			Access.release(current,self)
 			_transition(Stage.IDLE)
 			current = {}
 			update_approach()
@@ -394,14 +411,7 @@ func _animate_pilot(delta: float) -> void:
 	pilot._update_animation(delta)
 
 func _set_open(amount: float) -> void:
-	for instance in current.meshes:
-		var count: int = instance.mesh.get_blend_shape_count() + 1
-		var phase := clampf(amount, 0.0, 1.0) * (count - 1)
-		var first := int(floor(phase))
-		var next := mini(first + 1, count - 1)
-		var weight := phase - first
-		for pose in range(1, count):
-			instance.set_blend_shape_value(pose - 1, (1.0 - weight if pose == first else 0.0) + (weight if pose == next else 0.0))
+	Access.open(current,amount)
 
 func _restore_pilot() -> void:
 	pilot.docking_in_progress = false
@@ -413,10 +423,13 @@ func _restore_pilot() -> void:
 	pilot.movement.reset_motion()
 
 func cancel() -> void:
+	launch_pending = false
 	if audio != null: audio.stop()
 	if stage == Stage.IDLE: return
-	_set_open(0.0)
-	current.collision.collision_layer = 1
+	if Access.owner(current) == self:
+		_set_open(0.0)
+		current.collision.collision_layer = 1
+	Access.release(current,self)
 	pilot.global_position = current.entry
 	pilot.force_update_transform()
 	pilot.reset_physics_interpolation()

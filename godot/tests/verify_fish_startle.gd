@@ -4,6 +4,10 @@ const Wildlife = preload("res://wildlife_population.gd")
 const Document = preload("res://map_document.gd")
 var checks := 0
 var failures := 0
+class Observer extends Node3D:
+	var dead := false
+	var active := true
+	var controls_enabled := true
 func _initialize() -> void: call_deferred("_run")
 func check(ok: bool, message: String) -> void:
 	checks += 1
@@ -12,7 +16,7 @@ func _run() -> void:
 	var world := Node3D.new(); root.add_child(world)
 	world.set_meta("bounds", AABB(Vector3(-100, 0, -100), Vector3(200, 80, 200)))
 	world.set_meta("surface_height", 80.0)
-	var player := Node3D.new(); world.add_child(player)
+	var player := Observer.new(); world.add_child(player)
 	var pop := Wildlife.new(); world.add_child(pop); pop.player = player; pop.world = world
 	var fish := Fish.new()
 	fish.setup(Node3D.new(), Vector3(0, 40, 0), AABB(Vector3(-100, 0, -100), Vector3(200, 80, 200)), 80, 0.2, 42)

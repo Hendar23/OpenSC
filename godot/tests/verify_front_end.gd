@@ -22,6 +22,12 @@ func _run() -> void:
 	var progress: float = game.front_end.progress_bar.value
 	game.front_end.update_progress("Loading environment: 1 / 4 sectors")
 	check(game.front_end.progress_bar.value >= progress,"Loading progress never moves backwards")
+	game.front_end.update_progress("Converting assets: environment textures: 1 / 2")
+	check(game.front_end.loading_status.text == "Converting assets" and game.front_end.progress_bar.value >= 48.0,"Cold asset conversion updates both the caption and stage progress")
+	game.front_end.update_progress("Loading cached environment")
+	check(game.front_end.loading_status.text == "Loading","Cached loading does not claim to convert assets")
+	game.front_end.update_progress("Checking cave light: 50%")
+	check(game.front_end.loading_status.text == "Loading","Internal loading details stay out of the caption")
 	if DisplayServer.get_name() != "headless":
 		root.mode = Window.MODE_WINDOWED; root.size = Vector2i(1280,720)
 		await RenderingServer.frame_post_draw

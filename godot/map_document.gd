@@ -5,7 +5,14 @@ const Assets = preload("res://clump_loader.gd")
 const Scenery = preload("res://scenery_loader.gd")
 const PulseLight = preload("res://pulse_light.gd")
 const Searchlight = preload("res://searchlight.gd")
+const BubbleStream = preload("res://bubble_stream.gd")
+const Patrol = preload("res://patrol_submarine.gd")
 const SmokeEmitter = preload("res://smoke_emitter.gd")
+const GunTurret = preload("res://gun_turret.gd")
+const Pirate = preload("res://pirate_submarine.gd")
+const Trader = preload("res://trader_submarine.gd")
+const GroundVehicle = preload("res://ground_vehicle.gd")
+const EntityTypes = preload("res://map_entity_types.gd")
 const DEFAULT_PATH := "res://../Maps/scen1.json"
 const GROUP_BEHAVIOURS := ["solitary", "shoaling", "schooling"]
 const RESPONSES := ["ignore", "flee", "defend", "attack"]
@@ -24,7 +31,7 @@ static func creature_combat(species: Dictionary) -> Dictionary:
 	return defaults
 const POPULATION_DEFAULTS := {"random_spawn": false, "groups_min": 3, "groups_max": 8, "count_min": 1, "count_max": 10, "spawn_chance": 100.0, "roam_radius": 10.0}
 static func empty() -> Dictionary:
-	return {"schema_version": 1, "seed": 8675309, "entities": {}, "species": [], "groups": [], "object_types": [ObjectDefinitions.FLOATING_MINE.duplicate(true), ObjectDefinitions.THORIUM.duplicate(true), ObjectDefinitions.inert_thorium()] + ObjectDefinitions.metal_types() + [ObjectDefinitions.CIGARETTE.duplicate(true),ObjectDefinitions.CLAM.duplicate(true),ObjectDefinitions.PEARL.duplicate(true)] + ObjectDefinitions.rock_types(), "object_groups": []}
+	return {"schema_version": 1, "seed": 8675309, "entities": {}, "species": [], "groups": [], "object_types": [ObjectDefinitions.FLOATING_MINE.duplicate(true), ObjectDefinitions.THORIUM.duplicate(true), ObjectDefinitions.inert_thorium()] + ObjectDefinitions.metal_types() + [ObjectDefinitions.CIGARETTE.duplicate(true),ObjectDefinitions.CLAM.duplicate(true),ObjectDefinitions.PEARL.duplicate(true)] + ObjectDefinitions.rock_types(), "object_groups": [], "entity_types": [], "npc_types": []}
 static func creature_health(species: Dictionary, catalogue: Dictionary) -> float:
 	var stats: Dictionary = catalogue.get("tables",{}).get("creature_stats",{}).get("records",{}).get(str(species.get("model","")).to_lower(),{})
 	# Three-times original durability for the stronger zapper. Authored health
@@ -46,6 +53,7 @@ static func finite_array(value: Variant, length: int) -> bool:
 static func valid(data: Variant) -> bool:
 	if not data is Dictionary or data.get("schema_version") != 1: return false
 	if not ObjectDefinitions.valid(data): return false
+	if not data.get("entities") is Dictionary or not EntityTypes.valid(data): return false
 	if data.has("menu_camera"):
 		if not data.menu_camera is Dictionary or not finite_array(data.menu_camera.get("transform"),12): return false
 		var menu_pose := decode(data.menu_camera.transform)
@@ -108,15 +116,55 @@ static func valid(data: Variant) -> bool:
 			if not finite_array([effective.scale_min, effective.scale_max], 2) or effective.scale_min <= 0 or effective.scale_max < effective.scale_min or effective.scale_max > 500: return false
 	for key in data.entities:
 		if (key != "player_spawn" and not str(key).begins_with("Scenery/") and not str(key).begins_with("Added/")) or str(key).contains("..") or str(key).contains(":"): return false
-	for entity in data.entities.values():
-		if not entity is Dictionary or not finite_array(entity.get("transform"), 12): return false
+	var records: Array = data.entities.values().duplicate()
+	for type in data.get("entity_types",[]) + data.get("npc_types",[]):
+		var definition: Dictionary = type.duplicate(true)
+		definition.transform = encode(Transform3D.IDENTITY)
+		records.append(definition)
+	for raw in records:
+		var entity: Dictionary = EntityTypes.effective(data,raw) if raw is Dictionary else {}
+		if not raw is Dictionary or not finite_array(entity.get("transform"), 12): return false
 		if absf(decode(entity.transform).basis.determinant()) < 0.00001: return false
-		if entity.get("kind") not in ["model", "light", "player", "dropoff", "smoke"]: return false
-		if entity.kind == "smoke":
+		if entity.get("kind") not in ["model", "light", "player", "dropoff", "smoke", "bubbles"]: return false
+		if entity.kind == "model" and str(entity.get("model","")).to_upper() == "TURRET":
+			for flag in ["turret_homing","turret_armed"]:
+				if entity.has(flag) and not entity[flag] is bool: return false
+			for stat in ["turret_health","turret_sustain","turret_range","turret_turn_speed","turret_faction"]:
+				if not ObjectDefinitions.numeric(entity.get(stat,GunTurret.DEFAULTS[stat]),0.01 if stat == "turret_health" else 0,5 if stat == "turret_faction" else 100000): return false
+			if float(entity.get("turret_faction",0)) != floorf(float(entity.get("turret_faction",0))): return false
+		if entity.get("family") == "patrol":
+			for flag in ["npc_armed","npc_respawn"]:
+				if entity.has(flag) and not entity[flag] is bool: return false
+			for stat in Patrol.PATROL_LIMITS:
+				var limits: Array = Patrol.PATROL_LIMITS[stat]
+				if not ObjectDefinitions.numeric(entity.get(stat,Patrol.PATROL_DEFAULTS[stat]),limits[0],limits[1]): return false
+			if not ObjectDefinitions.numeric(entity.get("npc_faction",1),1,2) or float(entity.get("npc_faction",1)) != floorf(float(entity.get("npc_faction",1))): return false
+		if entity.kind == "model" and str(entity.get("model","")).to_upper() in Pirate.PIRATE_MODELS:
+			if entity.has("npc_respawn") and not entity.npc_respawn is bool: return false
+			for stat in Pirate.PIRATE_LIMITS:
+				var limits: Array = Pirate.PIRATE_LIMITS[stat]
+				if not ObjectDefinitions.numeric(entity.get(stat,Pirate.PIRATE_DEFAULTS[stat]),limits[0],limits[1]): return false
+		if entity.kind == "model" and str(entity.get("model","")).to_upper() in Trader.MODELS:
+			if entity.has("npc_respawn") and not entity.npc_respawn is bool: return false
+			for stat in Trader.LIMITS:
+				var limits: Array = Trader.LIMITS[stat]
+				if not ObjectDefinitions.numeric(entity.get(stat,Trader.DEFAULTS[stat]),limits[0],limits[1]): return false
+			if float(entity.get("npc_wait_max",40)) < float(entity.get("npc_wait_min",15)): return false
+			if float(entity.get("npc_faction",1)) != floorf(float(entity.get("npc_faction",1))): return false
+		if entity.kind == "model" and str(entity.get("model","")).to_upper() in GroundVehicle.MODELS:
+			if entity.has("npc_respawn") and not entity.npc_respawn is bool: return false
+			for stat in GroundVehicle.LIMITS:
+				var limits: Array = GroundVehicle.LIMITS[stat]
+				if not ObjectDefinitions.numeric(entity.get(stat,GroundVehicle.DEFAULTS[stat]),limits[0],limits[1]): return false
+			if float(entity.get("npc_wait_max",6)) < float(entity.get("npc_wait_min",2)): return false
+			if float(entity.get("npc_faction",1)) != floorf(float(entity.get("npc_faction",1))): return false
+		if entity.kind in ["smoke","bubbles"]:
 			if entity.has("enabled") and not entity.enabled is bool: return false
-			for property in SmokeEmitter.DEFAULTS:
-				var limits: Array = SmokeEmitter.LIMITS[property]
-				if not ObjectDefinitions.numeric(entity.get(property,SmokeEmitter.DEFAULTS[property]),limits[0],limits[1]): return false
+			var emitter_defaults: Dictionary = BubbleStream.DEFAULTS if entity.kind == "bubbles" else SmokeEmitter.DEFAULTS
+			var emitter_limits: Dictionary = BubbleStream.LIMITS if entity.kind == "bubbles" else SmokeEmitter.LIMITS
+			for property in emitter_defaults:
+				var limits: Array = emitter_limits[property]
+				if not ObjectDefinitions.numeric(entity.get(property,emitter_defaults[property]),limits[0],limits[1]): return false
 		if entity.kind == "dropoff":
 			if not ObjectDefinitions.numeric(entity.get("radius"),0.01,1000) or not ObjectDefinitions.numeric(entity.get("city_id",0),0,1000000000000): return false
 		if entity.kind == "light":
@@ -149,6 +197,7 @@ static func load_path(path: String) -> Dictionary:
 		if str(key).begins_with("Scenery/Searchlight_") and entry.kind == "model" and str(entry.get("model", "")).to_upper() == "BIGLITE":
 			entry.kind = "light"; entry.light_type = "searchlight"; entry.solid = false
 	ObjectDefinitions.ensure(data)
+	EntityTypes.migrate(data)
 	return data
 static func load_active(include_mod_wildlife: bool = true) -> Dictionary:
 	for entry in Mods.candidates("map.scen1"):
@@ -168,21 +217,28 @@ static func save(data: Dictionary, path: String = DEFAULT_PATH) -> Error:
 static func capture(world: Node3D, catalogue: Dictionary = {}) -> Dictionary:
 	var data := empty()
 	for node in world.find_children("*", "Node3D", true, false):
-		if not node.has_meta("editor_model") and not node.has_meta("editor_dropoff") and not node is OmniLight3D and not node is Searchlight and not node is SmokeEmitter: continue
+		if not node.has_meta("editor_model") and not node.has_meta("editor_dropoff") and not node is OmniLight3D and not node is Searchlight and not node is SmokeEmitter and not node is BubbleStream: continue
 		var key := str(world.get_path_to(node))
 		# Creature-attached lights (such as an angler's lure) are not map entities.
 		if not key.begins_with("Scenery/") and not key.begins_with("Added/"): continue
 		var record := {"name": str(node.get_meta("city_name", node.name)), "kind": "dropoff" if node.has_meta("editor_dropoff") else ("light" if node is OmniLight3D or node is Searchlight else "model"), "model": str(node.get_meta("editor_model", "")), "transform": encode(node.global_transform), "deleted": false, "solid": node.has_node("SceneryCollision")}
 		if node is SmokeEmitter: record.kind = "smoke"
+		if node is BubbleStream: record.kind = "bubbles"
 		if node.has_meta("editor_dropoff"):
 			record.radius = node.radius; record.city_id = node.city_id
 			var city: Dictionary = catalogue.get("tables",{}).get("city_info",{}).get("records",{}).get(str(node.city_id),{})
 			record.name = str(city.get("name","City " + str(node.city_id))) + " drop-off point"
 		if node.has_meta("city_id"): record.dock = {"city_id": int(node.get_meta("city_id")), "race_id": int(node.get_meta("race_id", 1))}
-		if node is PulseLight or node is Searchlight or node is SmokeEmitter: record.merge(node.settings())
+		if node is PulseLight or node is Searchlight or node is SmokeEmitter or node is BubbleStream: record.merge(node.settings())
 		elif node is OmniLight3D: record.merge({"energy": node.light_energy, "range": node.omni_range})
+		if node.has_node("GunTurret"): record.merge(node.get_node("GunTurret").tuning)
+		if node.has_node("Trader"):
+			record.merge(node.get_node("Trader").tuning)
+			if node.get_node("Trader") is Patrol: record.family = "patrol"
+		if node.has_node("GroundVehicle"): record.merge(node.get_node("GroundVehicle").tuning)
 		data.entities[key] = record
 	data.entities["player_spawn"] = {"name": "Player spawn", "kind": "player", "transform": encode(Transform3D(world.get_meta("player_spawn_basis",Basis.IDENTITY), world.get_meta("player_spawn"))), "deleted": false}
+	EntityTypes.migrate(data)
 	return data
 static func load_model(id: String, folder: String, animated: bool = false) -> Node3D:
 	# Model IDs resolve enabled modern replacements through the existing loader.
@@ -194,7 +250,7 @@ static func load_model(id: String, folder: String, animated: bool = false) -> No
 	return model
 static func apply_entities(world: Node3D, folder: String, data: Dictionary) -> void:
 	for key in data.entities:
-		var entry: Dictionary = data.entities[key]
+		var entry: Dictionary = EntityTypes.effective(data,data.entities[key])
 		if entry.kind == "player":
 			if not entry.get("deleted", false):
 				var pose := decode(entry.transform)
@@ -215,7 +271,8 @@ static func apply_entities(world: Node3D, folder: String, data: Dictionary) -> v
 		if node == null and str(key).begins_with("Added/"):
 			if not world.has_node("Added"):
 				var added := Node3D.new(); added.name = "Added"; world.add_child(added)
-			if entry.kind == "smoke": node = SmokeEmitter.new()
+			if entry.kind == "bubbles": node = BubbleStream.new()
+			elif entry.kind == "smoke": node = SmokeEmitter.new()
 			else: node = preload("res://drop_off_point.gd").new() if entry.kind == "dropoff" else ((Searchlight.new() if entry.get("light_type") == "searchlight" else PulseLight.new()) if entry.kind == "light" else load_model(str(entry.get("model", "")), folder, entry.has("dock")))
 			if node == null: continue
 			node.name = str(key).get_file()
@@ -239,8 +296,21 @@ static func apply_entities(world: Node3D, folder: String, data: Dictionary) -> v
 				if entry.get("solid", true): Scenery._add_prop_collision(node)
 		if entry.kind == "dropoff": node.configure(float(entry.radius),int(entry.get("city_id",0)))
 		node.global_transform = decode(entry.transform)
-		if node is PulseLight or node is Searchlight or node is SmokeEmitter:
+		# Map keys identify authored instances independently of runtime parents.
+		preload("res://entity_identity.gd").assign_id(node,preload("res://entity_identity.gd").authored("map/" + str(key),0))
+		if entry.kind == "model" and str(entry.get("model","")).to_upper() == "TURRET":
+			if not node.has_node("SceneryCollision"): Scenery._add_prop_collision(node)
+			GunTurret.install(node,entry)
+		if node is PulseLight or node is Searchlight or node is SmokeEmitter or node is BubbleStream:
 			node.configure(folder, entry)
+		elif entry.kind == "model" and str(entry.get("model","")).to_upper() in GroundVehicle.MODELS:
+			GroundVehicle.install(node,entry)
+		elif entry.kind == "model" and entry.get("family") == "patrol":
+			Patrol.install_patrol(node,entry)
+		elif entry.kind == "model" and str(entry.get("model","")).to_upper() in Pirate.PIRATE_MODELS:
+			Pirate.install_pirate(node,entry)
+		elif entry.kind == "model" and str(entry.get("model","")).to_upper() in Trader.MODELS:
+			Trader.install(node,entry)
 		elif node is OmniLight3D:
 			node.light_energy = clampf(float(entry.get("energy", 1.0)), 0.0, 16.0)
 			node.omni_range = clampf(float(entry.get("range", 5.0)), 0.1, 1000.0)

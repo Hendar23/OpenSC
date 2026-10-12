@@ -218,6 +218,19 @@ func _build_interface() -> void:
 		if game.dock_interface != null and game.dock_interface.visible: game.dock_interface.rebuild()
 	)
 	system.add_child(credits_button)
+	var equipment_button := Button.new(); equipment_button.name = "UnlockTestingEquipment"; equipment_button.toggle_mode = true
+	equipment_button.text = "All equipment at every station: Off"; equipment_button.focus_mode = Control.FOCUS_NONE
+	equipment_button.toggled.connect(func(enabled: bool) -> void:
+		game.testing_all_equipment = enabled
+		equipment_button.text = "All equipment at every station: " + ("On" if enabled else "Off")
+		if game.dock_interface != null and game.dock_interface.visible: game.dock_interface.rebuild()
+	)
+	system.add_child(equipment_button)
+	var time_presets = HBoxContainer.new(); time_presets.name = "TimeOfDayPresets"; system.add_child(time_presets)
+	for preset in [["Day", 12.0], ["Sunset", 18.0], ["Night", 0.0], ["Sunrise", 6.0]]:
+		var button := Button.new(); button.text = preset[0]; button.focus_mode = Control.FOCUS_NONE
+		button.pressed.connect(func() -> void: game.daylight_controls.time_of_day.value = preset[1]; game._save_preferences())
+		time_presets.add_child(button)
 	var market_speed_label := Label.new(); system.add_child(market_speed_label)
 	game.market_speed_slider = HSlider.new(); game.market_speed_slider.name = "MarketSpeed"
 	game.market_speed_slider.scrollable = false; game.market_speed_slider.focus_mode = Control.FOCUS_NONE
@@ -305,11 +318,6 @@ func _build_daylight_controls() -> void:
 			game._update_daylight()
 		)
 		slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
-	var presets = HBoxContainer.new(); game.graphics_controls.add_child(presets)
-	for preset in [["Day", 12.0], ["Sunset", 18.0], ["Night", 0.0], ["Sunrise", 6.0]]:
-		var button := Button.new(); button.text = preset[0]; button.focus_mode = Control.FOCUS_NONE
-		button.pressed.connect(func() -> void: game.daylight_controls.time_of_day.value = preset[1]; game._save_preferences())
-		presets.add_child(button)
 	var hint := Label.new(); hint.text = "Pause the cycle to hold a time. F1 pauses it while you adjust settings."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; game.graphics_controls.add_child(hint)
 

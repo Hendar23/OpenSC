@@ -7,7 +7,13 @@ const Paths = preload("res://asset_paths.gd")
 const Data = preload("res://original_game_data.gd")
 var checks := 0
 var failures := 0
-func _initialize() -> void: call_deferred("_run")
+func _initialize() -> void:
+	var storage = preload("res://player_storage.gd")
+	storage.root_override = "res://tests/cache-zapper-fixtures"
+	storage.ensure_parent(storage.preferences_path())
+	var ignore := FileAccess.open(storage.root_override.path_join(".gdignore"),FileAccess.WRITE); ignore.store_string("")
+	var config := ConfigFile.new(); config.set_value("game","folder",ProjectSettings.globalize_path("res://../Original Sub Culture")); config.save(storage.preferences_path())
+	call_deferred("_run")
 func check(ok: bool, message: String) -> void:
 	checks += 1
 	if not ok: failures += 1; push_error(message)
@@ -121,6 +127,31 @@ func _run() -> void:
 	target.health = 100; weapon.update_fire(false,0)
 	for frame in range(25): weapon.update_fire(true,1.0 / 25)
 	check(is_equal_approx(target.health,sixty_hz) and is_equal_approx(target.health,87.5),"Raw zapper tick damage is independent of Godot frame rate")
+	var original_mount := weapon.muzzle.transform
+	weapon.update_fire(false,0); weapon.configure({"range":2.5}); weapon.set_upgraded(true)
+	check(weapon.muzzle.transform == original_mount and weapon.muzzle.find_children("ELECTRIC","Node3D",false,false).size() == 1,"Upgrade keeps the same equipment mount and one original twin-prong housing")
+	check(weapon.upgraded_emitters[0].is_equal_approx(Vector3(-0.165859,0.037052,-0.000778)) and weapon.upgraded_emitters[1].is_equal_approx(Vector3(0.165859,0.037052,-0.000778)),"Upgraded arcs originate at the pointed electrode vertices instead of their base faces")
+	check(weapon.effective_range() == 5 and weapon.effective_damage() == 5,"Original upgrade doubles range and raw damage")
+	check(weapon.icon == weapon.upgraded_icon and weapon.upgraded_icon != null,"Upgrade switches to ELECTRI2 HUD artwork")
+	target.position = weapon.muzzle.get_node("Emitter").global_position + Vector3(0,0,-4)
+	target.health = 100
+	await physics_frame; await physics_frame
+	weapon.update_fire(true,0.04)
+	check(weapon.last_hit == target and is_equal_approx(target.health,99.0),"Upgraded zapper reaches four units and applies five raw damage once per tick")
+	weapon._process(0.04); weapon.secondary_arc._process(0.04)
+	check(weapon.secondary_arc.beam.visible and weapon.secondary_arc.beam.mesh.get_surface_count() == 1 and weapon.secondary_arc.beam_end == weapon.beam_end,"Twin lightning ribbons converge on one hit point")
+	pilot.rotation = Vector3(0.2,0.7,0); weapon.muzzle.rotation.x = 0.15; weapon.muzzle.scale = Vector3.ONE * 1.2
+	weapon.update_fire(true,0)
+	check(weapon.beam_start.is_equal_approx(weapon.muzzle.to_global(weapon.upgraded_emitters[0])) and weapon.secondary_arc.beam_start.is_equal_approx(weapon.muzzle.to_global(weapon.upgraded_emitters[1])),"Both arcs follow their prong tips through ship and custom mount transforms")
+	pilot.rotation = Vector3.ZERO; weapon.muzzle.transform = original_mount
+	weapon.update_fire(false,0)
+	check(not weapon.secondary_arc.firing and not weapon.secondary_arc.beam.visible,"Releasing fire stops the second arc")
+	weapon.set_installed([])
+	check(not weapon.muzzle.visible and weapon.upgraded,"Unequipping hides the housing without removing the upgrade")
+	weapon.set_installed(["zapper"]); weapon.set_upgraded(false)
+	check(weapon.effective_range() == 2.5 and weapon.icon == weapon.standard_icon and weapon.muzzle.get_node("Emitter").position == weapon.standard_emitter,"Reset restores the standard zapper and icon")
+	target.position = start + Vector3(0,0,-2)
+	await physics_frame; await physics_frame
 	target.health = 9; weapon.update_fire(false,0)
 	var deaths := []; target.died.connect(func() -> void: deaths.append(true))
 	preload("res://creature_death.gd").settings.chunk_lifetime = 1.0

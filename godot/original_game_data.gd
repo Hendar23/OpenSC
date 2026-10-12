@@ -14,7 +14,14 @@ static func load_catalogue(folder: String, with_mods: bool = true) -> Dictionary
 		fingerprints[relative] = FileAccess.get_sha256(path) if FileAccess.file_exists(path) else "missing"
 	var signature := folder + JSON.stringify(fingerprints)
 	if signature != cached_signature:
-		cached_base = _import(folder,fingerprints)
+		var cache := preload("res://asset_cache.gd")
+		var paths: Array = []
+		for relative in INPUTS: paths.append(folder.path_join(relative))
+		var cache_key := cache.key("catalogue", paths)
+		cached_base = cache.load_data(cache_key)
+		if cached_base.is_empty():
+			cached_base = _import(folder,fingerprints)
+			cache.save_data(cache_key, cached_base)
 		cached_signature = signature
 	var result := cached_base.duplicate(true)
 	if with_mods:

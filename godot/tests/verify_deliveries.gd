@@ -7,7 +7,11 @@ var failures := 0
 func check(ok: bool,message: String) -> void:
  checks += 1
  if not ok: failures += 1; push_error(message)
-func _initialize() -> void: call_deferred("run")
+func _initialize() -> void:
+ var storage = preload("res://player_storage.gd")
+ storage.root_override = "res://tests/cache-traffic-fixtures"; storage.ensure_parent(storage.preferences_path())
+ var config := ConfigFile.new(); config.set_value("game","folder",ProjectSettings.globalize_path("res://../Original Sub Culture")); config.save(storage.preferences_path())
+ call_deferred("run")
 func run() -> void:
  var types := {"object_types":Definitions.metal_types(),"object_groups":[]}; Definitions.ensure(types)
  for type in types.object_types:
@@ -35,7 +39,7 @@ func run() -> void:
  game.events.session_started.connect(func(restored: bool) -> void: sessions.append(restored))
  game.events.city_docked.connect(func(city: int) -> void: docks.append(city))
  game._begin_new_game(); game.pilot.controls_enabled = true; game.pilot.set_physics_process(false); game.docking.set_physics_process(false)
- game.equipment.set_installed(["deep_sea_lights","magnet"])
+ game.equipment.set_installed(["deep_sea_lights","magnet","grapple"])
  var magnet: Node3D = game.equipment.magnet; magnet.set_physics_process(false); magnet.set_enabled(true)
  var coin := preload("res://salvage_body.gd").new(); game.object_population.add_child(coin)
  var definition: Dictionary = Definitions.metal_types()[2]
@@ -43,8 +47,8 @@ func run() -> void:
  coin.global_position = magnet.head.global_position + Vector3.DOWN * 0.1; magnet._attach(coin)
  var city := int(game.docking.ports[0].node.get_meta("city_id"))
  var pad := preload("res://drop_off_point.gd").new(); game.world_root.add_child(pad); pad.configure(2.0,city); pad.global_position = coin.global_position
- check(pad.contains_point(pad.global_position + Vector3.UP * 3.9),"Drop-off vertical reach is doubled")
- check(not pad.contains_point(pad.global_position + Vector3.UP * 4.1) and not pad.contains_point(pad.global_position + Vector3.RIGHT * 2.1),"Vertical expansion preserves the horizontal acceptance range")
+ check(pad.contains_point(pad.global_position + Vector3.UP * 7.9) and pad.contains_point(pad.global_position + Vector3.DOWN * 7.9),"Drop-off vertical reach is doubled again above and below the point")
+ check(not pad.contains_point(pad.global_position + Vector3.UP * 8.1) and not pad.contains_point(pad.global_position + Vector3.RIGHT * 2.1),"Vertical expansion preserves the horizontal acceptance range")
  magnet.drop_points.assign([pad]); magnet._physics_process(0.016)
  check(game._delivery_prompt_active(),"Carrying salvage into a city's zone opens its confirmation request")
  game._process(0)
@@ -71,21 +75,35 @@ func run() -> void:
  check(coin.pickup_item().is_empty(),"The Suck-o-matic cannot reclaim accepted salvage")
  game.equipment.grapple.enabled = false
  magnet.enabled = false
+ var second := preload("res://salvage_body.gd").new(); game.object_population.add_child(second)
+ second.setup(definition,preload("res://object_population.gd").appearance(definition,game.game_folder),0,0.0,true)
+ second.set_meta("grapple_tow_target",true)
+ second.global_position = pad.global_position + Vector3.UP * 3
+ var grapple: Node3D = game.equipment.grapple; grapple.set_physics_process(false); grapple.set_enabled(true)
+ grapple.drop_points.assign([pad]); grapple._attach(second)
+ check(game.equipment.towing_tool() == grapple and game._delivery_prompt_active(),"A second object prompts immediately at the same drop-off using the other mounted tool")
+ game._answer_delivery(false)
+ check(not game._delivery_prompt_active() and grapple.target == second,"Declining keeps the second item attached")
+ grapple.release(); grapple._attach(second)
+ check(game._delivery_prompt_active(),"A fresh attachment resets the previous delivery refusal")
+ game._answer_delivery(true)
+ check(accepted.size() == 2 and game.player_progress.pending_deliveries[str(city)].copper == 4 and second.has_meta("delivery_city"),"Successive objects accumulate their goods at the same city")
+ check(not game._delivery_prompt_active(),"Accepted second object cannot keep its delivery prompt active")
  game.save_games.folder = "res://tests/delivery-save-fixture"
  game.docking.current = game.docking.ports[1]; game.docking.stage = game.Docking.Stage.DOCKED
  check(game.save_games.write(0,game._save_snapshot("Pending delivery")) == OK,"Pending city deliveries are written to a valid save file")
  game.player_progress = Progress.restore()
  check(await game._load_saved_game(0),"Save containing pending deliveries loads normally")
- check(sessions == [false,true] and docks.is_empty() and accepted.size() == 1 and collected.is_empty(),"Loading publishes restored-session state without replaying docking or delivery events")
- check(game.player_progress.pending_deliveries[str(city)].copper == 2 and game.player_progress.cargo.is_empty(),"Loading at another city preserves the delivery without collecting it")
+ check(sessions == [false,true] and docks.is_empty() and accepted.size() == 2 and collected.is_empty(),"Loading publishes restored-session state without replaying docking or delivery events")
+ check(game.player_progress.pending_deliveries[str(city)].copper == 4 and game.player_progress.cargo.is_empty(),"Loading at another city preserves the delivery without collecting it")
  check(game.object_population.snapshot().any(func(entry: Dictionary) -> bool: return entry.get("delivery_city",-1) == city),"Loading at another city also preserves the physical delivered object")
  # Loading a docked save pauses the world. Simulate resuming before the
  # next docking arrival rather than calling its update while still paused.
  paused = false
  game.docking.current = game.docking.ports[0]; game.docking.stage = game.Docking.Stage.DOCKED; game.dock_interface_active = false; game._process(0)
- check(game.player_progress.cargo.get("copper",0) == 2 and not game.player_progress.pending_deliveries.has(str(city)),"Docking transfers the saved delivery to the sub's trade inventory")
+ check(game.player_progress.cargo.get("copper",0) == 4 and not game.player_progress.pending_deliveries.has(str(city)),"Docking transfers the saved delivery to the sub's trade inventory")
  check(not game.object_population.snapshot().any(func(entry: Dictionary) -> bool: return entry.get("delivery_city",-1) == city),"Docking at the receiving city removes its accepted objects")
- check(collected.size() == 1 and collected[0].city == city and collected[0].goods == {"copper":2},"Collection is a separate event from acceptance")
+ check(collected.size() == 1 and collected[0].city == city and collected[0].goods == {"copper":4},"Collection is a separate event from acceptance")
  game._collect_city_deliveries(city)
  check(collected.size() == 1,"Repeated collection does not replay a completed delivery")
  game.docking.docked.emit()

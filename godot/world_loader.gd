@@ -1,10 +1,20 @@
 extends RefCounted
 
 const Assets = preload("res://clump_loader.gd")
+const CHUNK_SIZE := 48.0
 
 # Decode the static atomic sectors in the supplied SCEN1.BSP. Game objects
 # and mission state are stored separately and are not reconstructed here.
 static func load_world(path: String, tree: SceneTree, progress: Callable) -> Node3D:
+	var disk_cache := preload("res://asset_cache.gd")
+	var cache_key := Assets.conversion_key("world", path)
+	var cached := disk_cache.load_scene(cache_key)
+	if cached != null:
+		progress.call("Loading cached environment")
+		await tree.process_frame
+		return cached
+	progress.call("Converting assets")
+	await tree.process_frame
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		push_error("Cannot open world: " + path)
@@ -61,9 +71,16 @@ static func load_world(path: String, tree: SceneTree, progress: Callable) -> Nod
 			if material >= references.size():
 				push_error("World triangle refers to an invalid material")
 				return null
-			if not buffers.has(material):
-				buffers[material] = {"vertices": [], "normals": [], "uvs": []}
-			var buffer: Dictionary = buffers[material]
+			var centroid := Vector3.ZERO
+			for corner in range(3):
+				var vertex_index := int(data[p + 1 + corner])
+				if vertex_index >= vertex_count: push_error("Invalid world triangle"); return null
+				centroid += vertices[vertex_index] / 3.0
+			var cell := Vector2i(floori(centroid.x / CHUNK_SIZE),floori(centroid.z / CHUNK_SIZE))
+			var key := "%d:%d:%d" % [material,cell.x,cell.y]
+			if not buffers.has(key):
+				buffers[key] = {"material":material,"cell":cell,"vertices": [], "normals": [], "uvs": []}
+			var buffer: Dictionary = buffers[key]
 			var positions: Array = buffer["vertices"]
 			var vertex_normals: Array = buffer["normals"]
 			var texture_coordinates: Array = buffer["uvs"]
@@ -88,7 +105,7 @@ static func load_world(path: String, tree: SceneTree, progress: Callable) -> Nod
 				texture_coordinates.append(Vector2(float(data[uv]), float(data[uv + 1])) / coordinate_size)
 		triangle_total += triangle_count
 		if sector_index % 24 == 0:
-			progress.call("Loading environment: %d / %d sectors" % [sector_index + 1, sectors.size()])
+			progress.call("Converting assets: environment: %d / %d sectors" % [sector_index + 1, sectors.size()])
 			await tree.process_frame
 	var root := Node3D.new()
 	root.name = "Environment"
@@ -96,8 +113,10 @@ static func load_world(path: String, tree: SceneTree, progress: Callable) -> Nod
 	var game_folder := path.get_base_dir().get_base_dir()
 	var material_ids := buffers.keys()
 	material_ids.sort()
-	for material_id in material_ids:
-		var buffer: Dictionary = buffers[material_id]
+	var shared_materials := {}
+	for key in material_ids:
+		var buffer: Dictionary = buffers[key]
+		var material_id: int = buffer.material
 		var arrays := []
 		arrays.resize(Mesh.ARRAY_MAX)
 		arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array(buffer["vertices"])
@@ -120,13 +139,16 @@ static func load_world(path: String, tree: SceneTree, progress: Callable) -> Nod
 			if not str(reference["mask"]).is_empty():
 				material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 				material.alpha_scissor_threshold = 0.5
-		mesh.surface_set_material(0, material)
+		if not shared_materials.has(material_id): shared_materials[material_id] = material
+		mesh.surface_set_material(0, shared_materials[material_id])
 		var instance := MeshInstance3D.new()
-		instance.name = "Material_%d" % int(material_id)
+		instance.name = "Material_%d_%d_%d" % [material_id,buffer.cell.x,buffer.cell.y]
+		instance.set_meta("terrain_material",material_id)
 		instance.mesh = mesh
 		root.add_child(instance)
-		progress.call("Loading environment textures: %d / %d" % [root.get_child_count(), material_ids.size()])
-		await tree.process_frame
+		if root.get_child_count() % 16 == 0:
+			progress.call("Converting assets: environment textures: %d / %d" % [root.get_child_count(), material_ids.size()])
+			await tree.process_frame
 	root.set_meta("bounds", AABB(lower, upper - lower))
 	# Legacy BSP sectors use positive coordinates; database matrices are relative
 	# to the world origin stored in the BSP header. Keep the existing terrain view.
@@ -134,6 +156,8 @@ static func load_world(path: String, tree: SceneTree, progress: Callable) -> Nod
 	root.set_meta("surface_height", upper.y)
 	root.set_meta("triangles", triangle_total)
 	root.set_meta("sectors", sectors.size())
+	root.set_meta("asset_cache_key", cache_key)
+	disk_cache.save_scene(cache_key, root)
 	return root
 
 
@@ -172,8 +196,9 @@ static func add_collision(root: Node3D, tree: SceneTree, progress: Callable) -> 
 			var light_shape := CollisionShape3D.new(); light_shape.shape = shape
 			shelter.add_child(light_shape)
 		count += 1
-		progress.call("Building environment collision: %d materials" % count)
-		await tree.process_frame
+		if count % 16 == 0:
+			progress.call("Building environment collision: %d chunks" % count)
+			await tree.process_frame
 	root.set_meta("collision_ready", true)
 	var ceiling := StaticBody3D.new()
 	ceiling.name = "WaterSurfaceCollision"
@@ -186,3 +211,5 @@ static func add_collision(root: Node3D, tree: SceneTree, progress: Callable) -> 
 	surface_collider.shape = plane
 	ceiling.add_child(surface_collider)
 	root.add_child(ceiling)
+	if root.has_meta("asset_cache_key"):
+		preload("res://asset_cache.gd").save_scene(str(root.get_meta("asset_cache_key")), root)

@@ -173,15 +173,23 @@ func _draw_city_markers() -> void:
 	var span := Vector2(map_span,map_span * rect.size.y / rect.size.x)
 	var marker_scale := minf(rect.size.x / 124.0,2.5)
 	for marker in map_data.markers:
-		if not map_data.is_explored(marker.position): continue
+		if not map_data.city_known(marker) and not map_data.is_explored(marker.position): continue
 		var offset := Vector2(marker.position.x - point.x, marker.position.z - point.z) / span * rect.size
 		var position := rect.get_center() + offset
 		if rect.grow(-4 * marker_scale).has_point(position):
 			city_markers.draw_circle(position, 2.5 * marker_scale, Color(0.15, 0.95, 0.2))
 			var text_position := position + Vector2(4, -3) * marker_scale
 			var text_width := rect.end.x - text_position.x - 2.0
-			if text_width > 12.0:
+			if text_width > 12.0 and map_data.city_known(marker):
 				city_markers.draw_string(ThemeDB.fallback_font, text_position, str(marker.name).to_upper().left(18), HORIZONTAL_ALIGNMENT_LEFT, text_width, maxi(6, int(6 * marker_scale)), Color(0.15,0.85,0.2))
+
+	for actor in map_data.actor_markers:
+		if not is_instance_valid(actor) or not actor.active or not map_data.is_explored(actor.global_position): continue
+		if full_world and not map_data.npc_in_range(pilot.global_position,actor.global_position): continue
+		var offset := Vector2(actor.global_position.x - point.x,actor.global_position.z - point.z) / span * rect.size
+		var position := rect.get_center() + offset
+		if rect.grow(-4 * marker_scale).has_point(position):
+			city_markers.draw_circle(position,2 * marker_scale,Color(1,0.2,0.1) if int(actor.get_meta("faction",1)) == 3 else Color(1,0.85,0.05) if int(actor.get_meta("faction",1)) == 1 else Color(0.2,0.65,1))
 
 func _map_centre() -> Vector3:
 	if full_world:

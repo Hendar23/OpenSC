@@ -7,6 +7,7 @@ const MapDocument = preload("res://map_document.gd")
 const HUD = preload("res://cockpit_hud.gd")
 const SessionDebris = preload("res://creature_death.gd")
 const SessionExplosion = preload("res://mine_explosion.gd")
+const SessionMissile = preload("res://turret_missile.gd")
 const PlayerProgress = preload("res://player_progress.gd")
 
 var game: Node
@@ -47,6 +48,7 @@ func _reset_loaded_world() -> void:
 	game.dock_interface.dismiss(); game.dock_interface_active = false
 	game._set_map_open(false)
 	game.docking.cancel()
+	game.bounty_radio_queue.clear(); game.bounty_remaining = 0; game.bounty_port = {}
 	game.docking.nearby = {}; game.docking.declined_port = null; game.docking.message = ""
 	game.docking.greeted_ports.clear(); game.docking.greeting_port = {}; game.docking.greeting_remaining = 0.0
 	if game.docking_portrait != null: game.docking_portrait.reset_signal()
@@ -70,6 +72,7 @@ func _reset_loaded_world() -> void:
 	game.equipment.reset_towing()
 	game.equipment.set_installed(["deep_sea_lights","suckomat"])
 	game.weapons.set_installed(["zapper"])
+	game.weapons.set_upgraded(false)
 	game.equipment.selected = 0
 	for item in game.equipment.available:
 		item.enabled = false
@@ -77,17 +80,25 @@ func _reset_loaded_world() -> void:
 		preload("res://submarine_mounts.gd").apply(item.mount,game.pilot.visual,item.id)
 	game.weapons.muzzle.transform = game.weapons.muzzle.get_meta("default_mount")
 	preload("res://submarine_mounts.gd").apply(game.weapons.muzzle,game.pilot.visual,"zapper")
+	game.weapons.set_upgraded(false)
 	game.equipment.apply_settings()
-	if game.wildlife != null: game.wildlife.reroll()
-	else: game._reset_provisional_wildlife()
 	game.object_population.reset_population()
+	if is_instance_valid(game.turret_system): game.turret_system.reset()
+	if is_instance_valid(game.ground_traffic): game.ground_traffic.reset()
+	if is_instance_valid(game.submarine_traffic): game.submarine_traffic.reset()
 	game.cockpit_hud.map_data.reset_exploration()
 	game.camera_was_frozen = false
 	game._set_camera_mode(false)
+	var activity: Node = game.world_root.get_node("ActorActivity")
+	activity.refresh_views(); activity.update_actors(0.0)
+	if game.wildlife != null:
+		for fish in game.wildlife.get_children(): fish.mission_owner = ""
+		game.wildlife.reroll()
+	else: game._reset_provisional_wildlife()
 
 func _clear_session_effects(node: Node) -> void:
 	for child in node.get_children():
-		if child is SessionDebris or child is SessionExplosion:
+		if child is SessionDebris or child is SessionExplosion or child is SessionMissile:
 			child.free()
 		else: game._clear_session_effects(child)
 
@@ -108,7 +119,11 @@ func _save_snapshot(name: String) -> Dictionary:
 	for item in game.weapons.mounted: arms.append(item.id)
 	var explored = game.cockpit_hud.map_data.explored.duplicate() as Image
 	explored.convert(Image.FORMAT_L8)
-	return {"version":game.save_games.VERSION,"name":name.left(64),"saved_at":Time.get_datetime_string_from_system(),"dock":{"id":int(game.docking.current.node.get_meta("city_id")),"name":game.docking.current.name},"pose":MapDocument.encode(game.pilot.global_transform),"hour":game.day_night.hour,"equipment":items,"weapons":arms,"equipment_selected":game.equipment.current().get("id",""),"weapon_selected":game.weapons.current().get("id",""),"explored":Marshalls.raw_to_base64(explored.get_data()),"map_signature":game._map_signature(),"mods":Mods.active_ids(),"progress":game.player_progress.duplicate(true),"objects":game.object_population.snapshot(),"mines":game.object_population.mines.snapshot()}
+	var result := {"version":game.save_games.VERSION,"name":name.left(64),"saved_at":Time.get_datetime_string_from_system(),"dock":{"id":int(game.docking.current.node.get_meta("city_id")),"name":game.docking.current.name},"pose":MapDocument.encode(game.pilot.global_transform),"hour":game.day_night.hour,"equipment":items,"weapons":arms,"equipment_selected":game.equipment.current().get("id",""),"weapon_selected":game.weapons.current().get("id",""),"explored":Marshalls.raw_to_base64(explored.get_data()),"discovered_cities":game.cockpit_hud.map_data.discovered_cities.keys(),"map_signature":game._map_signature(),"mods":Mods.active_ids(),"progress":game.player_progress.duplicate(true),"objects":game.object_population.snapshot(),"mines":game.object_population.mines.snapshot()}
+	if is_instance_valid(game.turret_system): result.turrets = game.turret_system.snapshot()
+	if is_instance_valid(game.ground_traffic): result.ground_traffic = game.ground_traffic.snapshot()
+	if is_instance_valid(game.submarine_traffic): result.submarine_traffic = game.submarine_traffic.snapshot()
+	return result
 
 func _load_saved_game(slot: int) -> bool:
 	if game.loading_save or game.world_loading: return false
@@ -160,13 +175,19 @@ func _load_saved_game(slot: int) -> bool:
 		var bytes := Marshalls.base64_to_raw(data.explored)
 		game.cockpit_hud.map_data.explored = Image.create_from_data(HUD.Map.RESOLUTION,HUD.Map.RESOLUTION,false,Image.FORMAT_L8,bytes)
 		game.cockpit_hud.map_data.exploration_texture.update(game.cockpit_hud.map_data.explored)
+		game.cockpit_hud.map_data.discovered_cities.clear()
+		for id in data.get("discovered_cities",[]): game.cockpit_hud.map_data.discovered_cities[str(id)] = true
 		game.cockpit_hud.map_data.last_explored = Vector2(INF,INF)
 	else: game.cockpit_hud.map_data.reset_exploration()
 	game.has_started_game = true; game.front_end.can_resume = true
 	if data.has("objects"): game.object_population.restore_snapshot(data.objects)
 	if data.has("mines"): game.object_population.mines.restore(data.mines)
 	else: game.object_population.mines.populate_startup()
+	if data.has("turrets") and is_instance_valid(game.turret_system): game.turret_system.restore(data.turrets)
+	if data.has("ground_traffic") and is_instance_valid(game.ground_traffic): game.ground_traffic.restore(data.ground_traffic)
+	if data.has("submarine_traffic") and is_instance_valid(game.submarine_traffic): game.submarine_traffic.restore(data.submarine_traffic)
 	game.player_progress = PlayerProgress.restore(data.get("progress",{}))
+	game.weapons.set_upgraded(game.player_progress.status.zapper_upgrade == 1)
 	game._collect_city_deliveries(int(game.docking.current.node.get_meta("city_id")))
 	game.equipment.vacuum.storage.assign(game.player_progress.suckomat)
 	game.equipment.vacuum.transfer_to(game.player_progress.cargo)

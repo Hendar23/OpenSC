@@ -3,6 +3,12 @@ class_name SubCultureClumpLoader
 const LegacyBMP = preload("res://legacy_bmp.gd")
 const Mods = preload("res://mod_registry.gd")
 const Modern = preload("res://modern_model.gd")
+const Cache = preload("res://asset_cache.gd")
+
+static func conversion_key(kind: String, path: String, options: Variant = null) -> String:
+	Mods.ensure()
+	var textures := path.get_base_dir().get_base_dir().path_join("GAMETEX")
+	return Cache.key(kind, [path], [options, Cache.directory_signature(textures), Cache.directory_signature(Mods.root), Mods.enabled, Mods.order])
 
 static func load_submarine(path: String) -> Node3D:
 	return load_clump(path, PackedStringArray(["Hull", "RearPropeller", "LeftPod", "RightPod", "RightPropeller", "LeftPropeller"]))
@@ -22,6 +28,9 @@ static func load_clump(path: String, names: PackedStringArray = PackedStringArra
 	return _load_legacy(path, names, include_morphs)
 
 static func _load_legacy(path: String, names: PackedStringArray = PackedStringArray(), include_morphs: bool = false) -> Node3D:
+	var cache_key := conversion_key("clump", path, [names, include_morphs])
+	var cached := Cache.load_scene(cache_key)
+	if cached != null: return cached
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		push_error("Cannot open %s: %s" % [path, error_string(FileAccess.get_open_error())])
@@ -93,6 +102,7 @@ static func _load_legacy(path: String, names: PackedStringArray = PackedStringAr
 		instance.name = "Mesh_%d" % i
 		instance.mesh = mesh
 		frames[frame_id].add_child(instance)
+	Cache.save_scene(cache_key, root)
 	return root
 
 
@@ -290,6 +300,11 @@ static func _load_texture(game_folder: String, texture_name: String, mask_name: 
 	var key := texture_name + "|" + mask_name
 	if cache.has(key):
 		return cache[key]
+	Mods.ensure()
+	var disk_key := Cache.key("texture", [], [ProjectSettings.globalize_path(game_folder), key, Cache.directory_signature(game_folder.path_join("GAMETEX")), Cache.directory_signature(Mods.root), Mods.enabled, Mods.order])
+	var cached := Cache.load_resource(disk_key) as Texture2D
+	if cached != null:
+		cache[key] = cached; return cached
 	for replacement in Mods.candidates("texture." + texture_name):
 		var mod_image := _replacement_image(replacement.path)
 		if mod_image != null and not mod_image.is_empty():
@@ -298,6 +313,7 @@ static func _load_texture(game_folder: String, texture_name: String, mask_name: 
 			var mod_texture := ImageTexture.create_from_image(mod_image)
 			mod_texture.set_meta("asset_mod", replacement.name)
 			cache[key] = mod_texture
+			Cache.save_resource(disk_key, mod_texture)
 			return mod_texture
 		Mods.note("%s: could not load texture %s; using the next replacement or original." % [replacement.name, texture_name])
 	var texture_path := game_folder.path_join("GAMETEX").path_join(texture_name.to_upper() + ".BMP")
@@ -326,6 +342,7 @@ static func _load_texture(game_folder: String, texture_name: String, mask_name: 
 				image.set_pixel(x, y, pixel)
 	var texture := ImageTexture.create_from_image(image)
 	cache[key] = texture
+	Cache.save_resource(disk_key, texture)
 	return texture
 
 static func _replacement_image(path: String) -> Image:

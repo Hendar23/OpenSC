@@ -145,6 +145,7 @@ static func model_id(path: String) -> String:
 	return canonical_id("model." + path.get_file().get_basename())
 
 static func _rebuild() -> void:
+	preload("res://asset_cache.gd").reset_session()
 	layers.clear()
 	movement.clear()
 	conflicts.clear()

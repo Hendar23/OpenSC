@@ -243,6 +243,9 @@ func _setup_grapple(player: Node3D, folder: String) -> void:
 	grapple = _setup_towing_tool(player,folder,"grapple","TOW","TOW")
 
 func towing_tool() -> Node3D:
+	# Delivery belongs to the tool carrying cargo, regardless of mount order.
+	for tool in [magnet,grapple]:
+		if is_instance_valid(tool) and is_instance_valid(tool.target): return tool
 	for item in mounted:
 		if item.id == "magnet": return magnet
 		if item.id == "grapple": return grapple

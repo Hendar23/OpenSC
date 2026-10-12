@@ -20,6 +20,7 @@ func read(slot: int) -> Dictionary:
 	return data
 static func valid(data: Variant) -> bool:
 	if not data is Dictionary or data.get("version") != VERSION: return false
+	if data.get("progress") is Dictionary and data.progress.has("missions") and not preload("res://mission_state.gd").valid(data.progress.missions): return false
 	if not data.get("dock") is Dictionary or not data.dock.get("id") is float and not data.dock.get("id") is int: return false
 	var dock_id := float(data.dock.id)
 	if not is_finite(dock_id) or dock_id < 0 or dock_id != floorf(dock_id): return false
@@ -39,9 +40,15 @@ static func valid(data: Variant) -> bool:
 		if not id is String or id.is_empty() or weapon_ids.has(id): return false
 		weapon_ids[id] = true
 	if not data.get("explored") is String: return false
+	if not data.get("discovered_cities",[]) is Array or data.get("discovered_cities",[]).size() > 256: return false
+	for id in data.get("discovered_cities",[]):
+		if not id is String or id.length() > 128: return false
 	if not data.get("equipment_selected","") is String or not data.get("weapon_selected","") is String: return false
 	if data.has("objects") and not preload("res://object_population.gd").valid_snapshot(data.objects): return false
 	if data.has("mines") and not preload("res://mine_population.gd").valid_snapshot(data.mines): return false
+	if data.has("turrets") and not preload("res://turret_system.gd").valid_snapshot(data.turrets): return false
+	if data.has("submarine_traffic") and not preload("res://submarine_traffic.gd").valid_snapshot(data.submarine_traffic): return false
+	if data.has("ground_traffic") and not preload("res://ground_traffic.gd").valid_snapshot(data.ground_traffic): return false
 	var bytes := Marshalls.base64_to_raw(data.explored)
 	return bytes.size() == preload("res://hud_map.gd").RESOLUTION * preload("res://hud_map.gd").RESOLUTION
 func write(slot: int, snapshot: Dictionary) -> Error:

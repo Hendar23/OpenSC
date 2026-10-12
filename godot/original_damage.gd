@@ -30,9 +30,11 @@ static func radiation(strength_at_one_unit: float, distance: float) -> float:
 # Weapon strength is raw shield loss before the receiver's sustain multiplier.
 # Keep each body's existing storage scale explicit: creatures/objects are raw,
 # while the player stores the ten-times larger displayed shield points.
-static func weapon(target: Node3D, raw_strength: float, source: Vector3) -> void:
+static func weapon(target: Node3D, raw_strength: float, source: Vector3, attacker: Node3D = null) -> void:
 	if raw_strength <= 0.0 or not is_finite(raw_strength): return
-	if target.has_method("take_weapon_damage"):
+	if target.has_method("take_weapon_damage_from"):
+		target.take_weapon_damage_from(raw_strength,source,attacker)
+	elif target.has_method("take_weapon_damage"):
 		target.take_weapon_damage(raw_strength,source)
 	elif target.has_method("take_damage"):
 		target.take_damage(raw_strength * float(target.get_meta("damage_sustain",1.0)),source)

@@ -31,6 +31,8 @@ func _run() -> void:
 	press(menu,"menu_right"); check(menu.wildlife_limit == 80,"Controller right raises the cap")
 	press(menu,"menu_down"); check(menu.sun_shafts_button.has_focus(),"Down selects sun shafts")
 	press(menu,"menu_accept"); check(not menu.sun_shafts_enabled,"Sun shafts toggle works while paused")
+	press(menu,"menu_down"); check(menu.explosion_button.has_focus(),"Down selects explosion style")
+	press(menu,"menu_accept"); check(not menu.enhanced_explosions,"Controller can select classic explosions while paused")
 	press(menu,"menu_down"); check(menu.back.has_focus(),"Down selects Back")
 	press(menu,"menu_accept"); check(not menu.visible and front.buttons.gameplay.has_focus(),"Back restores Gameplay option focus")
 	paused = false

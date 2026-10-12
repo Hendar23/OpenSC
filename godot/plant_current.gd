@@ -6,10 +6,15 @@ var plant_count := 0
 var patches: Array[Dictionary] = []
 var world: Node3D
 var flexible_meshes := {}
+var patch_cells := {}
+var indexed_patch_count := -1
+var recovering := {}
+const CELL_SIZE := 8.0
 
 func attach(parent_world: Node3D) -> void:
 	world = parent_world
 	materials.clear(); patches.clear(); plant_count = 0
+	patch_cells.clear(); recovering.clear(); indexed_patch_count = -1
 	_collect(parent_world)
 	configure({})
 
@@ -124,7 +129,25 @@ func wash_at(point: Vector3, sources: Array[Dictionary]) -> Vector3:
 	return bend.limit_length(1.2)
 
 func update_sources(sources: Array[Dictionary], delta: float) -> void:
-	for patch in patches:
+	if indexed_patch_count != patches.size():
+		patch_cells.clear(); recovering.clear(); indexed_patch_count = patches.size()
+		for index in range(patches.size()):
+			var cell := Vector3i((Vector3(patches[index].point) / CELL_SIZE).floor())
+			if not patch_cells.has(cell): patch_cells[cell] = []
+			patch_cells[cell].append(index)
+			if Vector3(patches[index].bend).length_squared() > 0: recovering[index] = true
+	var candidates := recovering.duplicate()
+	var reach := float(settings.wash_range) * 1.1 + 0.3
+	if settings.enabled and settings.wash_strength > 0:
+		for source in sources:
+			var low := Vector3i(((Vector3(source.position) - Vector3.ONE * reach) / CELL_SIZE).floor())
+			var high := Vector3i(((Vector3(source.position) + Vector3.ONE * reach) / CELL_SIZE).floor())
+			for x in range(low.x,high.x + 1):
+				for y in range(low.y,high.y + 1):
+					for z in range(low.z,high.z + 1):
+						for index in patch_cells.get(Vector3i(x,y,z),[]): candidates[index] = true
+	for index in candidates:
+		var patch: Dictionary = patches[index]
 		var target := wash_at(patch.point,sources)
 		var previous: Vector3 = patch.bend
 		if previous.length_squared() < 0.000001 and target.length_squared() < 0.000001: continue
@@ -132,4 +155,6 @@ func update_sources(sources: Array[Dictionary], delta: float) -> void:
 		var next := previous.lerp(target,1.0 - exp(-rate * delta))
 		if next.length_squared() < 0.000001: next = Vector3.ZERO
 		patch.bend = next
+		if next == Vector3.ZERO: recovering.erase(index)
+		else: recovering[index] = true
 		for material in patch.materials: material.set_shader_parameter("propeller_bend",next)

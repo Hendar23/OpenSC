@@ -26,6 +26,11 @@ __pycache__/
 
 # Local credentials/configuration.
 /.local/
+# Player data if a source checkout shares the Documents/OpenSC directory.
+/cache/
+/settings/
+/savegame/
+/preferences.cfg
 .env
 .env.*
 !.env.example

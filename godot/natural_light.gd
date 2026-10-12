@@ -140,6 +140,8 @@ func attach(node: Node) -> void:
 					material.set_shader_parameter("emission_color",original.emission * original.emission_energy_multiplier)
 					material.set_shader_parameter("has_emission_texture",original.emission_texture != null); material.set_shader_parameter("emission_texture",original.emission_texture)
 				material.next_pass = original.next_pass; material.set_meta("natural_original",original); materials[original.get_instance_id()] = material
+				if original.has_meta("caustics_owners"):
+					original.get_meta("caustics_owners").append(weakref(material))
 			node.set_surface_override_material(index,material)
 			if node.material_override != null: node.material_override = material
 	for child in node.get_children(): attach(child)
