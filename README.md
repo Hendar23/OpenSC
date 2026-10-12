@@ -3,6 +3,13 @@ OpenSC is an open-source game engine remake for playing Criterion Games [Sub Cul
 
 Built with [Godot](https://godotengine.org/)
 
+The world is built, and the core scavenging/trading gameplay is in place, plus a few enhancements here and there.
+
+Still to do:
+- Most of the equipment and upgrades
+- Missions
+- Music & Cutscenes
+
 Latest release is available [here](https://github.com/Hendar23/OpenSC/tags)
 - You will need a copy of the original Sub Culture files. It has been abandonware for years now. Google is your friend.
 - A controller is recommended.
