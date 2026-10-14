@@ -9,7 +9,7 @@ const DEFAULT_PAGES := {
 	"goods":{"buttons":[{"action":"equipment","rect":[15,418,160,48]}],"list":[22,49,198,304],"buy":[248,364,65,27],"sell":[356,364,65,27],"info":[86,364,65,27]},
 	"missions":{"buttons":[{"action":"home","rect":[18,422,230,40]}]},
 	"save":{"buttons":[{"action":"home","rect":[20,395,190,71]}],"slots":[204,56,268,44]},
-	"load":{"buttons":[{"action":"close","rect":[23,419,190,42]}],"slots":[204,56,268,44]}
+	"load":{"buttons":[{"action":"close","rect":[231,435,185,38]}],"slots":[152,56,336,44]}
 }
 var folder := ""
 var page := "home"
@@ -56,6 +56,8 @@ var audio_tuning := preload("res://sound_tuning.gd").new()
 var active_button: Button
 var controller_button: Button
 var rebuilding := false
+var mission_selection := ""
+var mission_abandon_dialog: ConfirmationDialog
 var dock_race := 1
 var art_cache := {}
 var mail_view := "welcome"
@@ -144,7 +146,9 @@ func button(action: String, area: Rect2, text: String = "", payload: Dictionary 
 	node.pressed.connect(func() -> void:
 		if not outcome_sound and not node.get_meta("sounded_down",false): _play_menu_sound("activate")
 		node.set_meta("sounded_down",false)
-		if action in pages: open(action)
+		if action in pages:
+			if action == "save" and not (model.call() as Dictionary).get("can_save",true): report("Saving is unavailable during an active mission."); return
+			open(action)
 		elif action == "choose_slot": _choose_slot(int(payload.slot))
 		elif action == "repair_info": shop_offer_id = selected_hold if payload.get("side","") == "hold" else selected_sale; _repair_info()
 		elif action in ["buy_equipment","sell_equipment"]: action_requested.emit(action,{"item":selected_sale if action == "buy_equipment" else selected_hold})
@@ -196,6 +200,9 @@ func _skin_button(node: DockButton, action: String, payload: Dictionary) -> void
 		else:
 			_piece(node,node.highlight_art,"ENGLISH/" + prefix + "GOOD",Vector2(473,435))
 			_piece(node,node.held_art,prefix + "GBUT",Vector2(563,416))
+	elif page == "missions" and action == "accept_mission":
+		_piece(node,node.highlight_art,"ENGLISH/M" + goods_prefix + "-BAL",Vector2(443,437))
+		_piece(node,node.held_art,"M" + goods_prefix + "-B2",Vector2(547,415))
 	elif page == "missions" and action == "home":
 		_piece(node,node.highlight_art,"ENGLISH/M" + goods_prefix + "-BDL",Vector2(93,437))
 		_piece(node,node.held_art,"M" + goods_prefix + "-B1",Vector2(27,421))
@@ -254,6 +261,7 @@ func _leave_button(node: Button) -> void:
 
 func open(next_page: String = "home") -> void:
 	page = next_page if pages.has(next_page) else "home"
+	if page == "missions": mission_selection = ""
 	status = ""; show(); rebuild(true); Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 func rebuild(new_page: bool = false) -> void:
 	rebuilding = true; active_button = null
@@ -277,7 +285,7 @@ func rebuild(new_page: bool = false) -> void:
 		"equipment": artwork = "TP-1" if race == 2 else "TB-1"
 		"goods": artwork = prefix + "GOODSCR"
 		"missions": artwork = "MIS" + prefix + "1"
-		"save","load": artwork = "SAVESCR" if page == "load" else "PSAVE" if race == 2 else "BSAVE"
+		"save","load": artwork = "LOADSCR" if page == "load" else "PSAVE" if race == 2 else "BSAVE"
 	background = TextureRect.new(); background.size = Vector2(640,480); background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	background.texture = texture(str(pages[page].get("background","texture.ui_dock_" + page)),"INTROTEX/ENGLISH/" + artwork + ".BMP")
 	layout.add_child(background)
@@ -291,6 +299,7 @@ func rebuild(new_page: bool = false) -> void:
 			var area := rect(pages[page].title); title.position = area.position; title.size = area.size
 		else: label(loaded_city.to_upper(),rect(pages[page].title),18,true)
 	for entry in pages[page].get("buttons",[]):
+		if page == "home" and entry.get("action") == "save" and not data.get("can_save",true): continue
 		if entry is Dictionary and entry.get("action") is String: button(entry.action,rect(entry.get("rect")),str(entry.get("text","")))
 	match page:
 		"home":
@@ -301,9 +310,7 @@ func rebuild(new_page: bool = false) -> void:
 
 		"goods": _commodity_shop(data)
 		"missions":
-			label("Available missions\n\nNo missions available yet.",Rect2(24,24,325,160),16)
-			label("Current mission\n\nNone",Rect2(392,24,224,160),16)
-			label("Mission selection and rewards are not implemented yet.",Rect2(26,239,588,138),16)
+			_mission_board(data)
 		"save","load":
 			var area := rect(pages[page].get("slots"))
 			var slots: Array = data.get("slots",[])
@@ -311,10 +318,24 @@ func rebuild(new_page: bool = false) -> void:
 				var text := "%d  %s" % [int(slot.slot) + 1,slot.name]
 				if slot.valid and not str(slot.saved_at).is_empty(): text += " — " + str(slot.saved_at).replace("T"," ")
 				if slot.exists and not slot.valid: text = "%d  Unreadable save" % [int(slot.slot) + 1]
-				var node := button("choose_slot",Rect2(area.position + Vector2(0,int(slot.slot) * area.size.y),Vector2(area.size.x,25)),text,{"slot":slot.slot})
+				var node := button("choose_slot",Rect2(area.position + Vector2(0,int(slot.slot) * area.size.y),Vector2(area.size.x,36 if page == "load" else 25)),text,{"slot":slot.slot})
+				if page == "load": _load_slot_style(node)
 				node.tooltip_text = "%s — %s" % [slot.city,slot.saved_at]
-				node.disabled = page == "load" and not slot.valid
-			label(status,Rect2(190,350,310,56),12,true)
+				node.disabled = (page == "load" and not slot.valid) or (page == "save" and not data.get("can_save",true))
+			label(status,Rect2(18,402,604,24) if page == "load" else Rect2(190,350,310,56),10 if page == "load" else 12,true)
+	if page == "home" and not data.get("can_save",true):
+		var image := _button_texture(prefix + "NOSAVE")
+		if image != null:
+			var patch := TextureRect.new(); patch.name = "NoSavePanel"; patch.texture = image
+			patch.position = Vector2(634,420) - image.get_size(); patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			layout.add_child(patch); layout.move_child(patch,background.get_index() + 1)
+	if page == "load":
+		var area := rect(pages[page].get("slots"))
+		var auto: Dictionary = data.get("autosave",{})
+		var automatic := button("choose_slot",Rect2(area.position + Vector2(0,7 * area.size.y),Vector2(area.size.x,36)),"Auto Save",{"slot":-1})
+		_load_slot_style(automatic)
+		automatic.disabled = not auto.get("valid",false)
+		automatic.tooltip_text = str(auto.get("saved_at",""))
 	var slot_controls: Array[Button] = []
 	if page in ["save","load"]: slot_controls = _wire_slot_focus()
 	var restored := layout.get_node_or_null(NodePath(focus_name)) as Control if not focus_name.is_empty() else null
@@ -747,7 +768,16 @@ func _input(event: InputEvent) -> void:
 		held_button.button_up.emit()
 		if visible and not held_button.disabled: held_button.pressed.emit()
 		get_viewport().set_input_as_handled(); return
+	if is_instance_valid(mission_abandon_dialog) and mission_abandon_dialog.visible:
+		_dialog_input(mission_abandon_dialog,event); return
 	if not visible or name_dialog.visible or overwrite_dialog.visible: return
+	if page == "missions" and get_viewport().gui_get_focus_owner() is ScrollContainer:
+		var scroll := get_viewport().gui_get_focus_owner() as ScrollContainer
+		if Bindings.pressed(event,"menu_up") or Bindings.pressed(event,"menu_down"):
+			scroll.scroll_vertical += -36 if Bindings.pressed(event,"menu_up") else 36
+			get_viewport().set_input_as_handled(); return
+		if Bindings.pressed(event,"menu_accept") or Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right"):
+			button_nodes[0].grab_focus(); get_viewport().set_input_as_handled(); return
 	if page == "home" and mail_view != "welcome" and Bindings.pressed(event,"menu_cancel"):
 		mail_view = "list" if mail_view == "read" else "welcome"
 		rebuild(); mail_button.grab_focus(); get_viewport().set_input_as_handled(); return
@@ -806,7 +836,7 @@ func _input(event: InputEvent) -> void:
 	else:
 		for direction in [["menu_left",SIDE_LEFT],["menu_right",SIDE_RIGHT],["menu_up",SIDE_TOP],["menu_down",SIDE_BOTTOM]]:
 			if not Bindings.pressed(event,direction[0]): continue
-			var focused := get_viewport().gui_get_focus_owner() as Button
+			var focused := get_viewport().gui_get_focus_owner() as Control
 			if focused == null:
 				if not button_nodes.is_empty(): button_nodes[0].grab_focus()
 			else:
@@ -818,6 +848,7 @@ func dismiss() -> void:
 	if is_instance_valid(controller_button): controller_button.button_up.emit()
 	controller_button = null
 	active_button = null
+	if is_instance_valid(mission_abandon_dialog): mission_abandon_dialog.hide()
 	name_dialog.hide(); overwrite_dialog.hide(); info_dialog.hide(); hide()
 
 func _wire_slot_focus() -> Array[Button]:
@@ -856,3 +887,64 @@ func _dialog_input(dialog: ConfirmationDialog, event: InputEvent) -> void:
 			var next: Control = focus.find_valid_focus_neighbor(direction[1]) if focus != null else dialog.get_ok_button()
 			if next != null: next.grab_focus()
 			dialog.get_viewport().set_input_as_handled(); break
+
+func _mission_board(data: Dictionary) -> void:
+	var mission: Dictionary = data.get("missions",{})
+	var id := str(mission.get("id",""))
+	var selected := not mission_selection.is_empty() and mission_selection == id
+	var heading := label("Missions",Rect2(24,20,330,14),10); heading.add_theme_color_override("font_color",Color.WHITE)
+	var row: Button
+	if mission.get("available",false) or mission.get("active",false):
+		row = button("choose_mission",Rect2(24,34,335,15),str(mission.get("title","Prospectors Wanted!")))
+		for state in ["normal","hover","focus","pressed"]: row.add_theme_stylebox_override(state,StyleBoxEmpty.new())
+		row.alignment = HORIZONTAL_ALIGNMENT_LEFT; row.add_theme_font_size_override("font_size",10)
+		row.add_theme_color_override("font_focus_color",Color.WHITE); row.add_theme_color_override("font_hover_color",Color.WHITE)
+		row.add_theme_color_override("font_color",Color.WHITE if selected else text_colour)
+		row.pressed.connect(func() -> void: mission_selection = id; rebuild())
+		if selected:
+			_ensure_selection_dot(); var dot := TextureRect.new(); dot.texture = selection_dot
+			dot.position = Vector2(15,38); dot.size = Vector2(8,8); dot.mouse_filter = Control.MOUSE_FILTER_IGNORE; layout.add_child(dot)
+	else: label("No missions available",Rect2(24,34,335,15),10)
+	var picture := TextureRect.new(); picture.name = "MissionPicture"; picture.position = Vector2(384,14); picture.size = Vector2(238,179)
+	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var relative := str(mission.get("picture","")) if selected else "INTROTEX/" + ("PDEFAULT" if dock_race == 2 else "BDEFAULT") + ".BMP"
+	if not relative.is_empty(): picture.texture = texture("texture.mission_picture_" + relative.get_file().get_basename().to_lower(),relative)
+	layout.add_child(picture)
+	var body := str(mission.get("briefing","")) if selected else str(mission.get("welcome",""))
+	if selected and not str(mission.get("response","")).is_empty(): body = str(mission.response)
+	var accept := button("accept_mission",Rect2(430,422,180,40))
+	accept.disabled = not mission.get("available",false) or not selected
+	if mission.get("active",false):
+		var abandon := button("confirm_abandon",Rect2(24,170,220,20),"Abandon mission")
+		abandon.add_theme_font_size_override("font_size",10); abandon.pressed.connect(_confirm_abandon_mission)
+	var scroll := ScrollContainer.new(); scroll.position = Vector2(16,214); scroll.size = Vector2(605,190)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; layout.add_child(scroll)
+	var briefing := RichTextLabel.new(); briefing.text = body; briefing.fit_content = true
+	briefing.scroll_active = false; briefing.custom_minimum_size.x = 585; briefing.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	briefing.add_theme_font_size_override("normal_font_size",10); briefing.add_theme_color_override("default_color",text_colour)
+	scroll.add_child(briefing); scroll.focus_mode = Control.FOCUS_ALL
+	for node in button_nodes: node.focus_neighbor_top = node.get_path_to(scroll)
+	var done: Button = button_nodes[0]
+	scroll.focus_neighbor_bottom = scroll.get_path_to(done)
+	if row != null:
+		done.focus_neighbor_right = done.get_path_to(row); row.focus_neighbor_left = row.get_path_to(done)
+		row.focus_neighbor_bottom = row.get_path_to(accept if not accept.disabled else done)
+	if not accept.disabled:
+		accept.focus_neighbor_left = accept.get_path_to(done); done.focus_neighbor_left = done.get_path_to(accept)
+	scroll.gui_input.connect(func(event: InputEvent) -> void:
+		if event.is_action_pressed("ui_down"): scroll.scroll_vertical += 32; scroll.accept_event()
+		elif event.is_action_pressed("ui_up"): scroll.scroll_vertical -= 32; scroll.accept_event())
+func _confirm_abandon_mission() -> void:
+	if is_instance_valid(mission_abandon_dialog): mission_abandon_dialog.free()
+	var dialog := ConfirmationDialog.new(); mission_abandon_dialog = dialog; dialog.title = "Abandon mission?"
+	dialog.dialog_text = "This will fail the current mission."; add_child(dialog)
+	dialog.confirmed.connect(func() -> void: action_requested.emit("abandon_mission",{}); dialog.queue_free())
+	dialog.canceled.connect(dialog.queue_free); dialog.popup_centered()
+
+func _load_slot_style(node: Button) -> void:
+	var style := StyleBoxEmpty.new(); style.content_margin_left = 44; style.content_margin_right = 24
+	for state in ["normal","hover","focus","pressed","disabled"]: node.add_theme_stylebox_override(state,style)
+	node.add_theme_font_size_override("font_size",10)
+	node.add_theme_color_override("font_color",Color.BLACK)
+	node.add_theme_color_override("font_hover_color",Color.WHITE)
+	node.add_theme_color_override("font_focus_color",Color.WHITE)

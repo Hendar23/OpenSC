@@ -25,7 +25,7 @@ static func restore(saved: Variant = {}) -> Dictionary:
 			var validated: Dictionary = restore({"cargo":goods}).cargo
 			if not validated.is_empty(): result.pending_deliveries[str(city)] = validated
 	var stage: Variant = saved.get("campaign_stage",1)
-	if (stage is int or stage is float) and is_finite(float(stage)): result.campaign_stage = clampi(int(stage),1,4)
+	if (stage is int or stage is float) and is_finite(float(stage)): result.campaign_stage = clampi(int(stage),1,7)
 	if saved.get("mission") is String: result.mission = saved.mission.left(128)
 	if saved.get("standing") is Dictionary:
 		for race in saved.standing:

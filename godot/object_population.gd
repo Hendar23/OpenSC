@@ -218,6 +218,7 @@ func _shatter(body: RigidBody3D) -> void:
 		if piece != null:
 			# Each shard is a new entity; retain its origin for future objectives.
 			piece.set_meta("source_entity_id",Identity.of(body))
+			if body.has_meta("mission_owner"): piece.set_meta("mission_owner",body.get_meta("mission_owner"))
 			piece.position += direction * float(piece.get_child(0).get_meta("diameter",0.5)) * 0.7
 			piece.linear_velocity = velocity + direction * 0.7
 			piece.angular_velocity = spin + Vector3(index,1,-index) * 0.5

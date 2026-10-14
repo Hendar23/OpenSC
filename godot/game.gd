@@ -42,6 +42,7 @@ const PlantCurrent = preload("res://plant_current.gd")
 const WaterVisuals = preload("res://water_visuals.gd")
 const OriginalGameData = preload("res://original_game_data.gd")
 var gameplay_catalogue := {}
+var mission_runtime: Node
 var water_visuals := WaterVisuals.new()
 const NaturalLight = preload("res://natural_light.gd")
 var natural_light := NaturalLight.new()
@@ -150,6 +151,7 @@ var ground_traffic: Node
 var market_ui_elapsed := 0.0
 
 func _ready() -> void:
+	mission_runtime = preload("res://mission_runtime.gd").new(); add_child(mission_runtime); mission_runtime.setup(self)
 	events.mission_available.connect(func(id: String, available: bool) -> void: preload("res://mailbox.gd").set_mission_available(player_progress,id,available))
 	events.mission_completed.connect(func(id: String, score: float) -> void: preload("res://mailbox.gd").mission_completed(player_progress,id,score))
 	# Keep menus, settings and market quotes responsive while the physical
@@ -763,9 +765,12 @@ func _process(delta: float) -> void:
 		if docking.stage == docking.Stage.IDLE and docking.nearby.is_empty() and not _delivery_prompt_active():
 			if bounty_remaining <= 0 and not bounty_radio_queue.is_empty():
 				bounty_port = bounty_radio_queue.pop_front(); bounty_remaining = 7.0
+				if bounty_port.get("voice") != null:
+					var voice := AudioStreamPlayer.new(); voice.stream = bounty_port.voice; add_child(voice)
+					voice.finished.connect(voice.queue_free); voice.play()
 			if bounty_remaining > 0:
 				bounty_remaining = maxf(0,bounty_remaining - delta); bounty_visible = true
-				docking_prompt.text = "%s: CITY RELAY BEACON : Thank you for your assistance. 1000 credit bounty paid." % bounty_port.name
+				docking_prompt.text = str(bounty_port.get("text","%s: CITY RELAY BEACON : Thank you for your assistance. 1000 credit bounty paid." % bounty_port.name))
 		docking_prompt.visible = not docking_prompt.text.is_empty()
 		docking_portrait.update_signal(bounty_port.portrait if bounty_visible else docking.portrait_texture() if docking_prompt.visible else null,bounty_port.distorted_portrait if bounty_visible else docking.distorted_portrait_texture(),docking.radio_static,delta)
 	if developer_ui_visible:
@@ -780,8 +785,15 @@ func _update_follow_camera(delta: float, snap: bool = false) -> void:
 	var target := pose.origin + Vector3.UP * 0.35
 	var forward := -pose.basis.z
 	var heading := atan2(-forward.x, -forward.z)
+	var distance := float(pilot.movement.settings.camera_distance)
+	var tool: Node3D = equipment.towing_tool() if equipment != null else null
+	if tool != null and is_instance_valid(tool.target) and not tool.target.is_queued_for_deletion():
+		var cargo: Node3D = tool.target
+		var extent := pose.origin.distance_to(cargo.global_position)
+		if cargo.get("stats") is Dictionary: extent += float(cargo.stats.get("size",0.5)) * 0.5
+		distance = camera_follow.cargo_distance(distance,extent)
 	var desired := camera_follow.desired_position(target, heading, pilot.velocity, forward,
-		float(pilot.movement.settings.forward_speed), float(pilot.movement.settings.camera_distance), delta, snap)
+		float(pilot.movement.settings.forward_speed), distance, delta, snap)
 	var next := desired if snap else camera.global_position.lerp(desired, 1.0 - exp(-7.0 * delta))
 	var query := PhysicsRayQueryParameters3D.create(target, next, 5)
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
@@ -1018,13 +1030,20 @@ func _dock_ui_model() -> Dictionary:
 	var standing: String = player_progress.standing.get(str(port.get("race",1)),"neutral")
 	var description_id := "%s%d.%s" % [city.get("description_key",""),player_progress.campaign_stage,standing]
 	var description: String = gameplay_catalogue.get("tables",{}).get("city_descriptions",{}).get("records",{}).get(description_id,{}).get("text","")
-	return {"city":port.get("name","Dock"),"city_id":city_id,"title_bitmap":city.get("title_bitmap",""),"welcome":description,"standing":{"bad":"Hostile","neutral":"Neutral","good":"Friendly"}.get(standing,"Neutral"),"mission":player_progress.mission,"status":player_progress.status.duplicate(),"race":port.get("race",1),"repair_offer":preload("res://equipment_shop.gd").shield_repair(gameplay_catalogue,city_id,player_progress.campaign_stage,testing_all_equipment),"offers":preload("res://equipment_shop.gd").offers(gameplay_catalogue,city_id,player_progress.campaign_stage,testing_all_equipment),"installed":preload("res://equipment_shop.gd").installed(equipment,weapons),"hold":player_progress.hold.duplicate(),"commodity_offers":preload("res://commodity_market.gd").offers(gameplay_catalogue,player_progress,city_id),"cargo":player_progress.cargo.duplicate(),"mail":preload("res://mailbox.gd").messages(gameplay_catalogue,player_progress,int(city_id) if not city_id.is_empty() else 0),"slots":save_games.slots() if dock_interface != null and dock_interface.page in ["save","load"] else []}
+	return {"autosave":save_games.automatic_slot() if dock_interface != null and dock_interface.page in ["save","load"] else {},"missions":mission_runtime.board(int(city_id) if not city_id.is_empty() else 0),"can_save":mission_runtime.can_save(),"city":port.get("name","Dock"),"city_id":city_id,"title_bitmap":city.get("title_bitmap",""),"welcome":description,"standing":{"bad":"Hostile","neutral":"Neutral","good":"Friendly"}.get(standing,"Neutral"),"mission":player_progress.mission,"status":player_progress.status.duplicate(),"race":port.get("race",1),"repair_offer":preload("res://equipment_shop.gd").shield_repair(gameplay_catalogue,city_id,player_progress.campaign_stage,testing_all_equipment),"offers":preload("res://equipment_shop.gd").offers(gameplay_catalogue,city_id,player_progress.campaign_stage,testing_all_equipment),"installed":preload("res://equipment_shop.gd").installed(equipment,weapons),"hold":player_progress.hold.duplicate(),"commodity_offers":preload("res://commodity_market.gd").offers(gameplay_catalogue,player_progress,city_id),"cargo":player_progress.cargo.duplicate(),"mail":preload("res://mailbox.gd").messages(gameplay_catalogue,player_progress,int(city_id) if not city_id.is_empty() else 0),"slots":save_games.slots() if dock_interface != null and dock_interface.page in ["save","load"] else []}
 
 func _save_snapshot(name: String) -> Dictionary:
 	return session._save_snapshot(name)
 
 func _dock_ui_action(action: String, payload: Dictionary) -> void:
 	match action:
+		"accept_mission":
+			if docking.stage != Docking.Stage.DOCKED: return
+			var result: String = mission_runtime.accept(int(docking.current.node.get_meta("city_id")))
+			dock_interface.report(result)
+			dock_interface.rebuild()
+		"abandon_mission":
+			if docking.stage == Docking.Stage.DOCKED: mission_runtime.finish(false)
 		"read_mail":
 			if docking.stage != Docking.Stage.DOCKED: return
 			preload("res://mailbox.gd").mark_read(player_progress,str(payload.get("id","")))
@@ -1070,6 +1089,7 @@ func _dock_ui_action(action: String, payload: Dictionary) -> void:
 				dock_interface.dismiss(); dock_interface_active = false; _request_docking()
 		"close": dock_interface.dismiss(); front_end.show_menu(has_started_game)
 		"save_slot":
+			if int(payload.get("slot",-1)) < 0: return
 			if docking.stage != Docking.Stage.DOCKED: dock_interface.report("Save games are available while docked."); return
 			var result := save_games.write(int(payload.slot),_save_snapshot(str(payload.name)))
 			dock_interface.report("" if result == OK else save_games.error)
@@ -1082,6 +1102,7 @@ func _submarine_health_changed(remaining: float, capacity: float) -> void:
 	player_progress.status.shields = int(round(remaining / capacity * 100.0))
 
 func _submarine_destroyed() -> void:
+	mission_runtime.finish(false)
 	_set_map_open(false)
 	weapons.update_fire(false,0)
 	var wreck := preload("res://submarine_death.gd").new(); world_root.add_child(wreck)

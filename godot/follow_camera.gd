@@ -23,3 +23,7 @@ func desired_position(target: Vector3, ship_yaw: float, velocity: Vector3, forwa
 		var rate := lerpf(IDLE_TURN_FOLLOW, FORWARD_TURN_FOLLOW, fraction)
 		orbit_yaw = lerp_angle(orbit_yaw, ship_yaw, 1.0 - exp(-rate * delta))
 	return target + Vector3(sin(orbit_yaw), 0.4, cos(orbit_yaw)) * distance
+
+func cargo_distance(distance: float, extent: float) -> float:
+	# A temporary view offset; leave the player's chosen camera distance intact.
+	return distance + clampf(extent * 0.55,1.25,4.0)

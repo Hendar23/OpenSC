@@ -53,9 +53,10 @@ func _advance_motion(delta: float) -> void:
 		victim = null; path.clear(); body.velocity = Vector3.ZERO; return
 	# Approach diagonally through the shared water navigation, stopping at the
 	# original five-to-six unit fighting distance rather than ramming a target.
-	if distance > 6:
+	var clear_shot := _clear_shot(global_position,victim.global_position)
+	if distance > 6 or not clear_shot:
 		if replan <= 0:
-			replan = 0.75; path = system.route(global_position,victim.global_position - offset.normalized() * 5.5)
+			replan = 0.75; path = _attack_route(victim.global_position)
 		if not path.is_empty(): super._advance_motion(delta)
 	else:
 		path.clear(); speed = 0; body.velocity = Vector3.ZERO
@@ -135,3 +136,29 @@ func take_weapon_damage_from(strength: float, source: Vector3, owner_body: Node3
 	apply_attributed_damage(strength,source,owner_body)
 	if alive and dead and system != null and is_instance_valid(owner_body) and owner_body == system.player:
 		system.pirate_defeated.emit(global_position)
+
+func _travel_without_target(delta: float) -> void:
+	super._advance_motion(delta)
+
+func _clear_shot(from: Vector3, to: Vector3) -> bool:
+	if system.space == null: return true
+	return system.space.intersect_ray(PhysicsRayQueryParameters3D.create(from,to,1)).is_empty()
+
+func _attack_route(target: Vector3) -> PackedVector3Array:
+	var away := global_position - target
+	if away.length_squared() < 0.001: away = Vector3.FORWARD
+	var direct := target + away.normalized() * 5.5
+	if _clear_shot(direct,target):
+		var direct_path: PackedVector3Array = system.route(global_position,direct)
+		if not direct_path.is_empty(): return direct_path
+	# A dock can obstruct the straight standoff point, or stand between us and
+	# a nearby target. Try clear firing positions around/above it before waiting.
+	away.y = 0; away = away.normalized()
+	if away.is_zero_approx(): away = Vector3.FORWARD
+	for lift in [0.0,3.0]:
+		for angle in [45.0,-45.0,90.0,-90.0,180.0]:
+			var point: Vector3 = target + away.rotated(Vector3.UP,deg_to_rad(angle)) * 5.5 + Vector3.UP * lift
+			if not system.water_clear(point) or not _clear_shot(point,target): continue
+			var candidate: PackedVector3Array = system.route(global_position,point)
+			if not candidate.is_empty(): return candidate
+	return PackedVector3Array()

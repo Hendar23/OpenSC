@@ -124,26 +124,13 @@ static func load_world(path: String, tree: SceneTree, progress: Callable) -> Nod
 		arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array(buffer["uvs"])
 		var mesh := ArrayMesh.new()
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-		var material := StandardMaterial3D.new()
-		material.albedo_color = Color(0.43, 0.55, 0.45)
-		material.roughness = 1.0
-		material.cull_mode = BaseMaterial3D.CULL_DISABLED
-		var reference: Dictionary = references[int(material_id)]
-		material.albedo_color = reference["color"]
-		var texture: Texture2D = Assets._load_texture(game_folder, reference["texture"], reference["mask"], cache)
-		if texture != null:
-			material.albedo_texture = texture
-			material.albedo_color = Color.WHITE
-			material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-			material.texture_repeat = true
-			if not str(reference["mask"]).is_empty():
-				material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-				material.alpha_scissor_threshold = 0.5
-		if not shared_materials.has(material_id): shared_materials[material_id] = material
+		if not shared_materials.has(material_id):
+			shared_materials[material_id] = _terrain_material(references[material_id],game_folder,cache)
 		mesh.surface_set_material(0, shared_materials[material_id])
 		var instance := MeshInstance3D.new()
 		instance.name = "Material_%d_%d_%d" % [material_id,buffer.cell.x,buffer.cell.y]
 		instance.set_meta("terrain_material",material_id)
+		instance.set_meta("terrain_cell",buffer.cell)
 		instance.mesh = mesh
 		root.add_child(instance)
 		if root.get_child_count() % 16 == 0:
@@ -159,6 +146,22 @@ static func load_world(path: String, tree: SceneTree, progress: Callable) -> Nod
 	root.set_meta("asset_cache_key", cache_key)
 	disk_cache.save_scene(cache_key, root)
 	return root
+
+
+static func _terrain_material(reference: Dictionary, folder: String, cache: Dictionary) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.roughness = 1.0
+	# Legacy terrain has mixed face winding. Keep caves and undersides visible.
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.albedo_color = reference["color"]
+	var texture: Texture2D = Assets._load_texture(folder,reference["texture"],reference["mask"],cache)
+	if texture != null:
+		material.albedo_texture = texture; material.albedo_color = Color.WHITE
+		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST; material.texture_repeat = true
+		if not str(reference["mask"]).is_empty():
+			material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+			material.alpha_scissor_threshold = 0.5
+	return material
 
 
 static func _signed_byte(value: int) -> float:
@@ -180,20 +183,35 @@ static func add_collision(root: Node3D, tree: SceneTree, progress: Callable) -> 
 	shelter.collision_layer = 16
 	shelter.collision_mask = 0
 	root.add_child(shelter)
-	var count := 0
+	var cells := {}
 	for child in root.get_children():
 		if not child is MeshInstance3D: continue
-		var shape := ConcavePolygonShape3D.new()
-		shape.backface_collision = true
-		shape.set_faces(child.mesh.get_faces())
-		var collider := CollisionShape3D.new()
-		collider.shape = shape
-		body.add_child(collider)
-		# Cutout vegetation is part of the original BSP too; leaves must not
-		# be mistaken for solid cave ceilings by shelter queries.
-		var material := child.mesh.surface_get_material(0) as StandardMaterial3D
-		if material != null and material.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED:
-			var light_shape := CollisionShape3D.new(); light_shape.shape = shape
+		var center: Vector3 = child.mesh.get_aabb().get_center()
+		var cell: Vector2i = child.get_meta("terrain_cell",Vector2i(floori(center.x / CHUNK_SIZE),floori(center.z / CHUNK_SIZE)))
+		if not cells.has(cell): cells[cell] = {"faces":PackedVector3Array(),"solid":PackedVector3Array()}
+		var buffer: Dictionary = cells[cell]
+		for surface in range(child.mesh.get_surface_count()):
+			var arrays: Array = child.mesh.surface_get_arrays(surface)
+			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var faces := PackedVector3Array()
+			if arrays[Mesh.ARRAY_INDEX] != null and not arrays[Mesh.ARRAY_INDEX].is_empty():
+				for index in arrays[Mesh.ARRAY_INDEX]: faces.append(child.transform * vertices[index])
+			else:
+				for vertex in vertices: faces.append(child.transform * vertex)
+			buffer.faces.append_array(faces)
+			# Leaves must not be mistaken for solid cave ceilings by shelter rays.
+			var material := child.mesh.surface_get_material(surface) as StandardMaterial3D
+			if material != null and material.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED: buffer.solid.append_array(faces)
+	var count := 0
+	for cell in cells:
+		var buffer: Dictionary = cells[cell]
+		var shape := ConcavePolygonShape3D.new(); shape.backface_collision = true; shape.set_faces(buffer.faces)
+		var collider := CollisionShape3D.new(); collider.shape = shape; body.add_child(collider)
+		if not buffer.solid.is_empty():
+			var light_shape := CollisionShape3D.new()
+			if buffer.solid.size() == buffer.faces.size(): light_shape.shape = shape
+			else:
+				var solid := ConcavePolygonShape3D.new(); solid.backface_collision = true; solid.set_faces(buffer.solid); light_shape.shape = solid
 			shelter.add_child(light_shape)
 		count += 1
 		if count % 16 == 0:

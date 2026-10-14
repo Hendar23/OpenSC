@@ -54,14 +54,15 @@ static func _import(folder: String, fingerprints: Dictionary) -> Dictionary:
 	for name in ["REQUIRE.TXT","ROUTES.TXT"]:
 		if archive.has(name): result.tables["mission_requirements" if name == "REQUIRE.TXT" else "mission_routes"] = _lists(archive[name],name)
 	if archive.has("MISSORD.CSV"):
-		var records := {}; var stage := ""
+		var records := {}; var stage := ""; var cities: Array = []
 		for row in csv_rows(archive["MISSORD.CSV"]):
 			if row.is_empty(): continue
-			if row[0] == "#stage":
+			if row[0] == "#cities": cities = row.slice(1)
+			elif row[0] == "#stage":
 				stage = str(row[1]); records[stage] = {"parameters":row.slice(2),"core":[],"optional":[]}
 			elif not stage.is_empty() and row[0] in ["#core","#miss"]:
 				records[stage]["core" if row[0] == "#core" else "optional"].append(row.slice(1))
-		result.tables["campaign_stages"] = {"source":"DATA/DATA.ENC:MISSORD.CSV","records":records}
+		result.tables["campaign_stages"] = {"source":"DATA/DATA.ENC:MISSORD.CSV","records":records,"cities":cities}
 	for name in ["WEAPTXT.CSV","TRADETXT.CSV"]:
 		if language.has(name): result.tables["equipment_text" if name == "WEAPTXT.CSV" else "commodity_text"] = _csv_table(language[name],INPUTS[1] + ":" + name)
 	if language.has("ENGLISH.TXT"): result.tables["mission_text"] = _mission_text(language["ENGLISH.TXT"])

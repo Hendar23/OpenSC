@@ -47,3 +47,10 @@ static func messages(folder: String) -> Dictionary:
 			if fields.size() >= 5: result[fields[0].strip_edges()] = fields[4].strip_edges()
 		return result
 	return result
+
+static func speaker_portrait(folder: String, speaker: String, distorted: bool = false) -> Texture2D:
+	# MESSAGES.TXT portrait keys name radio faces, not hull/fish textures.
+	var prefix := {"pir":"RTPIR","ship":"RTSHIP","trad":"RTTRAD","tech":"RTTECH","fact":"RTFACT"}
+	var key := speaker.to_lower()
+	if not prefix.has(key): return null
+	return Assets._load_texture(folder,str(prefix[key]) + ("6" if distorted else "H"),"",{})

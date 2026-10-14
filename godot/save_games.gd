@@ -6,10 +6,10 @@ var folder := preload("res://player_storage.gd").saves_path()
 var error := ""
 var city_names := {}
 func path(slot: int) -> String:
-	return folder.path_join("slot-%d.json" % slot)
+	return folder.path_join("before-mission.json" if slot == -1 else "slot-%d.json" % slot)
 func read(slot: int) -> Dictionary:
 	error = ""
-	if slot < 0 or slot >= SLOT_COUNT: error = "Invalid save slot."; return {}
+	if slot < -1 or slot >= SLOT_COUNT: error = "Invalid save slot."; return {}
 	var file := FileAccess.open(path(slot),FileAccess.READ)
 	if file == null: error = "No saved game in this slot."; return {}
 	if file.get_length() > MAX_FILE_BYTES: error = "Save file is too large."; return {}
@@ -53,7 +53,9 @@ static func valid(data: Variant) -> bool:
 	return bytes.size() == preload("res://hud_map.gd").RESOLUTION * preload("res://hud_map.gd").RESOLUTION
 func write(slot: int, snapshot: Dictionary) -> Error:
 	error = ""
-	if slot < 0 or slot >= SLOT_COUNT or not valid(snapshot): error = "Cannot save invalid game state."; return ERR_INVALID_DATA
+	if slot < -1 or slot >= SLOT_COUNT or not valid(snapshot): error = "Cannot save invalid game state."; return ERR_INVALID_DATA
+	if not snapshot.get("progress",{}).get("missions",{}).get("active",{}).is_empty():
+		error = "Saving is unavailable during an active mission."; return ERR_UNAVAILABLE
 	var serialized := JSON.stringify(snapshot)
 	if serialized.to_utf8_buffer().size() > MAX_FILE_BYTES: error = "Save file is too large."; return ERR_INVALID_DATA
 	var absolute := ProjectSettings.globalize_path(folder)
@@ -75,3 +77,7 @@ func slots() -> Array[Dictionary]:
 		var city := str(city_names.get(int(dock.get("id",-1)),dock.get("name","")))
 		result.append({"slot":slot,"exists":FileAccess.file_exists(path(slot)),"valid":not data.is_empty(),"name":data.get("name","Empty slot"),"city":city,"saved_at":data.get("saved_at",""),"error":error})
 	return result
+
+func automatic_slot() -> Dictionary:
+	var data := read(-1)
+	return {"slot":-1,"name":"Auto Save","exists":FileAccess.file_exists(path(-1)),"valid":not data.is_empty(),"city":str(data.get("dock",{}).get("name","")),"saved_at":data.get("saved_at",""),"error":error}

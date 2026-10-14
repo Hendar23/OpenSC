@@ -11,3 +11,5 @@ signal equipment_activated(equipment_id: String, active: bool)
 signal item_used(item_id: String)
 signal mission_available(mission_id: String, available: bool)
 signal mission_completed(mission_id: String, score: float)
+
+signal mission_failed(mission_id: String)

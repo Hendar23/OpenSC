@@ -1,5 +1,5 @@
 extends RefCounted
-## Save boundary for the upcoming mission runtime. No objectives run here.
+## Saved campaign history and mission state. Objectives run in mission_runtime.gd.
 const VERSION := 1
 static func empty() -> Dictionary:
 	return {"version":VERSION,"active":{},"completed":{}}
