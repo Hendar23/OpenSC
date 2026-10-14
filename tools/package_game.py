@@ -55,7 +55,7 @@ def build(destination: Path, archive_output: bool = True) -> dict:
             if not asset.is_relative_to(pack.resolve()) or not asset.is_file():
                 raise SystemExit(f"Missing or invalid mod asset: {pack.name}/{relative}")
         shutil.copytree(pack, destination / "Mods" / pack.name,
-                        ignore=shutil.ignore_patterns(".*", "*.import", "*.tmp", "*.bak"))
+                        ignore=lambda directory, names: set(shutil.ignore_patterns(".*", "*.import", "*.tmp", "*.bak")(directory, names)) | {name for name in names if name.lower().startswith("readme")})
         bundled_mods.append(manifest["id"])
     shutil.copy2(ROOT / "Launch Game.cmd", destination / "Launch Game.cmd")
     # Archive before running Godot: imports, personal files and verification

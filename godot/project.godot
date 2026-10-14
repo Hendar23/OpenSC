@@ -14,8 +14,8 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
-config/name="OpenSubCulture: asset viewer"
-config/version="0.1.0-alpha.1"
+config/name="OpenSC"
+config/version="0.1.0-beta.1"
 run/main_scene="res://game.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 

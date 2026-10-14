@@ -120,6 +120,8 @@ var defaults_directory := ""
 var use_map_overrides := true
 var loading_preferences := false
 var docking: Node
+var radio_greeting := ""
+var radio_feed: Control
 var docking_prompt: Label
 const RadioPortrait = preload("res://radio_portrait.gd")
 var docking_portrait: RadioPortrait
@@ -325,6 +327,7 @@ func _start_game(folder: String) -> void:
 	pilot_mode = false
 	if docking_prompt != null: docking_prompt.hide()
 	if docking_portrait != null: docking_portrait.reset_signal()
+	if radio_feed != null: radio_feed.clear()
 	if docking != null:
 		docking.cancel()
 		docking.free()
@@ -578,14 +581,15 @@ func _build_docking_prompt() -> void:
 	docked_screen.add_child(docked_label)
 	docking_prompt = Label.new()
 	docking_prompt.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	docking_prompt.offset_top = -85.0
+	docking_prompt.offset_top = -82.0
 	docking_prompt.offset_bottom = -25.0
-	docking_prompt.offset_left = 140.0
-	docking_prompt.offset_right = -20.0
-	docking_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	docking_prompt.offset_left = 84.0
+	docking_prompt.anchor_right = 0.0
+	docking_prompt.offset_right = 556.0
+	docking_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	docking_prompt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	docking_prompt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	docking_prompt.add_theme_font_size_override("font_size", 22)
+	docking_prompt.add_theme_font_size_override("font_size", 16)
 	docking_prompt.add_theme_color_override("font_shadow_color", Color.BLACK)
 	docking_prompt.add_theme_constant_override("shadow_offset_x", 2)
 	docking_prompt.add_theme_constant_override("shadow_offset_y", 2)
@@ -594,14 +598,21 @@ func _build_docking_prompt() -> void:
 	docking_portrait = preload("res://radio_portrait.gd").new()
 	docking_portrait.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	docking_portrait.offset_left = 20.0
-	docking_portrait.offset_right = 116.0
-	docking_portrait.offset_top = -150.0
+	docking_portrait.offset_right = 68.0
+	docking_portrait.offset_top = -90.0
 	docking_portrait.offset_bottom = -30.0
 	docking_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	docking_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	docking_portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	docking_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(docking_portrait)
+	radio_feed = preload("res://radio_feed.gd").new()
+	radio_feed.name = "RadioFeed"; hud.add_child(radio_feed)
+	radio_feed.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	radio_feed.offset_left = 20; radio_feed.offset_right = 556
+	radio_feed.offset_top = -380; radio_feed.offset_bottom = -100
+	radio_feed.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
 
 func _fail_startup(message: String) -> void:
 	world_loading = false
@@ -731,6 +742,7 @@ func _process(delta: float) -> void:
 			market_ui_elapsed = 0.0
 			if dock_interface_active and dock_interface.visible and dock_interface.page == "goods": dock_interface.refresh_market()
 	_update_mouse_pointer()
+	if radio_feed != null: radio_feed.visible = pilot_mode and not world_loading and not get_tree().paused and not front_end.menu_layer.visible
 	if get_tree().paused or world_loading: return
 	particles.active = pilot_mode and not world_loading
 	if pilot_mode and not world_loading and not developer_ui_visible: day_night.step(delta)
@@ -760,19 +772,23 @@ func _process(delta: float) -> void:
 		_update_follow_camera(delta)
 	if docking_prompt != null:
 		docking_prompt.text = docking.message
+		var greeting_active: bool = docking.greeting_remaining > 0 and docking.message == docking.greeting_text and not docking.message.is_empty()
+		if greeting_active:
+			if radio_greeting != docking.message:
+				radio_greeting = docking.message
+				radio_feed.push_message({"text":docking.message,"portrait":docking.portrait_texture(),"distorted_portrait":docking.distorted_portrait_texture()},docking.radio_static)
+			docking_prompt.text = ""
+		else: radio_greeting = ""
 		if _delivery_prompt_active(): docking_prompt.text = "CITY DROP POINT : Do you want attached object to be automatically retrieved? (Y/N)"
-		var bounty_visible := false
+		_age_radio(delta)
 		if docking.stage == docking.Stage.IDLE and docking.nearby.is_empty() and not _delivery_prompt_active():
 			if bounty_remaining <= 0 and not bounty_radio_queue.is_empty():
 				bounty_port = bounty_radio_queue.pop_front(); bounty_remaining = 7.0
 				if bounty_port.get("voice") != null:
-					var voice := AudioStreamPlayer.new(); voice.stream = bounty_port.voice; add_child(voice)
+					var voice := AudioStreamPlayer.new(); voice.stream = bounty_port.voice; voice.volume_db = preload("res://docking_radio.gd").SPEECH_VOLUME_DB; add_child(voice)
 					voice.finished.connect(voice.queue_free); voice.play()
-			if bounty_remaining > 0:
-				bounty_remaining = maxf(0,bounty_remaining - delta); bounty_visible = true
-				docking_prompt.text = str(bounty_port.get("text","%s: CITY RELAY BEACON : Thank you for your assistance. 1000 credit bounty paid." % bounty_port.name))
 		docking_prompt.visible = not docking_prompt.text.is_empty()
-		docking_portrait.update_signal(bounty_port.portrait if bounty_visible else docking.portrait_texture() if docking_prompt.visible else null,bounty_port.distorted_portrait if bounty_visible else docking.distorted_portrait_texture(),docking.radio_static,delta)
+		docking_portrait.update_signal(docking.portrait_texture() if docking_prompt.visible else null,docking.distorted_portrait_texture(),docking.radio_static,delta)
 	if developer_ui_visible:
 		var state: RefCounted = pilot.movement
 		telemetry.text = "Speed: %.2f · Vertical: %.2f units/s\nPod tilt: %.1f° · Hull pitch: %.1f°\nDocking limit: %.2f units/s" % [state.velocity.length(), state.velocity.y, rad_to_deg(state.tilt), rad_to_deg(asin(clampf(-pilot.global_basis.z.y, -1.0, 1.0))), docking.maximum_docking_speed()]
@@ -1040,10 +1056,8 @@ func _dock_ui_action(action: String, payload: Dictionary) -> void:
 		"accept_mission":
 			if docking.stage != Docking.Stage.DOCKED: return
 			var result: String = mission_runtime.accept(int(docking.current.node.get_meta("city_id")))
-			dock_interface.report(result)
-			dock_interface.rebuild()
-		"abandon_mission":
-			if docking.stage == Docking.Stage.DOCKED: mission_runtime.finish(false)
+			if result.is_empty(): dock_interface.open("home")
+			else: dock_interface.report(result)
 		"read_mail":
 			if docking.stage != Docking.Stage.DOCKED: return
 			preload("res://mailbox.gd").mark_read(player_progress,str(payload.get("id","")))
@@ -1116,6 +1130,14 @@ func _submarine_destroyed() -> void:
 	weapons.hide(); equipment.hide()
 	_set_camera_mode(false)
 
+func _age_radio(delta: float) -> void:
+	# A dock prompt can hide a message, but must not preserve an old bounty
+	# indefinitely and announce it beside a later, unrelated pirate death.
+	bounty_remaining = maxf(0,bounty_remaining - maxf(0,delta))
+	for entry in bounty_radio_queue:
+		if entry.has("ttl"): entry.ttl -= maxf(0,delta)
+	bounty_radio_queue = bounty_radio_queue.filter(func(entry: Dictionary) -> bool: return not entry.has("ttl") or float(entry.ttl) > 0)
+
 func _pirate_bounty(point: Vector3) -> void:
 	var nearest: Dictionary = {}
 	var distance := INF
@@ -1124,5 +1146,9 @@ func _pirate_bounty(point: Vector3) -> void:
 		if candidate < distance: distance = candidate; nearest = port
 	if nearest.is_empty(): return
 	player_progress.status.credits += 1000
-	bounty_radio_queue.append(nearest)
+	var announcement := nearest.duplicate()
+	announcement.text = "%s: CITY RELAY BEACON : Thank you for your assistance. 1000 credit bounty paid." % nearest.name
+	announcement.ttl = 12.0
+	bounty_radio_queue.append(announcement)
+	if radio_feed != null: radio_feed.push_message(announcement,docking.radio_static)
 	if dock_interface_active: dock_interface.rebuild()

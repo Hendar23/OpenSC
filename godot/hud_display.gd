@@ -189,7 +189,7 @@ func _draw_city_markers() -> void:
 		var offset := Vector2(actor.global_position.x - point.x,actor.global_position.z - point.z) / span * rect.size
 		var position := rect.get_center() + offset
 		if rect.grow(-4 * marker_scale).has_point(position):
-			city_markers.draw_circle(position,2 * marker_scale,Color(1,0.2,0.1) if int(actor.get_meta("faction",1)) == 3 else Color(1,0.85,0.05) if int(actor.get_meta("faction",1)) == 1 else Color(0.2,0.65,1))
+			city_markers.draw_circle(position,2 * marker_scale,Color(1,0.85,0.05) if int(actor.get_meta("faction",1)) == 3 else Color(1,0.5,0.05) if int(actor.get_meta("faction",1)) == 1 else Color(0.2,0.65,1))
 
 func _map_centre() -> Vector3:
 	if full_world:

@@ -49,6 +49,8 @@ func _reset_loaded_world() -> void:
 	game._set_map_open(false)
 	game.docking.cancel()
 	game.bounty_radio_queue.clear(); game.bounty_remaining = 0; game.bounty_port = {}
+	if game.radio_feed != null: game.radio_feed.clear()
+	game.radio_greeting = ""
 	game.docking.nearby = {}; game.docking.declined_port = null; game.docking.message = ""
 	game.docking.greeted_ports.clear(); game.docking.greeting_port = {}; game.docking.greeting_remaining = 0.0
 	if game.docking_portrait != null: game.docking_portrait.reset_signal()

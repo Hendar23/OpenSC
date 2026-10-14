@@ -1,5 +1,7 @@
 extends RefCounted
 
+const SPEECH_VOLUME_DB := -8.0
+
 const Assets = preload("res://clump_loader.gd")
 const Scenery = preload("res://scenery_loader.gd")
 

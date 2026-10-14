@@ -78,12 +78,15 @@ func run() -> void:
 	var accept := game.dock_interface.layout.get_node("accept_mission") as Button
 	var row := game.dock_interface.layout.get_node("choose_mission") as Button
 	check(accept.disabled,"Accept stays disabled until a mission is selected")
-	check(done.find_valid_focus_neighbor(SIDE_RIGHT) == row,"Controller moves from Done to the mission list")
+	check(done.find_valid_focus_neighbor(SIDE_RIGHT) == done,"Right stays on Done while Accept is disabled")
+	check(done.find_valid_focus_neighbor(SIDE_TOP) is ScrollContainer,"Up reaches briefing from Done")
 	row.pressed.emit()
 	accept = game.dock_interface.layout.get_node("accept_mission") as Button
 	row = game.dock_interface.layout.get_node("choose_mission") as Button
 	done = game.dock_interface.layout.get_node("home") as Button
-	check(not accept.disabled and row.find_valid_focus_neighbor(SIDE_BOTTOM) == accept,"Selected mission leads down to Accept")
+	check(not accept.disabled and row.find_valid_focus_neighbor(SIDE_BOTTOM) is ScrollContainer,"Selected mission leads down to briefing")
+	check(done.find_valid_focus_neighbor(SIDE_RIGHT) == accept and accept.find_valid_focus_neighbor(SIDE_LEFT) == done,"Done and Accept navigate horizontally")
+	check(row.find_valid_focus_neighbor(SIDE_RIGHT) == row,"Right cannot jump vertically from mission row")
 	check(accept.held_art[0].rect.position + accept.position == Vector2(547,415),"Pressed Accept artwork aligns with the original panel")
 	var mission_picture := game.dock_interface.layout.get_node("MissionPicture") as TextureRect
 	check(mission_picture.texture != null,"Selected mission displays its own picture")
@@ -96,11 +99,13 @@ func run() -> void:
 	var down := InputEventJoypadButton.new(); down.button_index = JOY_BUTTON_DPAD_DOWN; down.pressed = true
 	root.push_input(down,true); await process_frame
 	check(scroll.scroll_vertical > 0,"Controller scrolls the full original briefing")
-	check(runtime.accept(1).is_empty(),"Controller test accepts mission")
+	game._dock_ui_action("accept_mission",{})
+	check(not runtime.can_save() and game.dock_interface.page == "home","Accepting returns directly to dock home")
 	game.dock_interface.open("home")
 	check(game.dock_interface.layout.get_node_or_null("save") == null,"Dock Save button is removed during mission")
 	check(game.dock_interface.layout.get_node_or_null("NoSavePanel") != null,"Original wood panel replaces the removed Save artwork")
 	runtime._radio("ag2","PIR")
+	check(not game.radio_feed.entries.is_empty(),"Mission transmission appears in history immediately")
 	var message: Dictionary = game.bounty_radio_queue.back()
 	var expected := preload("res://docking_radio.gd").speaker_portrait(game.game_folder,"pir")
 	check(message.portrait.get_image().get_data() == expected.get_image().get_data(),"Pirate message uses radio portrait rather than fish texture")

@@ -19,7 +19,7 @@ func run() -> void:
 	var assets: String = args[0]; var phase: String = args[1]
 	preload("res://input_bindings.gd").reset_defaults()
 	Mods.initialize(true)
-	check(Mods.packs.size() == 5 and Mods.active_ids().is_empty(), "Five bundled mods are available, disabled by default")
+	check(Mods.packs.size() == 6 and Mods.active_ids().is_empty(), "Six bundled mods are available, disabled by default")
 	for pack in Mods.packs:
 		check(pack.valid and pack.errors.is_empty(), "Bundled mod manifest and assets validate: " + str(pack.name))
 	if phase == "mods":

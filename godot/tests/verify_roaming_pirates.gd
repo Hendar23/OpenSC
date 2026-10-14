@@ -40,6 +40,15 @@ func run() -> void:
 	Damage.weapon(pirate.body,10000,ordinary.global_position,ordinary)
 	check(pirate.dead and game.player_progress.status.credits == credits,"NPC kills earn no player bounty")
 	check(population.replace(pirate) and not pirate.dead,"Destroyed pirate is replaced in safe water")
+	check(is_equal_approx(pirate.health.remaining,30.0),"Roaming pirate resets to full original health")
+	Damage.weapon(pirate.body,2.5,game.pilot.global_position,game.pilot)
+	check(not pirate.dead and is_equal_approx(pirate.health.remaining,29.25),"Single standard zapper tick applies sustain once")
+	Damage.weapon(pirate.body,10000,ordinary.global_position,ordinary)
+	check(pirate.dead and game.player_progress.status.credits == credits,"Player damage followed by NPC killing blow earns no bounty")
+	check(population.replace(pirate),"Reset pirate after shared combat")
+	Damage.weapon(pirate.body,10000,pirate.global_position)
+	check(pirate.dead and game.player_progress.status.credits == credits,"Unattributed environmental kill earns no bounty")
+	check(population.replace(pirate),"Reset pirate after environmental damage")
 	var factory: Dictionary = {}
 	for port in game.docking.ports:
 		if int(port.node.get_meta("city_id")) == 6: factory = port
@@ -103,7 +112,7 @@ func run() -> void:
 		for index in range(Shop.ITEMS.size()):
 			var id: String = Shop.ITEMS[index]
 			var offer := Shop.offer(game.gameplay_catalogue,city_id,1,id,false)
-			var expected: int = opening_prices[city_id][index]
+			var expected: int = opening_prices[city_id][index] if index < opening_prices[city_id].size() else 0
 			check(offer.available == (expected > 0) and offer.price == expected,"Original new-game stock and price: city %s / %s" % [city_id,id])
 	for button in presets.get_children():
 		if button.text == "Night": button.pressed.emit()
@@ -115,6 +124,13 @@ func run() -> void:
 	check(await game._load_saved_game(6),"Saved pirate game loads")
 	check(game.cockpit_hud.map_data.city_known(marker) and game.player_progress.status.credits == credits + 1000,"Discovery and bounty survive complete game restore")
 	check(game.submarine_traffic.roaming_population.ships.size() == 3,"Load retains three roaming slots")
+	game.bounty_radio_queue.clear()
+	game.bounty_radio_queue.append({"text":"old paid bounty","ttl":12.0})
+	game.bounty_radio_queue.append({"text":"mission dialogue","mission":"intro"})
+	game.bounty_remaining = 7.0
+	game._age_radio(13.0)
+	check(game.bounty_remaining == 0,"Hidden radio display still times out while docking")
+	check(game.bounty_radio_queue.size() == 1 and game.bounty_radio_queue[0].has("mission"),"Stale bounty announcements expire without losing mission dialogue")
 	map.reset_exploration(); check(map.discovered_cities.is_empty(),"New game clears city discovery")
 	for script in ["res://pirate_population.gd","res://tests/verify_roaming_pirates.gd"]:
 		if not FileAccess.file_exists(script + ".uid"):
