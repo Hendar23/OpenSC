@@ -10,7 +10,7 @@ Still to do:
 - Missions
 - Music & Cutscenes
 
-Latest release is available [here](https://github.com/Hendar23/OpenSC/tags)
+Latest release is available [here]([https://github.com/Hendar23/OpenSC/tags](https://github.com/Hendar23/OpenSC/releases/tag/v0.1.0-beta.1))
 - You will need a copy of the original Sub Culture files. It has been abandonware for years now. Google is your friend.
 - A controller is recommended.
   
