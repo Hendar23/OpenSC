@@ -99,7 +99,7 @@ static func _import_city_radio(catalogue: Dictionary, language: Dictionary) -> v
 	var messages := {}
 	for line in str(language.get("MESSAGES.TXT","")).split("\n"):
 		var fields := line.split("\t")
-		if fields.size() >= 5: messages[fields[0].strip_edges()] = {"text":fields[4].strip_edges()}
+		if fields.size() >= 5: messages[fields[0].strip_edges()] = {"text":fields[4].strip_edges(),"portrait":fields[3].strip_edges()}
 	catalogue.tables["radio_messages"] = {"source":"DATA/ENGLISH/LANGUAGE.ENC:MESSAGES.TXT","records":messages}
 	var places: Array[Dictionary] = []
 	for line in str(language.get("PLACES.TXT","")).split("\n"):

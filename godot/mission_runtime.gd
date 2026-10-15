@@ -154,6 +154,6 @@ func _radio(code: String, portrait: String) -> void:
 	var row: Dictionary = game.gameplay_catalogue.tables.get("radio_messages",{}).get("records",{}).get(code,{})
 	var face: Texture2D = preload("res://docking_radio.gd").speaker_portrait(game.game_folder,portrait)
 	var stream: AudioStream = preload("res://legacy_audio.gd").load_file(game.game_folder.path_join("WAVES/ENGLISH/" + code.to_upper() + ".RAW"))
-	var message := {"name":"","text":str(row.get("text","")),"portrait":face,"distorted_portrait":preload("res://docking_radio.gd").speaker_portrait(game.game_folder,portrait,true),"voice":stream,"mission":str(active().id)}
+	var message := {"speaker":"ship" if portrait == "SHIP" else "mission/" + str(active().id) + "/" + portrait.to_lower(),"name":"","text":str(row.get("text","")),"portrait":face,"distorted_portrait":preload("res://docking_radio.gd").speaker_portrait(game.game_folder,portrait,true),"voice":stream,"mission":str(active().id)}
 	game.bounty_radio_queue.append(message)
 	if game.radio_feed != null: game.radio_feed.push_message(message,game.docking.radio_static)

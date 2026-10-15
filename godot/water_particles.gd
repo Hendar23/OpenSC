@@ -4,9 +4,7 @@ const DEFAULTS := {"enabled": true, "count": 600.0, "size": 0.025, "drift": 0.06
 var settings: Dictionary = DEFAULTS.duplicate()
 var camera: Camera3D
 var active := false
-var positions: Array[Vector3] = []
-var flows: Array[Vector3] = []
-var sizes: Array[float] = []
+var drift_distance := 0.0
 var rng := RandomNumberGenerator.new()
 var material := ShaderMaterial.new()
 
@@ -25,6 +23,7 @@ func _init() -> void:
 
 func configure(values: Dictionary) -> void:
 	var previous_count := int(settings.count)
+	var previous_radius := float(settings.radius)
 	settings.merge(values, true)
 	settings.count = clampf(float(settings.count), 0.0, 4000.0)
 	settings.size = clampf(float(settings.size), 0.005, 0.08)
@@ -35,34 +34,30 @@ func configure(values: Dictionary) -> void:
 	material.set_shader_parameter("cloud_radius", settings.radius)
 	material.set_shader_parameter("visibility", settings.visibility)
 	visible = bool(settings.enabled) and active
-	if positions.size() != int(settings.count) or previous_count != int(settings.count): _rebuild()
+	if multimesh.instance_count == 0 or previous_count != int(settings.count): _rebuild()
+	if previous_radius != float(settings.radius): _update_bounds()
 
 func _rebuild() -> void:
-	positions.clear(); flows.clear(); sizes.clear()
-	multimesh.instance_count = int(settings.count)
-	var center := camera.global_position if camera != null and camera.is_inside_tree() else Vector3.ZERO
-	for i in range(multimesh.instance_count):
-		positions.append(center + _offset())
-		flows.append(Vector3(rng.randf_range(-0.7, 0.7), rng.randf_range(0.1, 0.4), rng.randf_range(-0.7, 0.7)))
-		sizes.append(rng.randf_range(0.65, 1.35))
-		multimesh.set_instance_custom_data(i, Color(rng.randf_range(0.4, 1.0), 0, 0, 0))
-		_draw(i)
+	# A periodic cube supplies a uniform spherical cloud after shader clipping.
+	# Compensate for the cube's unused corners to retain the requested density.
+	multimesh.instance_count = ceili(float(settings.count) * 6.0 / PI)
+	for index in range(multimesh.instance_count):
+		var phase := Vector3(rng.randf_range(-1,1),rng.randf_range(-1,1),rng.randf_range(-1,1))
+		var size := rng.randf_range(0.65,1.35)
+		multimesh.set_instance_transform(index,Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * size),phase))
+		multimesh.set_instance_custom_data(index,Color(rng.randf_range(0.4,1.0),rng.randf(),rng.randf(),rng.randf()))
+	_update_bounds()
 
-func _offset() -> Vector3:
-	var direction := Vector3(rng.randfn(), rng.randfn(), rng.randfn()).normalized()
-	return direction * pow(rng.randf(), 1.0 / 3.0) * float(settings.radius)
-
-func _draw(index: int) -> void:
-	multimesh.set_instance_transform(index, Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * sizes[index]), positions[index]))
+func _update_bounds() -> void:
+	var extent := Vector3.ONE * (float(settings.radius) + 1.0)
+	custom_aabb = AABB(-extent,extent * 2.0)
 
 func _process(delta: float) -> void:
 	visible = active and bool(settings.enabled)
-	if not visible or camera == null: return
-	var center := camera.global_position
-	var radius := float(settings.radius)
-	for i in range(positions.size()):
-		positions[i] += flows[i] * float(settings.drift) * delta
-		if positions[i].distance_squared_to(center) > radius * radius: positions[i] = center + _offset()
-		_draw(i)
-	# Avoid frustum culling against the initial cloud after travelling the map.
-	custom_aabb = AABB(center - Vector3.ONE * (radius + 1.0), Vector3.ONE * (radius + 1.0) * 2.0)
+	if not visible or not is_instance_valid(camera): return
+	# Only two uniforms and one cloud transform change, independent of count.
+	# Our own clock respects pause and keeps drift changes continuous.
+	drift_distance += maxf(delta,0.0) * float(settings.drift)
+	global_position = camera.global_position
+	material.set_shader_parameter("cloud_center",global_position)
+	material.set_shader_parameter("drift_distance",drift_distance)

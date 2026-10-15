@@ -16,7 +16,7 @@ func _valid_target(target: Node3D) -> bool:
 	# The player has no faction affiliation. Patrols do not acquire them as an enemy.
 	if target == system.player: return false
 	var faction := int(target.get_meta("faction",0))
-	return faction in [1,2,3] and faction != int(tuning.npc_faction)
+	return faction == 3
 func _nearest_target() -> Node3D:
 	var nearest: Node3D
 	var best := pow(float(tuning.npc_detection),2)

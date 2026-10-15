@@ -58,7 +58,7 @@ func run() -> void:
 	check(armed.size() == 2 and unarmed.size() == 2,"Only combat ships are armed")
 	for agent in armed:
 		var enemy = armed.filter(func(other: Node3D) -> bool: return other != agent)[0]
-		check(agent._valid_target(enemy.body),"Combat patrol targets opposing faction")
+		check(not agent._valid_target(enemy.body),"Combat patrol leaves opposing faction in peace")
 		var pirate = game.submarine_traffic.roaming_population.ships[0]
 		check(agent._valid_target(pirate.body),"Combat patrol targets pirates")
 		check(not agent._valid_target(game.pilot),"Neutral player is not acquired by faction patrols")

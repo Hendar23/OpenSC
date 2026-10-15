@@ -57,7 +57,8 @@ def build(destination: Path, archive_output: bool = True) -> dict:
         shutil.copytree(pack, destination / "Mods" / pack.name,
                         ignore=lambda directory, names: set(shutil.ignore_patterns(".*", "*.import", "*.tmp", "*.bak")(directory, names)) | {name for name in names if name.lower().startswith("readme")})
         bundled_mods.append(manifest["id"])
-    shutil.copy2(ROOT / "Launch Game.cmd", destination / "Launch Game.cmd")
+    for name in ("Launch Game.cmd", "Launch Game Compatibility.cmd"):
+        shutil.copy2(ROOT / name, destination / name)
     # Archive before running Godot: imports, personal files and verification
     # output must never become part of the distributable.
     archive = destination.parent / (destination.name + ".zip")
@@ -130,6 +131,7 @@ def standalone(destination: Path, engine: Path, template: Path) -> dict:
         shutil.copytree(stage / name, destination / name)
     for name in ("GODOT_LICENSE.txt", "GODOT_COPYRIGHT.txt"):
         shutil.copy2(template.parent / name, destination / name)
+    shutil.copy2(ROOT / "Launch Game Compatibility.cmd", destination / "Launch Game Compatibility.cmd")
     preset = '''[preset.0]
 name="Windows Desktop"
 platform="Windows Desktop"

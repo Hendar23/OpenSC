@@ -8,7 +8,14 @@ var failures := 0
 func check(ok: bool, message: String) -> void:
  checks += 1
  if not ok: failures += 1; push_error(message)
-func _initialize() -> void: call_deferred("run")
+func _initialize() -> void:
+ var storage = preload("res://player_storage.gd")
+ storage.root_override = "res://tests/cache-light-identity-fixtures"
+ storage.ensure_parent(storage.preferences_path())
+ var cfg := ConfigFile.new()
+ cfg.set_value("game","folder",ProjectSettings.globalize_path("res://../Original Sub Culture"))
+ cfg.save(storage.preferences_path())
+ call_deferred("run")
 func run() -> void:
  preload("res://mod_registry.gd").initialize(false)
  var game = Game.new(); game.remember_preferences = false; root.add_child(game)
@@ -18,9 +25,9 @@ func run() -> void:
  check(game.startup_complete,"World loads")
  if not game.startup_complete: quit(1); return
  var data = JSON.parse_string(FileAccess.get_file_as_string("res://../Maps/scen1.json"))
- var key := "Scenery/Light_69"
+ var key := "Scenery/Beacon_Object_62"
  var light = game.world_root.get_node_or_null(NodePath(key))
- check(light is Pulse,"Saved dock light 69 is restored even without a generated source node")
+ check(light is Pulse,"Saved dock lamp uses its permanent original-object ID")
  if light != null:
   check(light.global_transform.is_equal_approx(Document.decode(data.entities[key].transform)),"User's repositioned light is preserved")
   var dock = game.world_root.get_node("Scenery/DOCKING_0")
@@ -48,7 +55,7 @@ func run() -> void:
    for frame in range(5): await process_frame
    await RenderingServer.frame_post_draw
    root.get_texture().get_image().save_png("res://tests/light69-off.png")
- for deleted in ["Scenery/Light_59","Scenery/Light_62","Scenery/Light_63","Scenery/Light_68","Scenery/Light_71"]:
+ for deleted in ["Scenery/Beacon_Light_0","Scenery/Beacon_Light_1"]:
   check(not game.world_root.has_node(NodePath(deleted)),"Deleted excess light stays deleted: " + deleted)
  var map_lights := []
  for node in game.world_root.find_children("*","Node3D",true,false):

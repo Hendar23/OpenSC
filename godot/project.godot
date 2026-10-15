@@ -17,7 +17,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 config/name="OpenSC"
 config/version="0.1.0-beta.1"
 run/main_scene="res://game.tscn"
-config/features=PackedStringArray("4.7", "GL Compatibility")
+config/features=PackedStringArray("4.7", "Forward Plus")
 
 [autoload]
 
@@ -36,6 +36,7 @@ common/physics_interpolation=true
 
 [rendering]
 
-renderer/rendering_method="gl_compatibility"
+renderer/rendering_method="forward_plus"
 renderer/rendering_method.mobile="gl_compatibility"
+rendering_device/fallback_to_opengl3=true
 environment/defaults/default_clear_color=Color(0.025, 0.115, 0.145, 1)

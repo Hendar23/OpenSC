@@ -210,7 +210,7 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 					solid = definition.get("collision") == "yes"
 				# Pulse-light generators have no mesh; don't render their editor clump.
 				if definition.get("object") == "PULSELIGHT":
-					_add_light(scenery, placement(row, offset).origin, 0.7, 4.0, folder)
+					_add_light(scenery, placement(row, offset).origin, 0.7, 4.0, folder,"Object_" + str(int(row.index)))
 		elif row.get("clump") == "PIPEBARS":
 			model_name = "PIPEBARS"
 		if model_name.is_empty() or model_name == "NONE":
@@ -223,14 +223,14 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 			await tree.process_frame
 	for row in tables.get("Lights", []):
 		var pose := placement(row, offset)
-		_add_light(scenery, pose.origin, float(row.get("intensity", 1.0)), maxf(1.0, float(row.get("radius", 1.0))), folder)
+		_add_light(scenery, pose.origin, float(row.get("intensity", 1.0)), maxf(1.0, float(row.get("radius", 1.0))), folder,"Light_" + str(int(row.index)))
 	# Startup 0x42b9d0 creates these dormant database markers explicitly.
-	# Append after beacons so legacy child-count-based light names stay stable.
+	# Install runtime turret controllers after creating the original scenery.
 	for row in tables.get("Objects", []):
 		if int(row.get("MissionID",0)) != 2 or int(row.get("ObjectID",-1)) not in [4,11,12]: continue
 		if str(row.get("clump","")).to_upper() != "TURRET": continue
 		# Prefer dedicated defences over overlapping generic database props.
-		# Remove after beacon naming so existing map light IDs remain stable.
+		# Remove overlapping generic turret placements.
 		for generic in tables.get("Objects", []):
 			if int(generic.get("AutoCreate",0)) != 1 or str(generic.get("clump","")) != "TURRET": continue
 			if placement(generic,offset).origin.distance_squared_to(placement(row,offset).origin) >= 0.25: continue
@@ -351,10 +351,12 @@ static func _plant_patch(parent: Node3D, row: Dictionary, center: Vector3, world
 		if index % 24 == 0: await tree.process_frame
 	return plants
 
-static func _add_light(parent: Node3D, point: Vector3, energy: float, radius: float, folder: String) -> void:
+static func _add_light(parent: Node3D, point: Vector3, energy: float, radius: float, folder: String, source_id: String) -> void:
 	if not point.is_finite() or not is_finite(energy) or not is_finite(radius): return
 	var light := PulseLight.new()
-	light.name = "Light_%d" % parent.get_child_count()
+	light.name = "Beacon_" + source_id
+	light.set_meta("light_source_id",source_id)
+	light.set_meta("light_source_position",point)
 	light.position = point
 	light.light_color = Color(0.48, 0.8, 0.68)
 	light.configure(folder, {"energy": clampf(energy, 0.0, 2.0), "range": clampf(radius, 1.0, 12.0)})

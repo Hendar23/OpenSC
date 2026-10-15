@@ -121,10 +121,9 @@ var use_map_overrides := true
 var loading_preferences := false
 var docking: Node
 var radio_greeting := ""
+var radio_status := ""
 var radio_feed: Control
-var docking_prompt: Label
 const RadioPortrait = preload("res://radio_portrait.gd")
-var docking_portrait: RadioPortrait
 var mod_panel: Window
 var object_population: Node3D
 var wildlife: Node3D
@@ -325,9 +324,8 @@ func _start_game(folder: String) -> void:
 	export_all_button.disabled = true
 	export_all_dialog.hide()
 	pilot_mode = false
-	if docking_prompt != null: docking_prompt.hide()
-	if docking_portrait != null: docking_portrait.reset_signal()
 	if radio_feed != null: radio_feed.clear()
+	radio_greeting = ""; radio_status = ""
 	if docking != null:
 		docking.cancel()
 		docking.free()
@@ -532,7 +530,7 @@ func _start_game(folder: String) -> void:
 	docking.docked.connect(_reset_docked_wildlife)
 	docking.docked.connect(func() -> void: events.city_docked.emit(int(docking.current.node.get_meta("city_id"))))
 	equipment.activated.connect(func(id: String, active: bool) -> void: events.equipment_activated.emit(id,active))
-	if docking_prompt == null: _build_docking_prompt()
+	if radio_feed == null: _build_radio_feed()
 	dock_interface.setup(folder,_dock_ui_model)
 	pilot_mode = true
 	world_loading = false
@@ -563,7 +561,7 @@ func _start_game(folder: String) -> void:
 func _progress(message: String) -> void:
 	front_end.update_progress(message)
 
-func _build_docking_prompt() -> void:
+func _build_radio_feed() -> void:
 	var hud := CanvasLayer.new()
 	hud.layer = 2
 	add_child(hud)
@@ -579,38 +577,11 @@ func _build_docking_prompt() -> void:
 	docked_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	docked_label.add_theme_font_size_override("font_size", 28)
 	docked_screen.add_child(docked_label)
-	docking_prompt = Label.new()
-	docking_prompt.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	docking_prompt.offset_top = -82.0
-	docking_prompt.offset_bottom = -25.0
-	docking_prompt.offset_left = 84.0
-	docking_prompt.anchor_right = 0.0
-	docking_prompt.offset_right = 556.0
-	docking_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	docking_prompt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	docking_prompt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	docking_prompt.add_theme_font_size_override("font_size", 16)
-	docking_prompt.add_theme_color_override("font_shadow_color", Color.BLACK)
-	docking_prompt.add_theme_constant_override("shadow_offset_x", 2)
-	docking_prompt.add_theme_constant_override("shadow_offset_y", 2)
-	docking_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hud.add_child(docking_prompt)
-	docking_portrait = preload("res://radio_portrait.gd").new()
-	docking_portrait.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	docking_portrait.offset_left = 20.0
-	docking_portrait.offset_right = 68.0
-	docking_portrait.offset_top = -90.0
-	docking_portrait.offset_bottom = -30.0
-	docking_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	docking_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	docking_portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	docking_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hud.add_child(docking_portrait)
 	radio_feed = preload("res://radio_feed.gd").new()
 	radio_feed.name = "RadioFeed"; hud.add_child(radio_feed)
 	radio_feed.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	radio_feed.offset_left = 20; radio_feed.offset_right = 556
-	radio_feed.offset_top = -380; radio_feed.offset_bottom = -100
+	radio_feed.offset_top = -340; radio_feed.offset_bottom = -20
 	radio_feed.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
@@ -756,6 +727,7 @@ func _process(delta: float) -> void:
 				equipment.vacuum.transfer_to(player_progress.cargo)
 				_collect_city_deliveries(int(docking.current.node.get_meta("city_id")))
 				dock_interface.open("home"); dock_interface_active = true
+				_autosave_docked()
 			elif not dock_interface.visible: dock_interface.show()
 			get_tree().paused = true
 		elif docking.stage != Docking.Stage.DOCKED and dock_interface_active:
@@ -770,28 +742,40 @@ func _process(delta: float) -> void:
 			camera_follow.resume(camera.global_position, pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.35)
 			camera_was_frozen = false
 		_update_follow_camera(delta)
-	if docking_prompt != null:
-		docking_prompt.text = docking.message
-		var greeting_active: bool = docking.greeting_remaining > 0 and docking.message == docking.greeting_text and not docking.message.is_empty()
-		if greeting_active:
-			if radio_greeting != docking.message:
-				radio_greeting = docking.message
-				radio_feed.push_message({"text":docking.message,"portrait":docking.portrait_texture(),"distorted_portrait":docking.distorted_portrait_texture()},docking.radio_static)
-			docking_prompt.text = ""
-		else: radio_greeting = ""
-		if _delivery_prompt_active(): docking_prompt.text = "CITY DROP POINT : Do you want attached object to be automatically retrieved? (Y/N)"
-		_age_radio(delta)
-		if docking.stage == docking.Stage.IDLE and docking.nearby.is_empty() and not _delivery_prompt_active():
-			if bounty_remaining <= 0 and not bounty_radio_queue.is_empty():
-				bounty_port = bounty_radio_queue.pop_front(); bounty_remaining = 7.0
-				if bounty_port.get("voice") != null:
-					var voice := AudioStreamPlayer.new(); voice.stream = bounty_port.voice; voice.volume_db = preload("res://docking_radio.gd").SPEECH_VOLUME_DB; add_child(voice)
-					voice.finished.connect(voice.queue_free); voice.play()
-		docking_prompt.visible = not docking_prompt.text.is_empty()
-		docking_portrait.update_signal(docking.portrait_texture() if docking_prompt.visible else null,docking.distorted_portrait_texture(),docking.radio_static,delta)
+	_update_radio_messages(delta)
 	if developer_ui_visible:
 		var state: RefCounted = pilot.movement
 		telemetry.text = "Speed: %.2f · Vertical: %.2f units/s\nPod tilt: %.1f° · Hull pitch: %.1f°\nDocking limit: %.2f units/s" % [state.velocity.length(), state.velocity.y, rad_to_deg(state.tilt), rad_to_deg(asin(clampf(-pilot.global_basis.z.y, -1.0, 1.0))), docking.maximum_docking_speed()]
+
+func _autosave_docked() -> void:
+	if docking.stage != Docking.Stage.DOCKED or not mission_runtime.can_save(): return
+	if save_games.write(-1,_save_snapshot("Auto Save")) != OK:
+		dock_interface.report("Autosave failed: " + save_games.error)
+
+func _update_radio_messages(delta: float) -> void:
+	if radio_feed == null: return
+	if docking.greeting_remaining > 0 and not docking.greeting_text.is_empty():
+		if radio_greeting != docking.greeting_text:
+			radio_greeting = docking.greeting_text
+			var relay: Dictionary = docking.greeting_port
+			radio_feed.push_message({"text":radio_greeting,"speaker":"relay/" + str(relay.get("name","")),"key":"greeting/" + str(relay.get("name","")),"portrait":relay.get("greeting_portrait"),"distorted_portrait":relay.get("greeting_distorted_portrait")},docking.radio_static)
+	else: radio_greeting = ""
+	var text: String = docking.message
+	if docking.greeting_remaining > 0 and text == docking.greeting_text: text = ""
+	var delivery := _delivery_prompt_active()
+	if delivery: text = "CITY DROP POINT : Do you want attached object to be automatically retrieved? (Y/N)"
+	var pinned: bool = delivery or (docking.stage == docking.Stage.IDLE and not docking.nearby.is_empty())
+	var transmission := {"speaker":"dock/" + str(docking._portrait_port().get("name","")),"text":text,"portrait":docking.portrait_texture(),"distorted_portrait":docking.distorted_portrait_texture()}
+	radio_feed.set_prompt(transmission if pinned else {},docking.radio_static)
+	if not pinned and not text.is_empty() and text != radio_status: radio_feed.push_message(transmission,docking.radio_static)
+	radio_status = text
+	_age_radio(delta)
+	if docking.stage == docking.Stage.IDLE and docking.nearby.is_empty() and not _delivery_prompt_active():
+		if bounty_remaining <= 0 and not bounty_radio_queue.is_empty():
+			bounty_port = bounty_radio_queue.pop_front(); bounty_remaining = 7.0
+			if bounty_port.get("voice") != null:
+				var voice := AudioStreamPlayer.new(); voice.stream = bounty_port.voice; voice.volume_db = preload("res://docking_radio.gd").SPEECH_VOLUME_DB; add_child(voice)
+				voice.finished.connect(voice.queue_free); voice.play()
 
 func _update_follow_camera(delta: float, snap: bool = false) -> void:
 	var pose := pilot.global_transform if snap else pilot.get_global_transform_interpolated()
@@ -868,7 +852,7 @@ func _update_daylight() -> void:
 		var exposure := natural_light.visibility(lighting_camera.global_position,true)
 		# Empty space behind cave geometry must match sheltered water, while
 		# the actual surface keeps its daylight material through cave exits.
-		water_environment.background_color = water_environment.background_color * exposure + Color(0.75,0.8,0.88) * float(natural_light.settings.cave_ambient) * (1.0 - exposure)
+		water_environment.background_color = natural_light.background_colour(water_environment.fog_light_color * exposure + Color(0.75,0.8,0.88) * float(natural_light.settings.cave_ambient) * (1.0 - exposure))
 	water_visuals.lighting(float(world_root.get_meta("surface_height")) if is_instance_valid(world_root) and world_root.has_meta("surface_height") else 0.0,lighting_cycle.sun_direction())
 	if fog_slider != null: water_visuals.fog(fog_visibility if fog_button.button_pressed else 1000000.0,fog_start_slider.value,fog_curve_slider.value)
 	if clock_label != null:
@@ -1148,6 +1132,9 @@ func _pirate_bounty(point: Vector3) -> void:
 	player_progress.status.credits += 1000
 	var announcement := nearest.duplicate()
 	announcement.text = "%s: CITY RELAY BEACON : Thank you for your assistance. 1000 credit bounty paid." % nearest.name
+	announcement.speaker = "relay/" + str(nearest.name)
+	announcement.portrait = nearest.get("greeting_portrait",nearest.portrait)
+	announcement.distorted_portrait = nearest.get("greeting_distorted_portrait",nearest.distorted_portrait)
 	announcement.ttl = 12.0
 	bounty_radio_queue.append(announcement)
 	if radio_feed != null: radio_feed.push_message(announcement,docking.radio_static)

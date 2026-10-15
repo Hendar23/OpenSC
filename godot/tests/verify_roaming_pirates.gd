@@ -24,8 +24,8 @@ func run() -> void:
 	for agent in traffic.traders: agent.set_local_simulation(true)
 	await physics_frame
 	var population = traffic.roaming_population
-	check(population != null and population.ships.size() == 3,"Three random pirate slots created")
-	check(population.ships.all(func(agent: Node3D) -> bool: return not agent.dead),"Three pirates spawn alive")
+	check(population != null and population.ships.size() == 2,"Two random pirate slots created")
+	check(population.ships.all(func(agent: Node3D) -> bool: return not agent.dead),"Two pirates spawn alive")
 	check(population.ships.all(func(agent: Node3D) -> bool: return agent.get_parent().get_meta("editor_model",agent.get_parent().get_meta("asset_id","")).to_upper().find("PIRATE3") == -1),"Pirate model 3 excluded")
 	for agent in population.ships:
 		check(traffic.water_clear(agent.global_position),"Pirate starts in navigable water")
@@ -60,7 +60,7 @@ func run() -> void:
 	check(game.player_progress.status.credits == credits + 1000,"Dead pirate cannot pay a second bounty")
 	check(pirate.dead,"Pirate stays dead during ordinary swimming")
 	population.replenish_docked(0.1)
-	check(population.ships.all(func(agent: Node3D) -> bool: return not agent.dead),"Docked replenishment restores three live pirates")
+	check(population.ships.all(func(agent: Node3D) -> bool: return not agent.dead),"Docked replenishment restores two live pirates")
 	pirate.victim = null; pirate.path.clear(); pirate.replan = 0
 	game.pilot.global_position = Vector3(10000,10000,10000)
 	for agent in traffic.traders:
@@ -70,9 +70,12 @@ func run() -> void:
 		if not pirate.path.is_empty(): break
 	check(not pirate.path.is_empty(),"Idle pirate chooses a map-wide roaming route")
 	var snapshot: Dictionary = traffic.snapshot(); var position: Vector3 = pirate.global_position
+	snapshot["population/pirates/2"] = snapshot["population/pirates/0"].duplicate(true)
+	check(traffic.valid_snapshot(snapshot),"Published-beta snapshot with a third pirate remains valid")
 	pirate.get_parent().position += Vector3.ONE
 	traffic.restore(snapshot)
 	check(pirate.global_position.is_equal_approx(position),"Random pirate poses survive save restore")
+	check(population.ships.size() == 2,"Loading old third-pirate data preserves new two-pirate cap")
 	var map = game.cockpit_hud.map_data
 	map.discovered_cities.clear()
 	var marker: Dictionary = map.markers[0]
@@ -123,7 +126,7 @@ func run() -> void:
 	check(game.save_games.write(6,saved) == OK,"Bounty and discovery save writes")
 	check(await game._load_saved_game(6),"Saved pirate game loads")
 	check(game.cockpit_hud.map_data.city_known(marker) and game.player_progress.status.credits == credits + 1000,"Discovery and bounty survive complete game restore")
-	check(game.submarine_traffic.roaming_population.ships.size() == 3,"Load retains three roaming slots")
+	check(game.submarine_traffic.roaming_population.ships.size() == 2,"Load retains two roaming slots")
 	game.bounty_radio_queue.clear()
 	game.bounty_radio_queue.append({"text":"old paid bounty","ttl":12.0})
 	game.bounty_radio_queue.append({"text":"mission dialogue","mission":"intro"})

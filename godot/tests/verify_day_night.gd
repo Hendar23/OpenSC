@@ -36,9 +36,10 @@ func _run() -> void:
 	check(game.startup_complete, "Game loads with daylight controls")
 	if not game.startup_complete: quit(1); return
 	check(game.water_environment.fog_mode == Environment.FOG_MODE_DEPTH and game.water_environment.fog_depth_begin == game.fog_start_slider.value and game.water_environment.fog_depth_end == game.fog_visibility and game.water_environment.fog_density == 1.0, "Fog starts beyond clear-water distance and builds to configured visibility")
-	game.fog_start_slider.value = 7.0; game.fog_curve_slider.value = 2.2
-	check(game.water_environment.fog_depth_begin == 7.0 and is_equal_approx(game.water_environment.fog_depth_curve, 2.2), "Clear-water and build-up controls apply live")
+	game.fog_start_slider.value = 7.0; game.fog_curve_slider.value = 2.25
+	check(game.water_environment.fog_depth_begin == 7.0 and is_equal_approx(game.water_environment.fog_depth_curve, 2.25), "Clear-water and build-up controls apply live")
 	game.daylight_controls.cycle_enabled.button_pressed = false
+	game.daylight_controls.night_brightness.value = 0.05
 	game.daylight_controls.time_of_day.value = 12
 	game._update_daylight()
 	var day_energy := game.water_environment.ambient_light_energy
@@ -80,10 +81,10 @@ func _run() -> void:
 	check(game._export_all_settings(path) == OK, "Combined export includes daylight settings")
 	var exported := ConfigFile.new(); exported.load(path)
 	check(exported.get_value("view", "cycle_minutes") == 4 and exported.get_value("view", "time_of_day") == 23 and is_equal_approx(exported.get_value("view", "night_brightness"), 0.2) and exported.get_value("view", "cycle_enabled"), "Export stores current clock and lighting preferences")
-	check(exported.get_value("view", "fog_start") == 7.0 and is_equal_approx(exported.get_value("view", "fog_curve"), 2.2), "New fog controls export with all settings")
+	check(exported.get_value("view", "fog_start") == 7.0 and is_equal_approx(exported.get_value("view", "fog_curve"), 2.25), "New fog controls export with all settings")
 	game._load_preferences(path)
 	check(game.day_night.cycle_minutes == 4 and is_equal_approx(game.day_night.night_brightness, 0.2), "Daylight settings reload")
-	check(game.fog_start_slider.value == 7.0 and is_equal_approx(game.fog_curve_slider.value, 2.2), "New fog controls reload")
+	check(game.fog_start_slider.value == 7.0 and is_equal_approx(game.fog_curve_slider.value, 2.25), "New fog controls reload")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	game.queue_free(); await process_frame
 	print("Day/night verification: %d checks, %d failures" % [checks, failures])

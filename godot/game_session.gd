@@ -50,10 +50,9 @@ func _reset_loaded_world() -> void:
 	game.docking.cancel()
 	game.bounty_radio_queue.clear(); game.bounty_remaining = 0; game.bounty_port = {}
 	if game.radio_feed != null: game.radio_feed.clear()
-	game.radio_greeting = ""
+	game.radio_greeting = ""; game.radio_status = ""
 	game.docking.nearby = {}; game.docking.declined_port = null; game.docking.message = ""
 	game.docking.greeted_ports.clear(); game.docking.greeting_port = {}; game.docking.greeting_remaining = 0.0
-	if game.docking_portrait != null: game.docking_portrait.reset_signal()
 	if game.docked_screen != null: game.docked_screen.hide()
 	game.weapons.update_fire(false,0); game.weapons.selected = 0; game.weapons.elapsed = 0.0
 	for particle in game.weapons.hit_blood.particles: particle.node.free()

@@ -49,7 +49,7 @@ func setup(player: Node3D, folder: String) -> void:
 	# Normal bias alone then leaves distant faces shadowing themselves; use
 	# depth bias as well. Thin dock walls still occlude the beam.
 	lamp.shadow_enabled = true
-	lamp.shadow_bias = 4.0
+	lamp.shadow_bias = 4.0 if RenderingServer.get_current_rendering_method() == "gl_compatibility" else 0.2
 	lamp.shadow_normal_bias = 1.0
 	mount.add_child(lamp)
 	var icons: Array[Texture2D] = []

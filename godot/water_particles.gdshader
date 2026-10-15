@@ -2,6 +2,8 @@ shader_type spatial;
 render_mode ambient_light_disabled, fog_disabled, cull_disabled, depth_draw_never;
 #include "res://natural_light.gdshaderinc"
 
+uniform vec3 cloud_center = vec3(0.0);
+uniform float drift_distance = 0.0;
 uniform float cloud_radius = 12.0;
 uniform float visibility = 0.45;
 uniform float surface_height = 100000.0;
@@ -12,7 +14,10 @@ varying vec3 natural_position;
 varying float natural_factor;
 
 void vertex() {
-	vec3 center = MODEL_MATRIX[3].xyz;
+	vec3 phase = MODEL_MATRIX[3].xyz - cloud_center;
+	vec3 flow = vec3(INSTANCE_CUSTOM.y * 1.4 - 0.7,INSTANCE_CUSTOM.z * 0.3 + 0.1,INSTANCE_CUSTOM.w * 1.4 - 0.7);
+	vec3 relative = phase * cloud_radius + flow * drift_distance - cloud_center;
+	vec3 center = cloud_center + mod(relative + vec3(cloud_radius),vec3(cloud_radius * 2.0)) - vec3(cloud_radius);
 	natural_position = center;
 	camera_distance = length(center - CAMERA_POSITION_WORLD);
 	world_height = center.y;
@@ -20,11 +25,11 @@ void vertex() {
 	// Preserve each instance's size while facing the camera.
 	float size = length(MODEL_MATRIX[0].xyz);
 	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0] * size,
-		INV_VIEW_MATRIX[1] * size, INV_VIEW_MATRIX[2] * size, MODEL_MATRIX[3]);
+		INV_VIEW_MATRIX[1] * size, INV_VIEW_MATRIX[2] * size, vec4(center,1.0));
 }
 
 void fragment() {
-	if (world_height >= surface_height) discard;
+	if (world_height >= surface_height || length(natural_position - cloud_center) >= cloud_radius) discard;
 	float shape = 1.0 - smoothstep(0.08, 0.5, length(UV - vec2(0.5)));
 	float near_fade = smoothstep(0.15, 0.65, camera_distance);
 	float far_fade = 1.0 - smoothstep(cloud_radius * 0.75, cloud_radius, camera_distance);

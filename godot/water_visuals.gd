@@ -19,13 +19,14 @@ func _init() -> void:
 		RenderingServer.global_shader_parameter_add("osc_sun_direction",RenderingServer.GLOBAL_VAR_TYPE_VEC3,Vector3.UP)
 		RenderingServer.global_shader_parameter_add("osc_caustics_texture",RenderingServer.GLOBAL_VAR_TYPE_SAMPLER2D,null)
 		globals_registered = true
-	var noise := FastNoiseLite.new(); noise.seed = 719; noise.noise_type = FastNoiseLite.TYPE_CELLULAR
-	noise.fractal_type = FastNoiseLite.FRACTAL_NONE
-	noise.cellular_return_type = FastNoiseLite.RETURN_DISTANCE2_SUB; noise.frequency = 0.018; noise.cellular_jitter = 0.8
+	# Low-frequency clouds produce soft pools of light, rather than cell edges.
+	var noise := FastNoiseLite.new(); noise.seed = 719; noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.fractal_type = FastNoiseLite.FRACTAL_FBM; noise.fractal_octaves = 2; noise.fractal_gain = 0.35
+	noise.frequency = 0.012
 	var gradient := Gradient.new()
-	gradient.set_color(0,Color.WHITE); gradient.set_color(1,Color.BLACK)
-	gradient.add_point(0.008,Color.WHITE); gradient.add_point(0.035,Color.BLACK)
-	texture = NoiseTexture2D.new(); texture.width = 512; texture.height = 512; texture.seamless = true; texture.normalize = false
+	gradient.set_color(0,Color.BLACK); gradient.set_color(1,Color.WHITE)
+	gradient.add_point(0.35,Color.BLACK); gradient.add_point(0.7,Color.WHITE)
+	texture = NoiseTexture2D.new(); texture.width = 512; texture.height = 512; texture.seamless = true; texture.normalize = true
 	texture.noise = noise; texture.color_ramp = gradient
 	RenderingServer.global_shader_parameter_set("osc_caustics_texture",texture)
 	configure({})

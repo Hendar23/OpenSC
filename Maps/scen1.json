@@ -686,36 +686,7 @@
         132.153533935547
       ]
     },
-    "Scenery/Light_23": {
-      "deleted": true,
-      "energy": 0.7,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_23",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 4.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        198.146392822266,
-        157.245635986328,
-        242.456726074219
-      ]
-    },
-    "Scenery/Light_24": {
+    "Scenery/Beacon_Object_9": {
       "deleted": false,
       "energy": 0.699999988079071,
       "flare_size": 2.0,
@@ -743,9 +714,15 @@
         198.146392822266,
         157.245635986328,
         242.456726074219
+      ],
+      "light_source_id": "Object_9",
+      "light_source_position": [
+        198.146392822266,
+        157.245635986328,
+        242.456726074219
       ]
     },
-    "Scenery/Light_25": {
+    "Scenery/Beacon_Object_10": {
       "deleted": false,
       "energy": 0.699999988079071,
       "flare_size": 2.0,
@@ -773,9 +750,15 @@
         217.609100341797,
         158.18115234375,
         137.098007202148
+      ],
+      "light_source_id": "Object_10",
+      "light_source_position": [
+        217.609100341797,
+        158.18115234375,
+        137.098007202148
       ]
     },
-    "Scenery/Light_26": {
+    "Scenery/Beacon_Object_23": {
       "deleted": false,
       "energy": 0.699999988079071,
       "flare_size": 2.0,
@@ -803,125 +786,15 @@
         329.424346923828,
         160.683975219727,
         135.47477722168
-      ]
-    },
-    "Scenery/Light_28": {
-      "deleted": true,
-      "energy": 0.7,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_28",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 4.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        277.678802490234,
-        158.791717529297,
-        201.643615722656
-      ]
-    },
-    "Scenery/Light_29": {
-      "deleted": true,
-      "energy": 0.7,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_29",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 4.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        198.146392822266,
-        157.245635986328,
-        242.456726074219
-      ]
-    },
-    "Scenery/Light_30": {
-      "deleted": true,
-      "energy": 0.7,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_30",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 4.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        217.609100341797,
-        158.18115234375,
-        137.098007202148
-      ]
-    },
-    "Scenery/Light_31": {
-      "deleted": true,
-      "energy": 0.7,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_31",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 4.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
+      ],
+      "light_source_id": "Object_23",
+      "light_source_position": [
         329.424346923828,
         160.683975219727,
         135.47477722168
       ]
     },
-    "Scenery/Light_32": {
+    "Scenery/Beacon_Object_61": {
       "deleted": false,
       "energy": 0.699999988079071,
       "flare_size": 2.0,
@@ -949,68 +822,15 @@
         277.678802490234,
         158.791717529297,
         201.643615722656
+      ],
+      "light_source_id": "Object_61",
+      "light_source_position": [
+        277.678802490234,
+        158.791717529297,
+        201.643615722656
       ]
     },
-    "Scenery/Light_33": {
-      "deleted": true,
-      "energy": 1.0,
-      "flare_size": 2.0,
-      "flash_off_time": 2.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "light_type": "beacon",
-      "model": "",
-      "name": "Light_33",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 1.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        311.823333740234,
-        153.397521972656,
-        253.50146484375
-      ]
-    },
-    "Scenery/Light_34": {
-      "deleted": true,
-      "energy": 0.7,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_34",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 4.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        270.795989990234,
-        158.729248046875,
-        201.656967163086
-      ]
-    },
-    "Scenery/Light_35": {
+    "Scenery/Beacon_Object_65": {
       "deleted": false,
       "energy": 0.699999988079071,
       "flare_size": 2.0,
@@ -1038,38 +858,15 @@
         318.407836914063,
         157.450347900391,
         259.533569335938
+      ],
+      "light_source_id": "Object_65",
+      "light_source_position": [
+        318.407836914063,
+        157.450347900391,
+        259.533569335938
       ]
     },
-    "Scenery/Light_36": {
-      "deleted": true,
-      "energy": 0.7,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_36",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 4.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        200.510620117188,
-        158.215484619141,
-        254.833969116211
-      ]
-    },
-    "Scenery/Light_37": {
+    "Scenery/Beacon_Object_68": {
       "deleted": false,
       "energy": 0.699999988079071,
       "flare_size": 2.0,
@@ -1097,9 +894,15 @@
         274.151428222656,
         158.686294555664,
         201.56510925293
+      ],
+      "light_source_id": "Object_68",
+      "light_source_position": [
+        274.151428222656,
+        158.686294555664,
+        201.56510925293
       ]
     },
-    "Scenery/Light_38": {
+    "Scenery/Beacon_Object_69": {
       "deleted": false,
       "energy": 0.699999988079071,
       "flare_size": 2.0,
@@ -1127,9 +930,15 @@
         270.795989990234,
         158.729248046875,
         201.656967163086
+      ],
+      "light_source_id": "Object_69",
+      "light_source_position": [
+        270.795989990234,
+        158.729248046875,
+        201.656967163086
       ]
     },
-    "Scenery/Light_40": {
+    "Scenery/Beacon_Object_75": {
       "deleted": false,
       "energy": 0.699999988079071,
       "flare_size": 2.0,
@@ -1157,9 +966,15 @@
         200.510620117188,
         158.215484619141,
         254.833969116211
+      ],
+      "light_source_id": "Object_75",
+      "light_source_position": [
+        200.510620117188,
+        158.215484619141,
+        254.833969116211
       ]
     },
-    "Scenery/Light_41": {
+    "Scenery/Beacon_Object_76": {
       "deleted": false,
       "energy": 0.699999988079071,
       "flare_size": 2.0,
@@ -1187,67 +1002,15 @@
         284.707061767578,
         157.190719604492,
         205.273422241211
+      ],
+      "light_source_id": "Object_76",
+      "light_source_position": [
+        284.707061767578,
+        157.190719604492,
+        205.273422241211
       ]
     },
-    "Scenery/Light_42": {
-      "deleted": true,
-      "energy": 0.7,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_42",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 4.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        274.151428222656,
-        158.686294555664,
-        201.56510925293
-      ]
-    },
-    "Scenery/Light_43": {
-      "deleted": true,
-      "energy": 0.7,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_43",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 4.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        270.795989990234,
-        158.729248046875,
-        201.656967163086
-      ]
-    },
-    "Scenery/Light_45": {
+    "Scenery/Beacon_Object_96": {
       "deleted": false,
       "energy": 0.699999988079071,
       "flare_size": 2.0,
@@ -1275,154 +1038,15 @@
         324.377471923828,
         159.326278686523,
         265.181488037109
-      ]
-    },
-    "Scenery/Light_46": {
-      "deleted": true,
-      "energy": 0.7,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_46",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 4.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        284.707061767578,
-        157.190719604492,
-        205.273422241211
-      ]
-    },
-    "Scenery/Light_47": {
-      "deleted": true,
-      "energy": 0.7,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_47",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 4.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        284.707061767578,
-        157.190719604492,
-        205.273422241211
-      ]
-    },
-    "Scenery/Light_50": {
-      "deleted": true,
-      "energy": 0.7,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_50",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 4.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
+      ],
+      "light_source_id": "Object_96",
+      "light_source_position": [
         324.377471923828,
         159.326278686523,
         265.181488037109
       ]
     },
-    "Scenery/Light_51": {
-      "deleted": true,
-      "energy": 0.7,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_51",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 4.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        324.377471923828,
-        159.326278686523,
-        265.181488037109
-      ]
-    },
-    "Scenery/Light_53": {
-      "deleted": true,
-      "energy": 0.7,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_53",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 4.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        324.377471923828,
-        159.326278686523,
-        265.181488037109
-      ]
-    },
-    "Scenery/Light_58": {
+    "Scenery/Beacon_Light_0": {
       "deleted": true,
       "energy": 1.0,
       "flare_size": 4.0,
@@ -1449,9 +1073,15 @@
         254.335845947266,
         161.431015014648,
         212.388870239258
+      ],
+      "light_source_id": "Light_0",
+      "light_source_position": [
+        254.335845947266,
+        161.431015014648,
+        212.388870239258
       ]
     },
-    "Scenery/Light_59": {
+    "Scenery/Beacon_Light_1": {
       "deleted": true,
       "energy": 1.0,
       "flare_size": 4.0,
@@ -1478,122 +1108,15 @@
         316.179046630859,
         152.983856201172,
         255.919387817383
-      ]
-    },
-    "Scenery/Light_62": {
-      "deleted": true,
-      "energy": 1.0,
-      "flare_size": 2.0,
-      "kind": "light",
-      "model": "",
-      "name": "Light_62",
-      "pulse_enabled": true,
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 1.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        254.335845947266,
-        161.431015014648,
-        212.388870239258
-      ]
-    },
-    "Scenery/Light_63": {
-      "deleted": true,
-      "energy": 1.0,
-      "flare_size": 1.0,
-      "kind": "light",
-      "model": "",
-      "name": "Light_63",
-      "pulse_enabled": true,
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 1.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
+      ],
+      "light_source_id": "Light_1",
+      "light_source_position": [
         316.179046630859,
         152.983856201172,
         255.919387817383
       ]
     },
-    "Scenery/Light_67": {
-      "deleted": true,
-      "energy": 1.0,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_67",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 1.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        254.335845947266,
-        161.431015014648,
-        212.388870239258
-      ]
-    },
-    "Scenery/Light_68": {
-      "deleted": true,
-      "energy": 1.0,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "light_type": "beacon",
-      "model": "",
-      "name": "Light_68",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 1.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        311.641448974609,
-        152.983856201172,
-        252.796325683594
-      ]
-    },
-    "Scenery/Light_69": {
+    "Scenery/Beacon_Object_62": {
       "beam_brightness": 0.55,
       "beam_length": 2.4336,
       "beam_softness": 0.65,
@@ -1628,64 +1151,12 @@
         311.830230712891,
         153.464202880859,
         253.519882202148
-      ]
-    },
-    "Scenery/Light_70": {
-      "deleted": true,
-      "energy": 1.0,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_70",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 1.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        254.335845947266,
-        161.431015014648,
-        212.388870239258
-      ]
-    },
-    "Scenery/Light_71": {
-      "deleted": true,
-      "energy": 1.0,
-      "flare_size": 4.0,
-      "flash_off_time": 1.0,
-      "flash_on_time": 0.5,
-      "kind": "light",
-      "light_mode": "flashing",
-      "model": "",
-      "name": "Light_71",
-      "pulse_minimum": 0.2,
-      "pulse_period": 2.4,
-      "range": 1.0,
-      "solid": false,
-      "transform": [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        316.179046630859,
-        152.983856201172,
-        255.919387817383
+      ],
+      "light_source_id": "Object_62",
+      "light_source_position": [
+        311.703216552734,
+        153.397521972656,
+        253.478363037109
       ]
     },
     "Scenery/PEARL_54": {

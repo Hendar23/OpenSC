@@ -20,6 +20,10 @@ static func ensure_globals() -> void:
 	RenderingServer.global_shader_parameter_add("osc_volume_size",RenderingServer.GLOBAL_VAR_TYPE_VEC3,Vector3.ONE)
 	for entry in [["osc_natural_enabled",RenderingServer.GLOBAL_VAR_TYPE_BOOL,false],["osc_overhead",RenderingServer.GLOBAL_VAR_TYPE_SAMPLER2D,null],["osc_overhead_bounds",RenderingServer.GLOBAL_VAR_TYPE_VEC4,Vector4(0,0,1,1)],["osc_overhead_pixel",RenderingServer.GLOBAL_VAR_TYPE_VEC2,Vector2.ONE],["osc_natural_surface",RenderingServer.GLOBAL_VAR_TYPE_FLOAT,0.0],["osc_sun_depth",RenderingServer.GLOBAL_VAR_TYPE_FLOAT,25.0],["osc_sun_falloff",RenderingServer.GLOBAL_VAR_TYPE_FLOAT,20.0],["osc_natural_ambient",RenderingServer.GLOBAL_VAR_TYPE_VEC4,Vector4(1,1,1,0.3)],["osc_natural_fog_color",RenderingServer.GLOBAL_VAR_TYPE_VEC4,Vector4.ZERO],["osc_natural_fog",RenderingServer.GLOBAL_VAR_TYPE_VEC3,Vector3(1000000,0,1)]]:
 		RenderingServer.global_shader_parameter_add(entry[0],entry[1],entry[2])
+static func background_colour(colour: Color) -> Color:
+	# RenderingDevice clears the background in linear values, whereas our
+	# legacy water colours are display values. Match the surface fog output.
+	return colour if RenderingServer.get_current_rendering_method() == "gl_compatibility" else colour.linear_to_srgb()
 static func alpha_shader() -> Shader:
 	if transparent_shader == null:
 		transparent_shader = Shader.new(); transparent_shader.code = preload("res://natural_surface.gdshader").code.replace("// ALPHA_OUTPUT","ALPHA = color.a * opacity;")

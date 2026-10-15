@@ -46,5 +46,5 @@ void fragment() {
 	ALBEDO = mix(nighttime,daytime,daylight) + vec3(1.0,0.96,0.82) * glint * surface_shine * daylight * 1.8;
 	// The sunlit surface uses outdoor water fog even when the camera is in
 	// a cave. Its distance fade still blends the far plane into open water.
-	ALBEDO = mix(ALBEDO,osc_natural_fog_color.rgb,natural_fog_amount(length(VERTEX)));
+	ALBEDO = natural_colour(mix(ALBEDO,osc_natural_fog_color.rgb,natural_fog_amount(length(VERTEX))));
 }

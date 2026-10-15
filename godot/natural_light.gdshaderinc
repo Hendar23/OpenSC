@@ -12,6 +12,12 @@ global uniform vec3 osc_natural_fog;
 global uniform sampler3D osc_sky_volume : filter_linear, repeat_disable;
 global uniform vec3 osc_volume_min;
 global uniform vec3 osc_volume_size;
+// Global vectors/constants are authored in display colour space. Forward+
+// shades in linear space; Compatibility writes display values directly.
+vec3 natural_colour(vec3 colour) {
+	if (OUTPUT_IS_SRGB) return colour;
+	return mix(colour / 12.92,pow((colour + vec3(0.055)) / 1.055,vec3(2.4)),greaterThan(colour,vec3(0.04045)));
+}
 float natural_exposure(vec3 point, vec2 thresholds) {
 	if (!osc_natural_enabled) return 1.0;
 	float depth = max(0.0,osc_natural_surface - point.y);
@@ -54,7 +60,7 @@ vec3 natural_fog_colour(vec3 point, vec3 camera) {
 	// even though their surface lighting has already faded out completely.
 	float distance_fade = natural_fog_amount(length(point - camera));
 	exposure = mix(exposure,natural_exposure(camera,vec2(0.35,0.95)),smoothstep(0.65,1.0,distance_fade));
-	return osc_natural_fog_color.rgb * exposure + vec3(0.75,0.8,0.88) * osc_cave_ambient * (1.0 - exposure);
+	return natural_colour(osc_natural_fog_color.rgb * exposure + vec3(0.75,0.8,0.88) * osc_cave_ambient * (1.0 - exposure));
 }
 
 vec3 natural_ambient(float exposure) {

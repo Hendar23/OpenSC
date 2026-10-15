@@ -179,6 +179,7 @@ func open(game_folder: String) -> void:
 		if key != "player_spawn": base_nodes[key] = world.get_node(NodePath(key)).duplicate()
 	# Mod-added species belong to their pack, not the editable map document.
 	document = Document.load_active(false)
+	Document.migrate_light_ids(world,document)
 	if document.is_empty():
 		document = baseline
 		_seed_species()

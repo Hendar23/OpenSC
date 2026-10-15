@@ -75,10 +75,12 @@ func setup(player: RigidBody3D, world: Node3D, folder: String = "", follow_view:
 		if not portraits.has(race):
 			portraits[race] = Radio.portrait(folder, race)
 			distorted[race] = Radio.distorted_portrait(folder,race)
+		var relay: Dictionary = catalogue.tables.get("radio_messages",{}).get("records",{}).get(str(city.get("greeting_neutral","")),{})
+		var relay_key := str(relay.get("portrait",{1:"touka",2:"velc",3:"belug",4:"tryto",5:"aqua",6:"fact"}.get(int(node.get_meta("city_id")),"fact")))
 		ports.append({"node": node, "meshes": meshes, "entry": entry,
 			"inside": inside,
 			"name": node.get_meta("city_name"), "race": race, "portrait": portraits[race],"distorted_portrait":distorted[race],
-			"collision": node.get_node("SceneryCollision"),"greeting_radius":float(city.get("greeting_radius",0.0)),"greeting":str(radio_messages.get(str(city.get("greeting_neutral","")),""))})
+			"collision": node.get_node("SceneryCollision"),"greeting_portrait":Radio.speaker_portrait(folder,relay_key),"greeting_distorted_portrait":Radio.speaker_portrait(folder,relay_key,true),"greeting_radius":float(city.get("greeting_radius",0.0)),"greeting":str(radio_messages.get(str(city.get("greeting_neutral","")),""))})
 	update_approach()
 
 static func _bounds(node: Node3D, pose: Transform3D, boxes: Array[AABB]) -> void:

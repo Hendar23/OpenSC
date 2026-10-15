@@ -27,8 +27,11 @@ void fragment() {
 	float start = max(0.0,max(low.x,max(low.y,low.z)));
 	float finish = min(high.x,min(high.y,high.z));
 	float depth = texture(depth_texture,SCREEN_UV).r;
-	vec3 ndc = vec3(SCREEN_UV*2.0-1.0,depth);
-	if (CLIP_SPACE_FAR < 0.0) { ndc.z = depth*2.0-1.0; }
+	#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+	vec3 ndc = vec3(SCREEN_UV,depth) * 2.0 - 1.0;
+	#else
+	vec3 ndc = vec3(SCREEN_UV * 2.0 - 1.0,depth);
+	#endif
 	vec4 hit = INV_PROJECTION_MATRIX*vec4(ndc,1.0);
 	vec4 world_hit = INV_VIEW_MATRIX*vec4(hit.xyz/hit.w,1.0);
 	finish = min(finish,length((inverse(MODEL_MATRIX)*world_hit).xyz-camera));
@@ -46,5 +49,7 @@ void fragment() {
 		density += edge*streak*attenuation*distance_fade*step_size;
 	}
 	ALBEDO = mix(light_color,vec3(0.4,0.8,0.85),0.35);
-	ALPHA = min(0.22,density*0.035)*strength;
+	float opacity = min(0.22,density*0.035)*strength;
+	// Additive volumes were tuned for Compatibility display-space blending.
+	ALPHA = OUTPUT_IS_SRGB ? opacity : pow(max(opacity,0.0),2.2);
 }

@@ -67,6 +67,18 @@ func _run() -> void:
 	check(controller.message == greeting_port.greeting,"Leaving the area rearms the next approach greeting")
 	game.pilot.global_position = greeting_port.entry; controller.update_approach()
 	check(controller.message.contains("Do you want to dock?") and controller.message.begins_with(str(greeting_port.name)),"Named docking prompt takes priority over the relay greeting")
+	game.radio_feed.clear(); game.radio_greeting = ""
+	controller.nearby = {}; controller.message = controller.greeting_text
+	game._update_radio_messages(0)
+	var relay_card: Dictionary = game.radio_feed.entries.back()
+	check(relay_card.message.portrait == greeting_port.greeting_portrait and relay_card.message.portrait != greeting_port.portrait,"City relay uses its city portrait rather than dock controller")
+	controller.nearby = greeting_port; controller.message = "Do you want to dock? (Y/N)"
+	game._update_radio_messages(0)
+	check(not game.radio_feed.prompt.is_empty(),"Dock question is pinned in the shared stack")
+	controller.nearby = {}; controller.message = controller.greeting_text
+	game._update_radio_messages(0)
+	check(game.radio_feed.entries.filter(func(e: Dictionary) -> bool: return str(e.message.get("key","")).begins_with("greeting/")).size() == 1,"Dock interruption cannot duplicate a relay greeting")
+	game.radio_feed.clear()
 	controller.greeting_remaining = 0; controller.greeted_ports.clear()
 	check(game.pilot.visual.scale.is_equal_approx(Vector3.ONE) and game.pilot.get_node("HullCollision").shape is ConvexPolygonShape3D and game.pilot.collision_parts.size() >= 5, "Ship uses the original visual scale and uses separate fitted hull and pod shapes")
 	game.pilot.movement.settings.forward_speed = 4.6
@@ -97,8 +109,8 @@ func _run() -> void:
 		game.pilot.velocity = Vector3.ZERO
 		controller.update_approach()
 		game._process(0.0)
-		check(controller.message.contains("Do you want to dock?") and game.docking_prompt.visible and not game.canvas.visible, "Docking prompt visible with developer UI hidden")
-		check(game.docking_portrait.visible and game.docking_portrait.texture.get_size() == Vector2(64, 80), "Original controller portrait appears alongside prompt")
+		check(controller.message.contains("Do you want to dock?") and not game.radio_feed.prompt.is_empty() and not game.canvas.visible, "Docking prompt visible with developer UI hidden")
+		check(game.radio_feed.prompt.portrait.visible and game.radio_feed.prompt.portrait.texture.get_size() == Vector2(64, 80), "Original controller portrait appears alongside prompt")
 		var camera_position: Vector3 = game.camera.global_position
 		var key := InputEventKey.new()
 		key.keycode = KEY_Y
@@ -166,15 +178,17 @@ func _run() -> void:
 	game.pilot.global_position = controller.ports[0].entry
 	game.pilot.velocity = Vector3.ZERO
 	controller.update_approach()
+	game._update_radio_messages(0)
+	var declined_portrait: TextureRect = game.radio_feed.prompt.portrait
 	var decline := InputEventKey.new()
 	decline.keycode = KEY_N
 	decline.pressed = true
 	game._unhandled_input(decline)
 	controller.update_approach()
 	game._process(0.0)
-	check(controller.message.is_empty() and game.docking_portrait.transition == "outro", "N dismisses the prompt and starts portrait signal loss")
-	game._process(0.3)
-	check(not game.docking_portrait.visible,"Portrait disappears once signal loss finishes")
+	check(controller.message.is_empty() and declined_portrait.transition == "outro", "N dismisses the prompt and starts portrait signal loss")
+	game.radio_feed._process(0.3)
+	check(not is_instance_valid(declined_portrait),"Portrait disappears once signal loss finishes")
 	game.pilot.global_position = Vector3(120, 120, 120)
 	controller.update_approach()
 	game.pilot.global_position = controller.ports[0].entry

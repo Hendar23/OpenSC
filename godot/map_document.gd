@@ -229,6 +229,9 @@ static func capture(world: Node3D, catalogue: Dictionary = {}) -> Dictionary:
 			var city: Dictionary = catalogue.get("tables",{}).get("city_info",{}).get("records",{}).get(str(node.city_id),{})
 			record.name = str(city.get("name","City " + str(node.city_id))) + " drop-off point"
 		if node.has_meta("city_id"): record.dock = {"city_id": int(node.get_meta("city_id")), "race_id": int(node.get_meta("race_id", 1))}
+		if node.has_meta("light_source_id"):
+			record.light_source_id = str(node.get_meta("light_source_id"))
+			record.light_source_position = array(node.get_meta("light_source_position"))
 		if node is PulseLight or node is Searchlight or node is SmokeEmitter or node is BubbleStream: record.merge(node.settings())
 		elif node is OmniLight3D: record.merge({"energy": node.light_energy, "range": node.omni_range})
 		if node.has_node("GunTurret"): record.merge(node.get_node("GunTurret").tuning)
@@ -248,7 +251,40 @@ static func load_model(id: String, folder: String, animated: bool = false) -> No
 	var model := Assets.load_clump(folder.path_join("CLUMPS/" + model_name + ".DFF"), PackedStringArray(), animated)
 	if model != null: Scenery.add_model_motion(model,model_name)
 	return model
+static func migrate_light_ids(world: Node3D, data: Dictionary) -> void:
+	if data.is_empty() or not data.get("entities") is Dictionary: return
+	var sources: Array[Dictionary] = []
+	for node in world.find_children("*","Node3D",true,false):
+		if not node.has_meta("light_source_id"): continue
+		sources.append({"key":str(world.get_path_to(node)),"id":str(node.get_meta("light_source_id")),"position":node.get_meta("light_source_position")})
+	var matches := {}
+	for key in data.entities.keys():
+		var entry: Dictionary = data.entities[key]
+		if entry.get("kind") != "light" or not str(key).begins_with("Scenery/Light_"): continue
+		var position := vector(entry.get("light_source_position",entry.transform.slice(9)))
+		var nearest := ""; var distance := 1.0
+		for source in sources:
+			var candidate: float = source.position.distance_squared_to(position)
+			if str(entry.get("light_source_id","")) == source.id or candidate < distance:
+				nearest = source.key; distance = candidate
+				if str(entry.get("light_source_id","")) == source.id: break
+		if nearest.is_empty(): continue # Keep unmatched/far-moved authored records intact.
+		if not matches.has(nearest): matches[nearest] = []
+		matches[nearest].append(key)
+	for source in sources:
+		if not matches.has(source.key): continue
+		if not data.entities.has(source.key):
+			var chosen: String = matches[source.key][0]
+			for key in matches[source.key]:
+				# Historical duplicate deletions must not discard a retained/moved lamp.
+				if not data.entities[key].get("deleted",false): chosen = key
+			var entry: Dictionary = data.entities[chosen].duplicate(true)
+			entry.light_source_id = source.id; entry.light_source_position = array(source.position)
+			data.entities[source.key] = entry
+		for key in matches[source.key]: data.entities.erase(key)
+
 static func apply_entities(world: Node3D, folder: String, data: Dictionary) -> void:
+	migrate_light_ids(world,data)
 	for key in data.entities:
 		var entry: Dictionary = EntityTypes.effective(data,data.entities[key])
 		if entry.kind == "player":
@@ -285,6 +321,9 @@ static func apply_entities(world: Node3D, folder: String, data: Dictionary) -> v
 			var replacement: Node3D = Searchlight.new() if entry.get("light_type") == "searchlight" else PulseLight.new()
 			var parent := node.get_parent(); var original_name := node.name
 			node.free(); replacement.name = original_name; parent.add_child(replacement); node = replacement
+		if entry.kind == "light" and entry.has("light_source_id"):
+			node.set_meta("light_source_id",str(entry.light_source_id))
+			node.set_meta("light_source_position",vector(entry.light_source_position))
 		if entry.has("dock"):
 			node.set_meta("city_id", int(entry.dock.city_id)); node.set_meta("race_id", int(entry.dock.race_id)); node.set_meta("city_name", str(entry.name))
 		if entry.kind == "model" and str(node.get_meta("editor_model", "")) != str(entry.get("model", "")) and not node.has_meta("city_id"):

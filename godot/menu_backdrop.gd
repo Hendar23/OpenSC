@@ -14,6 +14,10 @@ var group_count := 0
 var generation := 0
 var hidden: Array[Dictionary] = []
 var animated_lights: Array[Dictionary] = []
+const PASS_MODELS := ["TRADSHUT","TECHSHUT","TRAD-SUB","TECH-SUB","TRAD2","TECH2SUB","PRISON","PIRATE","PIRATE2","PIRATE3"]
+var pass_visuals: Array[Node3D] = []
+var pass_propellers: Array[Dictionary] = []
+var pass_height := 0.0
 var submarine: Node3D
 var wake: Node3D
 var propeller_audio: AudioStreamPlayer3D
@@ -43,6 +47,19 @@ func setup(owner_game: Node3D) -> void:
 	_position_camera()
 	submarine = Node3D.new(); submarine.name = "MenuSubmarine"; add_child(submarine)
 	var visual: Node3D = game.model.duplicate(0); submarine.add_child(visual)
+	pass_visuals.append(visual); _register_propellers(visual,"SUB")
+	for id in PASS_MODELS:
+		var ship := preload("res://map_document.gd").load_model(id,game.game_folder)
+		if ship == null: continue
+		_remove_collisions(ship); submarine.add_child(ship)
+		var boxes: Array[AABB] = []
+		preload("res://docking_controller.gd")._bounds(ship,Transform3D.IDENTITY,boxes)
+		if not boxes.is_empty():
+			var box: AABB = boxes[0]
+			for next in boxes: box = box.merge(next)
+			if box.size.length() > 3.0: ship.scale *= 3.0 / box.size.length()
+		ship.rotation.y += PI # NPC hulls face +Z; the menu travel frame faces -Z.
+		ship.hide(); pass_visuals.append(ship); _register_propellers(ship,id)
 	wake = Bubbles.new(); add_child(wake); wake.set_physics_process(false)
 	wake.configure(game.pilot.bubbles.material.albedo_texture)
 	wake.surface_height = game.pilot.surface_height
@@ -58,6 +75,29 @@ func setup(owner_game: Node3D) -> void:
 	submarine.add_child(propeller_audio)
 	submarine.hide()
 	_add_plants()
+
+func _register_propellers(visual: Node3D, model_id: String) -> void:
+	var nodes: Array[Node3D] = []
+	var parts: Dictionary = visual.get_meta("submarine_parts",{})
+	for role in parts:
+		if not str(role).ends_with("propeller"): continue
+		var node := visual.get_node_or_null(NodePath(str(parts[role]))) as Node3D
+		if node != null and not nodes.has(node): nodes.append(node)
+	for node in visual.find_children("*Propeller","Node3D",true,false):
+		if not nodes.has(node): nodes.append(node)
+	# Original multi-frame hulls store their aft rotors as numbered children.
+	# Single-frame Procha/pirate models have no separate rotor to rotate.
+	if not visual.get_meta("modern_model",false):
+		var count := 2 if model_id in ["TRAD2","PRISON"] else 1 if model_id in ["TRADSHUT","TRAD-SUB"] else 0
+		for index in range(1,count + 1):
+			var node := visual.get_node_or_null("Frame_0/Frame_" + str(index)) as Node3D
+			if node != null and not nodes.has(node): nodes.append(node)
+	for node in nodes: pass_propellers.append({"node":node,"rest":node.get_meta("rest_basis",node.basis)})
+
+func _animate_propellers() -> void:
+	var angle := fmod(time * TAU * 5,TAU)
+	for part in pass_propellers:
+		if part.node.is_visible_in_tree(): part.node.basis = part.rest * Basis(Vector3.BACK,angle)
 
 func _position_camera() -> void:
 	var document := preload("res://map_document.gd").load_active() if game.use_map_overrides else {}
@@ -134,15 +174,18 @@ func _process(delta: float) -> void:
 		next_pass -= delta
 		if next_pass <= 0:
 			pass_time = 0; pass_direction = -1 if random.randf() < 0.5 else 1
-			pass_depth = random.randf_range(3.5,5.0); submarine.show()
+			pass_depth = random.randf_range(3.5,5.0); pass_height = random.randf_range(-1.0,1.0)
+			for visual in pass_visuals: visual.hide()
+			pass_visuals[random.randi_range(0,pass_visuals.size() - 1)].show()
+			submarine.show()
 	else:
 		pass_time += delta
 		var direction := view.global_basis.x * pass_direction
-		submarine.global_position = view.global_position - view.global_basis.z * pass_depth + direction * (-9.0 + pass_time * 1.2)
+		submarine.global_position = view.global_position - view.global_basis.z * pass_depth + direction * (-9.0 + pass_time * 1.2) + view.global_basis.y * pass_height
+		submarine.global_position.y = minf(submarine.global_position.y,game.pilot.surface_height - 1.0)
 		submarine.global_basis = Basis.looking_at(direction)
 		_update_propeller_audio()
-		for node in submarine.find_children("*Propeller","Node3D",true,false):
-			node.basis = node.get_meta("rest_basis",Basis.IDENTITY) * Basis(Vector3.BACK,time * TAU * 5)
+		_animate_propellers()
 		wake.emit_from(0,submarine.global_position - direction * 0.4,-direction,1,16,delta)
 		if pass_time > 15:
 			pass_time = -1; next_pass = random.randf_range(18,40); submarine.hide()

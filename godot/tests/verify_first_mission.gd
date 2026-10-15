@@ -22,6 +22,17 @@ func run() -> void:
 	game.docking.set_physics_process(false)
 	var runtime: Node = game.mission_runtime
 	var initial_npcs: int = game.submarine_traffic.traders.size()
+	var backdrop: Node3D = game.menu_backdrop
+	check(backdrop.pass_visuals.size() == backdrop.PASS_MODELS.size() + 1,"Menu fly-by pool includes player and all faction/pirate variants")
+	var selected := {}; var heights := {}
+	backdrop.random.seed = 20261015; backdrop.active = true
+	for attempt in range(80):
+		backdrop.pass_time = -1; backdrop.next_pass = 0; backdrop._process(0)
+		heights[str(backdrop.pass_height)] = true
+		for index in range(backdrop.pass_visuals.size()):
+			if backdrop.pass_visuals[index].visible: selected[index] = true
+	check(selected.size() == backdrop.pass_visuals.size() and heights.size() > 1,"Menu fly-bys vary ship and height between passes")
+	backdrop.active = false; backdrop.hide()
 	check(not runtime.board(5).available and not runtime.board(6).available,"Special docks do not offer prospecting")
 	for city in [1,2,3,4]:
 		game.player_progress = preload("res://player_progress.gd").restore()
@@ -34,6 +45,9 @@ func run() -> void:
 		check(runtime.spawned.size() == 13,"Five inert crystals, four bonus ore, three caps and one pirate")
 		check(runtime.pirate.patrol.size() == 5 and is_equal_approx(runtime.pirate.health.remaining,9.0),"Original patrol and weakened pirate")
 		check(game.save_games.read(-1).progress.missions.active.is_empty(),"Autosave records state before acceptance")
+		var before_mission := FileAccess.get_file_as_string(game.save_games.path(-1))
+		game._autosave_docked()
+		check(FileAccess.get_file_as_string(game.save_games.path(-1)) == before_mission,"Mission docking preserves pre-mission autosave byte for byte")
 		check(game.save_games.write(0,game._save_snapshot("Blocked")) == ERR_UNAVAILABLE,"Backend refuses mission saves")
 		check(not game._dock_ui_model().can_save,"UI exposes save restriction")
 		runtime.docked(city); check(not runtime.can_save(),"Home docking before refinery does not complete")

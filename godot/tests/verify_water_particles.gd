@@ -19,6 +19,7 @@ func _run() -> void:
 	game._toggle_developer_ui(); check(game._desired_mouse_mode() == Input.MOUSE_MODE_VISIBLE, "Pointer restored immediately for F1")
 	game._toggle_developer_ui(); check(game._desired_mouse_mode() == Input.MOUSE_MODE_HIDDEN, "Pointer hidden immediately after F1 closes")
 	if DisplayServer.get_name() != "headless": check(Input.mouse_mode == Input.MOUSE_MODE_HIDDEN, "Native pointer mode changes while piloting")
+	game.folder_dialog.use_native_dialog = false # Exercise in-engine visibility; OS dialogs own their cursor.
 	game.folder_dialog.show(); game._update_mouse_pointer(); check(game._desired_mouse_mode() == Input.MOUSE_MODE_VISIBLE, "Folder dialog restores pointer")
 	game.folder_dialog.hide()
 	game.docking.stage = game.Docking.Stage.DOCKED; game._update_mouse_pointer(); check(game._desired_mouse_mode() == Input.MOUSE_MODE_VISIBLE, "Docked screen restores pointer")
@@ -26,15 +27,13 @@ func _run() -> void:
 	var cloud := game.particles
 	cloud.active = true; cloud.set_process(false)
 	cloud.configure({"enabled": true, "count": 400.0, "drift": 0.0})
-	check(cloud.multimesh.instance_count == 400 and cloud.positions.size() == 400, "Live density updates pooled instances")
-	var point: Vector3 = cloud.positions[0]
-	cloud._process(1.0); check(cloud.positions[0].is_equal_approx(point), "Zero drift freezes world-space specks")
+	check(cloud.multimesh.instance_count == ceili(400.0 * 6.0 / PI) and cloud.settings.count == 400, "Live density updates pooled instances")
+	var phase: float = cloud.drift_distance
+	cloud._process(1.0); check(is_equal_approx(cloud.drift_distance,phase), "Zero drift freezes world-space specks")
 	cloud.configure({"drift": 0.1}); cloud._process(1.0)
-	check(cloud.positions[0].distance_to(point) > 0.001 and cloud.positions[0].distance_to(point) < 0.12, "Specks drift slowly")
+	check(is_equal_approx(cloud.drift_distance - phase,0.1), "Specks drift slowly")
 	game.camera.global_position += Vector3(100, 0, 0); cloud._process(0.0)
-	var contained := true
-	for position in cloud.positions: contained = contained and position.distance_to(game.camera.global_position) <= float(cloud.settings.radius) + 0.001
-	check(contained and cloud.custom_aabb.has_point(game.camera.global_position), "Camera teleport repopulates cloud and updates culling bounds")
+	check(cloud.global_position == game.camera.global_position and (cloud.global_transform * cloud.custom_aabb).has_point(game.camera.global_position), "Camera teleport repopulates cloud and updates culling bounds")
 	cloud.configure({"enabled": false}); check(not cloud.visible, "Disable hides particles")
 	cloud.configure({"enabled": true, "count": 0.0}); check(cloud.multimesh.instance_count == 0, "Zero density supported")
 	game.particle_controls.count.value = 800; game.particle_controls.size.value = 0.04

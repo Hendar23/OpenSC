@@ -1,5 +1,6 @@
 extends Node3D
-## Three persistent slots; replacements are relocated into unseen open water.
+## Two persistent slots; replacements are relocated into unseen open water.
+const MAX_PIRATES := 2
 const Pirate = preload("res://pirate_submarine.gd")
 var traffic: Node
 var ships: Array[Node3D] = []
@@ -8,7 +9,7 @@ var random := RandomNumberGenerator.new()
 
 func setup(manager: Node, folder: String, document: Dictionary) -> void:
 	traffic = manager; random.randomize()
-	for index in range(3):
+	for index in range(MAX_PIRATES):
 		var id: String = Pirate.PIRATE_MODELS[index % 2]
 		var values := Pirate.PIRATE_DEFAULTS.duplicate()
 		for type in document.get("npc_types",[]):

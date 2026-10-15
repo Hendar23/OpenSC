@@ -22,7 +22,7 @@ func apply(environment: Environment, sun: DirectionalLight3D, surface: ShaderMat
 	var night_tint := Color(0.006, 0.02, 0.055) * (night_brightness / 0.18)
 	night_tint.a = 1.0
 	var water := night_tint.lerp(Color(0.005, 0.48, 0.56), day)
-	environment.background_color = water
+	environment.background_color = preload("res://natural_light.gd").background_colour(water)
 	environment.fog_light_color = water
 	# Neutral nearby illumination preserves the original texture colours. Water
 	# tint comes from distance fog, rather than colouring every object's lighting.

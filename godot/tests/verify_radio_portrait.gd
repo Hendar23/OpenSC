@@ -31,6 +31,12 @@ func run() -> void:
 		check(display.transition == "intro" and display.modulate.a == 1,"A new transmission cleanly interrupts receiver drop")
 		display.update_signal(null,null,noise,0.3)
 		check(not display.visible and display.texture == null,"Receiver disappears after its outro finishes")
+	for key in ["touka","belug","velc","tryto","aqua"]:
+		var relay := Radio.speaker_portrait(folder,key)
+		var distorted := Radio.speaker_portrait(folder,key,true)
+		check(relay != null and distorted != null and relay.get_size() == Vector2(64,80),"City relay face and static variant load: " + key)
+	var relay := Radio.speaker_portrait(folder,"touka")
+	check(relay.get_image().get_data() != Radio.portrait(folder,1).get_image().get_data(),"Touka city speaker differs from its docking controller")
 	# Missing optional frames still show the clear portrait without errors.
 	var clear := Radio.portrait(folder,1)
 	display.update_signal(clear,null,[],0)

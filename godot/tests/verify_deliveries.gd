@@ -52,7 +52,7 @@ func run() -> void:
  magnet.drop_points.assign([pad]); magnet._physics_process(0.016)
  check(game._delivery_prompt_active(),"Carrying salvage into a city's zone opens its confirmation request")
  game._process(0)
- check(game.docking_prompt.visible and game.docking_prompt.text.contains("automatically retrieved"),"Confirmation appears in the game HUD")
+ check(not game.radio_feed.prompt.is_empty() and game.radio_feed.prompt.label.text.contains("automatically retrieved"),"Confirmation appears in the game HUD")
  var no := InputEventKey.new(); no.keycode = KEY_N; no.pressed = true; game._input(no)
  check(magnet.target == coin and game.player_progress.pending_deliveries.is_empty(),"N leaves the object attached and creates no goods")
  check(accepted.is_empty() and collected.is_empty(),"Declined deliveries do not emit completion events")

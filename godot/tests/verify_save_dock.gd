@@ -38,7 +38,7 @@ func run() -> void:
 	game._begin_new_game(); game.pilot.set_physics_process(false); game.docking.set_physics_process(false)
 	check((-game.pilot.global_basis.z).is_equal_approx(Vector3.LEFT),"New game faces 90 degrees right of the previous positive-Z heading")
 	check(game.pilot.global_basis.is_equal_approx(game.world_root.get_meta("player_spawn_basis")),"New game uses the editable spawn rotation")
-	check(game.docking_portrait.anchor_left == 0.0 and game.docking_portrait.offset_left == 20.0 and game.docking_prompt.offset_left > game.docking_portrait.offset_right,"Radio portraits sit left of the message text")
+	check(game.radio_feed.anchor_left == 0.0 and game.radio_feed.offset_left == 20.0 and game.radio_feed.offset_bottom == -20.0,"Unified radio stack uses the bottom-left HUD position")
 	game.save_games.folder = "res://tests/save-fixture"
 	var port: Dictionary = game.docking.ports[0]
 	game.docking.current = port; game.docking.saved_collision_mask = game.pilot.collision_mask
@@ -55,6 +55,11 @@ func run() -> void:
 	game.equipment.vacuum.storage.assign(["ore","ore","ore"])
 	game.dock_interface_active = false
 	game._process(0.0)
+	var automatic: Dictionary = game.save_games.read(-1)
+	check(not automatic.is_empty() and automatic.progress.cargo.get("ore",0) == 3 and int(automatic.dock.id) == int(port.node.get_meta("city_id")),"Dock autosave includes current city and newly transferred cargo")
+	game.player_progress.status.credits += 1; game._process(0)
+	check(game.save_games.read(-1).progress.status.credits == automatic.progress.status.credits,"Dock autosave writes once per arrival, not every paused frame")
+	game.player_progress.status.credits -= 1
 	check(game.player_progress.cargo.get("ore",0) == 3 and game.equipment.vacuum.storage.is_empty(),"Entering dock transfers Suck-O-Matic storage into cargo")
 	check(paused and not game.world_root.can_process() and not game.pilot.can_process() and not game.docking.can_process(),"Dock menus pause gameplay processing and world physics")
 	check(game.dock_interface.can_process() and game.can_process(),"Dock controls and the market remain responsive while paused")

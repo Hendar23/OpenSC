@@ -15,4 +15,4 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-start "" "%OSC_GODOT%" --path "%~dp0godot" res://game.tscn
+start "" "%OSC_GODOT%" --path "%~dp0godot" res://game.tscn %*
