@@ -5,10 +5,7 @@ Built with [Godot](https://godotengine.org/)
 
 The world is built, and the core scavenging/trading gameplay is in place, plus a few enhancements here and there.
 
-Still to do:
-- Most of the equipment and upgrades
-- Missions
-- Music & Cutscenes
+Just adding the remaining missions and equipment
 
 Latest release is available [here](https://github.com/Hendar23/OpenSC/releases/tag/v0.1.0-beta.1).
 - You will need a copy of the original Sub Culture files. It has been abandonware for years now. Google is your friend.
