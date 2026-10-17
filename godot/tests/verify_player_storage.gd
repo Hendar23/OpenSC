@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Storage = preload("res://player_storage.gd")
 const Bindings = preload("res://input_bindings.gd")
 const Mods = preload("res://mod_registry.gd")

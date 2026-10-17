@@ -19,14 +19,13 @@ func _init() -> void:
 		RenderingServer.global_shader_parameter_add("osc_sun_direction",RenderingServer.GLOBAL_VAR_TYPE_VEC3,Vector3.UP)
 		RenderingServer.global_shader_parameter_add("osc_caustics_texture",RenderingServer.GLOBAL_VAR_TYPE_SAMPLER2D,null)
 		globals_registered = true
-	# Low-frequency clouds produce soft pools of light, rather than cell edges.
-	var noise := FastNoiseLite.new(); noise.seed = 719; noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	noise.fractal_type = FastNoiseLite.FRACTAL_FBM; noise.fractal_octaves = 2; noise.fractal_gain = 0.35
-	noise.frequency = 0.012
+	var noise := FastNoiseLite.new(); noise.seed = 719; noise.noise_type = FastNoiseLite.TYPE_CELLULAR
+	noise.fractal_type = FastNoiseLite.FRACTAL_NONE
+	noise.cellular_return_type = FastNoiseLite.RETURN_DISTANCE2_SUB; noise.frequency = 0.018; noise.cellular_jitter = 0.8
 	var gradient := Gradient.new()
-	gradient.set_color(0,Color.BLACK); gradient.set_color(1,Color.WHITE)
-	gradient.add_point(0.35,Color.BLACK); gradient.add_point(0.7,Color.WHITE)
-	texture = NoiseTexture2D.new(); texture.width = 512; texture.height = 512; texture.seamless = true; texture.normalize = true
+	gradient.set_color(0,Color.WHITE); gradient.set_color(1,Color.BLACK)
+	gradient.add_point(0.008,Color.WHITE); gradient.add_point(0.035,Color.BLACK)
+	texture = NoiseTexture2D.new(); texture.width = 512; texture.height = 512; texture.seamless = true; texture.normalize = false
 	texture.noise = noise; texture.color_ramp = gradient
 	RenderingServer.global_shader_parameter_set("osc_caustics_texture",texture)
 	configure({})
@@ -70,9 +69,12 @@ func attach(node: Node) -> void:
 		for index in range(node.mesh.get_surface_count()):
 			var original: Material = node.get_active_material(index)
 			if original == null or original.get_meta("caustics_attached",false): continue
+			# Spawned models may already have the natural-light shader wrapper.
+			# Keep that shader and its uniforms, reading surface flags from its source.
+			var source: Material = original.get_meta("natural_original",original)
 			var plant: bool = original is ShaderMaterial and original.shader == PlantShader
-			if not original is StandardMaterial3D and not plant: continue
-			if original is StandardMaterial3D and original.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA: continue
+			if not source is StandardMaterial3D and not plant: continue
+			if source is StandardMaterial3D and source.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA: continue
 			var material: Material = original if plant else materials.get(original.get_instance_id())
 			if material == null: material = original.duplicate(); materials[original.get_instance_id()] = material
 			if not material.get_meta("caustics_attached",false):
@@ -80,10 +82,10 @@ func attach(node: Node) -> void:
 				overlay.set_shader_parameter("is_plant",plant)
 				if plant:
 					for parameter in original.shader.get_shader_uniform_list(): overlay.set_shader_parameter(parameter.name,original.get_shader_parameter(parameter.name))
-				elif original.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR:
-					overlay.set_shader_parameter("alpha_cutout",original.albedo_texture != null)
-					overlay.set_shader_parameter("alpha_texture",original.albedo_texture)
-					overlay.set_shader_parameter("alpha_threshold",original.alpha_scissor_threshold)
+				elif source.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR:
+					overlay.set_shader_parameter("alpha_cutout",source.albedo_texture != null)
+					overlay.set_shader_parameter("alpha_texture",source.albedo_texture)
+					overlay.set_shader_parameter("alpha_threshold",source.alpha_scissor_threshold)
 				if plant:
 					overlay.set_shader_parameter("alpha_cutout",original.get_shader_parameter("has_texture"))
 					overlay.set_shader_parameter("alpha_texture",original.get_shader_parameter("albedo_texture"))

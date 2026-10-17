@@ -17,8 +17,6 @@ static func install_pirate(model: Node3D, values: Dictionary) -> Node3D:
 	agent.tuning = PIRATE_DEFAULTS.duplicate()
 	for key in PIRATE_DEFAULTS: agent.tuning[key] = values.get(key,PIRATE_DEFAULTS[key])
 	agent.body.set_meta("faction",3)
-	# The civilian Frame_1 fallback is not a verified pirate propeller.
-	if not model.get_meta("submarine_parts",{}).has("main_propeller"): agent.propeller = null
 	agent.hitbox = agent.body
 	return agent
 
@@ -46,11 +44,11 @@ func _advance_motion(delta: float) -> void:
 	if victim == null:
 		if roaming:
 			_roam(delta); return
-		path.clear(); speed = 0; body.velocity = Vector3.ZERO; return
+		path.clear(); _coast(delta); return
 	var offset := victim.global_position - global_position
 	var distance := offset.length()
 	if distance > float(tuning.npc_detection) * 1.5:
-		victim = null; path.clear(); body.velocity = Vector3.ZERO; return
+		victim = null; path.clear(); _coast(delta); return
 	# Approach diagonally through the shared water navigation, stopping at the
 	# original five-to-six unit fighting distance rather than ramming a target.
 	var clear_shot := _clear_shot(global_position,victim.global_position)
@@ -58,11 +56,9 @@ func _advance_motion(delta: float) -> void:
 		if replan <= 0:
 			replan = 0.75; path = _attack_route(victim.global_position)
 		if not path.is_empty(): super._advance_motion(delta)
+		else: _coast(delta,offset.normalized())
 	else:
-		path.clear(); speed = 0; body.velocity = Vector3.ZERO
-		var model := get_parent() as Node3D
-		if distance > 0.001 and absf(offset.normalized().y) < 0.98:
-			model.global_basis = model.global_basis.orthonormalized().slerp(Basis.looking_at(-offset.normalized(),Vector3.UP),1 - exp(-2 * delta)).scaled_local(home.basis.get_scale())
+		path.clear(); _coast(delta,offset.normalized())
 	if distance > float(tuning.npc_attack_range) or cooldown > 0 or missile_template == null: return
 	var heading: Vector3 = get_parent().global_basis.z.normalized()
 	if heading.dot(offset.normalized()) <= 0.85: return
@@ -119,7 +115,7 @@ func burst(point: Vector3, size: float) -> void:
 func _roam(delta: float) -> void:
 	if path.is_empty():
 		if replan > 0:
-			speed = 0; body.velocity = Vector3.ZERO; return
+			_coast(delta); return
 		replan = 1.0
 		var ids: PackedInt64Array = system.graph.get_point_ids()
 		for attempt in range(12):
@@ -129,7 +125,7 @@ func _roam(delta: float) -> void:
 			path = system.route(global_position,point)
 			if not path.is_empty(): break
 	if not path.is_empty(): super._advance_motion(delta)
-	else: speed = 0; body.velocity = Vector3.ZERO
+	else: _coast(delta)
 
 func take_weapon_damage_from(strength: float, source: Vector3, owner_body: Node3D) -> void:
 	var alive := not dead

@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Game = preload("res://game.gd")
 const Document = preload("res://map_document.gd")
 const Pulse = preload("res://pulse_light.gd")

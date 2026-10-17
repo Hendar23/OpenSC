@@ -27,14 +27,23 @@ func _run() -> void:
 	water.configure({"caustics_strength":0.7,"wave_height":0.08})
 	check(water.settings.caustics_strength == 0.7 and water.settings.wave_height == 0.08,"Water settings accept tuning")
 	var natural := preload("res://natural_light.gd").new(); natural.attach(world)
+	var bindings := water.caustic_passes.size(); water.attach(world)
+	check(water.caustic_passes.size() == bindings,"Attaching after natural-light wrapping does not add a duplicate pass")
+	var late := MeshInstance3D.new(); late.mesh = BoxMesh.new(); late.material_override = original
+	world.add_child(late); natural.attach(late)
+	var wrapped: Material = late.get_active_material(0); water.attach(late)
+	check(late.get_active_material(0) is ShaderMaterial and late.get_active_material(0).shader == wrapped.shader and late.get_active_material(0).next_pass != null,"Late-spawned naturally lit models retain their shader and receive caustics")
 	water.configure({"caustics_strength":0.0})
 	check(floor.get_active_material(0).next_pass == null,"Disabling caustics removes the pass after natural-light wrapping")
+	check(late.get_active_material(0).next_pass == null,"Disabling caustics also removes late-model passes")
 	water.configure({"caustics_strength":0.7})
 	check(floor.get_active_material(0).next_pass != null,"Re-enabling caustics restores the original pass")
 	water.lighting(10,Vector3.DOWN)
 	check(floor.get_active_material(0).next_pass == null,"Night removes the caustics pass")
 	water.lighting(10,Vector3.UP)
 	check(floor.get_active_material(0).next_pass != null,"Day restores the caustics pass")
+	check(late.get_active_material(0).next_pass != null,"Day restores caustics on late models")
+	late.hide()
 	if DisplayServer.get_name() == "headless":
 		world.queue_free(); await process_frame; print("Water visuals: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0); return
 	var viewport := SubViewport.new(); viewport.size = Vector2i(512,512); viewport.own_world_3d = true; viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS; root.add_child(viewport); world.reparent(viewport)

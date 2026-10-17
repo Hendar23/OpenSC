@@ -67,6 +67,9 @@ func _run() -> void:
 	check(hud.map_data.markers.size() == game.docking.ports.size(), "Minimap marks all live dock locations")
 	check(hud.map_data.uv(hud.map_data.bounds.position).is_equal_approx(Vector2.ZERO) and hud.map_data.uv(hud.map_data.bounds.end).is_equal_approx(Vector2.ONE), "World and minimap coordinates agree at both bounds")
 	var equipment: Node3D = game.equipment
+	var hull_meshes: Array = game.pilot.visual.find_children("*","MeshInstance3D",true,false)
+	check(hull_meshes.any(func(mesh: MeshInstance3D) -> bool: return mesh.get_active_material(0).next_pass != null and mesh.get_active_material(0).next_pass.shader == preload("res://caustics.gdshader")),"Player hull receives the sunlight caustics pass")
+	check(game.submarine_traffic.traders.all(func(agent: Node3D) -> bool: return agent.get_parent().find_children("*","MeshInstance3D",true,false).any(func(mesh: MeshInstance3D) -> bool: return mesh.get_active_material(0).get_meta("caustics_attached",false))),"Ambient and newly spawned pirate hulls receive caustics")
 	check(equipment.mounted.size() == 2 and equipment.current().id == "deep_sea_lights" and equipment.mounted[1].id == "suckomat", "Deep-Sea Lights and Suck-O-Matic are starting modular equipment")
 	check(equipment.current().icons[0] != null and equipment.current().icons[1] != null and equipment.get_node("DeepSeaLightsMount").get_child_count() == 2, "Original model and both equipment sprites load")
 	var mount: Node3D = equipment.get_node("DeepSeaLightsMount")
@@ -184,6 +187,43 @@ func _run() -> void:
 	game.cockpit_hud.setup_lighting(game.water_environment,game.sun)
 	hud = game.cockpit_hud
 	check(hud.model_views.size() == 5 and hud.displays.all(func(display: Control) -> bool: return display.screen_only), "All five 3D instruments bind the live displays")
+	var tool_view: SubViewport = hud.model_views[1]
+	var counter_mesh := tool_view.find_child("Counter_Display",true,false) as MeshInstance3D
+	var counter_view := tool_view.get_node("EquipmentCounter") as SubViewport
+	check(counter_mesh.material_override.emission_texture == counter_view.get_texture() and not hud.displays[1].show_equipment_counter,"3D tool counter binds its own screen and is absent from the main icon")
+	check(Rect2(Vector2.ZERO,hud.displays[1].size).encloses(hud.displays[1].counter_rect()),"A screen-only instrument without a dedicated counter has a fallback inside the screen")
+	hud.crt_reflection_strength = 0
+	check(counter_mesh.material_override.clearcoat == 0 and counter_mesh.material_override.metallic_specular == 0,"Counter glass follows the CRT reflection setting")
+	hud.crt_reflection_strength = 0.25
+	if DisplayServer.get_name() != "headless":
+		equipment.selected = 1; equipment.vacuum.set_physics_process(false)
+		for frame in range(6): await process_frame
+		await RenderingServer.frame_post_draw
+		var empty_counter := counter_view.get_texture().get_image()
+		var tool_screen: MeshInstance3D = tool_view.find_child("Screen_Display",true,false)
+		var icon_before: Image = tool_screen.material_override.emission_texture.get_image()
+		for item in range(5): equipment.vacuum.storage.append("ore")
+		for frame in range(6): await process_frame
+		await RenderingServer.frame_post_draw
+		check(empty_counter.get_data() != counter_view.get_texture().get_image().get_data(),"Suck-O-Matic count changes on the dedicated 3D counter")
+		check(icon_before.get_data() == tool_screen.material_override.emission_texture.get_image().get_data(),"Cargo count changes do not paint digits over the equipment icon")
+		equipment.vacuum.storage.clear()
+		equipment.set_installed(["bigears"]); equipment.selected = 0
+		game.player_progress.ammunition.bigears = 5
+		for frame in range(6): await process_frame
+		await RenderingServer.frame_post_draw
+		var five_probes := counter_view.get_texture().get_image()
+		var ears_icon: Image = tool_screen.material_override.emission_texture.get_image()
+		check(hud.displays[1].equipment_count() == 5 and hud.displays[1].equipment_icon_index(equipment.current()) == 0,"3D Big Ears uses LISTEN1 with five probes available")
+		game.player_progress.ammunition.bigears = 4
+		for frame in range(6): await process_frame
+		await RenderingServer.frame_post_draw
+		check(five_probes.get_data() != counter_view.get_texture().get_image().get_data(),"Big Ears ammunition updates on the dedicated 3D counter")
+		check(ears_icon.get_data() == tool_screen.material_override.emission_texture.get_image().get_data(),"Big Ears count does not overwrite the 3D equipment icon")
+		counter_view.get_texture().get_image().save_png("res://tests/bigears-3d-counter.png")
+		equipment.current().icons[0].get_image().save_png("res://tests/bigears-idle-icon.png")
+		equipment.current().icons[1].get_image().save_png("res://tests/bigears-attached-icon.png")
+		equipment.set_installed(["deep_sea_lights","suckomat"]); game.player_progress.ammunition.bigears = 5
 	for index in range(5):
 		var live_mesh: MeshInstance3D = hud.model_views[index].find_child("Dial_Display" if index in [0,4] else "Screen_Display",true,false)
 		check(live_mesh != null and live_mesh.material_override.emission_texture is ViewportTexture,"Instrument %d binds its screen or circular dial" % index)

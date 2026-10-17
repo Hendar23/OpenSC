@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Vehicle = preload("res://ground_vehicle.gd")
 const Traffic = preload("res://ground_traffic.gd")
 const Document = preload("res://map_document.gd")

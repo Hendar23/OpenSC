@@ -102,7 +102,7 @@ static func _read_pack(folder: String) -> Dictionary:
 		if relative.is_empty() or relative.is_absolute_path() or not resolved.begins_with(folder + "/"):
 			pack.errors.append("Asset path must stay inside its mod folder: " + str(key)); continue
 		var extension := relative.get_extension().to_lower()
-		var model := asset_id == "submarine.player" or asset_id.begins_with("model.") or asset_id in ["hud.tilt", "hud.equipment", "hud.map", "hud.weapon", "hud.shield"]
+		var model := asset_id in ["submarine.player","cockpit.first_person"] or asset_id.begins_with("model.") or asset_id in ["hud.tilt", "hud.equipment", "hud.map", "hud.weapon", "hud.shield"]
 		var texture := asset_id.begins_with("texture.")
 		var audio := asset_id in ["audio.submarine.main_propeller", "audio.submarine.side_pods", "audio.submarine.pod_rotation", "audio.submarine.impact_hit1", "audio.submarine.impact_hit3", "audio.submarine.impact_creaking", "audio.docking.sequence", "audio.docking.doors", "audio.docking.door_stop", "audio.weapon.zapper", "audio.creature.death", "audio.object.mine.explosion"]
 		var map := asset_id == "map.scen1"
@@ -133,6 +133,17 @@ static func _read_pack(folder: String) -> Dictionary:
 		if trigger != "" and (not model or trigger != "model_radius"):
 			pack.errors.append("Model trigger_distance must be model_radius: " + str(key)); continue
 		pack.assets[asset_id] = {"id": asset_id, "path": resolved, "relative": relative, "pack": pack.id, "name": pack.name, "scale": float(scale), "forward_axis": axis, "parts": parts.duplicate(), "material_textures": material_textures}
+		if asset_id == "cockpit.first_person":
+			var glass := {}
+			var options: Variant = entry.get("glass",{})
+			if options is Dictionary:
+				for option in options:
+					var value: Variant = options[option]
+					if option in ["scratch_strength","reflection_strength","edge_tint","grime_strength","refraction_strength"] and (value is float or value is int) and is_finite(float(value)) and float(value) >= 0 and float(value) <= 2:
+						glass[option] = float(value)
+					else: pack.errors.append("Ignored invalid cockpit glass setting: " + str(option))
+			else: pack.errors.append("Cockpit glass settings must be an object.")
+			pack.assets[asset_id]["glass"] = glass
 		if trigger == "model_radius": pack.assets[asset_id].trigger_distance = trigger
 	return pack
 

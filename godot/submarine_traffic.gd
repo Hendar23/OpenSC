@@ -1,6 +1,7 @@
 extends Node
 const Identity = preload("res://entity_identity.gd")
 var events: RefCounted
+var prepare_visual: Callable
 ## One water navigation graph shared by all civilian vessels.
 signal pirate_defeated(position: Vector3)
 var roaming_population: Node3D
@@ -51,6 +52,7 @@ func setup(world: Node3D, folder: String, dock_ports: Array[Dictionary], terrain
 		register_vessel(agent,world,folder,alert)
 
 func register_vessel(agent: Node3D, world: Node3D, folder: String, alert: Callable = Callable()) -> void:
+	if prepare_visual.is_valid(): prepare_visual.call(agent.get_parent())
 	agent.system = self; traders.append(agent)
 	if events != null: agent.destroyed.connect(events.entity_destroyed.emit)
 	if agent.has_method("configure_resources"): agent.configure_resources(folder)
@@ -191,7 +193,8 @@ func avoidance(agent: Node3D, forward: Vector3) -> Dictionary:
 	var actors: Array[Node3D] = []
 	for other in traders:
 		if other != agent and other.running and not other.dead and other.stage == "travel": actors.append(other.body)
-	if is_instance_valid(player): actors.append(player)
+	var tether: WeakRef = agent.body.get_meta("rescue_pod_pilot") if agent.body.has_meta("rescue_pod_pilot") else null
+	if is_instance_valid(player) and (tether == null or tether.get_ref() != player): actors.append(player)
 	var velocity: Vector3 = forward * maxf(agent.speed,float(agent.tuning.npc_speed) * 0.6)
 	var right := Vector3(forward.z,0,-forward.x).normalized()
 	for other in actors:
@@ -287,6 +290,8 @@ func restore(value: Dictionary) -> void:
 		agent.mission_owner = entry.get("mission_owner","")
 		agent.get_parent().global_transform = preload("res://map_document.gd").decode(entry.pose)
 		agent.get_parent().reset_physics_interpolation()
+		agent.motion.velocity = Vector3.ZERO; agent.motion.bank = 0.0; agent.speed = 0.0; agent.body.velocity = Vector3.ZERO
+		agent.progress_goal = Vector3.INF; agent.progress_best = INF; agent.progress_stalled = 0.0
 		agent.health.remaining = minf(entry.health,float(agent.tuning.npc_health)); agent.dead = agent.health.remaining <= 0
 		agent.stage = entry.stage; agent.destination = int(entry.destination); agent.last_city = int(entry.last_city)
 		for field in ["elapsed","wait","flee","respawn"]: agent.set(field,float(entry[field]))

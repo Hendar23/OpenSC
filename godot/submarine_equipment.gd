@@ -16,6 +16,7 @@ var vacuum: Node3D
 var counter_digits: Array[Texture2D] = []
 var pilot: Node3D
 var lamp: SpotLight3D
+var support_tools: Node3D
 var bulb_materials: Array[StandardMaterial3D] = []
 
 func setup(player: Node3D, folder: String) -> void:
@@ -66,6 +67,7 @@ func setup(player: Node3D, folder: String) -> void:
 	available.assign(mounted)
 	_setup_magnet(player,folder)
 	_setup_grapple(player,folder)
+	support_tools = preload("res://submarine_support_tools.gd").new(); add_child(support_tools); support_tools.setup(self,folder)
 	apply_settings()
 
 static func _meshes(node: Node3D, parent_pose: Transform3D, hull_only: bool = false) -> Array[Dictionary]:
@@ -144,15 +146,21 @@ func _play_cycle_sound() -> void:
 
 func toggle_selected() -> void:
 	if mounted.is_empty(): return
-	mounted[selected].enabled = not mounted[selected].enabled
+	var item: Dictionary = mounted[selected]
+	item.enabled = not item.enabled
+	if support_tools != null and item.id in ["bigears","escape"]:
+		support_tools.activate(str(item.id),bool(item.enabled))
 	apply_settings()
-	activated.emit(str(mounted[selected].id),bool(mounted[selected].enabled))
+	activated.emit(str(item.id),bool(item.enabled))
 
 func current() -> Dictionary:
 	return {} if mounted.is_empty() else mounted[selected]
 
 func apply_settings() -> void:
 	for item in available: item.mount.visible = item in mounted
+	if support_tools != null:
+		var pod_enabled := mounted.any(func(item: Dictionary) -> bool: return item.id == "escape" and item.enabled)
+		if pod_enabled != support_tools.pod_enabled: support_tools.activate("escape",pod_enabled)
 	for tool in [magnet,grapple]:
 		if tool == null: continue
 		var id: String = tool.tool_id
@@ -252,6 +260,7 @@ func towing_tool() -> Node3D:
 	return null
 
 func reset_towing() -> void:
+	if support_tools != null: support_tools.reset()
 	for tool in [magnet,grapple]:
 		if tool != null: tool.reset()
 

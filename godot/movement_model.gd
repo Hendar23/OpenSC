@@ -82,10 +82,14 @@ func step(delta: float, basis: Basis, throttle: float, vertical: float, turn: fl
 	var body_mass := maxf(1.0, float(settings.mass) + cargo_mass)
 	var local := basis.inverse() * velocity
 	var resistance := float(settings.water_resistance)
+	# Towed cargo adds horizontal water resistance as well as inertia. Without
+	# this, thrust and drag both divided by total mass and cruising speed stayed
+	# unchanged. Use the existing weighted cargo load; leave unloaded tuning intact.
+	var towing_drag := 1.0 + cargo_mass / maxf(1.0,float(settings.mass))
 	# Directional linear and speed-dependent water drag. Mass changes the response.
-	local.x *= exp(-(float(settings.lateral_drag) + resistance * absf(local.x)) * REFERENCE_MASS / body_mass * delta)
+	local.x *= exp(-(float(settings.lateral_drag) + resistance * absf(local.x)) * REFERENCE_MASS / body_mass * towing_drag * delta)
 	local.y *= exp(-(float(settings.vertical_drag) + resistance * absf(local.y)) * REFERENCE_MASS / body_mass * delta)
-	local.z *= exp(-(float(settings.forward_drag) + resistance * absf(local.z)) * REFERENCE_MASS / body_mass * delta)
+	local.z *= exp(-(float(settings.forward_drag) + resistance * absf(local.z)) * REFERENCE_MASS / body_mass * towing_drag * delta)
 	velocity = basis * local + thrust_force / body_mass * delta
 	local = basis.inverse() * velocity
 	local.z = clampf(local.z, -float(settings["forward_speed"]), float(settings["reverse_speed"]))

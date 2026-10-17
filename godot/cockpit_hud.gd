@@ -44,10 +44,10 @@ var crt_reflection_strength := 0.25:
 		for view in model_views:
 			var glass: ShaderMaterial = view.get_meta("crt_glass")
 			glass.set_shader_parameter("reflection_strength",crt_reflection_strength)
-			var material: StandardMaterial3D = view.get_meta("crt_glass_material")
-			material.clearcoat = crt_reflection_strength
-			material.metallic_specular = crt_reflection_strength
-			material.metallic = float(view.get_meta("crt_original_metallic")) * crt_reflection_strength
+			for material: StandardMaterial3D in view.get_meta("crt_screen_materials"):
+				material.clearcoat = crt_reflection_strength
+				material.metallic_specular = crt_reflection_strength
+				material.metallic = float(view.get_meta("crt_original_metallic")) * crt_reflection_strength
 
 func setup_lighting(environment: Environment, light: DirectionalLight3D) -> void:
 	lighting_environment = environment
@@ -139,11 +139,11 @@ func _setup_bottom_camera(world: Node3D) -> void:
 	add_child(bottom_view)
 	bottom_camera = Camera3D.new(); bottom_camera.name = "BottomCamera"
 	bottom_camera.near = 0.01; bottom_camera.fov = 65
-	bottom_camera.cull_mask &= ~2 # Keep the hull and mounted tools out of the intake view.
+	bottom_camera.cull_mask &= ~(2 | preload("res://first_person_cockpit.gd").RENDER_LAYER) # Hull/tools/canopy stay out of auxiliary feeds.
 	bottom_view.add_child(bottom_camera); bottom_camera.current = true
 	rear_camera = Camera3D.new(); rear_camera.name = "RearCamera"
 	rear_camera.near = 0.01; rear_camera.fov = 65
-	rear_camera.cull_mask &= ~2 # The hull must not obscure the view astern.
+	rear_camera.cull_mask &= ~(2 | preload("res://first_person_cockpit.gd").RENDER_LAYER)
 	bottom_view.add_child(rear_camera)
 	_update_bottom_camera()
 	_update_rear_camera()
@@ -325,6 +325,22 @@ func _model_instrument(definition: Dictionary, display: Control) -> Control:
 		material.clearcoat = crt_reflection_strength
 		material.metallic_specular = crt_reflection_strength
 		screen_mesh.material_override = material
+		var screen_materials: Array[StandardMaterial3D] = [material]
+		var counter_mesh := model.find_child("Counter_Display",true,false) as MeshInstance3D
+		if definition.id in ["equipment","weapon"] and counter_mesh != null:
+			# The model's small counter is a separate screen, outside the icon UVs.
+			if definition.id == "equipment": display.show_equipment_counter = false
+			else: display.show_weapon_counter = false
+			var counter_view := SubViewport.new(); counter_view.name = definition.id.capitalize() + "Counter"
+			counter_view.size = Vector2i(51,30); counter_view.disable_3d = true
+			counter_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS; view.add_child(counter_view)
+			var counter := Display.new(); counter.kind = definition.id + "_counter"; counter.pilot = pilot; counter.equipment = equipment; counter.weapons = weapons
+			counter.screen_only = true; counter.size = Vector2(17,10); counter.scale = Vector2.ONE * 3.0
+			counter.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST; counter_view.add_child(counter)
+			var counter_material := material.duplicate() as StandardMaterial3D
+			counter_material.albedo_texture = counter_view.get_texture(); counter_material.emission_texture = counter_view.get_texture()
+			counter_mesh.material_override = counter_material; screen_materials.append(counter_material)
+		view.set_meta("crt_screen_materials",screen_materials)
 		var boxes: Array[AABB] = []
 		Assets_bounds(model, Transform3D.IDENTITY, boxes)
 		var box: AABB = boxes[0]

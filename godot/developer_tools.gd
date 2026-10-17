@@ -196,6 +196,7 @@ func _build_interface() -> void:
 	_build_water_controls()
 	_build_equipment_controls()
 	_build_weapon_controls()
+	var canopy_tab := preload("res://canopy_controls.gd").new(); canopy_tab.game = game; game.developer_tabs.add_child(canopy_tab)
 	game.bubble_controls = VBoxContainer.new()
 	game.graphics_controls.add_child(game.bubble_controls)
 	var graphics_hint := Label.new()
@@ -226,6 +227,28 @@ func _build_interface() -> void:
 		if game.dock_interface != null and game.dock_interface.visible: game.dock_interface.rebuild()
 	)
 	system.add_child(equipment_button)
+	var missions_button := Button.new(); missions_button.name = "UnlockTestingMissions"; missions_button.toggle_mode = true
+	missions_button.text = "All implemented missions for testing: Off"; missions_button.focus_mode = Control.FOCUS_NONE
+	var mission_choice := OptionButton.new(); mission_choice.name = "TestingMission"; mission_choice.disabled = true
+	mission_choice.tooltip_text = "Choose the mission to offer at its original station (shown in brackets). Bypasses progression, completion and affordability checks. Required equipment is still needed to play."
+	for id in game.mission_runtime.testing_missions():
+		var origin: int = game.mission_runtime.testing_mission_city(id)
+		var city_name: String = {1:"Touka Reef",2:"Velcova Station",3:"Beluga Basin",4:"Tryton"}.get(origin,"")
+		# The developer UI is built before the original text catalogue loads.
+		var mission_title: String = {"stranded":"Rescue Bacau Shuttle","spytrad2":"Bohine Forces: Covert Operation","breakout":"Save Procha Prisoners","breakout2":"Save Procha Prisoners"}.get(id,"Prospectors Wanted!")
+		mission_choice.add_item(mission_title + " (" + city_name + ")")
+		mission_choice.set_item_metadata(mission_choice.item_count - 1,id)
+		if id == game.mission_runtime.testing_mission_id: mission_choice.select(mission_choice.item_count - 1)
+	mission_choice.item_selected.connect(func(index: int) -> void:
+		game.mission_runtime.set_testing_missions(missions_button.button_pressed,str(mission_choice.get_item_metadata(index)))
+	)
+	missions_button.toggled.connect(func(enabled: bool) -> void:
+		missions_button.text = "All implemented missions for testing: " + ("On" if enabled else "Off")
+		mission_choice.disabled = not enabled
+		game.mission_runtime.set_testing_missions(enabled,str(mission_choice.get_selected_metadata()))
+	)
+	system.add_child(missions_button); system.add_child(mission_choice)
+	missions_button.set_pressed(game.mission_runtime.testing_all_missions)
 	var time_presets = HBoxContainer.new(); time_presets.name = "TimeOfDayPresets"; system.add_child(time_presets)
 	for preset in [["Day", 12.0], ["Sunset", 18.0], ["Night", 0.0], ["Sunrise", 6.0]]:
 		var button := Button.new(); button.text = preset[0]; button.focus_mode = Control.FOCUS_NONE
@@ -303,7 +326,7 @@ func _build_daylight_controls() -> void:
 	game.graphics_controls.add_child(run); game.daylight_controls.cycle_enabled = run
 	run.toggled.connect(func(on: bool) -> void: game.day_night.enabled = on; game._save_preferences())
 	game.clock_label = Label.new(); game.graphics_controls.add_child(game.clock_label)
-	for row in [["time_of_day", "Time of day", 0.0, 24.0, 0.1], ["cycle_minutes", "Full cycle length (minutes)", 1.0, 60.0, 1.0], ["night_brightness", "Night brightness", 0.02, 0.5, 0.01]]:
+	for row in [["time_of_day", "Time of day", 0.0, 24.0, 0.1], ["cycle_minutes", "Full cycle length (minutes)", 1.0, 60.0, 1.0], ["night_brightness", "Night brightness", 0.0, 0.5, 0.01]]:
 		var key: String = row[0]; var caption: String = row[1]
 		var label = Label.new(); game.graphics_controls.add_child(label)
 		var slider := HSlider.new(); slider.scrollable = false; slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]

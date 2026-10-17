@@ -7,6 +7,22 @@ const IDLE_TURN_FOLLOW := 0.35
 const FORWARD_TURN_FOLLOW := 3.0
 var orbit_yaw := 0.0
 var initialized := false
+var obstruction_distance := -1.0
+var obstruction_hold := 0.0
+
+func clear_distance(desired: float, allowed: float, delta: float, snap: bool = false) -> float:
+	allowed = clampf(allowed,0.02,desired)
+	var blocked := allowed < desired - 0.01
+	var comfortable := maxf(0.02,allowed - 0.2) if blocked else desired
+	if snap or obstruction_distance < 0:
+		obstruction_distance = comfortable; obstruction_hold = 0.0
+	else:
+		if blocked: obstruction_hold = 0.18
+		else: obstruction_hold = maxf(0.0,obstruction_hold - delta)
+		if comfortable < obstruction_distance or obstruction_hold <= 0:
+			obstruction_distance = lerpf(obstruction_distance,comfortable,1.0-exp(-(18.0 if blocked else 3.0)*delta))
+		obstruction_distance = minf(obstruction_distance,allowed)
+	return obstruction_distance
 
 func resume(camera_position: Vector3, target: Vector3) -> void:
 	var offset := camera_position - target

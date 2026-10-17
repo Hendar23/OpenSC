@@ -68,6 +68,10 @@ func _run() -> void:
 	check(game.cockpit_hud.displays[0].casing_light.get_luminance() < bright_casing.get_luminance() * 0.3,"HUD casings follow night lighting without modulating their displays")
 	check(game.water_environment.ambient_light_energy < day_energy * 0.3 and game.water_environment.fog_light_color.b > game.water_environment.fog_light_color.g and game.water_environment.fog_light_color.get_luminance() < day_color.get_luminance() * 0.15, "Night is darker deep blue water")
 	check(game.surface_material.get_shader_parameter("daylight") == 0.0 and game.sun.light_energy < 0.1, "Surface and sunlight follow night")
+	game.daylight_controls.night_brightness.value = 0; game._update_daylight()
+	check(is_zero_approx(game.day_night.night_brightness) and is_zero_approx(game.water_environment.ambient_light_energy) and game.water_environment.fog_light_color.is_equal_approx(Color.BLACK),"Night slider reaches zero ambient and dark water")
+	check(is_zero_approx(float(game.surface_material.get_shader_parameter("night_brightness"))),"Water surface receives zero night brightness")
+	game.daylight_controls.night_brightness.value = 0.05; game._update_daylight()
 	game.fog_button.button_pressed = false; game._update_daylight(); check(not game.water_environment.fog_enabled, "Cycle respects fog toggle")
 	game.daylight_controls.cycle_minutes.value = 4
 	game.daylight_controls.night_brightness.value = 0.2

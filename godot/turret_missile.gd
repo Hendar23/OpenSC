@@ -13,6 +13,7 @@ var clock := 0.0
 var velocity := Vector3.ZERO
 var direction := Vector3.FORWARD
 var bubbles: Node3D
+var source_exclusions: Array[RID] = []
 
 func setup(owner_turret: Node3D, template: Node3D, point: Vector3, heading: Vector3, victim: Node3D, guided: bool) -> void:
 	source = owner_turret; target = victim; homing = guided; direction = heading.normalized()
@@ -40,7 +41,7 @@ func _physics_process(delta: float) -> void:
 				if angle > 0.000001: direction = direction.slerp(desired,minf(1.0,0.1 / angle)).normalized()
 		velocity = (velocity + direction * (0.0025 / 0.1 * Damage.TICKS_PER_SECOND)) * DAMPING
 		var next := global_position + velocity / Damage.TICKS_PER_SECOND
-		var exclusions: Array[RID] = []
+		var exclusions: Array[RID] = source_exclusions.duplicate()
 		if is_instance_valid(source) and source.hitbox != null: exclusions.append(source.hitbox.get_rid())
 		var query := PhysicsRayQueryParameters3D.create(global_position,next,15,exclusions)
 		query.hit_back_faces = true

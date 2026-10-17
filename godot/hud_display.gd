@@ -14,6 +14,8 @@ var radiation_icon: Texture2D
 var radiation_clock := 0.0
 var screen := Rect2(0, 0, 128, 80)
 var screen_only := false
+var show_equipment_counter := true
+var show_weapon_counter := true
 var map_span := 70.0
 var full_world := false
 var fog_material: ShaderMaterial
@@ -106,20 +108,12 @@ func _draw() -> void:
 	elif kind == "equipment":
 		var item: Dictionary = equipment.current()
 		if not item.is_empty():
-			var icon_index := 0 if item.enabled else 1
-			# Original Suck-O-Matic handler 0x47d4a0 indexes PICKUP1/2 by its active byte.
-			if item.id == "suckomat": icon_index = 1 if item.enabled else 0
-			if item.id in ["magnet","grapple"]:
-				var tool: Node3D = equipment.towing_tool()
-				# Original towing handlers keep state 1 until retraction finishes.
-				icon_index = 2 if is_instance_valid(tool.target) else (1 if item.enabled or tool.retracting else 0)
+			var icon_index := equipment_icon_index(item)
 			var icon: Texture2D = item.icons[icon_index]
 			if icon != null: draw_texture_rect(icon, rect, false)
-			if item.id == "suckomat" and equipment.counter_digits.size() == 10:
-				var count: int = equipment.vacuum.storage.size()
-				for digit in range(2):
-					var texture: Texture2D = equipment.counter_digits[0 if digit == 0 else count]
-					if texture != null: draw_texture_rect(texture,Rect2(Vector2(9.5 + digit * 9,23.5),Vector2(8,10)),false)
+			if show_equipment_counter: _draw_equipment_counter(counter_rect())
+	elif kind == "equipment_counter": _draw_equipment_counter(Rect2(Vector2.ZERO,size))
+	elif kind == "weapon_counter": _draw_counter(Rect2(Vector2.ZERO,size),weapon_count())
 	elif kind == "tilt":
 		var centre := rect.get_center()
 		draw_circle(centre, minf(rect.size.x, rect.size.y) * 0.5, Color(0.005, 0.035, 0.04))
@@ -133,6 +127,7 @@ func _draw() -> void:
 		var item: Dictionary = weapons.current() if weapons != null else {}
 		if not item.is_empty() and item.icon != null: draw_texture_rect(item.icon,rect,false)
 		else: draw_string(ThemeDB.fallback_font, rect.position + Vector2(17, 25), "—", HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 34, 16, Color(0.4, 0.7, 0.7))
+		if show_weapon_counter: _draw_counter(weapon_counter_rect(),weapon_count())
 	elif kind == "shield":
 		var centre := rect.get_center()
 		draw_circle(centre, minf(rect.size.x,rect.size.y) * 0.5, Color(0.01, 0.04, 0.05))
@@ -147,6 +142,45 @@ func _draw() -> void:
 		if radiation_symbol_visible() and radiation_icon != null:
 			var icon_size := radiation_icon.get_size() * gauge_scale
 			draw_texture_rect(radiation_icon,Rect2(centre - icon_size * 0.5,icon_size),false)
+
+func counter_rect() -> Rect2:
+	return Rect2(Vector2(4,size.y - 14) if screen_only else Vector2(9.5,23.5),Vector2(17,10))
+
+func weapon_counter_rect() -> Rect2:
+	return Rect2(Vector2(size.x - 21,size.y - 14) if screen_only else Vector2(94.5,23.5),Vector2(17,10))
+
+func weapon_count() -> int:
+	if weapons == null or weapons.current().get("id","") != "depthl" or equipment == null or equipment.support_tools == null: return -1
+	var mission: Node = equipment.support_tools.runtime()
+	return clampi(int(mission.game.player_progress.hold.get("depth",0)),0,99) if mission != null else 0
+
+func equipment_icon_index(item: Dictionary) -> int:
+	if item.id in ["escape","bigears"]: return int(item.get("icon_state",0))
+	# Original Suck-O-Matic handler indexes PICKUP1/2 by its active byte.
+	if item.id == "suckomat": return 1 if item.enabled else 0
+	if item.id in ["magnet","grapple"]:
+		var tool: Node3D = equipment.towing_tool()
+		return 2 if is_instance_valid(tool.target) else (1 if item.enabled or tool.retracting else 0)
+	return 0 if item.enabled else 1
+
+func equipment_count() -> int:
+	if equipment == null: return -1
+	var id: String = equipment.current().get("id","")
+	if id == "suckomat": return clampi(equipment.vacuum.storage.size(),0,99)
+	if id == "bigears" and equipment.support_tools != null:
+		var mission: Node = equipment.support_tools.runtime()
+		if mission != null: return clampi(int(mission.game.player_progress.ammunition.get("bigears",5)),0,99)
+	return -1
+
+func _draw_equipment_counter(rect: Rect2) -> void:
+	_draw_counter(rect,equipment_count())
+
+func _draw_counter(rect: Rect2, count: int) -> void:
+	if count < 0 or equipment == null or equipment.counter_digits.size() != 10: return
+	var scale := rect.size / Vector2(17,10)
+	for digit in range(2):
+		var texture: Texture2D = equipment.counter_digits[(count / 10) if digit == 0 else (count % 10)]
+		if texture != null: draw_texture_rect(texture,Rect2(rect.position + Vector2(digit * 9,0) * scale,Vector2(8,10) * scale),false)
 
 func radiation_symbol_visible() -> bool:
 	return pilot != null and bool(pilot.get("radiation_exposed")) and fmod(radiation_clock,0.5) < 0.25

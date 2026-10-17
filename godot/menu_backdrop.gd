@@ -14,7 +14,7 @@ var group_count := 0
 var generation := 0
 var hidden: Array[Dictionary] = []
 var animated_lights: Array[Dictionary] = []
-const PASS_MODELS := ["TRADSHUT","TECHSHUT","TRAD-SUB","TECH-SUB","TRAD2","TECH2SUB","PRISON","PIRATE","PIRATE2","PIRATE3"]
+const PASS_MODELS := ["TRADSHUT","TECHSHUT","TRAD-SUB","TECH-SUB","TRAD2","TECH2SUB","PRISON","PIRATE","PIRATE2"]
 var pass_visuals: Array[Node3D] = []
 var pass_propellers: Array[Dictionary] = []
 var pass_height := 0.0
@@ -36,6 +36,7 @@ func _ready() -> void:
 	random.randomize()
 	daylight.hour = 12.0
 	view = Camera3D.new(); view.fov = 65; add_child(view)
+	view.cull_mask &= ~preload("res://first_person_cockpit.gd").RENDER_LAYER
 	hide()
 
 func setup(owner_game: Node3D) -> void:
@@ -77,22 +78,7 @@ func setup(owner_game: Node3D) -> void:
 	_add_plants()
 
 func _register_propellers(visual: Node3D, model_id: String) -> void:
-	var nodes: Array[Node3D] = []
-	var parts: Dictionary = visual.get_meta("submarine_parts",{})
-	for role in parts:
-		if not str(role).ends_with("propeller"): continue
-		var node := visual.get_node_or_null(NodePath(str(parts[role]))) as Node3D
-		if node != null and not nodes.has(node): nodes.append(node)
-	for node in visual.find_children("*Propeller","Node3D",true,false):
-		if not nodes.has(node): nodes.append(node)
-	# Original multi-frame hulls store their aft rotors as numbered children.
-	# Single-frame Procha/pirate models have no separate rotor to rotate.
-	if not visual.get_meta("modern_model",false):
-		var count := 2 if model_id in ["TRAD2","PRISON"] else 1 if model_id in ["TRADSHUT","TRAD-SUB"] else 0
-		for index in range(1,count + 1):
-			var node := visual.get_node_or_null("Frame_0/Frame_" + str(index)) as Node3D
-			if node != null and not nodes.has(node): nodes.append(node)
-	for node in nodes: pass_propellers.append({"node":node,"rest":node.get_meta("rest_basis",node.basis)})
+	for node in preload("res://trader_submarine.gd").rotor_nodes(visual,model_id): pass_propellers.append({"node":node,"rest":node.get_meta("rest_basis",node.basis)})
 
 func _animate_propellers() -> void:
 	var angle := fmod(time * TAU * 5,TAU)

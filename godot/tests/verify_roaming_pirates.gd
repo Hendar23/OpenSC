@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Damage = preload("res://original_damage.gd")
 const Shop = preload("res://equipment_shop.gd")
 var checks := 0

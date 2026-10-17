@@ -7,6 +7,10 @@ static func restore(saved: Variant = {}) -> Dictionary:
 	if not saved is Dictionary: saved = {}
 	result.missions = preload("res://mission_state.gd").restore(saved.get("missions",{}))
 	result.mail = preload("res://mailbox.gd").restore(saved.get("mail",{}))
+	result.ammunition = {"bigears":5}
+	if saved.get("ammunition") is Dictionary:
+		var ammo: Variant = saved.ammunition.get("bigears",5)
+		if (ammo is float or ammo is int) and is_finite(float(ammo)): result.ammunition.bigears = clampi(int(ammo),0,5)
 	var jobs: Variant = saved.get("campaign_jobs",0)
 	result.campaign_jobs = clampi(int(jobs),0,999) if (jobs is int or jobs is float) and is_finite(float(jobs)) else 0
 	result.markets = preload("res://commodity_market.gd").restore(saved.get("markets",{}))

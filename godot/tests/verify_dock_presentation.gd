@@ -9,7 +9,8 @@ func check(ok: bool, message: String) -> void:
 func _initialize() -> void: call_deferred("run")
 func capture(name: String) -> void:
  if DisplayServer.get_name() == "headless": return
- await process_frame; await RenderingServer.frame_post_draw
+ for frame in range(6): await process_frame
+ await RenderingServer.frame_post_draw
  root.get_texture().get_image().save_png("res://tests/dock-state-" + name + ".png")
 func run() -> void:
  preload("res://input_bindings.gd").install()
@@ -44,7 +45,9 @@ func run() -> void:
   var button: Button = ui.layout.get_node(name)
   check(button.highlight_art.size() == 1 and button.held_art.size() == 1,"Equipment button state artwork: " + name)
  check(ui.layout.get_node("SaleInfo").position == Vector2(27,361),"Sale info overlay aligns with original background")
- for slot in [3,5,9]:
+ for index in range(4):
+  check(ui.slot_buttons[index].get_meta("slot") == [9,5,3,4][index],"Original screenshot's top row orders zapper, lights, towing tools and Big Ears")
+ for slot in [3,5,7,9]:
   ui._mount_highlight(slot)
   check(ui.mount_dot.visible and ui.mount_dot.get_child(0).visible,"Supported equipment has a mount marker")
   check(ui.mount_dot.get_child(1).visible == (slot == 5),"Lights highlight both submarine views; underside equipment uses side view")
@@ -53,6 +56,8 @@ func run() -> void:
  var original_size: Vector2 = image.size
  image.size = Vector2(245,92); ui._mount_highlight(5)
  check((ui.mount_dot.position + ui.mount_dot.get_child(0).position + Vector2(3.5,3.5)).is_equal_approx(image.position + Vector2(116,48)),"Unscaled light marker follows original image pixels")
+ ui._mount_highlight(7)
+ check((ui.mount_dot.position + ui.mount_dot.get_child(0).position + Vector2(3.5,3.5)).is_equal_approx(image.position + Vector2(164,66)),"Depth launcher marker uses original underside/rear position from the second UI coordinate table")
  image.size = Vector2(490,300); ui._mount_highlight(3)
  check((ui.mount_dot.position + ui.mount_dot.get_child(0).position + Vector2(3.5,3.5)).is_equal_approx(image.position + Vector2(392,214)),"Marker follows image scaling and vertical letterboxing")
  image.size = original_size; ui._mount_highlight(0)
@@ -71,6 +76,17 @@ func run() -> void:
   for action in ["missions","equipment","save","launch"]:
    var button: Button = ui.layout.get_node(action)
    check(button.highlight_art.size() == 1 and button.held_art.size() == 1,"Race %d original home button: %s" % [race,action])
+  state.can_save = false; ui.rebuild()
+  var cover: TextureRect = ui.layout.get_node("NoSavePanel")
+  var cover_image := cover.texture.get_image(); var backdrop := ui.background.texture.get_image(); var matches := 0; var samples := 0
+  for y in range(0,cover_image.get_height(),2):
+   for x in range(0,cover_image.get_width(),2):
+    samples += 1
+    var pixel := cover_image.get_pixel(x,y); var behind := backdrop.get_pixelv(Vector2i(cover.position) + Vector2i(x,y))
+    if Vector3(pixel.r - behind.r,pixel.g - behind.g,pixel.b - behind.b).length() < 0.02: matches += 1
+  check(float(matches) / samples > 0.25 and ui.layout.get_node_or_null("save") == null,"Race %d no-save cover aligns with matching frame pixels and removes Save" % race)
+  await capture("no-save-%d" % race)
+  state.can_save = true
   ui.open("goods")
   var prefix: String = {1:"B",2:"P",4:"R"}[race]
   done = ui.layout.get_node("equipment")

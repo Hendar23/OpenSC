@@ -146,6 +146,7 @@ func attach(node: Node) -> void:
 				material.next_pass = original.next_pass; material.set_meta("natural_original",original); materials[original.get_instance_id()] = material
 				if original.has_meta("caustics_owners"):
 					original.get_meta("caustics_owners").append(weakref(material))
+					material.set_meta("caustics_attached",true)
 			node.set_surface_override_material(index,material)
 			if node.material_override != null: node.material_override = material
 	for child in node.get_children(): attach(child)

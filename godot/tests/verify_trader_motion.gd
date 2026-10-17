@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Trader = preload("res://trader_submarine.gd")
 const Explosion = preload("res://mine_explosion.gd")
 var checks := 0

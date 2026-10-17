@@ -81,6 +81,9 @@ func _reset_loaded_world() -> void:
 		preload("res://submarine_mounts.gd").apply(item.mount,game.pilot.visual,item.id)
 	game.weapons.muzzle.transform = game.weapons.muzzle.get_meta("default_mount")
 	preload("res://submarine_mounts.gd").apply(game.weapons.muzzle,game.pilot.visual,"zapper")
+	if game.weapons.depth_mount != null:
+		game.weapons.depth_mount.transform = game.weapons.depth_mount.get_meta("default_mount")
+		preload("res://submarine_mounts.gd").apply(game.weapons.depth_mount,game.pilot.visual,"depthl")
 	game.weapons.set_upgraded(false)
 	game.equipment.apply_settings()
 	game.object_population.reset_population()

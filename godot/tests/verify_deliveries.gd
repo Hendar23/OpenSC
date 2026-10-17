@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Game = preload("res://game.gd")
 const Definitions = preload("res://object_definitions.gd")
 const Progress = preload("res://player_progress.gd")

@@ -32,12 +32,10 @@ void fragment() {
 	vec2 flow = vec2(cos(osc_wave_direction),sin(osc_wave_direction));
 	vec2 uv = projected / max(osc_caustics_size * 12.0,0.1);
 	float clock = TIME * osc_wave_speed * osc_caustics_speed;
-	// Two differently moving cloud fields stretch and merge into broad patches.
-	vec2 warp = vec2(sin(projected.y * 0.18 + clock * 0.35),cos(projected.x * 0.16 - clock * 0.27)) * 0.035;
-	float first = texture(osc_caustics_texture,uv + warp + flow * clock * 0.008).r;
-	float second = texture(osc_caustics_texture,uv * 0.73 - warp * 0.65 - flow.yx * clock * 0.005 + vec2(0.37,0.61)).r;
-	float pattern = smoothstep(0.15,0.75,first * 0.7 + second * 0.3);
-	pattern *= 0.85 + 0.15 * sin(clock * 0.45 + second * 6.283185);
+	uv += vec2(sin(projected.y * 0.9 + clock),cos(projected.x * 0.8 - clock)) * 0.015;
+	float first = texture(osc_caustics_texture,uv + flow * TIME * osc_caustics_speed * 0.014).r;
+	float second = texture(osc_caustics_texture,uv * 1.13 - flow.yx * TIME * osc_caustics_speed * 0.01).r;
+	float pattern = max(first,second * 0.65);
 	float fade = exp(-depth / max(osc_caustics_depth,0.1)) * smoothstep(0.0,0.35,osc_sun_direction.y);
 	fade *= natural_visibility(world_position);
 	// Fade the extra light into fog without adding the blue fog colour twice.

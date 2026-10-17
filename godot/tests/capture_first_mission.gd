@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 func _initialize() -> void:
 	var storage = preload("res://player_storage.gd"); storage.root_override = "res://tests/cache-mission-fixtures"
 	call_deferred("run")

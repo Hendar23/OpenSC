@@ -6,6 +6,14 @@ var active: bool:
 	get: return get_parent().visible and not dead and get_parent().get_node("Trader").running and get_parent().get_node("Trader").stage == "travel"
 var controls_enabled: bool:
 	get: return active
+
+func apply_weapon_impulse(impulse: Vector3) -> void:
+	# NPC steering owns momentum; changing body.velocity alone is overwritten
+	# on the next movement step. Feed blasts into that same inertial state.
+	var agent := get_parent().get_node("Trader")
+	agent.motion.velocity += impulse
+	velocity += impulse
+
 func take_weapon_damage(strength: float, source: Vector3 = Vector3.ZERO) -> void:
 	get_parent().get_node("Trader").take_weapon_damage(strength,source)
 func take_damage(amount: float, source: Vector3 = Vector3.ZERO) -> void:

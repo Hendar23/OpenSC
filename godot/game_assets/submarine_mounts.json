@@ -1,10 +1,49 @@
 {
 	"Original:sub.dff": {
+		"bigears": {
+			"position": [
+				0.0,
+				0.187999993562698,
+				-0.311999976634979
+			],
+			"rotation_degrees": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": 1.0
+		},
 		"deep_sea_lights": {
 			"position": [
 				0.0,
 				0.140000000596046,
 				-0.365000009536743
+			],
+			"rotation_degrees": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": 1.0
+		},
+		"depthl": {
+			"position": [
+				0.0,
+				-0.159999996423721,
+				-0.00799999944865704
+			],
+			"rotation_degrees": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": 1.0
+		},
+		"escape": {
+			"position": [
+				0.0,
+				-0.224000006914139,
+				-0.068000003695488
 			],
 			"rotation_degrees": [
 				0.0,

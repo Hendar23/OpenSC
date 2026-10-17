@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Pirate = preload("res://pirate_submarine.gd")
 const Document = preload("res://map_document.gd")
 var checks := 0

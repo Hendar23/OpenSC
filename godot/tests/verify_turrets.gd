@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Turret = preload("res://gun_turret.gd")
 const Missile = preload("res://turret_missile.gd")
 const System = preload("res://turret_system.gd")

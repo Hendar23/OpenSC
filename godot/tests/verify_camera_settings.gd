@@ -26,6 +26,15 @@ func _run() -> void:
 	check(is_equal_approx(Vector2(slow_offset.x, slow_offset.z).length(), 0.35), "Closest zoom allows the camera substantially nearer the smaller ship")
 	slow.resume(Vector3(3, 1, 0), Vector3.ZERO)
 	check(is_equal_approx(slow.orbit_yaw, PI * 0.5), "Reattachment seeds orbit from actual frozen camera position")
+	var boom := Follow.new(); boom.clear_distance(3.0,0.15,0,true)
+	var smallest := INF; var largest := 0.0
+	for frame in range(120):
+		var distance := boom.clear_distance(3.0,0.15 if frame % 2 == 0 else 3.0,1.0/120.0)
+		smallest = minf(smallest,distance); largest = maxf(largest,distance)
+	check(smallest > 0 and largest-smallest < 0.01,"An obstruction flickering behind the hull cannot flip or oscillate the camera boom")
+	var held := boom.obstruction_distance
+	for frame in range(120): boom.clear_distance(3.0,3.0,1.0/120.0)
+	check(boom.obstruction_distance > held + 1.0 and boom.obstruction_distance < 3.0,"Camera eases back after the obstruction clears")
 	for length in [0.0, 0.1, 4.0, 30.0]:
 		var profile := Transit.plan(length, 2.3, 1.2)
 		var max_speed := 0.0

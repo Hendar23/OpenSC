@@ -46,7 +46,7 @@ var mount_dot: Control
 var equipment_preview: TextureRect
 # Original 0x4407b0 uses the tables at 0x4e3d80/0x4e3e20.
 # Coordinates below are relative to 2SUB's original (201,66) image origin.
-const MOUNT_POINTS := {3:[Vector2(196,78)],5:[Vector2(116,48),Vector2(234,40)],9:[Vector2(217,63)]}
+const MOUNT_POINTS := {3:[Vector2(196,78)],4:[Vector2(100,63)],5:[Vector2(116,48),Vector2(234,40)],7:[Vector2(164,66)],9:[Vector2(217,63)]}
 var info_dialog: Control
 var info_done: Button
 var info_return_focus: Control
@@ -328,7 +328,9 @@ func rebuild(new_page: bool = false) -> void:
 		var image := _button_texture(("P" if race == 2 else "B") + "NOSAVE")
 		if image != null:
 			var patch := TextureRect.new(); patch.name = "NoSavePanel"; patch.texture = image
-			patch.position = Vector2(634,420) - image.get_size(); patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			# Both original covers start here; their different bitmap dimensions
+			# must not shift the Procha border and diagonal divider.
+			patch.position = Vector2(463,266); patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			layout.add_child(patch); layout.move_child(patch,background.get_index() + 1)
 	if page == "load":
 		var area := rect(pages[page].get("slots"))
@@ -414,7 +416,7 @@ func _mail_panel(data: Dictionary) -> void:
 		mail_body = RichTextLabel.new(); mail_body.name = "MailBody"
 		mail_body.text = str(message.get("body","")); mail_body.bbcode_enabled = false
 		mail_body.position = Vector2(100,102); mail_body.size = Vector2(412,98)
-		mail_body.add_theme_font_size_override("normal_font_size",13); mail_body.add_theme_color_override("default_color",text_colour)
+		mail_body.add_theme_font_size_override("normal_font_size",10); mail_body.add_theme_color_override("default_color",text_colour)
 		mail_body.add_theme_stylebox_override("focus",StyleBoxEmpty.new())
 		mail_body.focus_mode = Control.FOCUS_ALL; layout.add_child(mail_body)
 		mail_body.focus_neighbor_bottom = mail_body.get_path_to(mail_button)
@@ -433,7 +435,7 @@ func _welcome(text: String, area: Rect2) -> void:
 	scroll.position = area.position; scroll.size = area.size; layout.add_child(scroll)
 	var body := Label.new(); body.text = text; body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_theme_font_size_override("font_size",13); body.add_theme_color_override("font_color",text_colour)
+	body.add_theme_font_size_override("font_size",10); body.add_theme_color_override("font_color",text_colour)
 	scroll.add_child(body)
 
 
@@ -444,7 +446,8 @@ func _equipment_shop(data: Dictionary) -> void:
 	sale_list = _item_list("ForSale",rect(settings.sale))
 	for id in offers:
 		if not offers[id].get("available",false): continue
-		sale_list.add_item(str(offers[id].name)); sale_list.set_item_metadata(sale_list.item_count - 1,id)
+		var pack := int(offers[id].get("quantity",1))
+		sale_list.add_item(("%d " % pack if pack > 1 else "") + str(offers[id].name)); sale_list.set_item_metadata(sale_list.item_count - 1,id)
 		if id == selected_sale: sale_list.select(sale_list.item_count - 1)
 	sale_list.item_selected.connect(func(index: int) -> void: selected_sale = str(sale_list.get_item_metadata(index)); _update_shop_selection(data))
 	var cost := label("",rect(settings.cost),12,true); cost.name = "PurchasePrice"
@@ -486,7 +489,7 @@ func _equipment_shop(data: Dictionary) -> void:
 	var installed: Dictionary = data.get("installed",{})
 	# Original grid: weapon, lights and underside tool positions.
 	for index in range(10):
-		var slot: int = {0:9,1:5,7:3}.get(index,0)
+		var slot: int = {0:9,1:5,2:3,3:4,8:7}.get(index,0)
 		var id: String = installed.get(slot,"") if slot != 0 else ""
 		var square := Rect2(210 + (index % 5) * 47,197 + (index / 5) * 39,46,38)
 		var slot_button := button("equipment_slot",square,"EMPTY" if id.is_empty() else "",{"slot":slot})
@@ -637,11 +640,11 @@ func _update_shop_selection(data: Dictionary) -> void:
 	var sale: Dictionary = offers.get(selected_sale,{})
 	var held: Dictionary = offers.get(selected_hold,{})
 	var count := int(data.get("hold",{}).get(selected_sale,0)) + int(selected_sale in data.get("installed",{}).values())
-	layout.get_node("BuyShieldRepair").disabled = sale.is_empty() or not sale.get("available",false) or int(data.status.credits) < int(sale.get("price",0)) or (selected_sale != "shield" and count >= int(sale.get("maximum",1)))
+	layout.get_node("BuyShieldRepair").disabled = sale.is_empty() or not sale.get("available",false) or int(data.status.credits) < int(sale.get("price",0)) or (selected_sale != "shield" and count + int(sale.get("quantity",1)) > int(sale.get("maximum",1)))
 	if not preload("res://equipment_shop.gd").upgrade_available(data,selected_sale): layout.get_node("BuyShieldRepair").disabled = true
 	layout.get_node("SaleInfo").disabled = sale.is_empty()
 	layout.get_node("HoldInfo").disabled = held.is_empty()
-	layout.get_node("SellShieldRepair").disabled = held.is_empty() or int(held.get("sell_price",0)) <= 0
+	layout.get_node("SellShieldRepair").disabled = held.is_empty() or int(held.get("sell_price",0)) <= 0 or int(data.get("hold",{}).get(selected_hold,0)) < int(held.get("quantity",1))
 	layout.get_node("UseShieldRepair").disabled = selected_hold not in ["shield","hullstr","radoff","zapperup"] or not preload("res://equipment_shop.gd").upgrade_available(data,selected_hold)
 	layout.get_node("PurchasePrice").text = "Cost %d" % int(sale.price) if not sale.is_empty() else ""
 	layout.get_node("ResalePrice").text = "SellPrice %d" % int(held.sell_price) if not held.is_empty() else ""
@@ -655,7 +658,8 @@ func _update_shop_selection(data: Dictionary) -> void:
 			var copy := int(copies.get(id,0)); copies[id] = copy + 1
 			var chosen: bool = selected_sale == id if list == sale_list else selected_hold == id and copy == selected_hold_copy
 			list.set_item_icon(index,selection_dot if chosen else empty_dot)
-			list.set_item_text(index,str(offer.get("name",id)) + (" ×%d" % number if list == hold_list and number > 1 and id != "shield" else ""))
+			var pack := int(offer.get("quantity",1))
+			list.set_item_text(index,("%d " % pack if list == sale_list and pack > 1 else "") + str(offer.get("name",id)) + (" ×%d" % number if list == hold_list and number > 1 and id != "shield" else ""))
 	var slot: int = held.get("slot",0)
 	for node in slot_buttons:
 		var normal: StyleBoxFlat = node.get_theme_stylebox("normal")
@@ -895,7 +899,7 @@ func _dialog_input(dialog: ConfirmationDialog, event: InputEvent) -> void:
 func _mission_board(data: Dictionary) -> void:
 	var mission: Dictionary = data.get("missions",{})
 	var id := str(mission.get("id",""))
-	var selected := bool(mission.get("active",false)) or (not mission_selection.is_empty() and mission_selection == id)
+	var selected := bool(mission.get("active",false)) or (bool(mission.get("available",false)) and not id.is_empty() and mission_selection == id)
 	var heading := label("Missions",Rect2(24,20,330,14),10); heading.add_theme_color_override("font_color",Color.WHITE)
 	var row: Button
 	if mission.get("available",false) or mission.get("active",false):

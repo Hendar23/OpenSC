@@ -8,7 +8,6 @@ static func install_patrol(model: Node3D, values: Dictionary) -> Node3D:
 	agent.tuning = PATROL_DEFAULTS.merged({"npc_faction":int(values.get("npc_faction",1))})
 	for key in PATROL_DEFAULTS: agent.tuning[key] = values.get(key,PATROL_DEFAULTS[key])
 	agent.body.set_meta("faction",int(agent.tuning.npc_faction))
-	if not model.get_meta("submarine_parts",{}).has("main_propeller"): agent.propeller = null
 	agent.hitbox = agent.body; agent.roaming = true
 	return agent
 func _valid_target(target: Node3D) -> bool:

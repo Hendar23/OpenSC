@@ -36,6 +36,7 @@ var impact: Sprite3D
 var spark: OmniLight3D
 var last_hit: Node3D
 var hit_blood: Node3D
+var depth_mount: Node3D
 var blood_cooldown := 0.0
 
 # Environmental and wildlife zappers share the player's crackle renderer.
@@ -96,6 +97,12 @@ func setup(player: Node3D, folder: String, view: Camera3D, catalogue: Dictionary
 	# Player weapon volume stays constant when the camera changes view or distance.
 	audio = AudioStreamPlayer.new(); audio.stream = AudioLoop.prepare(_sound(folder,"audio.weapon.zapper","ELECTRIC"),true,35); audio.volume_db = settings.volume_db; add_child(audio)
 	hit_blood = preload("res://creature_hit.gd").new(); add_child(hit_blood)
+	depth_mount = Node3D.new(); depth_mount.name = "DepthLauncherMount"; depth_mount.position = Vector3(0,-0.08,0.35); add_child(depth_mount)
+	var depth_housing := Assets.load_clump(folder.path_join("CLUMPS/DEPTHL.DFF"))
+	if depth_housing != null: depth_housing.rotation = Vector3(deg_to_rad(50),PI,0); depth_housing.scale *= player.VISUAL_SCALE; depth_mount.add_child(depth_housing)
+	preload("res://submarine_mounts.gd").apply(depth_mount,player.visual,"depthl")
+	available.append({"id":"depthl","name":"Depth Charge Launcher","icon":Assets._load_texture(folder,"DEPTH","",{})})
+	depth_mount.hide()
 
 static func _sound(folder: String, id: String, sample: String) -> AudioStream:
 	for replacement in Mods.candidates(id):
@@ -151,7 +158,8 @@ static func _emitter_tips(housing: Node3D, bounds: AABB) -> Array[Vector3]:
 func set_upgraded(enabled: bool) -> void:
 	upgraded = enabled
 	icon = upgraded_icon if enabled else standard_icon
-	for item in available: item.icon = icon
+	for item in available:
+		if item.id == "zapper": item.icon = icon
 	if muzzle == null: return
 	muzzle.get_node("Emitter").position = upgraded_emitters[0] if enabled else standard_emitter
 	if not enabled and secondary_arc != null:
@@ -172,6 +180,10 @@ func _physics_process(delta: float) -> void:
 	update_fire(pilot.active and pilot.controls_enabled and _held(),delta)
 
 func update_fire(held: bool, delta: float) -> void:
+	if current().get("id","") == "depthl":
+		var equipment: Node3D = pilot.get_node_or_null("MountedEquipment")
+		if equipment != null and equipment.support_tools != null: equipment.support_tools.fire_depth(held)
+		held = false
 	blood_cooldown = maxf(0.0,blood_cooldown - delta)
 	firing = held and not mounted.is_empty() and settings.range > 0
 	beam.visible = firing; spark.visible = firing
@@ -290,5 +302,6 @@ func set_installed(ids: Array) -> void:
 	for item in available:
 		if item.id in ids: mounted.append(item)
 	selected = 0
-	muzzle.visible = not mounted.is_empty()
+	muzzle.visible = "zapper" in ids
+	if depth_mount != null: depth_mount.visible = "depthl" in ids
 	if mounted.is_empty(): update_fire(false,0)

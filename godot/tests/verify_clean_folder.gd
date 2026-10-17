@@ -1,13 +1,16 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Game = preload("res://game.gd")
 const Storage = preload("res://player_storage.gd")
 const Paths = preload("res://asset_paths.gd")
 const Mods = preload("res://mod_registry.gd")
+const RELEASE_MODS := ["clownfish","example.png-texture","sea-mine-model","test-3d-map-instrument"]
 var failures := 0
 var checks := 0
 func _initialize() -> void:
 	Storage.root_override = ProjectSettings.globalize_path("res://..").trim_suffix("/") + "-test-player"
 	if not OS.has_feature("editor"): Storage.root_override = OS.get_executable_path().get_base_dir() + "-test-player"
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--player-root="): Storage.root_override = argument.trim_prefix("--player-root=")
 	call_deferred("run")
 func check(ok: bool, message: String) -> void:
 	checks += 1
@@ -19,7 +22,7 @@ func run() -> void:
 	var assets: String = args[0]; var phase: String = args[1]
 	preload("res://input_bindings.gd").reset_defaults()
 	Mods.initialize(true)
-	check(Mods.packs.size() == 6 and Mods.active_ids().is_empty(), "Six bundled mods are available, disabled by default")
+	check(Mods.packs.size() == RELEASE_MODS.size() and Mods.packs.all(func(pack: Dictionary) -> bool: return str(pack.id) in RELEASE_MODS) and Mods.active_ids().is_empty(), "Only the four release-ready mods are bundled, disabled by default")
 	for pack in Mods.packs:
 		check(pack.valid and pack.errors.is_empty(), "Bundled mod manifest and assets validate: " + str(pack.name))
 	if phase == "mods":
@@ -93,8 +96,8 @@ func run() -> void:
 		game._dock_ui_action("launch",{})
 		check(not paused and game.docking.stage != game.Docking.Stage.DOCKED, "Launching resumes gameplay after load")
 	else:
-		check(game.pilot.visual.get_meta("modern_model", false), "All-mod game uses the remastered submarine")
-		check(game.pilot.visual.get_meta("submarine_parts", {}).size() == 5, "Remastered moving assemblies resolve")
+		check(not game.pilot.visual.get_meta("modern_model", false), "Inactive remastered submarine is not bundled")
+		check(not game.cockpit_hud.model_views.is_empty(), "Bundled 3D HUD instruments load")
 		game._begin_new_game()
 		check(game.has_started_game and not paused, "New Game runs with all bundled mods enabled")
 		check(Mods.runtime_warnings.is_empty(), "No mod asset fallback warnings")

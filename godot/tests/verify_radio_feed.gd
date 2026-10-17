@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 var failures := 0
 var checks := 0
 func check(ok: bool, message: String) -> void:

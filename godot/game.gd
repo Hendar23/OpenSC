@@ -110,6 +110,7 @@ var camera_follow := FollowCamera.new()
 var camera_was_frozen := false
 const SUB_RENDER_LAYER := 2
 var first_person := false
+var first_person_cockpit: Node3D
 var cockpit_camera_offset := Vector3(0,0.025,-0.16)
 var fog_visibility := DEFAULT_VISIBILITY
 var remember_preferences := true
@@ -466,6 +467,7 @@ func _start_game(folder: String) -> void:
 	var hull_bounds := Equipment._bounds(Equipment._meshes(pilot.visual,Transform3D.IDENTITY,true))
 	cockpit_camera_offset = Vector3(hull_bounds.get_center().x,hull_bounds.position.y + hull_bounds.size.y * 0.48,hull_bounds.position.z + hull_bounds.size.z * 0.25)
 	_update_equipment_settings()
+	water_visuals.attach(pilot)
 	natural_light.attach(pilot)
 	cockpit_hud = HUD.new()
 	cockpit_hud.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -473,6 +475,8 @@ func _start_game(folder: String) -> void:
 	cockpit_hud.setup(pilot, equipment, world_root, folder,weapons)
 	cockpit_hud.setup_lighting(water_environment,sun)
 	cockpit_hud.natural_light = natural_light
+	if is_instance_valid(first_person_cockpit): first_person_cockpit.free()
+	first_person_cockpit = preload("res://first_person_cockpit.gd").new(); camera.add_child(first_person_cockpit); first_person_cockpit.setup(self)
 	_build_expanded_map()
 	_update_hud_settings()
 	for index in range(5):
@@ -505,6 +509,7 @@ func _start_game(folder: String) -> void:
 	docking.setup(pilot, world_root, folder, camera,gameplay_catalogue)
 	submarine_traffic = preload("res://submarine_traffic.gd").new(); submarine_traffic.name = "SubmarineTraffic"; world_root.add_child(submarine_traffic)
 	submarine_traffic.events = events
+	submarine_traffic.prepare_visual = func(visual: Node3D) -> void: water_visuals.attach(visual); natural_light.attach(visual)
 	submarine_traffic.setup(world_root,folder,docking.ports,cockpit_hud.map_data,pilot,func(faction: int) -> void:
 		player_progress.standing[str(faction)] = "bad"
 		for turret in turret_system.turrets:
@@ -773,7 +778,7 @@ func _update_radio_messages(delta: float) -> void:
 	if docking.stage == docking.Stage.IDLE and docking.nearby.is_empty() and not _delivery_prompt_active():
 		if bounty_remaining <= 0 and not bounty_radio_queue.is_empty():
 			bounty_port = bounty_radio_queue.pop_front(); bounty_remaining = 7.0
-			if bounty_port.get("voice") != null:
+			if bounty_port.get("voice") != null and not bounty_port.get("voice_played",false):
 				var voice := AudioStreamPlayer.new(); voice.stream = bounty_port.voice; voice.volume_db = preload("res://docking_radio.gd").SPEECH_VOLUME_DB; add_child(voice)
 				voice.finished.connect(voice.queue_free); voice.play()
 
@@ -794,10 +799,22 @@ func _update_follow_camera(delta: float, snap: bool = false) -> void:
 		distance = camera_follow.cargo_distance(distance,extent)
 	var desired := camera_follow.desired_position(target, heading, pilot.velocity, forward,
 		float(pilot.movement.settings.forward_speed), distance, delta, snap)
-	var next := desired if snap else camera.global_position.lerp(desired, 1.0 - exp(-7.0 * delta))
-	var query := PhysicsRayQueryParameters3D.create(target, next, 5)
+	var exclusions: Array[RID] = [pilot.get_rid()]
+	if tool != null:
+		if is_instance_valid(tool.target) and tool.target is CollisionObject3D: exclusions.append(tool.target.get_rid())
+		if is_instance_valid(tool.head): exclusions.append(tool.head.get_rid())
+	# Solve the full boom before smoothing. Sampling only the already shortened
+	# camera position made its own obstruction appear/disappear every frame.
+	var offset := desired - target
+	var query := PhysicsRayQueryParameters3D.create(target,desired,1,exclusions)
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	if not hit.is_empty(): next = hit.position - (next - target).normalized() * 0.4
+	var allowed := maxf(0.02,target.distance_to(hit.position) - 0.08) if not hit.is_empty() else offset.length()
+	var boom := camera_follow.clear_distance(offset.length(),allowed,delta,snap)
+	var limited := target + offset.normalized() * boom
+	var next := limited if snap else camera.global_position.lerp(limited,1.0-exp(-7.0*delta))
+	query.to = next
+	hit = get_world_3d().direct_space_state.intersect_ray(query)
+	if not hit.is_empty(): next = target + (next-target).normalized() * maxf(0.02,target.distance_to(hit.position)-0.05)
 	next.y = minf(next.y, pilot.surface_height - 0.2)
 	camera.global_position = next
 	if next.distance_to(target) > 0.01: camera.look_at(target, Vector3.UP)
@@ -808,6 +825,7 @@ func _set_camera_mode(cockpit: bool) -> void:
 	if cockpit: camera.cull_mask &= ~SUB_RENDER_LAYER
 	else: camera.cull_mask |= SUB_RENDER_LAYER
 	_update_follow_camera(0.0,true)
+	if is_instance_valid(first_person_cockpit): first_person_cockpit.refresh()
 
 func _request_docking() -> void:
 	if pilot.dead: return
@@ -852,7 +870,8 @@ func _update_daylight() -> void:
 		var exposure := natural_light.visibility(lighting_camera.global_position,true)
 		# Empty space behind cave geometry must match sheltered water, while
 		# the actual surface keeps its daylight material through cave exits.
-		water_environment.background_color = natural_light.background_colour(water_environment.fog_light_color * exposure + Color(0.75,0.8,0.88) * float(natural_light.settings.cave_ambient) * (1.0 - exposure))
+		var cave_ambient := minf(float(natural_light.settings.cave_ambient),water_environment.ambient_light_energy)
+		water_environment.background_color = natural_light.background_colour(water_environment.fog_light_color * exposure + Color(0.75,0.8,0.88) * cave_ambient * (1.0 - exposure))
 	water_visuals.lighting(float(world_root.get_meta("surface_height")) if is_instance_valid(world_root) and world_root.has_meta("surface_height") else 0.0,lighting_cycle.sun_direction())
 	if fog_slider != null: water_visuals.fog(fog_visibility if fog_button.button_pressed else 1000000.0,fog_start_slider.value,fog_curve_slider.value)
 	if clock_label != null:
@@ -886,6 +905,7 @@ func _update_weapon_settings() -> void:
 func _desired_mouse_mode() -> int:
 	var menus := map_open or developer_ui_visible or (folder_dialog != null and folder_dialog.visible) or (mod_panel != null and mod_panel.visible)
 	menus = menus or (front_end != null and front_end.menu_layer.visible)
+	menus = menus or (dock_interface != null and dock_interface.visible)
 	menus = menus or (export_all_dialog != null and export_all_dialog.visible)
 	menus = menus or (tuning_panel != null and tuning_panel.export_dialog.visible) or (sound_panel != null and sound_panel.export_dialog.visible)
 	var docked: bool = docking != null and docking.stage == Docking.Stage.DOCKED
@@ -1006,6 +1026,9 @@ func _answer_delivery(accepted: bool) -> void:
 	var magnet: Node3D = equipment.towing_tool()
 	if not accepted: magnet.decline_delivery(); return
 	var body: RigidBody3D = magnet.target
+	if mission_runtime.side_jobs.delivery(body,int(magnet.delivery_point.city_id)): return
+	if body == mission_runtime.side_jobs.target and mission_runtime.side_jobs.id == "stranded":
+		mission_runtime.side_jobs.radio("x27"); magnet.decline_delivery(); return
 	var terms := _delivery_terms(body)
 	var city := str(int(magnet.delivery_point.city_id))
 	if not player_progress.pending_deliveries.has(city): player_progress.pending_deliveries[city] = {}
@@ -1064,15 +1087,10 @@ func _dock_ui_action(action: String, payload: Dictionary) -> void:
 			var offer: Dictionary = _dock_ui_model().offers.get(id,{})
 			if offer.is_empty(): dock_interface.transaction_feedback("Item unavailable.","equipment_trade"); return
 			if action == "buy_equipment":
-				if id != "shield" and preload("res://equipment_shop.gd").owned(player_progress,equipment,weapons,id) >= int(offer.maximum):
+				if id != "shield" and preload("res://equipment_shop.gd").owned(player_progress,equipment,weapons,id) + int(offer.get("quantity",1)) > int(offer.maximum):
 					dock_interface.transaction_feedback("Already owned.","equipment_trade"); return
 				dock_interface.transaction_feedback(preload("res://equipment_shop.gd").buy(player_progress,offer),"equipment_trade")
-			elif int(player_progress.hold.get(id,0)) > 0 and int(offer.sell_price) > 0:
-				player_progress.hold[id] -= 1
-				if player_progress.hold[id] == 0: player_progress.hold.erase(id)
-				player_progress.status.credits += int(offer.sell_price)
-				dock_interface.transaction_feedback("","equipment_trade")
-			else: dock_interface.transaction_feedback("Item cannot be sold.","equipment_trade")
+			else: dock_interface.transaction_feedback(preload("res://equipment_shop.gd").sell(player_progress,offer),"equipment_trade")
 		"use_repair":
 			if docking.stage != Docking.Stage.DOCKED: return
 			var id := str(payload.get("item","shield"))

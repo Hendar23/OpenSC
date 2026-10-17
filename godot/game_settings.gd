@@ -12,6 +12,7 @@ func _init(context: Node) -> void:
 	game = context
 
 func _load_preferences(path: String = "") -> void:
+	var explicit_import := not path.is_empty()
 	if path.is_empty(): path = preload("res://current_settings.gd").path("view_defaults.cfg")
 	var config := ConfigFile.new()
 	if config.load(path) != OK: return
@@ -91,6 +92,15 @@ func _load_preferences(path: String = "") -> void:
 			if game.cockpit_hud != null:
 				game.cockpit_hud.set_enabled(index,setting,false)
 	game.loading_preferences = false
+	if is_instance_valid(game.first_person_cockpit) and game.first_person_cockpit.model != null:
+		var canopy: Node = game.first_person_cockpit
+		for row in preload("res://first_person_cockpit.gd").CONTROLS:
+			var key: String = "canopy/" + canopy.pack_id + "/" + row[0]
+			var setting: Variant = config.get_value("view",key)
+			if (setting is float or setting is int) and is_finite(float(setting)): canopy.set_setting(row[0],float(setting))
+		if explicit_import:
+			var result: Error = canopy.persist_settings()
+			if result != OK: game._report_settings_error("canopy.cfg",result)
 
 func _schedule_settings_save() -> void:
 	if not game.remember_preferences or game.loading_preferences or game.world_loading or not game.startup_complete or game.settings_save_pending: return
@@ -165,6 +175,8 @@ func _view_settings() -> Dictionary:
 	for key in game.plant_controls:
 		settings["plants_" + str(key)] = game.plant_controls[key].button_pressed if key == "enabled" else game.plant_controls[key].value
 	for key in game.water_controls: settings[key] = game.water_controls[key].value
+	if is_instance_valid(game.first_person_cockpit) and game.first_person_cockpit.model != null:
+		for key in game.first_person_cockpit.settings: settings["canopy/" + game.first_person_cockpit.pack_id + "/" + key] = game.first_person_cockpit.settings[key]
 	return settings
 
 func _export_all_settings(path: String) -> Error:

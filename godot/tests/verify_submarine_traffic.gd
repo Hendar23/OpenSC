@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Traffic = preload("res://submarine_traffic.gd")
 const Access = preload("res://dock_access.gd")
 const Document = preload("res://map_document.gd")
@@ -28,6 +28,9 @@ func run() -> void:
 	await physics_frame
 	traffic.set_physics_process(false)
 	game.wildlife.set_simulating(false)
+	# This manual reaction fixture needs detailed wildlife even with its player
+	# parked far away; distance streaming deliberately suppresses such reactions.
+	game.wildlife.streaming = false
 	for creature in game.wildlife.get_children():
 		if creature is CollisionObject3D: creature.collision_layer = 0
 	game.pilot.active = false; game.pilot.controls_enabled = false

@@ -13,7 +13,8 @@ func block(world: Node3D, position: Vector3, size: Vector3) -> MeshInstance3D:
 	var material := StandardMaterial3D.new(); material.albedo_color = Color(0.6,0.6,0.6); material.roughness = 1; mesh.material_override = material; body.add_child(mesh)
 	return mesh
 func snapshot(viewport: SubViewport) -> Image:
-	await process_frame; await RenderingServer.frame_post_draw; await process_frame; await RenderingServer.frame_post_draw
+	for frame in range(6): await process_frame
+	await RenderingServer.frame_post_draw
 	return viewport.get_texture().get_image()
 func _run() -> void:
 	var viewport := SubViewport.new(); viewport.own_world_3d = true; viewport.size = Vector2i(640,480); viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS; root.add_child(viewport)
@@ -48,5 +49,24 @@ func _run() -> void:
 		check(lit.get_pixelv(cave_pixel).v > 0.1,"Local lights can illuminate a sheltered cave")
 		natural.configure({"sun_depth":2.0,"sun_falloff":3.0}); var deep: Image = await snapshot(viewport); deep.save_png("res://tests/natural-light-deep-lamp.png")
 		check(deep.get_pixelv(open_pixel).v < 0.02 and deep.get_pixelv(cave_pixel).v > 0.1,"Deep water remains black while local light still works")
+		# Exercise rendered brightness, rather than only checking small energy
+		# numbers: linear rendering previously made 0.02 look surprisingly bright.
+		natural.configure({"sun_depth":20.0,"sun_falloff":5.0,"cave_ambient":0.03})
+		var cycle := preload("res://day_night_cycle.gd").new()
+		cycle.hour = 0; cycle.night_brightness = 0.02; lamp.hide()
+		cycle.apply(environment.environment,sun); natural.lighting(environment.environment,1000000,5,1.8)
+		var night: Image = await snapshot(viewport)
+		print("Minimum night pixels: cave=",night.get_pixelv(cave_pixel).v," open=",night.get_pixelv(open_pixel).v)
+		check(night.get_pixelv(open_pixel).v < 0.04 and night.get_pixelv(cave_pixel).v < 0.04,"Low night brightness renders dark outdoors and under a roof in either renderer")
+		cycle.night_brightness = 0; cycle.apply(environment.environment,sun); natural.lighting(environment.environment,1000000,5,1.8)
+		var black: Image = await snapshot(viewport)
+		check(black.get_pixelv(open_pixel).v < 0.005 and black.get_pixelv(cave_pixel).v < 0.005,"Zero night brightness removes ambient light including the cave floor")
+		lamp.show(); var night_lamp: Image = await snapshot(viewport)
+		check(night_lamp.get_pixelv(cave_pixel).v > 0.1,"Local lights still illuminate surfaces at zero night brightness")
+		check(black.get_pixelv(glow_pixel).b > 0.3,"Emissive objects remain visible at zero night brightness")
+		lamp.hide(); cycle.hour = 12; cycle.apply(environment.environment,sun); natural.lighting(environment.environment,1000000,5,1.8)
+		var restored: Image = await snapshot(viewport)
+		print("Restored daylight pixel=",restored.get_pixelv(open_pixel).v," ambient=",environment.environment.ambient_light_energy," sun=",sun.light_energy)
+		check(is_equal_approx(environment.environment.ambient_light_energy,0.32) and restored.get_pixelv(open_pixel).v > 0.2,"Daylight retains its established ambient energy and bright seabed")
 	viewport.queue_free(); await process_frame
 	print("Natural lighting: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

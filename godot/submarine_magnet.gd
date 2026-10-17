@@ -36,6 +36,7 @@ var target: RigidBody3D
 var clamp_joint: Generic6DOFJoint3D
 var enabled := false
 var retracting := false
+var reel_offset := Vector3.ZERO
 var deploying := false
 var paid_length := 0.0
 var head_socket := Vector3.ZERO
@@ -78,9 +79,10 @@ func set_enabled(on: bool) -> void:
   if is_instance_valid(rig): _clear_rig()
   _deploy()
  else:
-  release()
+  release(false)
   if is_instance_valid(head):
    deploying = false
+   reel_offset = pilot.global_basis.inverse() * (head.to_global(head_socket) - global_position)
    head.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC; head.freeze = true; retracting = true
   else: _clear_rig()
  _play(deploy_audio); state_changed.emit(enabled)
@@ -237,6 +239,8 @@ func _attach(body: Node) -> void:
  if not enabled or not is_instance_valid(head) or is_instance_valid(target) or not is_instance_valid(body) or not body is RigidBody3D: return
  if not body.get_meta("grapple_tow_target" if tool_id == "grapple" else "metal_tow_target",false) or body.has_meta("delivery_city") or bool(body.get("dead")) or body.freeze: return
  target = body
+ _seat_head(target)
+ head.add_collision_exception_with(target)
  # World objects inherit the non-interpolated scenery branch. Match the
  # submarine and cable's render timing so the clamp does not judder at 60 Hz.
  target.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON
@@ -257,11 +261,12 @@ func _attach(body: Node) -> void:
  delivery_point = null; declined_point = null
  _update_delivery_point()
  _play(clamp_audio)
-func release() -> void:
+func release(recall: bool = true) -> void:
  delivery_point = null; declined_point = null
  if is_instance_valid(clamp_joint): clamp_joint.free()
  clamp_joint = null
  if is_instance_valid(target):
+  if is_instance_valid(head): head.remove_collision_exception_with(target)
   if not target_chain_mask: target.collision_mask &= ~CHAIN_LAYER
   if not target_query_layer: target.collision_layer &= ~CARGO_QUERY_LAYER
   for contact in link_colliders: contact.get_parent().remove_collision_exception_with(target)
@@ -269,16 +274,57 @@ func release() -> void:
   target.sleeping = false
  target = null
  _update_cargo_mass()
+ if recall and enabled: set_enabled(false)
+
+static func _closest_triangle(point: Vector3, a: Vector3, b: Vector3, c: Vector3) -> Vector3:
+ var normal := (b-a).cross(c-a)
+ if normal.length_squared() < 0.0000000001: return a
+ var projected := Plane(a,b,c).project(point)
+ if (b-a).cross(projected-a).dot(normal) >= 0 and (c-b).cross(projected-b).dot(normal) >= 0 and (a-c).cross(projected-c).dot(normal) >= 0: return projected
+ var nearest := Geometry3D.get_closest_point_to_segment(point,a,b)
+ for other in [Geometry3D.get_closest_point_to_segment(point,b,c),Geometry3D.get_closest_point_to_segment(point,c,a)]:
+  if point.distance_squared_to(other) < point.distance_squared_to(nearest): nearest = other
+ return nearest
+
+func _seat_head(cargo: RigidBody3D) -> void:
+ # Broad-phase hulls enclose fins and empty space. Seat the clamp on the actual
+ # visible triangles, then exempt the two attached bodies from self-collision.
+ var visual: Node3D = cargo.get("appearance") if cargo.get("appearance") is Node3D else cargo
+ var point := head.global_position
+ var closest := point; var distance := INF
+ for mesh: MeshInstance3D in visual.find_children("*","MeshInstance3D",true,false):
+  for surface in range(mesh.mesh.get_surface_count()):
+   var arrays: Array = mesh.mesh.surface_get_arrays(surface)
+   var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+   var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
+   var count := indices.size() if not indices.is_empty() else vertices.size()
+   for index in range(0,count-2,3):
+    var a: Vector3 = mesh.global_transform * vertices[indices[index] if not indices.is_empty() else index]
+    var b: Vector3 = mesh.global_transform * vertices[indices[index+1] if not indices.is_empty() else index+1]
+    var c: Vector3 = mesh.global_transform * vertices[indices[index+2] if not indices.is_empty() else index+2]
+    var contact := _closest_triangle(point,a,b,c)
+    if contact.distance_squared_to(point) < distance: closest = contact; distance = contact.distance_squared_to(point)
+ if not is_finite(distance): return
+ var normal := (point-closest).normalized()
+ if normal.is_zero_approx(): normal = Vector3.UP
+ if normal.dot(closest-_body_center(cargo)) < 0.0: normal = -normal
+ var extent := 0.0
+ for child in head.get_children():
+  if child is CollisionShape3D and child.shape is BoxShape3D:
+   var local := head.global_basis.inverse() * normal
+   extent = local.abs().dot(child.shape.size * 0.5)
+ head.global_position = closest + normal * extent
+ head.reset_physics_interpolation()
 func _update_cargo_mass() -> void:
  if is_instance_valid(pilot) and pilot.has_method("set_towed_mass"):
   pilot.set_towed_mass(target.mass * cargo_weight if is_instance_valid(target) else 0.0)
 func reset() -> void:
  enabled = false; retracting = false; deploying = false
- release(); _clear_rig(); state_changed.emit(false)
+ release(false); _clear_rig(); state_changed.emit(false)
  if deploy_audio != null: deploy_audio.stop()
  if clamp_audio != null: clamp_audio.stop()
 func _clear_rig() -> void:
- release()
+ release(false)
  if is_instance_valid(rig): rig.free()
  rig = null; head = null; links.clear(); link_colliders.clear()
  if is_instance_valid(housing): housing.show()
@@ -294,11 +340,15 @@ func _physics_process(delta: float) -> void:
   reset(); return
  _volume(deploy_audio); _volume(clamp_audio)
  if not is_instance_valid(head): reset(); return
+ # A destroyed/removed load can vanish without calling the equipment toggle.
+ if enabled and is_instance_valid(clamp_joint) and (not is_instance_valid(target) or bool(target.get("dead")) or target.has_meta("delivery_city")):
+  set_enabled(false)
  head.water_drag = water_drag
  _update_cargo_mass()
  if retracting:
   head.add_collision_exception_with(pilot)
-  var socket := head.to_global(head_socket).move_toward(global_position,speed * delta)
+  reel_offset = reel_offset.move_toward(Vector3.ZERO,speed * delta)
+  var socket := global_position + pilot.global_basis * reel_offset
   head.global_position = socket - head.global_basis * head_socket
   paid_length = socket.distance_to(global_position)
   if paid_length < 0.002:
@@ -324,5 +374,5 @@ func _update_delivery_point() -> void:
 func decline_delivery() -> void:
  declined_point = delivery_point; delivery_point = null
 func _exit_tree() -> void:
- release()
+ release(false)
  if chain_template != null: chain_template.free()

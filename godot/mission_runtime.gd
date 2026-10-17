@@ -1,18 +1,47 @@
 extends Node
-## Retail opening job: SC.EXE 0046ae40, MISSORD / MISSION1 / REWARD1.
+## Opening campaign jobs: SC.EXE callbacks, MISSORD / MISSION1 / REWARD1.
 const IDS := {1:"tradetrad",3:"tradetrad2",2:"tradetech",4:"tradetech2"}
+const Rules = preload("res://mission_rules.gd")
 var game: Node
 var spawned: Array[Node] = []
 var pirate: Node3D
 var last_response := ""
+var last_response_id := ""
+var last_response_city := 0
 var outcome: CanvasLayer
+var side_jobs: Node
+var target_marker: Control
+var speech: AudioStreamPlayer
+var testing_all_missions := false
+var testing_mission_id := "stranded"
+
+func testing_missions() -> Array:
+	return Array(IDS.values()) + Rules.IMPLEMENTED
+
+func testing_mission_city(id: String) -> int:
+	for offers in [IDS,Rules.OPENING]:
+		for city in offers:
+			if offers[city] == id: return int(city)
+	return 0
+
+func set_testing_missions(enabled: bool, id: String = "") -> void:
+	testing_all_missions = enabled
+	if id in testing_missions(): testing_mission_id = id
+	_publish_offers()
+	if game.dock_interface != null and game.dock_interface.visible: game.dock_interface.rebuild()
 
 func setup(context: Node) -> void:
 	game = context
+	add_to_group("mission_runtime")
 	process_mode = Node.PROCESS_MODE_PAUSABLE
+	speech = AudioStreamPlayer.new(); speech.name = "MissionSpeech"; add_child(speech)
+	speech.volume_db = preload("res://docking_radio.gd").SPEECH_VOLUME_DB
 	game.events.city_docked.connect(docked)
 	game.events.session_started.connect(_session_started)
 	outcome = preload("res://mission_outcome.gd").new(); game.add_child(outcome)
+	side_jobs = preload("res://stage_two_missions.gd").new(); add_child(side_jobs); side_jobs.runtime = self; side_jobs.game = game
+	var guidance := CanvasLayer.new(); guidance.layer = 1; add_child(guidance)
+	target_marker = preload("res://mission_target.gd").new(); target_marker.game = game; target_marker.jobs = side_jobs; guidance.add_child(target_marker)
 
 func active() -> Dictionary:
 	return game.player_progress.missions.active
@@ -26,41 +55,72 @@ func text(id: String, response: int = 0) -> String:
 	else:
 		var marker := "#response %d" % response
 		raw = raw.get_slice(marker,1).get_slice("#response",0)
-	return raw.replace("<p>","").replace("@",",").strip_edges()
+	for marker in ["#bulletin","#rem"]: raw = raw.get_slice(marker,0)
+	return _flow_text(raw,response == 0)
+
+static func _flow_text(raw: String, has_title: bool = false) -> String:
+	raw = raw.replace("\r\n","\n").replace("\r","\n").strip_edges()
+	if raw.is_empty(): return ""
+	var title := ""
+	if has_title:
+		title = raw.get_slice("\n",0).strip_edges()
+		raw = raw.substr(title.length()).strip_edges()
+	# Source newlines are hard-wrapping for the old display width. Only <p>
+	# carries an intentional break: one for a new line, two for a paragraph.
+	raw = raw.replace("\n"," ").replace("@",",")
+	var spaces := RegEx.new(); spaces.compile("[\\t ]+")
+	raw = spaces.sub(raw," ",true).replace("<p>","\n")
+	var lines := PackedStringArray()
+	for line in raw.split("\n"): lines.append(line.strip_edges())
+	raw = "\n".join(lines).strip_edges()
+	while raw.contains("\n\n\n"): raw = raw.replace("\n\n\n","\n\n")
+	return title + ("\n\n" + raw if not raw.is_empty() else "") if has_title else raw
 
 func board(city: int) -> Dictionary:
-	var available := int(game.player_progress.campaign_stage) == 1 and IDS.has(city) and active().is_empty()
-	var id := str(IDS.get(city,""))
+	var id := str(IDS.get(city,"")) if int(game.player_progress.campaign_stage) == 1 else Rules.next_offer(game.player_progress,city)
+	if testing_all_missions: id = testing_mission_id if city == testing_mission_city(testing_mission_id) else ""
+	var available := not id.is_empty() and active().is_empty() and (testing_all_missions or Rules.requirement_cost(game,id,city) <= int(game.player_progress.status.credits))
 	var shown_id := str(active().id) if not active().is_empty() else id
 	var row: Dictionary = game.gameplay_catalogue.get("tables",{}).get("mission_availability",{}).get("records",{}).get(shown_id,{})
-	return {"available":available,"id":shown_id,"title":text(shown_id).get_slice("\n",0),"briefing":text(shown_id),"picture":"MISSSCRE/" + str(row.get("picture","piccy100")).to_upper() + ".BMP","welcome":welcome(city),"active":not active().is_empty(),"objective":objective(),"response":last_response}
+	return {"available":available,"id":shown_id,"title":text(shown_id).get_slice("\n",0),"briefing":text(shown_id),"picture":"MISSSCRE/" + str(row.get("picture","piccy100")).to_upper() + ".BMP","welcome":welcome(city),"active":not active().is_empty(),"report":false,"objective":objective(),"response":""}
 
 func welcome(city: int) -> String:
 	var raw := str(game.gameplay_catalogue.get("tables",{}).get("source_texts",{}).get("records",{}).get("english.default.txt",{}).get("text",""))
 	var faction := "procker" if city in [2,4] else "refinery" if city == 6 else "bohine"
 	raw = raw.get_slice("#" + faction,1).get_slice("#default",1).get_slice("#noweapons",0)
-	return raw.replace("<p>","").strip_edges()
+	return _flow_text(raw)
 
 
 func objective() -> String:
 	if active().is_empty(): return "None"
+	if Rules.IMPLEMENTED.has(str(active().id)): return side_jobs.objective()
 	return "Return to a city with refined thorium." if active().get("refinery",false) else "Take raw thorium to the Refinery."
 
 func accept(city: int) -> String:
 	if game.docking.stage != game.Docking.Stage.DOCKED: return "Accept missions while docked."
 	if not board(city).available: return "This mission is unavailable."
-	if game.save_games.write(-1,game._save_snapshot("Before Prospectors Wanted!")) != OK: return game.save_games.error
-	var id: String = IDS[city]
+	var id: String = board(city).id
+	if game.save_games.write(-1,game._save_snapshot("Before " + text(id).get_slice("\n",0))) != OK: return game.save_games.error
 	game.player_progress.missions.active = {"id":id,"city":city,"refinery":false}
-	game.player_progress.mission = "Prospectors Wanted!"
+	game.player_progress.mission = text(id).get_slice("\n",0)
 	last_response = ""
-	_spawn_opening()
-	if not game.equipment.vacuum.item_collected.is_connected(_collected): game.equipment.vacuum.item_collected.connect(_collected)
-	for variant in IDS.values(): game.events.mission_available.emit(variant,false)
+	last_response_id = ""
+	outcome.dismiss()
+	if Rules.IMPLEMENTED.has(id):
+		if Rules.PAIRED.has(id):
+			var unavailable: Array = game.player_progress.missions.get("unavailable",[])
+			if not unavailable.has(Rules.PAIRED[id]): unavailable.append(Rules.PAIRED[id])
+			game.player_progress.missions["unavailable"] = unavailable
+		side_jobs.start(id)
+	else:
+		_spawn_opening()
+		if not game.equipment.vacuum.item_collected.is_connected(_collected): game.equipment.vacuum.item_collected.connect(_collected)
+	_publish_offers()
 	return ""
 
 func docked(city: int) -> void:
 	if active().is_empty(): return
+	if Rules.IMPLEMENTED.has(str(active().id)): side_jobs.docked(city); return
 	if city == 6: active().refinery = true; return
 	if not active().get("refinery",false) or not IDS.has(city): return
 	# Completion is docking-driven, even with no refined cargo (response 5..8).
@@ -70,21 +130,34 @@ func docked(city: int) -> void:
 	last_response = text(str(active().id),response)
 	finish(true)
 
-func finish(success: bool) -> void:
+func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	if active().is_empty(): return
 	var id := str(active().id)
+	last_response_id = id
 	var city := int(active().get("resolved_city",active().city))
+	last_response_city = city
+	var side_job := Rules.IMPLEMENTED.has(id)
+	var outcome_shown := bool(active().get("outcome_shown",false))
+	if score < 0: score = 1.0 if success else 0.0
+	if response > 0: last_response = text(id,response)
 	var rewards: Dictionary = game.gameplay_catalogue.tables.get("mission_rewards",{}).get("records",{}).get(id,{})
 	game.player_progress.missions.active = {}
 	game.player_progress.mission = "None"
+	if success or side_job:
+		game.player_progress.missions.completed[id] = {"success":success,"city":city,"score":score}
+	if side_job:
+		game.player_progress.missions["stage2_resolved"] = int(game.player_progress.missions.get("stage2_resolved",0)) + 1
+		if success: game.player_progress.missions["stage2_successes"] = int(game.player_progress.missions.get("stage2_successes",0)) + 1
 	if success:
-		game.player_progress.missions.completed[id] = {"success":true,"city":city}
-		game.player_progress.campaign_stage = 2
+		if not side_job: game.player_progress.campaign_stage = 2
 		game.player_progress.campaign_jobs += 1
+		# 0041ec40 pays the fixed REWARD1 amount; score selects bulletins,
+		# rather than scaling the credit reward.
 		game.player_progress.status.credits += int(rewards.get("credits",0))
-		game.events.mission_completed.emit(id,1.0)
+		game.events.mission_completed.emit(id,score)
 	else:
-		last_response = "Mission failed. You can accept the prospecting job again at a city."
+		if response == 0: last_response = "Mission failed." if side_job else "Mission failed. You can accept the prospecting job again at a city."
+		if side_job: preload("res://mailbox.gd").mission_completed(game.player_progress,id,score)
 		game.events.mission_failed.emit(id)
 	# Retain reward reputation deltas separately from the existing coarse standing labels.
 	var reputation: Dictionary = game.player_progress.missions.get("reputation",{})
@@ -95,20 +168,28 @@ func finish(success: bool) -> void:
 	if success: reputation[enemy] = float(reputation.get(enemy,0)) + delta * float(rewards.get("enemy",-0.5))
 	game.player_progress.missions["reputation"] = reputation
 	_cleanup()
-	outcome.play(game.game_folder,success)
+	_publish_offers()
+	if not outcome_shown or not success: outcome.play(game.game_folder,success)
 	if game.dock_interface_active: game.dock_interface.rebuild()
 
 func _session_started(_restored: bool) -> void:
-	_cleanup(); last_response = ""; outcome.dismiss()
-	for id in IDS.values(): game.events.mission_available.emit(id,int(game.player_progress.campaign_stage) == 1 and can_save())
+	if speech != null: speech.stop()
+	_cleanup(); last_response = ""; last_response_id = ""; outcome.dismiss()
+	_publish_offers()
+
+func _publish_offers() -> void:
+	for id in Array(IDS.values()) + Rules.IMPLEMENTED:
+		var available: bool = can_save() and (testing_all_missions or (id in IDS.values() and int(game.player_progress.campaign_stage) == 1) or (id in Rules.IMPLEMENTED and int(game.player_progress.campaign_stage) == 2 and not game.player_progress.missions.completed.has(id) and id not in game.player_progress.missions.get("unavailable",[])))
+		game.events.mission_available.emit(id,available)
 
 func _cleanup() -> void:
+	if side_jobs != null: side_jobs.clear()
 	if is_instance_valid(pirate):
 		game.submarine_traffic.traders.erase(pirate)
 		game.cockpit_hud.map_data.actor_markers.erase(pirate.body)
 		if is_instance_valid(pirate.smoke): pirate.smoke.free(); pirate.smoke = null
 	pirate = null
-	game.bounty_radio_queue = game.bounty_radio_queue.filter(func(entry: Dictionary) -> bool: return not entry.has("mission"))
+	game.bounty_radio_queue = game.bounty_radio_queue.filter(func(entry: Dictionary) -> bool: return not entry.has("mission") or entry.get("terminal",false))
 	if is_instance_valid(game.object_population):
 		for body in game.object_population.get_children():
 			if body.has_meta("mission_owner") and not spawned.has(body): body.queue_free()
@@ -147,13 +228,20 @@ func _spawn_opening() -> void:
 
 func _collected(item: String) -> void:
 	if active().is_empty() or item != "ore": return
+	if Rules.IMPLEMENTED.has(str(active().id)): return
 	active()["collected"] = int(active().get("collected",0)) + 1
 	if int(active().collected) <= 2: _radio("ag4" if int(active().collected) == 1 else "ag5","SHIP")
-func _radio(code: String, portrait: String) -> void:
+func _radio(code: String, portrait: String, terminal: bool = false) -> void:
 	if active().is_empty(): return
 	var row: Dictionary = game.gameplay_catalogue.tables.get("radio_messages",{}).get("records",{}).get(code,{})
 	var face: Texture2D = preload("res://docking_radio.gd").speaker_portrait(game.game_folder,portrait)
 	var stream: AudioStream = preload("res://legacy_audio.gd").load_file(game.game_folder.path_join("WAVES/ENGLISH/" + code.to_upper() + ".RAW"))
-	var message := {"speaker":"ship" if portrait == "SHIP" else "mission/" + str(active().id) + "/" + portrait.to_lower(),"name":"","text":str(row.get("text","")),"portrait":face,"distorted_portrait":preload("res://docking_radio.gd").speaker_portrait(game.game_folder,portrait,true),"voice":stream,"mission":str(active().id)}
+	var message := {"speaker":"ship" if portrait.to_upper() == "SHIP" else "mission/" + str(active().id) + "/" + portrait.to_lower(),"name":"","text":str(row.get("text","")),"portrait":face,"distorted_portrait":preload("res://docking_radio.gd").speaker_portrait(game.game_folder,portrait,true),"voice":stream,"mission":str(active().id)}
+	# Mission text is displayed immediately, including beside a drop-off prompt.
+	# Play its speech at the same time; completion cleanup removes queued mission
+	# messages and must not discard the final voice before it has even started.
+	if stream != null:
+		speech.stop(); speech.stream = stream; speech.play(); message["voice_played"] = true
 	game.bounty_radio_queue.append(message)
+	if terminal: message["terminal"] = true
 	if game.radio_feed != null: game.radio_feed.push_message(message,game.docking.radio_static)

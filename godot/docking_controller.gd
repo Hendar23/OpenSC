@@ -404,6 +404,11 @@ func _animate_pilot(delta: float) -> void:
 	pilot.movement.tilt = move_toward(pilot.movement.tilt, tilt, deg_to_rad(float(transit_settings.tilt_speed)) * delta)
 	pilot.movement.pods_aligned = is_equal_approx(pilot.movement.tilt,tilt)
 	pilot.movement.main_power = 1.0 if horizontal > 0.001 else 0.0
+	if stage == Stage.DESCEND:
+		# The docking lift uses the pods. Brake approach spin here rather than
+		# carrying its configured coast or tiny horizontal corrections down the shaft.
+		pilot.movement.main_power = 0.0
+		pilot.propeller_speeds.x = 0.0
 	pilot.movement.left_power = 1.0 if moving else 0.0
 	pilot.movement.right_power = pilot.movement.left_power
 	if stage == Stage.ALIGN and absf(pilot.movement.angular_velocity.y) > 0.001:

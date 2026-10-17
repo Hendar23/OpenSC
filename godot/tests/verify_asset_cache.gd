@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Cache = preload("res://asset_cache.gd")
 const Storage = preload("res://player_storage.gd")
 const Assets = preload("res://clump_loader.gd")
@@ -7,6 +7,7 @@ const Data = preload("res://original_game_data.gd")
 const World = preload("res://world_loader.gd")
 var checks := 0
 var failures := 0
+func _init() -> void: Cache.enabled = true
 func _initialize() -> void: call_deferred("run")
 func check(ok: bool, message: String) -> void:
 	checks += 1

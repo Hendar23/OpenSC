@@ -242,6 +242,10 @@ static func _build_mesh(data: PackedByteArray, geometry: int, end: int, path: St
 		surface_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 		if int(material_id) < references.size():
 			var reference: Dictionary = references[int(material_id)]
+			# TRAD2 leaves the shared rotor's mask name blank; other original hulls
+			# explicitly pair this same texture with PELLERM.
+			if str(reference.texture).to_upper() == "PELLER" and str(reference.mask).is_empty():
+				reference = reference.duplicate(); reference.mask = "PELLERM"
 			var texture: Texture2D = _load_texture(game_folder, reference["texture"], reference["mask"], texture_cache)
 			if texture != null:
 				surface_material.albedo_texture = texture

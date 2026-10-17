@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Document = preload("res://map_document.gd")
 const Mods = preload("res://mod_registry.gd")
 var checks := 0

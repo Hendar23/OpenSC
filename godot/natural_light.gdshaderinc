@@ -60,9 +60,12 @@ vec3 natural_fog_colour(vec3 point, vec3 camera) {
 	// even though their surface lighting has already faded out completely.
 	float distance_fade = natural_fog_amount(length(point - camera));
 	exposure = mix(exposure,natural_exposure(camera,vec2(0.35,0.95)),smoothstep(0.65,1.0,distance_fade));
-	return natural_colour(osc_natural_fog_color.rgb * exposure + vec3(0.75,0.8,0.88) * osc_cave_ambient * (1.0 - exposure));
+	float cave = min(osc_cave_ambient,osc_natural_ambient.a);
+	return natural_colour(osc_natural_fog_color.rgb * exposure + vec3(0.75,0.8,0.88) * cave * (1.0 - exposure));
 }
 
 vec3 natural_ambient(float exposure) {
-	return osc_natural_ambient.rgb * osc_natural_ambient.a * exposure + vec3(0.75,0.8,0.88) * osc_cave_ambient * (1.0 - exposure);
+	// Shelter must not become brighter than the surrounding night water.
+	float cave = min(osc_cave_ambient,osc_natural_ambient.a);
+	return osc_natural_ambient.rgb * osc_natural_ambient.a * exposure + vec3(0.75,0.8,0.88) * cave * (1.0 - exposure);
 }

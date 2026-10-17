@@ -27,7 +27,13 @@ func apply(environment: Environment, sun: DirectionalLight3D, surface: ShaderMat
 	# Neutral nearby illumination preserves the original texture colours. Water
 	# tint comes from distance fog, rather than colouring every object's lighting.
 	environment.ambient_light_color = Color(0.75, 0.8, 0.88).lerp(Color(0.9, 0.95, 1.0), day)
-	environment.ambient_light_energy = lerpf(night_brightness, 0.32, day)
+	# The night control describes visible brightness. RenderingDevice shades in
+	# linear space; using the display value as energy lifted even minimum night
+	# lighting substantially. Keep the established daytime energy unchanged.
+	var night_energy := night_brightness
+	if RenderingServer.get_current_rendering_method() != "gl_compatibility":
+		night_energy = Color(night_brightness,night_brightness,night_brightness).srgb_to_linear().r
+	environment.ambient_light_energy = lerpf(night_energy, 0.32, day)
 	var direction := sun_direction()
 	sun.basis = Basis.looking_at(-direction,Vector3.FORWARD)
 	var elevation := maxf(0.0,direction.y)
