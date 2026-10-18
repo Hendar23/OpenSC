@@ -1,5 +1,5 @@
 # OpenSC
-OpenSC is an open-source game engine remake for playing Criterion Games [Sub Culture](https://en.wikipedia.org/wiki/Sub_Culture)
+OpenSC is an open-source game remake for playing Criterion Games [Sub Culture](https://en.wikipedia.org/wiki/Sub_Culture)
 
 Built with [Godot](https://godotengine.org/)
 
