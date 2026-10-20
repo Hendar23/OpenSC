@@ -158,6 +158,9 @@ static func _terrain_material(reference: Dictionary, folder: String, cache: Dict
 	if texture != null:
 		material.albedo_texture = texture; material.albedo_color = Color.WHITE
 		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST; material.texture_repeat = true
+		if texture.get_meta("terrain_mipmaps", false):
+			material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+			material.set_meta("terrain_mipmaps", true)
 		if not str(reference["mask"]).is_empty():
 			material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 			material.alpha_scissor_threshold = 0.5

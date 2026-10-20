@@ -13,20 +13,17 @@ var side_jobs: Node
 var target_marker: Control
 var speech: AudioStreamPlayer
 var testing_all_missions := false
-var testing_mission_id := "stranded"
 
 func testing_missions() -> Array:
 	return Array(IDS.values()) + Rules.IMPLEMENTED
 
 func testing_mission_city(id: String) -> int:
-	for offers in [IDS,Rules.OPENING]:
-		for city in offers:
-			if offers[city] == id: return int(city)
-	return 0
+	for city in IDS:
+		if IDS[city] == id: return int(city)
+	return Rules.offering_city(id)
 
-func set_testing_missions(enabled: bool, id: String = "") -> void:
+func set_testing_missions(enabled: bool) -> void:
 	testing_all_missions = enabled
-	if id in testing_missions(): testing_mission_id = id
 	_publish_offers()
 	if game.dock_interface != null and game.dock_interface.visible: game.dock_interface.rebuild()
 
@@ -78,11 +75,29 @@ static func _flow_text(raw: String, has_title: bool = false) -> String:
 
 func board(city: int) -> Dictionary:
 	var id := str(IDS.get(city,"")) if int(game.player_progress.campaign_stage) == 1 else Rules.next_offer(game.player_progress,city)
-	if testing_all_missions: id = testing_mission_id if city == testing_mission_city(testing_mission_id) else ""
+	var offers: Array[Dictionary] = []
+	if testing_all_missions:
+		for candidate in testing_missions():
+			if city == testing_mission_city(candidate): offers.append(_board_entry(candidate))
+		id = str(offers[0].id) if not offers.is_empty() else ""
 	var available := not id.is_empty() and active().is_empty() and (testing_all_missions or Rules.requirement_cost(game,id,city) <= int(game.player_progress.status.credits))
+	if not testing_all_missions and available: offers.append(_board_entry(id))
+	if not active().is_empty(): offers.clear()
 	var shown_id := str(active().id) if not active().is_empty() else id
-	var row: Dictionary = game.gameplay_catalogue.get("tables",{}).get("mission_availability",{}).get("records",{}).get(shown_id,{})
-	return {"available":available,"id":shown_id,"title":text(shown_id).get_slice("\n",0),"briefing":text(shown_id),"picture":"MISSSCRE/" + str(row.get("picture","piccy100")).to_upper() + ".BMP","welcome":welcome(city),"active":not active().is_empty(),"report":false,"objective":objective(),"response":""}
+	return _board_entry(shown_id).merged({"available":available,"welcome":welcome(city),"active":not active().is_empty(),"report":false,"response":"","offers":offers,"information":refinery_information() if city == 6 else [],"information_only":city == 6})
+
+func _board_entry(id: String) -> Dictionary:
+	var row: Dictionary = game.gameplay_catalogue.get("tables",{}).get("mission_availability",{}).get("records",{}).get(id,{})
+	return {"id":id,"title":text(id).get_slice("\n",0),"briefing":text(id),"picture":"MISSSCRE/"+str(row.get("picture","piccy100")).to_upper()+".BMP"}
+
+func refinery_information() -> Array[Dictionary]:
+	# MISSION1's factory entries use the no-op 004189f0 callback: guides,
+	# not campaign offers. The retail refinery has no Accept control.
+	var result: Array[Dictionary] = []
+	for id in ["ore","metal","pearl"]:
+		var row: Dictionary = game.gameplay_catalogue.get("tables",{}).get("mission_availability",{}).get("records",{}).get(id,{})
+		result.append({"id":id,"title":text(id).get_slice("\n",0),"briefing":text(id),"picture":"MISSSCRE/"+str(row.get("picture","piccy100")).to_upper()+".BMP"})
+	return result
 
 func welcome(city: int) -> String:
 	var raw := str(game.gameplay_catalogue.get("tables",{}).get("source_texts",{}).get("records",{}).get("english.default.txt",{}).get("text",""))
@@ -91,15 +106,12 @@ func welcome(city: int) -> String:
 	return _flow_text(raw)
 
 
-func objective() -> String:
-	if active().is_empty(): return "None"
-	if Rules.IMPLEMENTED.has(str(active().id)): return side_jobs.objective()
-	return "Return to a city with refined thorium." if active().get("refinery",false) else "Take raw thorium to the Refinery."
-
-func accept(city: int) -> String:
+func accept(city: int, selected_id: String = "") -> String:
 	if game.docking.stage != game.Docking.Stage.DOCKED: return "Accept missions while docked."
-	if not board(city).available: return "This mission is unavailable."
-	var id: String = board(city).id
+	var offer: Dictionary = board(city)
+	if not offer.available: return "This mission is unavailable."
+	var id: String = str(offer.id) if selected_id.is_empty() else selected_id
+	if not offer.offers.any(func(entry: Dictionary) -> bool: return entry.id == id): return "This mission is unavailable at this station."
 	if game.save_games.write(-1,game._save_snapshot("Before " + text(id).get_slice("\n",0))) != OK: return game.save_games.error
 	game.player_progress.missions.active = {"id":id,"city":city,"refinery":false}
 	game.player_progress.mission = text(id).get_slice("\n",0)
@@ -167,7 +179,9 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	var enemy := "2" if faction == "1" else "1"
 	if success: reputation[enemy] = float(reputation.get(enemy,0)) + delta * float(rewards.get("enemy",-0.5))
 	game.player_progress.missions["reputation"] = reputation
-	_cleanup()
+	if side_jobs.fishing != null: preload("res://mission_survivors.gd").release(side_jobs,side_jobs.fishing.enemies)
+	if side_jobs.remaining != null: preload("res://mission_survivors.gd").release(side_jobs,side_jobs.remaining.enemies)
+	_cleanup(true)
 	_publish_offers()
 	if not outcome_shown or not success: outcome.play(game.game_folder,success)
 	if game.dock_interface_active: game.dock_interface.rebuild()
@@ -175,15 +189,16 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 func _session_started(_restored: bool) -> void:
 	if speech != null: speech.stop()
 	_cleanup(); last_response = ""; last_response_id = ""; outcome.dismiss()
+	preload("res://campaign_resources.gd").restore_for_progress(game)
 	_publish_offers()
 
 func _publish_offers() -> void:
 	for id in Array(IDS.values()) + Rules.IMPLEMENTED:
-		var available: bool = can_save() and (testing_all_missions or (id in IDS.values() and int(game.player_progress.campaign_stage) == 1) or (id in Rules.IMPLEMENTED and int(game.player_progress.campaign_stage) == 2 and not game.player_progress.missions.completed.has(id) and id not in game.player_progress.missions.get("unavailable",[])))
+		var available: bool = can_save() and (testing_all_missions or (id in IDS.values() and int(game.player_progress.campaign_stage) == 1) or (id in Rules.IMPLEMENTED and Rules.next_offer(game.player_progress,Rules.offering_city(id)) == id))
 		game.events.mission_available.emit(id,available)
 
-func _cleanup() -> void:
-	if side_jobs != null: side_jobs.clear()
+func _cleanup(preserve_rover: bool = false) -> void:
+	if side_jobs != null: side_jobs.clear(not preserve_rover)
 	if is_instance_valid(pirate):
 		game.submarine_traffic.traders.erase(pirate)
 		game.cockpit_hud.map_data.actor_markers.erase(pirate.body)
@@ -198,6 +213,7 @@ func _cleanup() -> void:
 	spawned.clear()
 
 func _spawn_opening() -> void:
+	preload("res://campaign_resources.gd").spawn_opening_bonus(game)
 	var population: Node = game.object_population
 	var definitions = preload("res://object_definitions.gd")
 	var offset: Vector3 = game.world_root.get_meta("database_offset",Vector3.ZERO)
@@ -209,8 +225,6 @@ func _spawn_opening() -> void:
 		var pose := preload("res://scenery_loader.gd").placement(row,offset)
 		var definition := {}
 		if int(row.get("ObjectID",-1)) == 1: definition = definitions.inert_thorium(population.thorium_types.get("thorium",definitions.THORIUM))
-		elif int(row.get("AutoCreate",0)) == 1 and int(row.get("ObjectType",0)) == 64: definition = population.thorium_types.get("thorium",definitions.THORIUM)
-		elif int(row.get("AutoCreate",0)) == 1 and int(row.get("ObjectType",0)) == 86: definition = population.salvage_types.get("bottletop",definitions.SALVAGE)
 		elif int(row.get("ObjectID",-1)) == 2: pirate_pose = pose
 		elif int(row.get("ObjectID",-1)) == 4: patrol[clampi(int(row.get("param2",0)),0,4)] = pose.origin
 		if not definition.is_empty():

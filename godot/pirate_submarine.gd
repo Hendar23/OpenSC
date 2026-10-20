@@ -11,6 +11,10 @@ var cooldown := 0.0
 var missile_template: Node3D
 var hitbox: CharacterBody3D
 var bubble_trail: Node3D
+var attack_run = preload("res://npc_attack_run.gd").new()
+var shot_retry := 0.0
+var acquire_clock := 0.0
+var fallback_probe := 0
 
 static func install_pirate(model: Node3D, values: Dictionary) -> Node3D:
 	var agent = preload("res://trader_submarine.gd").install(model,values,load("res://pirate_submarine.gd"))
@@ -22,11 +26,11 @@ static func install_pirate(model: Node3D, values: Dictionary) -> Node3D:
 
 func reset() -> void:
 	super.reset()
-	victim = null; cooldown = 0; replan = 0; wait = 0
+	victim = null; cooldown = 0; replan = 0; wait = 0; shot_retry = 0; acquire_clock = 0; fallback_probe = 0; attack_run.reset()
 
 func set_local_simulation(on: bool) -> void:
 	if on != local_simulation:
-		victim = null; path.clear(); cooldown = 0; replan = 0
+		victim = null; path.clear(); cooldown = 0; replan = 0; attack_run.reset()
 	super.set_local_simulation(on)
 
 func configure_resources(folder: String) -> void:
@@ -39,8 +43,11 @@ func configure_resources(folder: String) -> void:
 func _advance_motion(delta: float) -> void:
 	if dead:
 		super._advance_motion(delta); return
-	cooldown = maxf(0,cooldown - delta); replan -= delta
-	if not _valid_target(victim): victim = _nearest_target()
+	cooldown = maxf(0,cooldown - delta); replan -= delta; shot_retry = maxf(0,shot_retry-delta); acquire_clock -= delta
+	if not _valid_target(victim):
+		victim = null
+		if acquire_clock <= 0:
+			victim = _nearest_target(); acquire_clock = 0.25+fmod(float(get_instance_id()%19)*0.017,0.12)
 	if victim == null:
 		if roaming:
 			_roam(delta); return
@@ -49,20 +56,12 @@ func _advance_motion(delta: float) -> void:
 	var distance := offset.length()
 	if distance > float(tuning.npc_detection) * 1.5:
 		victim = null; path.clear(); _coast(delta); return
-	# Approach diagonally through the shared water navigation, stopping at the
-	# original five-to-six unit fighting distance rather than ramming a target.
-	var clear_shot := _clear_shot(global_position,victim.global_position)
-	if distance > 6 or not clear_shot:
-		if replan <= 0:
-			replan = 0.75; path = _attack_route(victim.global_position)
-		if not path.is_empty(): super._advance_motion(delta)
-		else: _coast(delta,offset.normalized())
-	else:
-		path.clear(); _coast(delta,offset.normalized())
-	if distance > float(tuning.npc_attack_range) or cooldown > 0 or missile_template == null: return
+	attack_run.advance(self,victim,delta)
+	if distance > float(tuning.npc_attack_range) or cooldown > 0 or shot_retry > 0 or missile_template == null: return
 	var heading: Vector3 = get_parent().global_basis.z.normalized()
 	if heading.dot(offset.normalized()) <= 0.85: return
 	var muzzle: Vector3 = get_parent().to_global(Vector3(0,-0.05,1))
+	shot_retry = 0.12
 	var query := PhysicsRayQueryParameters3D.create(muzzle,victim.global_position,15,[body.get_rid()])
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if not hit.is_empty() and hit.collider != victim: return
@@ -73,10 +72,14 @@ func _advance_motion(delta: float) -> void:
 	missile.get_child(0).show()
 	cooldown = float(tuning.npc_fire_interval) * random.randf_range(0.8,1.2)
 
+func _continuous_route() -> bool:
+	return roaming or is_instance_valid(victim) or super._continuous_route()
+
 func _valid_target(target: Node3D) -> bool:
 	if not is_instance_valid(target) or not target.is_visible_in_tree(): return false
 	if target.get("dead") == true: return false
 	if target.get("active") == false: return false
+	if target.get_meta("bubble_screened",false): return false
 	return true
 
 func prepare_abstract_route() -> bool:
@@ -151,10 +154,13 @@ func _attack_route(target: Vector3) -> PackedVector3Array:
 	# a nearby target. Try clear firing positions around/above it before waiting.
 	away.y = 0; away = away.normalized()
 	if away.is_zero_approx(): away = Vector3.FORWARD
-	for lift in [0.0,3.0]:
-		for angle in [45.0,-45.0,90.0,-90.0,180.0]:
-			var point: Vector3 = target + away.rotated(Vector3.UP,deg_to_rad(angle)) * 5.5 + Vector3.UP * lift
-			if not system.water_clear(point) or not _clear_shot(point,target): continue
-			var candidate: PackedVector3Array = system.route(global_position,point)
-			if not candidate.is_empty(): return candidate
+	# Spread failed alternative searches over successive decisions rather than
+	# running every angle/height for every combatant in the same physics tick.
+	var angles := [45.0,-45.0,90.0,-90.0,180.0]
+	for attempt in range(3):
+		var probe := fallback_probe; fallback_probe = (fallback_probe+1)%10
+		var point: Vector3 = target + away.rotated(Vector3.UP,deg_to_rad(angles[probe%5])) * 5.5 + Vector3.UP * (0.0 if probe < 5 else 3.0)
+		if not system.water_clear(point) or not _clear_shot(point,target): continue
+		var candidate: PackedVector3Array = system.route(global_position,point)
+		if not candidate.is_empty(): return candidate
 	return PackedVector3Array()

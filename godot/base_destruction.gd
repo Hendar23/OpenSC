@@ -11,6 +11,24 @@ var bubble_texture: Texture2D
 var explosions := 0
 var wrecks := 0
 
+func setup_vessel(model: Node3D, traffic: Node) -> void:
+	# Keep a visual copy so mission cleanup cannot remove the demolition.
+	# Never copy controllers, hull colliders, hidden missile templates or smoke.
+	var visual := Node3D.new(); traffic.get_parent().add_child(visual)
+	for mesh: MeshInstance3D in model.find_children("*","MeshInstance3D",true,false):
+		if mesh.mesh == null or not _visible_within(mesh,model): continue
+		var copy := MeshInstance3D.new(); copy.mesh = mesh.mesh; copy.material_override = mesh.material_override
+		for surface in mesh.mesh.get_surface_count(): copy.set_surface_override_material(surface,mesh.get_surface_override_material(surface))
+		visual.add_child(copy); copy.global_transform = mesh.global_transform
+	setup([visual],[],traffic)
+
+func _visible_within(node: Node3D, root: Node3D) -> bool:
+	# The dead source hull is already hidden; test its descendants only.
+	while node != root:
+		if not node.visible: return false
+		node = node.get_parent() as Node3D
+	return true
+
 func setup(models: Array[Node3D], smoke: Array[Node], traffic: Node) -> void:
 	name = "BaseDestruction"; add_to_group("base_destruction")
 	frames = traffic.explosion_frames; sound = traffic.explosion_sound; bubble_texture = traffic.bubble_texture

@@ -32,7 +32,7 @@ func _physics_process(delta: float) -> void:
 	clock += delta * Damage.TICKS_PER_SECOND
 	while clock >= 1.0:
 		clock -= 1.0
-		if homing and is_instance_valid(target) and not target.dead:
+		if homing and is_instance_valid(target) and not target.dead and not target.get_meta("bubble_screened",false):
 			var desired := (target.global_position - global_position).normalized()
 			if not desired.is_zero_approx():
 				# Preserve the original steering strength; the Godot integrator

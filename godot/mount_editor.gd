@@ -4,6 +4,8 @@ const Pilot = preload("res://submarine_controller.gd")
 const Equipment = preload("res://submarine_equipment.gd")
 const Weapons = preload("res://submarine_weapons.gd")
 const Mounts = preload("res://submarine_mounts.gd")
+const IDS := ["deep_sea_lights","zapper","suckomat","magnet","grapple","bigears","escape","depthl","attract","rover","bubble","repel","strobe","flarel","sflarel","woosh","missile","ripper","electro"]
+const CAPTIONS := ["Deep-Sea Lights","Zapper","Suck-O-Matic","Magnet","Grappling Hook","Big Ears","Escape Pod","Depth Charge Launcher","Attractatron","ROV","Bubble Gun","Repellertron","Strobe","FLR-1000","FLR-1500","Woosh Drive","Missile Launcher","Ripper","Electro Bolt"]
 var viewport: SubViewport
 var camera: Camera3D
 var stage: Node3D
@@ -28,9 +30,9 @@ func _ready() -> void:
 	var sidebar := VBoxContainer.new(); sidebar.custom_minimum_size.x = 320; add_child(sidebar)
 	label = Label.new(); label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; sidebar.add_child(label)
 	selector = OptionButton.new()
-	for caption in ["Deep-Sea Lights","Zapper","Suck-O-Matic","Magnet","Grappling Hook","Big Ears","Escape Pod","Depth Charge Launcher"]: selector.add_item(caption)
+	for caption in CAPTIONS: selector.add_item(caption)
 	sidebar.add_child(selector)
-	selector.item_selected.connect(func(index: int) -> void: selected = ["deep_sea_lights","zapper","suckomat","magnet","grapple","bigears","escape","depthl"][index]; _sync())
+	selector.item_selected.connect(func(index: int) -> void: selected = IDS[index]; _sync())
 	for caption in ["Position X (right)","Position Y (up)","Position Z (back)","Rotation X (degrees)","Rotation Y (degrees)","Rotation Z (degrees)"]:
 		var row := HBoxContainer.new(); sidebar.add_child(row)
 		var text := Label.new(); text.text = caption; text.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(text)
@@ -71,6 +73,7 @@ func open(folder: String) -> void:
 	for item in equipment.available: mounts[item.id] = item.mount
 	mounts.zapper = weapons.muzzle
 	mounts.depthl = weapons.depth_mount
+	for id in weapons.arsenal.mounts: mounts[id] = weapons.arsenal.mounts[id]
 	var box := Equipment._bounds(Equipment._meshes(visual,Transform3D.IDENTITY))
 	target = box.get_center(); distance = maxf(0.6,box.size.length() * 1.5)
 	label.text = "Submarine mounts\n" + Mounts.profile(visual)

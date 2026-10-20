@@ -130,7 +130,7 @@ func _run() -> void:
 	var original_mount := weapon.muzzle.transform
 	weapon.update_fire(false,0); weapon.configure({"range":2.5}); weapon.set_upgraded(true)
 	check(weapon.muzzle.transform == original_mount and weapon.muzzle.find_children("ELECTRIC","Node3D",false,false).size() == 1,"Upgrade keeps the same equipment mount and one original twin-prong housing")
-	check(weapon.upgraded_emitters[0].is_equal_approx(Vector3(-0.165859,0.037052,-0.000778)) and weapon.upgraded_emitters[1].is_equal_approx(Vector3(0.165859,0.037052,-0.000778)),"Upgraded arcs originate at the pointed electrode vertices instead of their base faces")
+	check(weapon.upgraded_emitters[0].is_equal_approx(Vector3(-0.15,0.02,0.01)) and weapon.upgraded_emitters[1].is_equal_approx(Vector3(0.15,0.02,0.01)),"Original upgraded arc origins match 0045dd30 relative to the recovered housing socket")
 	check(weapon.effective_range() == 5 and weapon.effective_damage() == 5,"Original upgrade doubles range and raw damage")
 	check(weapon.icon == weapon.upgraded_icon and weapon.upgraded_icon != null,"Upgrade switches to ELECTRI2 HUD artwork")
 	target.position = weapon.muzzle.get_node("Emitter").global_position + Vector3(0,0,-4)

@@ -101,6 +101,7 @@ func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, bloo
 		explosion_audio = AudioStreamPlayer3D.new(); explosion_audio.stream = sound; explosion_audio.pitch_scale = random.randf_range(0.9,1.1); explosion_audio.max_distance = 35; add_child(explosion_audio); preload("res://explosion_audio.gd").apply(explosion_audio,0.0,"wildlife_splat_volume"); explosion_audio.play()
 
 func _collect_meshes(node: Node, result: Array[MeshInstance3D]) -> void:
+	if node.get_meta("exclude_from_debris",false): return
 	if node is MeshInstance3D and node.mesh != null: result.append(node)
 	for child in node.get_children(): _collect_meshes(child,result)
 

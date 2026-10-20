@@ -17,7 +17,6 @@
     {"id": "audio", "label": "Audio"},
     {"id": "gameplay", "label": "General"},
     {"id": "mods", "label": "Mods"},
-    {"id": "website", "label": "Website"},
     {"id": "exit", "label": "Exit"},
     {"id": "back", "label": "Back"}
   ]

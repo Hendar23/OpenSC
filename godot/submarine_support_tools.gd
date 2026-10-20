@@ -20,6 +20,8 @@ var explosion_frames: Array[Texture2D] = []
 var explosion_sound: AudioStream
 var fire_audio: AudioStreamPlayer
 var depth_audio: AudioStreamPlayer
+var attractatron: Node3D
+var rover: CharacterBody3D
 
 func setup(owner_equipment: Node3D, game_folder: String) -> void:
 	equipment = owner_equipment; folder = game_folder
@@ -31,6 +33,10 @@ func setup(owner_equipment: Node3D, game_folder: String) -> void:
 	explosion_sound = preload("res://submarine_weapons.gd")._sound(folder,"audio.weapon.depth.explosion","DCHARGE")
 	_add_tool("bigears","Big Ears","LISTENL",["LISTEN1","LISTEN2"],Vector3(-0.24,0.08,-0.03))
 	_add_tool("escape","Escape Pod","ESCAPE",["ESCAPE1","ESCAPE2","ESCAPE3","ESCAPE4"],equipment.available[1].mount.position)
+	_add_tool("attract","Attractatron","ATTRACT",["ATTRON","ATTROFF"],Vector3(0,0.22,-0.22)*equipment.pilot.VISUAL_SCALE)
+	attractatron = preload("res://attractatron.gd").new(); add_child(attractatron); attractatron.setup(equipment,folder)
+	_add_tool("rover","ROV","ROVER",["ROVERWP"],Vector3(0,-0.2,0.1)*equipment.pilot.VISUAL_SCALE)
+	rover = preload("res://remote_vehicle.gd").new(); equipment.pilot.get_parent().add_child(rover); rover.setup(self)
 
 func runtime() -> Node:
 	return get_tree().get_first_node_in_group("mission_runtime")
@@ -46,7 +52,8 @@ func _add_tool(id: String, caption: String, model_id: String, textures: Array, p
 	mount.hide()
 
 func activate(id: String, on: bool) -> void:
-	if id == "bigears" and on:
+	if id == "rover": rover.set_deployed(on)
+	elif id == "bigears" and on:
 		fire_listening()
 		for item in equipment.available:
 			if item.id == id: item.enabled = false
@@ -102,8 +109,9 @@ func _attach_pod(body: Node) -> void:
 	# Seat the pod at the transport's visible surface, preserving its contact
 	# point as the convoy moves. The enclosing NPC collider includes empty space.
 	var agent: Node3D = mission.side_jobs.target
+	var appearance: Node3D = body if body == agent else agent.get_parent()
 	var point := pod.global_position; var closest := point; var distance := INF
-	for mesh: MeshInstance3D in agent.get_parent().find_children("*","MeshInstance3D",true,false):
+	for mesh: MeshInstance3D in appearance.find_children("*","MeshInstance3D",true,false):
 		if mesh.mesh == null or not mesh.visible: continue
 		for surface in range(mesh.mesh.get_surface_count()):
 			var arrays: Array = mesh.mesh.surface_get_arrays(surface)
@@ -119,7 +127,8 @@ func _attach_pod(body: Node) -> void:
 	if not is_finite(distance): return
 	var normal := (point-closest).normalized()
 	if normal.is_zero_approx(): normal = Vector3.UP
-	if normal.dot(closest-body.to_global(agent.bounds.get_center())) < 0: normal = -normal
+	var center: Vector3 = body.get_meta("mission_target_center",Vector3.ZERO)
+	if normal.dot(closest-body.to_global(center)) < 0: normal = -normal
 	point = closest + normal * pod.radius
 	if equipment.pilot.global_position.distance_to(point) > 3.0: return
 	pod_target = body; pod_attached = true; pod_anchor = body.to_local(point)
@@ -138,11 +147,13 @@ func fire_listening() -> void:
 	for item in equipment.available:
 		if item.id == "bigears": mount = item.mount
 	if mount == null: return
-	var projectile := _projectile("LISTEND",mount.global_position - equipment.pilot.global_basis.z * 0.25)
+	var projectile := _projectile("LISTEND",preload("res://submarine_mounts.gd").launch_point(mount,equipment.pilot.visual,"bigears",Vector3(0,0,-0.25)))
 	if projectile == null: return
 	projectile.linear_velocity = equipment.pilot.linear_velocity
 	projectile.add_collision_exception_with(equipment.pilot)
-	if mission.side_jobs.id == "spytrad2" and is_instance_valid(mission.side_jobs.target): projectile.designated_target = mission.side_jobs.target.body
+	if mission.side_jobs.id in ["spytrad","spytrad2","spytech","spytech2"] and is_instance_valid(mission.side_jobs.target):
+		var listening_target: Node3D = mission.side_jobs.remaining.ship if mission.side_jobs.remaining != null else mission.side_jobs.target
+		projectile.designated_target = listening_target.body
 	progress.ammunition.bigears = count - 1
 	if fire_audio.stream != null:
 		fire_audio.volume_db = -16.0 + float(equipment.pilot.submarine_audio.tuning.settings.master_volume); fire_audio.play()
@@ -233,7 +244,8 @@ func _physics_process(delta: float) -> void:
 	for item in equipment.available:
 		if item.id == "escape": item["icon_state"] = 3 if passengers else 2 if is_instance_valid(pod_target) else 1 if pod_enabled else 0
 
-func reset() -> void:
+func reset(reset_rover: bool = true) -> void:
+	if reset_rover and is_instance_valid(rover): rover.reset()
 	_detach_pod(false)
 	for node in projectiles:
 		if is_instance_valid(node): node.queue_free()
@@ -248,3 +260,4 @@ func reset() -> void:
 
 func _exit_tree() -> void:
 	reset()
+	if is_instance_valid(rover): rover.queue_free()

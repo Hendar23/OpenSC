@@ -2,6 +2,8 @@ shader_type spatial;
 render_mode cull_disabled, ambient_light_disabled, fog_disabled;
 #include "res://natural_light.gdshaderinc"
 uniform sampler2D albedo_texture : source_color, filter_nearest, repeat_enable;
+uniform sampler2D terrain_albedo_texture : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform bool terrain_mipmaps = false;
 uniform sampler2D backface_texture : source_color, filter_nearest, repeat_enable;
 uniform bool has_backface_texture = false;
 uniform sampler2D emission_texture : source_color, filter_nearest, repeat_enable;
@@ -42,7 +44,10 @@ void vertex() {
 void fragment() {
 	vec2 uv = UV * uv_scale.xy + uv_offset.xy;
 	vec4 color = albedo_color;
-	if (has_texture) color *= texture(albedo_texture,uv);
+	if (has_texture) {
+		if (terrain_mipmaps) color *= texture(terrain_albedo_texture,uv);
+		else color *= texture(albedo_texture,uv);
+	}
 	if (use_vertex_color) color *= COLOR;
 	if (has_backface_texture && !FRONT_FACING) color = texture(backface_texture,uv);
 	if (color.a < alpha_threshold) discard;

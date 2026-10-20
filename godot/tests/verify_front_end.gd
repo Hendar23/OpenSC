@@ -67,8 +67,8 @@ func _run() -> void:
 			check(actor.node.mobility == species.mobility and is_equal_approx(actor.node.roam_radius,float(species.roam_radius)),"Menu respects creature mobility and roaming settings")
 	check(game.menu_backdrop.actors.all(func(actor: Dictionary) -> bool: return actor.node.collision_layer == 0 and actor.node.collision_mask == 5),"Menu actors cannot change gameplay collisions")
 	check(not game.front_end.is_button_available("continue") and game.front_end.is_button_available("load") == game.save_games.slots().any(func(slot: Dictionary) -> bool: return slot.valid) and game.front_end.is_button_available("controls") and game.front_end.is_button_available("audio") and game.front_end.is_button_available("graphics"),"Controls, Audio and Graphics are available and Load reflects existing saves")
-	check(game.front_end.buttons.website.text == "Website" and game.front_end.menu_config.title_rect[2] == 294 and game.front_end.is_button_available("website") and game.front_end.WEBSITE_URL == "https://github.com/Hendar23/OpenSC","Smaller title and Website label retain the repository link")
-	check(game.front_end.buttons.options.visible and not game.front_end.buttons.controls.visible and not game.front_end.buttons.mods.visible and not game.front_end.buttons.graphics.visible and not game.front_end.buttons.audio.visible,"Main menu groups settings behind Options")
+	check(not game.front_end.buttons.has("website") and game.front_end.menu_config.title_rect[2] == 294,"Main menu removes Website and preserves title layout")
+	check(game.front_end.buttons.options.visible and game.front_end.buttons.mods.visible and not game.front_end.buttons.controls.visible and not game.front_end.buttons.graphics.visible and not game.front_end.buttons.audio.visible,"Main menu exposes Mods directly and groups settings behind Options")
 	check(game.front_end.menu_picture.material is ShaderMaterial and game.front_end.menu_picture.material.get_shader_parameter("corner_radius") == 12.0,"Title card has rounded corners without changing the source artwork")
 	check(game._desired_mouse_mode() == Input.MOUSE_MODE_VISIBLE or Input.mouse_mode == Input.MOUSE_MODE_VISIBLE,"Main menu shows the pointer")
 	if DisplayServer.get_name() != "headless":
@@ -110,7 +110,7 @@ func _run() -> void:
 		root.get_texture().get_image().save_png("res://tests/live-menu-submarine-preview.png")
 	var accept := InputEventJoypadButton.new(); accept.pressed = true; accept.button_index = JOY_BUTTON_A
 	game.front_end.buttons.options.grab_focus(); game.front_end._input(accept)
-	check(game.front_end.menu_page == "options" and game.front_end._visible_button_order() == ["controls","graphics","audio","gameplay","mods","back"] and not game.front_end.buttons.new_game.visible,"Controller opens the five settings entries and Back")
+	check(game.front_end.menu_page == "options" and game.front_end._visible_button_order() == ["controls","graphics","audio","gameplay","back"] and not game.front_end.buttons.new_game.visible,"Controller opens the four settings entries and Back")
 	var down := InputEventJoypadButton.new(); down.pressed = true; down.button_index = JOY_BUTTON_DPAD_DOWN
 	game.front_end._input(down)
 	check(root.gui_get_focus_owner() == game.front_end.buttons.graphics,"Options navigation reaches Graphics after Controls")
@@ -118,8 +118,9 @@ func _run() -> void:
 		for frame in range(4): await process_frame
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/options-menu-preview.png")
-	check(game.front_end.is_button_available("mods"),"Mods is available from the main menu")
-	game.front_end.buttons.mods.pressed.emit()
+	game.front_end._activate_button("back")
+	check(game.front_end.is_button_available("mods") and game.front_end.buttons.mods.visible,"Mods is available from the main menu")
+	game.front_end.buttons.mods.grab_focus(); game.front_end._input(accept)
 	check(game.mod_panel.visible and not game.mod_panel.embedded,"Main-menu Mods opens the mod-management window")
 	check(paused and game.mod_panel.can_process() and game.mod_panel.content.can_process(),"Mods controls stay interactive while the main menu pauses gameplay")
 	if DisplayServer.get_name() != "headless":
@@ -129,7 +130,8 @@ func _run() -> void:
 	var mods_cancel := InputEventJoypadButton.new(); mods_cancel.pressed = true; mods_cancel.button_index = JOY_BUTTON_B
 	game.mod_panel._input(mods_cancel)
 	check(not game.mod_panel.visible,"Controller Back closes the Mods window")
-	check(game.front_end.menu_page == "options" and root.gui_get_focus_owner() == game.front_end.buttons.mods,"Closing Mods returns focus to its Options entry")
+	check(game.front_end.menu_page == "main" and root.gui_get_focus_owner() == game.front_end.buttons.mods,"Closing Mods returns focus to its main menu entry")
+	game.front_end._activate_button("options")
 	game.front_end.buttons.controls.pressed.emit()
 	check(game.front_end.controls_menu.visible and paused,"Controls opens over the paused main menu")
 	var cancel := InputEventJoypadButton.new(); cancel.pressed = true; cancel.button_index = JOY_BUTTON_B

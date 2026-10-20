@@ -42,7 +42,7 @@ func run() -> void:
 		check(runtime.board(city).available,"First job offered at city %d" % city)
 		var credits: int = game.player_progress.status.credits
 		check(runtime.accept(city).is_empty(),"Accept first mission %d" % city)
-		check(runtime.spawned.size() == 13,"Five inert crystals, four bonus ore, three caps and one pirate")
+		check(runtime.spawned.size() == 6,"Five mission crystals and one pirate are mission-owned; cave ore and bonus salvage persist separately")
 		check(runtime.pirate.patrol.size() == 5 and is_equal_approx(runtime.pirate.health.remaining,9.0),"Original patrol and weakened pirate")
 		check(game.save_games.read(-1).progress.missions.active.is_empty(),"Autosave records state before acceptance")
 		var before_mission := FileAccess.get_file_as_string(game.save_games.path(-1))

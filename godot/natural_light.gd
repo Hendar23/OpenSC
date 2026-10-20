@@ -136,6 +136,9 @@ func attach(node: Node) -> void:
 				if original.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA:
 					material.shader = alpha_shader()
 				for entry in [["albedo_color",original.albedo_color],["has_texture",original.albedo_texture != null],["albedo_texture",original.albedo_texture],["use_vertex_color",original.vertex_color_use_as_albedo],["roughness_value",original.roughness],["metallic_value",original.metallic],["specular_value",original.metallic_specular],["uv_scale",original.uv1_scale],["uv_offset",original.uv1_offset]]: material.set_shader_parameter(entry[0],entry[1])
+				if original.get_meta("terrain_mipmaps", false):
+					material.set_shader_parameter("terrain_mipmaps", true)
+					material.set_shader_parameter("terrain_albedo_texture", original.albedo_texture)
 				material.set_shader_parameter("alpha_threshold",original.alpha_scissor_threshold if original.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR else 0.0)
 				material.set_shader_parameter("has_normal_texture",original.normal_enabled and original.normal_texture != null); material.set_shader_parameter("normal_texture",original.normal_texture); material.set_shader_parameter("normal_scale",original.normal_scale)
 				material.set_shader_parameter("has_roughness_texture",original.roughness_texture != null); material.set_shader_parameter("roughness_texture",original.roughness_texture); material.set_shader_parameter("roughness_channel",channel_mask(original.roughness_texture_channel))

@@ -73,6 +73,7 @@ var active := false:
 		if is_inside_tree(): reset_physics_interpolation()
 		if not value and impact_rumble != null: impact_rumble.stop()
 var controls_enabled := true
+var remote_controlled := false
 var visual: Node3D
 var damage_smoke: Node3D
 
@@ -237,7 +238,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		previous_velocity = Vector3.ZERO
 	var impact := _contact_impact(state)
 	var impact_speed: float = impact.speed
-	var controls := Controls.read() if controls_enabled else Vector4.ZERO
+	var controls := Controls.read() if controls_enabled and not remote_controlled else Vector4.ZERO
 	movement.velocity = state.linear_velocity
 	movement.angular_velocity = state.angular_velocity
 	movement.step(state.step, state.transform.basis, controls.x, controls.y, controls.z, controls.w)

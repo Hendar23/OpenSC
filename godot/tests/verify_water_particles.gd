@@ -15,6 +15,7 @@ func _run() -> void:
 		await physics_frame
 	check(game.startup_complete, "Game starts with particles")
 	if not game.startup_complete: quit(1); return
+	game.developer_enabled = true
 	game._update_mouse_pointer(); check(game._desired_mouse_mode() == Input.MOUSE_MODE_HIDDEN, "Pointer hidden while piloting")
 	game._toggle_developer_ui(); check(game._desired_mouse_mode() == Input.MOUSE_MODE_VISIBLE, "Pointer restored immediately for F1")
 	game._toggle_developer_ui(); check(game._desired_mouse_mode() == Input.MOUSE_MODE_HIDDEN, "Pointer hidden immediately after F1 closes")

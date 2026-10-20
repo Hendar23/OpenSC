@@ -73,9 +73,16 @@ func run() -> void:
  await capture("missions-done")
  for current_race in [1,2,4]:
   race = current_race; state.race = race; ui.open("home")
+  var expected_home: Image = preload("res://legacy_bmp.gd").load_image(folder.path_join("INTROTEX/ENGLISH/" + {1:"TRAD1",2:"TECH1",4:"VELCOVA"}[race] + ".BMP"))
+  check(ui.background.texture.get_image().get_data() == expected_home.get_data(),"Race %d home uses its original background" % race)
   for action in ["missions","equipment","save","launch"]:
    var button: Button = ui.layout.get_node(action)
    check(button.highlight_art.size() == 1 and button.held_art.size() == 1,"Race %d original home button: %s" % [race,action])
+   if race == 4:
+    check(button.held_art[0].texture == ui._button_texture({"missions":"MISBUT","equipment":"TRABUT","save":"SAVBUT","launch":"LAUBUT"}[action]),"Refinery home uses green pressed artwork: " + action)
+  if race == 4:
+   check(ui.text_colour == Color.GREEN,"Refinery text matches the green original skin")
+   await capture("refinery-home")
   state.can_save = false; ui.rebuild()
   var cover: TextureRect = ui.layout.get_node("NoSavePanel")
   var cover_image := cover.texture.get_image(); var backdrop := ui.background.texture.get_image(); var matches := 0; var samples := 0
@@ -87,6 +94,14 @@ func run() -> void:
   check(float(matches) / samples > 0.25 and ui.layout.get_node_or_null("save") == null,"Race %d no-save cover aligns with matching frame pixels and removes Save" % race)
   await capture("no-save-%d" % race)
   state.can_save = true
+  if race == 4:
+   ui.open("equipment")
+   var expected_shop: Image = preload("res://legacy_bmp.gd").load_image(folder.path_join("INTROTEX/ENGLISH/TRADE.BMP"))
+   check(ui.background.texture.get_image().get_data() == expected_shop.get_data(),"Refinery equipment uses the original green TRADE screen")
+   check(ui.layout.get_node("home").held_art[0].texture == ui._button_texture("BUTLIT") and ui.layout.get_node("goods").held_art[0].texture == ui._button_texture("RGBUT"),"Refinery equipment Done and Goods use green artwork")
+   for entry in [["BuyShieldRepair","BUY"],["SellShieldRepair","SELL"],["SaleInfo","INFO"]]:
+    check(ui.layout.get_node(entry[0]).held_art[0].texture == ui._button_texture("ENGLISH/" + entry[1] + "LIT"),"Refinery equipment uses green pressed state: " + entry[1])
+   await capture("refinery-equipment")
   ui.open("goods")
   var prefix: String = {1:"B",2:"P",4:"R"}[race]
   done = ui.layout.get_node("equipment")

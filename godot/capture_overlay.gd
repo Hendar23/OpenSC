@@ -30,6 +30,20 @@ func _ready() -> void:
 	screenshot_label.add_theme_color_override("font_shadow_color",Color.BLACK)
 	screenshot_label.add_theme_constant_override("shadow_offset_x",1); screenshot_label.add_theme_constant_override("shadow_offset_y",1)
 	screenshot_label.hide()
+	get_tree().node_added.connect(_watch_window)
+	_watch_windows(get_tree().root)
+
+func _watch_windows(node: Node) -> void:
+	_watch_window(node)
+	for child in node.get_children(): _watch_windows(child)
+
+func _watch_window(node: Node) -> void:
+	if node is Window and node != get_window():
+		var callback := _window_input.bind(node)
+		if not node.window_input.is_connected(callback): node.window_input.connect(callback)
+
+func _window_input(event: InputEvent, window: Window) -> void:
+	_handle_capture_input(event,window)
 
 func _process(delta: float) -> void:
 	if fps_label.visible: fps_label.text = "%d FPS" % Engine.get_frames_per_second()
@@ -38,13 +52,16 @@ func _process(delta: float) -> void:
 	if message_time <= 0: screenshot_label.hide()
 
 func _input(event: InputEvent) -> void:
+	_handle_capture_input(event,get_viewport())
+
+func _handle_capture_input(event: InputEvent, viewport: Viewport) -> void:
 	if event.is_echo(): return
 	if Bindings.pressed(event,"fps_toggle"):
 		fps_label.visible = not fps_label.visible
-		get_viewport().set_input_as_handled()
+		viewport.set_input_as_handled()
 	elif Bindings.pressed(event,"screenshot"):
 		save_screenshot()
-		get_viewport().set_input_as_handled()
+		viewport.set_input_as_handled()
 
 func screenshot_folder() -> String:
 	var folder := ProjectSettings.globalize_path("res://..").simplify_path() if OS.has_feature("editor") else OS.get_executable_path().get_base_dir()

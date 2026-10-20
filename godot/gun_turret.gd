@@ -134,6 +134,7 @@ func _physics_process(delta: float) -> void:
 	if not local_simulation: return
 	if dead or head == null or not is_instance_valid(player): return
 	if not player.active or not player.controls_enabled or player.dead: return
+	if player.get_meta("bubble_screened",false): return
 	cooldown = maxf(0,cooldown - delta); retaliation = maxf(0,retaliation - delta)
 	var relative := player.global_position - head.global_position
 	if relative.length_squared() > float(tuning.turret_range) * float(tuning.turret_range): return

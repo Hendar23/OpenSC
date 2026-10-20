@@ -18,6 +18,7 @@ func _run() -> void:
 		await physics_frame
 	check(game.startup_complete and game.sound_panel != null, "Game creates the sound tuning panel")
 	var panel: PanelContainer = game.sound_panel
+	game.developer_enabled = true
 	var audio: Node = game.pilot.submarine_audio
 	game._toggle_sound_tuning()
 	check(game.canvas.visible and panel.visible and not game.tuning_panel.visible, "Sound shortcut reveals developer UI without overlapping movement tuning")

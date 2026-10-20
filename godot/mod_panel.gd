@@ -15,6 +15,8 @@ var scroll: ScrollContainer
 var refresh_button: Button
 var apply_button: Button
 var cancel_button: Button
+var description: Label
+var selected_id := ""
 
 func _ready() -> void:
 	# Main-menu gameplay is paused; this window must still receive GUI input.
@@ -54,9 +56,16 @@ func _ready() -> void:
 	rows = VBoxContainer.new()
 	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(rows)
+	var details := ScrollContainer.new()
+	details.custom_minimum_size.y = 85
+	details.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	column.add_child(details)
+	description = Label.new()
+	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	description.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	details.add_child(description)
 	info = Label.new()
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	info.custom_minimum_size.y = 70
 	column.add_child(info)
 	var buttons := HBoxContainer.new()
 	column.add_child(buttons)
@@ -169,6 +178,7 @@ func _build_rows() -> void:
 		enabled.toggled.connect(func(on: bool) -> void:
 			if on and id not in pending_enabled: pending_enabled.append(id)
 			elif not on: pending_enabled.erase(id)
+			_show_description(id)
 			_update_info()
 		)
 		line.add_child(enabled)
@@ -178,6 +188,7 @@ func _build_rows() -> void:
 			var move := Button.new()
 			move.text = "Earlier" if direction == -1 else "Later"
 			move.pressed.connect(func() -> void:
+				_show_description(id)
 				var index := pending_order.find(id)
 				var target := clampi(index + direction, 0, pending_order.size() - 1)
 				pending_order.remove_at(index)
@@ -189,16 +200,23 @@ func _build_rows() -> void:
 		for index in range(controls.size()):
 			var control: Control = controls[index]
 			control.set_meta("mod_id",id); control.set_meta("mod_column",index)
-			control.focus_entered.connect(func() -> void: scroll.ensure_control_visible(control))
+			control.focus_entered.connect(func() -> void: _show_description(id); scroll.ensure_control_visible(control))
+			control.mouse_entered.connect(func() -> void: _show_description(id))
 			if str(id) == focused_id and index == focused_column: control.grab_focus()
 		lines.append(controls)
-		var description := Label.new()
+	_wire_focus(lines)
+	_show_description(selected_id if selected_id in choices else "")
+	_update_info()
+
+func _show_description(id: String) -> void:
+	selected_id = id
+	description.text = ""
+	for pack in Mods.packs:
+		if str(pack.id) != id: continue
 		description.text = str(pack.description)
 		if not pack.errors.is_empty(): description.text += "\n" + "\n".join(pack.errors)
-		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		item.add_child(description)
-	_wire_focus(lines)
-	_update_info()
+		break
+	if description.get_parent() is ScrollContainer: description.get_parent().scroll_vertical = 0
 
 func _wire_focus(lines: Array[Array]) -> void:
 	for column in range(3):
@@ -236,6 +254,7 @@ func _update_info() -> void:
 	if not notes.is_empty(): info.text += "\n" + "\n".join(notes.slice(0, 5))
 	if notes.size() > 5: info.text += "\n%d more notes (hover to read)." % (notes.size() - 5)
 	info.tooltip_text = "\n".join(notes)
+	info.visible = not info.text.strip_edges().is_empty()
 
 func _apply() -> void:
 	if embedded:
@@ -248,6 +267,7 @@ func _commit_apply() -> void:
 	var result := Mods.apply(pending_enabled, pending_order, persist_preferences)
 	if result != OK:
 		info.text = "Could not save mod selection: " + error_string(result)
+		info.show()
 		return
 	hide()
 	applied.emit()

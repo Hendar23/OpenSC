@@ -7,10 +7,12 @@ static func restore(saved: Variant = {}) -> Dictionary:
 	if not saved is Dictionary: saved = {}
 	result.missions = preload("res://mission_state.gd").restore(saved.get("missions",{}))
 	result.mail = preload("res://mailbox.gd").restore(saved.get("mail",{}))
-	result.ammunition = {"bigears":5}
+	result.ammunition = {"bigears":5,"woosh":99.0,"electro":99.0}
 	if saved.get("ammunition") is Dictionary:
-		var ammo: Variant = saved.ammunition.get("bigears",5)
-		if (ammo is float or ammo is int) and is_finite(float(ammo)): result.ammunition.bigears = clampi(int(ammo),0,5)
+		for key in result.ammunition:
+			var ammo: Variant = saved.ammunition.get(key,result.ammunition[key])
+			if (ammo is float or ammo is int) and is_finite(float(ammo)):
+				result.ammunition[key] = clampi(int(ammo),0,5) if key == "bigears" else clampf(float(ammo),0,99)
 	var jobs: Variant = saved.get("campaign_jobs",0)
 	result.campaign_jobs = clampi(int(jobs),0,999) if (jobs is int or jobs is float) and is_finite(float(jobs)) else 0
 	result.markets = preload("res://commodity_market.gd").restore(saved.get("markets",{}))
@@ -45,8 +47,8 @@ static func restore(saved: Variant = {}) -> Dictionary:
 	if saved.get("hold") is Dictionary:
 		for id in saved.hold:
 			var count: Variant = saved.hold[id]
-			if id is String and (count is int or count is float) and is_finite(float(count)) and count > 0:
-				result.hold[id] = clampi(int(count),1,9999)
+			if (id is String or id is StringName) and (count is int or count is float) and is_finite(float(count)) and count > 0:
+				result.hold[str(id)] = clampi(int(count),1,9999)
 	if saved.get("cargo") is Dictionary:
 		for id in saved.cargo:
 			var count: Variant = saved.cargo[id]

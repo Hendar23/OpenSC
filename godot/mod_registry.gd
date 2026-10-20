@@ -112,6 +112,9 @@ static func _read_pack(folder: String) -> Dictionary:
 			pack.errors.append("Unsupported asset ID or file type: " + str(key)); continue
 		if not FileAccess.file_exists(resolved):
 			pack.errors.append("Missing asset file: " + relative); continue
+		var terrain_mipmaps: Variant = entry.get("terrain_mipmaps", false)
+		if not terrain_mipmaps is bool or (entry.has("terrain_mipmaps") and not texture):
+			pack.errors.append("terrain_mipmaps must be a boolean on a texture asset: " + str(key)); continue
 		var scale: Variant = entry.get("scale", 1.0)
 		if not (scale is float or scale is int) or not is_finite(float(scale)) or float(scale) <= 0.0:
 			pack.errors.append("Invalid model scale: " + str(key)); continue
@@ -133,6 +136,7 @@ static func _read_pack(folder: String) -> Dictionary:
 		if trigger != "" and (not model or trigger != "model_radius"):
 			pack.errors.append("Model trigger_distance must be model_radius: " + str(key)); continue
 		pack.assets[asset_id] = {"id": asset_id, "path": resolved, "relative": relative, "pack": pack.id, "name": pack.name, "scale": float(scale), "forward_axis": axis, "parts": parts.duplicate(), "material_textures": material_textures}
+		if terrain_mipmaps: pack.assets[asset_id]["terrain_mipmaps"] = true
 		if asset_id == "cockpit.first_person":
 			var glass := {}
 			var options: Variant = entry.get("glass",{})

@@ -40,6 +40,7 @@ func _run() -> void:
 		await physics_frame
 	check(game.startup_complete, "Game loads with cockpit instruments")
 	if not game.startup_complete: quit(1); return
+	game._begin_new_game()
 	game.pilot.set_physics_process(false)
 	game.pilot.freeze = true
 	var hud: CanvasLayer = game.cockpit_hud

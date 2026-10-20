@@ -1,8 +1,0 @@
-{
-  "schema_version": 1,
-  "id": "example.png-texture",
-  "name": "Mod example: PNG submarine texture",
-  "version": "1.0",
-  "description": "Demonstrates a modern PNG replacement for texture.sub1.",
-  "assets": { "texture.sub1": { "file": "textures/sub1.png" } }
-}

@@ -49,6 +49,10 @@ func run() -> void:
 	game.pilot.restore_health(100,70); game.player_progress.status.credits = 321
 	game.player_progress.standing[str(port.race)] = "good"
 	game.player_progress.campaign_stage = 2
+	# Entering stage two implies the opening mission's persistent resources
+	# already exist. Keep this manually advanced fixture consistent before save,
+	# rather than triggering old-beta resource migration only during load.
+	preload("res://campaign_resources.gd").restore_for_progress(game)
 	game.cockpit_hud.map_data.explored.fill(Color.BLACK)
 	game.cockpit_hud.map_data.explored.set_pixel(100,101,Color.WHITE)
 	var authored_count: int = game.object_population.snapshot().size()

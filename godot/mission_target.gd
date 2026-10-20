@@ -4,15 +4,19 @@ var game: Node
 var jobs: Node
 
 func _ready() -> void:
+	# Pausing must clear the previous draw commands, as well as stop gameplay.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 func target_body() -> CollisionObject3D:
+	if jobs.remaining != null: return jobs.remaining.target_body()
+	if jobs.fishing != null: return jobs.fishing.target_body()
 	if jobs.id == "stranded":
 		if jobs.delivered_city == 0 and is_instance_valid(jobs.target) and not jobs.target.dead: return jobs.target
 	elif jobs.id in ["breakout","breakout2"]:
 		if not jobs.passengers and is_instance_valid(jobs.target) and not jobs.target.dead: return jobs.target.body
-	elif jobs.id == "spytrad2":
+	elif jobs.id in ["spytrad","spytrad2"]:
 		# Original 00490640 targets the scout first, then the revealed base.
 		if not jobs.vents.is_empty():
 			for vent in jobs.vents:
@@ -23,10 +27,11 @@ func target_body() -> CollisionObject3D:
 func target_point() -> Vector2:
 	var target := target_body()
 	if not is_instance_valid(target): return Vector2.INF
-	if not game.pilot_mode or not game.pilot.active or game.pilot.dead or game.world_loading or game.dock_interface_active or game.map_open or game.front_end.menu_layer.visible: return Vector2.INF
+	if get_tree().paused or not game.pilot_mode or not game.pilot.active or game.pilot.dead or game.world_loading or game.dock_interface_active or game.map_open or game.front_end.menu_layer.visible: return Vector2.INF
 	var camera: Camera3D = game.camera
 	var center: Vector3 = target.get_meta("mission_target_center",Vector3.ZERO)
-	if jobs.id != "stranded" and is_instance_valid(jobs.target) and target == jobs.target.body: center = jobs.target.bounds.get_center()
+	if jobs.fishing != null: center = target.get_parent().get_node("Trader").bounds.get_center()
+	elif jobs.remaining == null and jobs.id != "stranded" and is_instance_valid(jobs.target) and target == jobs.target.body: center = jobs.target.bounds.get_center()
 	var point: Vector3 = target.get_global_transform_interpolated() * center
 	if camera.is_position_behind(point) or camera.global_position.distance_to(point) > camera.far: return Vector2.INF
 	var projected := camera.unproject_position(point)

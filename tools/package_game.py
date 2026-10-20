@@ -14,6 +14,19 @@ PROJECT = ROOT / "godot"
 TEXT_TYPES = {".gd", ".gdshader", ".gdshaderinc", ".tscn", ".tres", ".godot"}
 
 
+def release_view_settings(text: str) -> str:
+    """Ship developer tools disabled even if a local defaults file enabled them."""
+    section = re.search(r"(?ms)^\[developer\][ \t]*\r?\n.*?(?=^\[|\Z)", text)
+    if section is None:
+        return text.rstrip() + "\n\n[developer]\n\nenabled=false\n"
+    body = section.group()
+    if re.search(r"(?m)^enabled[ \t]*=", body):
+        body = re.sub(r"(?m)^enabled[ \t]*=.*$", "enabled=false", body)
+    else:
+        body = body.rstrip() + "\nenabled=false\n\n"
+    return text[:section.start()] + body + text[section.end():]
+
+
 def build(destination: Path, archive_output: bool = True) -> dict:
     if destination.exists():
         raise SystemExit(f"Refusing to overwrite an existing folder: {destination}")
@@ -38,6 +51,8 @@ def build(destination: Path, archive_output: bool = True) -> dict:
         target = destination / "godot" / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
+        if relative == Path("view_defaults.cfg"):
+            target.write_text(release_view_settings(target.read_text(encoding="utf-8")), encoding="utf-8")
         uid = source.with_name(source.name + ".uid")
         if uid.is_file():
             shutil.copy2(uid, target.with_name(target.name + ".uid"))

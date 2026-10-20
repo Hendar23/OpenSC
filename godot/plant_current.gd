@@ -38,6 +38,9 @@ func _prepare(node: Node) -> void:
 			material.set_shader_parameter("albedo_color",original.albedo_color)
 			material.set_shader_parameter("has_texture",original.albedo_texture != null)
 			if original.albedo_texture != null: material.set_shader_parameter("albedo_texture",original.albedo_texture)
+			if original.get_meta("terrain_mipmaps", false):
+				material.set_shader_parameter("terrain_mipmaps", true)
+				material.set_shader_parameter("terrain_albedo_texture", original.albedo_texture)
 			material.set_shader_parameter("roughness_value",original.roughness)
 			material.set_shader_parameter("metallic_value",original.metallic)
 			material.set_shader_parameter("root_height",bounds.position.y)

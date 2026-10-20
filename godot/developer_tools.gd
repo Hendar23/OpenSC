@@ -228,26 +228,12 @@ func _build_interface() -> void:
 	)
 	system.add_child(equipment_button)
 	var missions_button := Button.new(); missions_button.name = "UnlockTestingMissions"; missions_button.toggle_mode = true
-	missions_button.text = "All implemented missions for testing: Off"; missions_button.focus_mode = Control.FOCUS_NONE
-	var mission_choice := OptionButton.new(); mission_choice.name = "TestingMission"; mission_choice.disabled = true
-	mission_choice.tooltip_text = "Choose the mission to offer at its original station (shown in brackets). Bypasses progression, completion and affordability checks. Required equipment is still needed to play."
-	for id in game.mission_runtime.testing_missions():
-		var origin: int = game.mission_runtime.testing_mission_city(id)
-		var city_name: String = {1:"Touka Reef",2:"Velcova Station",3:"Beluga Basin",4:"Tryton"}.get(origin,"")
-		# The developer UI is built before the original text catalogue loads.
-		var mission_title: String = {"stranded":"Rescue Bacau Shuttle","spytrad2":"Bohine Forces: Covert Operation","breakout":"Save Procha Prisoners","breakout2":"Save Procha Prisoners"}.get(id,"Prospectors Wanted!")
-		mission_choice.add_item(mission_title + " (" + city_name + ")")
-		mission_choice.set_item_metadata(mission_choice.item_count - 1,id)
-		if id == game.mission_runtime.testing_mission_id: mission_choice.select(mission_choice.item_count - 1)
-	mission_choice.item_selected.connect(func(index: int) -> void:
-		game.mission_runtime.set_testing_missions(missions_button.button_pressed,str(mission_choice.get_item_metadata(index)))
-	)
+	missions_button.text = "All missions for testing: Off"; missions_button.focus_mode = Control.FOCUS_NONE
 	missions_button.toggled.connect(func(enabled: bool) -> void:
-		missions_button.text = "All implemented missions for testing: " + ("On" if enabled else "Off")
-		mission_choice.disabled = not enabled
-		game.mission_runtime.set_testing_missions(enabled,str(mission_choice.get_selected_metadata()))
+		missions_button.text = "All missions for testing: " + ("On" if enabled else "Off")
+		game.mission_runtime.set_testing_missions(enabled)
 	)
-	system.add_child(missions_button); system.add_child(mission_choice)
+	system.add_child(missions_button)
 	missions_button.set_pressed(game.mission_runtime.testing_all_missions)
 	var time_presets = HBoxContainer.new(); time_presets.name = "TimeOfDayPresets"; system.add_child(time_presets)
 	for preset in [["Day", 12.0], ["Sunset", 18.0], ["Night", 0.0], ["Sunrise", 6.0]]:
@@ -457,6 +443,7 @@ func _build_water_controls() -> void:
 		slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
 
 func _toggle_developer_ui() -> void:
+	if not game.developer_enabled and not game.developer_ui_visible: return
 	game.developer_ui_visible = not game.developer_ui_visible
 	game.canvas.visible = game.developer_ui_visible
 	game._update_mouse_pointer()
@@ -486,14 +473,14 @@ func _select_developer_tab(tab_name: String) -> void:
 
 # Retained for capture/test scripts; F1 is the only menu keyboard shortcut.
 func _toggle_tuning() -> void:
-	if not game.pilot_mode: return
+	if not game.developer_enabled or not game.pilot_mode: return
 	if game.cockpit_hud != null: game.cockpit_hud.visible = not game.world_loading and game.docking.stage != Docking.Stage.DOCKED
 	game.developer_ui_visible = true
 	game.canvas.visible = true
 	game._select_developer_tab("Movement")
 
 func _toggle_sound_tuning() -> void:
-	if not game.pilot_mode: return
+	if not game.developer_enabled or not game.pilot_mode: return
 	game.developer_ui_visible = true
 	game.canvas.visible = true
 	game._select_developer_tab("Sound")

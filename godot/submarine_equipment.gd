@@ -17,6 +17,7 @@ var counter_digits: Array[Texture2D] = []
 var pilot: Node3D
 var lamp: SpotLight3D
 var support_tools: Node3D
+var extra_tools: Node3D
 var bulb_materials: Array[StandardMaterial3D] = []
 
 func setup(player: Node3D, folder: String) -> void:
@@ -43,6 +44,7 @@ func setup(player: Node3D, folder: String) -> void:
 	lamp = SpotLight3D.new()
 	lamp.name = "DeepSeaBeam"
 	lamp.position = Vector3(0, housing_bounds.get_center().y, housing_bounds.position.z - 0.008)
+	if preload("res://submarine_mounts.gd").is_original(player.visual): lamp.position = Vector3.ZERO
 	lamp.light_color = Color(1.0, 0.97, 0.9)
 	lamp.spot_attenuation = 0.5
 	# Dock walls and terrain must occlude the beam, including during launch.
@@ -68,6 +70,7 @@ func setup(player: Node3D, folder: String) -> void:
 	_setup_magnet(player,folder)
 	_setup_grapple(player,folder)
 	support_tools = preload("res://submarine_support_tools.gd").new(); add_child(support_tools); support_tools.setup(self,folder)
+	extra_tools = preload("res://remaining_equipment.gd").new(); add_child(extra_tools); extra_tools.setup(self,folder)
 	apply_settings()
 
 static func _meshes(node: Node3D, parent_pose: Transform3D, hull_only: bool = false) -> Array[Dictionary]:
@@ -133,6 +136,7 @@ func _prepare_bulb(housing: Node3D) -> void:
 			node.material_override = material
 			bulb_materials.append(material)
 func cycle(direction: int) -> void:
+	if support_tools != null and is_instance_valid(support_tools.rover) and support_tools.rover.deployed: return
 	if mounted.is_empty(): return
 	var previous := selected
 	selected = posmod(selected + direction, mounted.size())
@@ -145,11 +149,16 @@ func _play_cycle_sound() -> void:
 		cycle_audio.play()
 
 func toggle_selected() -> void:
+	if support_tools != null and is_instance_valid(support_tools.rover) and support_tools.rover.deployed:
+		for mounted_item in mounted:
+			if mounted_item.id == "rover": mounted_item.enabled = false
+		support_tools.activate("rover",false); apply_settings(); activated.emit("rover",false); return
 	if mounted.is_empty(): return
 	var item: Dictionary = mounted[selected]
 	item.enabled = not item.enabled
-	if support_tools != null and item.id in ["bigears","escape"]:
+	if support_tools != null and item.id in ["bigears","escape","rover"]:
 		support_tools.activate(str(item.id),bool(item.enabled))
+	if extra_tools != null and item.id in ["bubble","repel","strobe","flarel","sflarel","woosh"]: extra_tools.activate(str(item.id))
 	apply_settings()
 	activated.emit(str(item.id),bool(item.enabled))
 
@@ -158,7 +167,10 @@ func current() -> Dictionary:
 
 func apply_settings() -> void:
 	for item in available: item.mount.visible = item in mounted
+	if extra_tools != null: extra_tools.refresh()
 	if support_tools != null:
+		if support_tools.rover != null: support_tools.rover.set_deployed(mounted.any(func(item: Dictionary) -> bool: return item.id == "rover" and item.enabled))
+		if support_tools.attractatron != null: support_tools.attractatron.set_enabled(mounted.any(func(item: Dictionary) -> bool: return item.id == "attract" and item.enabled))
 		var pod_enabled := mounted.any(func(item: Dictionary) -> bool: return item.id == "escape" and item.enabled)
 		if pod_enabled != support_tools.pod_enabled: support_tools.activate("escape",pod_enabled)
 	for tool in [magnet,grapple]:
@@ -233,6 +245,10 @@ func _setup_cycle_audio(folder: String) -> void:
 
 func set_installed(ids: Array) -> void:
 	var selected_id: String = current().get("id","")
+	var had_rover := mounted.any(func(item: Dictionary) -> bool: return item.id == "rover")
+	if support_tools != null and is_instance_valid(support_tools.rover):
+		if "rover" in ids and not had_rover: support_tools.rover.reset()
+		elif "rover" not in ids and had_rover and not support_tools.rover.dead: support_tools.rover.reset()
 	for item in available:
 		if item.id not in ids: item.enabled = false
 	mounted.clear()
@@ -260,6 +276,7 @@ func towing_tool() -> Node3D:
 	return null
 
 func reset_towing() -> void:
+	if extra_tools != null: extra_tools.reset()
 	if support_tools != null: support_tools.reset()
 	for tool in [magnet,grapple]:
 		if tool != null: tool.reset()

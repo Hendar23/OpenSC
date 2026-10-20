@@ -20,7 +20,7 @@ func run() -> void:
 	var folder := ProjectSettings.globalize_path("res://../Original Sub Culture")
 	var context := Context.new(); context.gameplay_catalogue = preload("res://original_game_data.gd").load_catalogue(folder,false)
 	var runtime := Runtime.new(); runtime.game = context
-	for id in ["tradetrad","tradetrad2","tradetech","tradetech2","stranded","spytrad2","breakout","breakout2"]:
+	for id in ["tradetrad","tradetrad2","tradetech","tradetech2","stranded","spytrad","spytrad2","breakout","breakout2","fishing","bigherd"]:
 		var text := runtime.text(id)
 		check(text.get_slice("\n",0) == str(context.gameplay_catalogue.tables.mission_text.records[id].text).get_slice("\n",0).strip_edges(),"Mission title remains separate: " + id)
 		check(not text.contains("<p>") and not text.contains("#response") and not text.contains("#bulletin"),"Mission formatting and following source sections stay hidden: " + id)

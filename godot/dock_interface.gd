@@ -46,7 +46,9 @@ var mount_dot: Control
 var equipment_preview: TextureRect
 # Original 0x4407b0 uses the tables at 0x4e3d80/0x4e3e20.
 # Coordinates below are relative to 2SUB's original (201,66) image origin.
-const MOUNT_POINTS := {3:[Vector2(196,78)],4:[Vector2(100,63)],5:[Vector2(116,48),Vector2(234,40)],7:[Vector2(164,66)],9:[Vector2(217,63)]}
+# Retail 004407b0 point tables at 004e3d80 / 004e3e20, relative to 2SUB
+# at (201,66). A slot can mark both views, or both sides of the top view.
+const MOUNT_POINTS := {1:[Vector2(50,48),Vector2(167,31)],2:[Vector2(87,28)],3:[Vector2(196,78)],4:[Vector2(101,48),Vector2(219,25)],5:[Vector2(116,48),Vector2(234,40)],6:[Vector2(87,69),Vector2(201,41)],7:[Vector2(164,66)],8:[Vector2(98,35),Vector2(98,62),Vector2(227,31)],9:[Vector2(217,63)]}
 var info_dialog: Control
 var info_done: Button
 var info_return_focus: Control
@@ -182,12 +184,17 @@ func _skin_button(node: DockButton, action: String, payload: Dictionary) -> void
 			"save":["SAVE",Vector2(490,307),Vector2(542,344),[Vector2(472,298),Vector2(625,298),Vector2(625,418)]],
 			"launch":["LAUN",Vector2(464,435),Vector2(460,360),[Vector2(458,350),Vector2(608,466),Vector2(458,466)]]}
 		var entry: Array = entries[action]
-		_piece(node,node.highlight_art,"ENGLISH/" + prefix + "D" + entry[0] + "T",entry[1])
-		_piece(node,node.held_art,prefix + "D" + entry[0] + "B",entry[2])
+		var highlight: String = "ENGLISH/" + prefix + "D" + entry[0] + "T"
+		var held: String = prefix + "D" + entry[0] + "B"
+		if dock_race == 4:
+			highlight = "ENGLISH/" + {"missions":"MISTEX","equipment":"TRATEX","save":"SAVTEX","launch":"LAUTEX"}[action]
+			held = {"missions":"MISBUT","equipment":"TRABUT","save":"SAVBUT","launch":"LAUBUT"}[action]
+		_piece(node,node.highlight_art,highlight,entry[1])
+		_piece(node,node.held_art,held,entry[2])
 		for point in entry[3]: node.hit_polygon.append(point - node.position)
 	elif action in ["buy_equipment","sell_equipment","repair_info","buy_commodity","sell_commodity","commodity_info"]:
 		var letter := "B" if action.begins_with("buy") else "S" if action.begins_with("sell") else "I"
-		if page == "goods" and dock_race == 4:
+		if dock_race == 4:
 			var name := "BUY" if letter == "B" else "SELL" if letter == "S" else "INFO"
 			_piece(node,node.highlight_art,"ENGLISH/" + name,node.position)
 			_piece(node,node.held_art,"ENGLISH/" + name + "LIT",node.position)
@@ -196,11 +203,11 @@ func _skin_button(node: DockButton, action: String, payload: Dictionary) -> void
 			_piece(node,node.held_art,"ENGLISH/" + trade + "-" + letter + "2",node.position)
 	elif page == "equipment" and action in ["home","goods"]:
 		if action == "home":
-			_piece(node,node.highlight_art,"ENGLISH/" + trade + "-DN1",Vector2(82,434))
-			_piece(node,node.held_art,trade + "-BUT1",Vector2(22,418))
+			_piece(node,node.highlight_art,"ENGLISH/DONELIT" if dock_race == 4 else "ENGLISH/" + trade + "-DN1",Vector2(82,434))
+			_piece(node,node.held_art,"BUTLIT" if dock_race == 4 else trade + "-BUT1",Vector2(22,418))
 		else:
-			_piece(node,node.highlight_art,"ENGLISH/" + prefix + "GOOD",Vector2(473,435))
-			_piece(node,node.held_art,prefix + "GBUT",Vector2(563,416))
+			_piece(node,node.highlight_art,"ENGLISH/" + goods_prefix + "GOOD",Vector2(473,435))
+			_piece(node,node.held_art,goods_prefix + "GBUT",Vector2(563,416))
 	elif page == "missions" and action == "accept_mission":
 		_piece(node,node.highlight_art,"ENGLISH/M" + goods_prefix + "-BAL",Vector2(443,437))
 		_piece(node,node.held_art,"M" + goods_prefix + "-B2",Vector2(547,415))
@@ -279,11 +286,11 @@ func rebuild(new_page: bool = false) -> void:
 		mail_city = str(data.get("city_id","")); mail_view = "welcome"; selected_mail = ""
 	loaded_city = str(data.get("city","Dock"))
 	var race := int(data.get("race",1)); dock_race = race; var prefix := "P" if race == 2 else "R" if race == 4 else "B"
-	text_colour = Color(0.2,0.95,1) if race == 2 else Color(1,0.8,0.15)
+	text_colour = Color(0.2,0.95,1) if race == 2 else Color.GREEN if race == 4 else Color(1,0.8,0.15)
 	if custom_colour is Color: text_colour = custom_colour
-	var artwork := "TRAD1" if race != 2 else "TECH1"
+	var artwork := "VELCOVA" if race == 4 else "TECH1" if race == 2 else "TRAD1"
 	match page:
-		"equipment": artwork = "TP-1" if race == 2 else "TB-1"
+		"equipment": artwork = "TRADE" if race == 4 else "TP-1" if race == 2 else "TB-1"
 		"goods": artwork = prefix + "GOODSCR"
 		"missions": artwork = "MIS" + prefix + "1"
 		"save","load": artwork = "LOADSCR" if page == "load" else "PSAVE" if race == 2 else "BSAVE"
@@ -325,7 +332,7 @@ func rebuild(new_page: bool = false) -> void:
 				node.disabled = (page == "load" and not slot.valid) or (page == "save" and not data.get("can_save",true))
 			label(status,Rect2(18,402,604,24) if page == "load" else Rect2(190,350,310,56),10 if page == "load" else 12,true)
 	if page == "home" and not data.get("can_save",true):
-		var image := _button_texture(("P" if race == 2 else "B") + "NOSAVE")
+		var image := _button_texture(prefix + "NOSAVE")
 		if image != null:
 			var patch := TextureRect.new(); patch.name = "NoSavePanel"; patch.texture = image
 			# Both original covers start here; their different bitmap dimensions
@@ -444,6 +451,7 @@ func _equipment_shop(data: Dictionary) -> void:
 	var settings: Dictionary = pages.equipment
 	if int(data.get("hold",{}).get(selected_hold,0)) == 0: selected_hold = ""
 	sale_list = _item_list("ForSale",rect(settings.sale))
+	sale_list.add_theme_font_size_override("font_size",10)
 	for id in offers:
 		if not offers[id].get("available",false): continue
 		var pack := int(offers[id].get("quantity",1))
@@ -454,6 +462,7 @@ func _equipment_shop(data: Dictionary) -> void:
 	var buy := button("buy_equipment",rect(settings.buy)); buy.name = "BuyShieldRepair"
 	var sale_info := button("repair_info",rect(settings.sale_info),"",{"side":"sale"}); sale_info.name = "SaleInfo"
 	hold_list = _item_list("Hold",rect(settings.hold))
+	hold_list.add_theme_font_size_override("font_size",10)
 	for id in data.get("hold",{}):
 		var count := int(data.hold[id])
 		if count <= 0: continue
@@ -479,7 +488,7 @@ func _equipment_shop(data: Dictionary) -> void:
 	var area := rect(settings.preview); picture.position = area.position; picture.size = area.size; layout.add_child(picture)
 	mount_dot = Control.new(); mount_dot.name = "MountPosition"
 	mount_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE; layout.add_child(mount_dot)
-	for index in range(2):
+	for index in range(3):
 		var marker := Panel.new(); marker.name = "Marker%d" % index
 		var dot := StyleBoxFlat.new(); dot.bg_color = Color.YELLOW; dot.set_corner_radius_all(4)
 		marker.add_theme_stylebox_override("panel",dot); marker.size = Vector2(7,7)
@@ -489,7 +498,7 @@ func _equipment_shop(data: Dictionary) -> void:
 	var installed: Dictionary = data.get("installed",{})
 	# Original grid: weapon, lights and underside tool positions.
 	for index in range(10):
-		var slot: int = {0:9,1:5,2:3,3:4,8:7}.get(index,0)
+		var slot: int = {0:9,1:5,2:3,3:4,4:8,5:1,6:2,7:6,8:7}.get(index,0)
 		var id: String = installed.get(slot,"") if slot != 0 else ""
 		var square := Rect2(210 + (index % 5) * 47,197 + (index / 5) * 39,46,38)
 		var slot_button := button("equipment_slot",square,"EMPTY" if id.is_empty() else "",{"slot":slot})
@@ -503,7 +512,7 @@ func _equipment_shop(data: Dictionary) -> void:
 		slot_buttons.append(slot_button)
 		slot_button.focus_entered.connect(func() -> void: _mount_highlight(slot))
 		slot_button.mouse_entered.connect(func() -> void: _mount_highlight(slot))
-		var blank := StyleBoxFlat.new(); blank.bg_color = Color(0.07,0.025,0.015) if id.is_empty() else Color(0.1,0.55,0.58)
+		var blank := StyleBoxFlat.new(); blank.bg_color = (Color(0.01,0.06,0.05) if dock_race == 4 else Color(0.07,0.025,0.015)) if id.is_empty() else Color(0.1,0.55,0.58)
 		blank.set_corner_radius_all(4); slot_button.add_theme_stylebox_override("normal",blank)
 	for index in range(10):
 		var node := slot_buttons[index]
@@ -693,7 +702,7 @@ func _show_item_info(offer: Dictionary, item_id: String) -> void:
 		image.mouse_filter = Control.MOUSE_FILTER_IGNORE; art_clip.add_child(image)
 	var prefix := "TP" if dock_race in [2,4] else "TB"
 	var frame := TextureRect.new(); frame.name = "Frame"; frame.size = content.size; frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var frame_texture := texture("texture.ui_dock_info_" + prefix.to_lower(),"INTROTEX/ENGLISH/" + prefix + "-POP1.BMP")
+	var frame_texture := texture("texture.ui_dock_info_r" if dock_race == 4 else "texture.ui_dock_info_" + prefix.to_lower(),"INTROTEX/ENGLISH/TRADEPOP.BMP" if dock_race == 4 else "INTROTEX/ENGLISH/" + prefix + "-POP1.BMP")
 	if frame_texture != null:
 		var frame_image := frame_texture.get_image(); frame_image.convert(Image.FORMAT_RGBA8)
 		for y in range(frame_image.get_height()):
@@ -715,8 +724,8 @@ func _show_item_info(offer: Dictionary, item_id: String) -> void:
 		text.text = row[1]; content.add_child(text); text.position = row[2].position; text.size = row[2].size
 	info_done = DockButton.new(); info_done.name = "Done"; info_done.position = Vector2(24,313); info_done.size = Vector2(143,52)
 	for state in ["normal","hover","focus","pressed"]: info_done.add_theme_stylebox_override(state,StyleBoxEmpty.new())
-	_piece(info_done,info_done.highlight_art,"ENGLISH/" + prefix + "-DN2",Vector2(89,330))
-	_piece(info_done,info_done.held_art,prefix + "-POPB",Vector2(24,313))
+	_piece(info_done,info_done.highlight_art,"ENGLISH/DONELIT2" if dock_race == 4 else "ENGLISH/" + prefix + "-DN2",Vector2(89,330))
+	_piece(info_done,info_done.held_art,"BUTLIT2" if dock_race == 4 else prefix + "-POPB",Vector2(24,313))
 	info_done.mouse_entered.connect(func() -> void: _enter_button(info_done))
 	info_done.focus_entered.connect(func() -> void: _enter_button(info_done))
 	info_done.mouse_exited.connect(func() -> void: _leave_button(info_done))
@@ -896,53 +905,81 @@ func _dialog_input(dialog: ConfirmationDialog, event: InputEvent) -> void:
 			if next != null: next.grab_focus()
 			dialog.get_viewport().set_input_as_handled(); break
 
+func _mission_row(id: String, title: String, index: int, selected: bool, row_name: String = "choose_mission") -> Button:
+	var row := button("choose_mission",Rect2(24,34+index*15,335,15),title)
+	row.name = row_name
+	for state in ["normal","hover","focus","pressed"]: row.add_theme_stylebox_override(state,StyleBoxEmpty.new())
+	row.alignment = HORIZONTAL_ALIGNMENT_LEFT; row.add_theme_font_size_override("font_size",10)
+	row.add_theme_color_override("font_focus_color",Color.WHITE); row.add_theme_color_override("font_hover_color",Color.WHITE)
+	row.add_theme_color_override("font_color",text_colour)
+	row.pressed.connect(func() -> void:
+		mission_selection = id; rebuild()
+		var next := layout.get_node_or_null(row_name) as Control
+		if next != null: next.grab_focus())
+	if selected:
+		_ensure_selection_dot(); var dot := TextureRect.new(); dot.texture = selection_dot
+		dot.position = Vector2(15,38+index*15); dot.size = Vector2(8,8); dot.mouse_filter = Control.MOUSE_FILTER_IGNORE; layout.add_child(dot)
+	return row
+
 func _mission_board(data: Dictionary) -> void:
 	var mission: Dictionary = data.get("missions",{})
+	var information: Array = mission.get("information",[])
+	var info := {}
+	for entry in information:
+		if str(entry.id) == mission_selection: info = entry; break
+	var information_only := bool(mission.get("information_only",false))
 	var id := str(mission.get("id",""))
-	var selected := bool(mission.get("active",false)) or (bool(mission.get("available",false)) and not id.is_empty() and mission_selection == id)
-	var heading := label("Missions",Rect2(24,20,330,14),10); heading.add_theme_color_override("font_color",Color.WHITE)
-	var row: Button
-	if mission.get("available",false) or mission.get("active",false):
-		row = button("choose_mission",Rect2(24,34,335,15),("Current mission: " if mission.get("active",false) else "") + str(mission.get("title","Prospectors Wanted!")))
-		for state in ["normal","hover","focus","pressed"]: row.add_theme_stylebox_override(state,StyleBoxEmpty.new())
-		row.alignment = HORIZONTAL_ALIGNMENT_LEFT; row.add_theme_font_size_override("font_size",10)
-		row.add_theme_color_override("font_focus_color",Color.WHITE); row.add_theme_color_override("font_hover_color",Color.WHITE)
-		row.add_theme_color_override("font_color",text_colour)
-		row.pressed.connect(func() -> void: mission_selection = id; rebuild())
-		if selected:
-			_ensure_selection_dot(); var dot := TextureRect.new(); dot.texture = selection_dot
-			dot.position = Vector2(15,38); dot.size = Vector2(8,8); dot.mouse_filter = Control.MOUSE_FILTER_IGNORE; layout.add_child(dot)
-	else: label("No missions available",Rect2(24,34,335,15),10)
+	var offers: Array = mission.get("offers",[mission] if mission.get("available",false) else [])
+	var chosen := {}
+	for entry in offers:
+		if str(entry.id) == mission_selection: chosen = entry; break
+	var selected := info.is_empty() and (bool(mission.get("active",false)) or not chosen.is_empty())
+	var content: Dictionary = chosen if not chosen.is_empty() else mission
+	if not information_only:
+		var heading := label("Missions",Rect2(24,20,330,14),10); heading.add_theme_color_override("font_color",Color.WHITE)
+	var rows: Array[Button] = []
+	if mission.get("active",false):
+		rows.append(_mission_row(id,"Current mission: "+str(mission.get("title","")),0,selected))
+	else:
+		for entry in offers:
+			rows.append(_mission_row(str(entry.id),str(entry.title),rows.size(),str(entry.id) == mission_selection,"choose_mission" if rows.is_empty() else "MissionOffer_"+str(entry.id)))
+	for entry in information:
+		rows.append(_mission_row(str(entry.id),str(entry.title),rows.size(),str(entry.id) == mission_selection,"RefineryInfo_"+str(entry.id)))
+	# Retail 0043e0d0 leaves an empty list blank; refinery heading is blank too.
 	var picture := TextureRect.new(); picture.name = "MissionPicture"; picture.position = Vector2(384,14); picture.size = Vector2(238,179)
 	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var relative := str(mission.get("picture","")) if selected else "INTROTEX/" + ("PDEFAULT" if dock_race == 2 else "BDEFAULT") + ".BMP"
-	if not relative.is_empty(): picture.texture = texture("texture.mission_picture_" + relative.get_file().get_basename().to_lower(),relative)
+	var relative: String = str(info.get("picture","")) if not info.is_empty() else str(content.get("picture","")) if selected else "INTROTEX/"+str({2:"PDEFAULT",4:"RDEFAULT"}.get(dock_race,"BDEFAULT"))+".BMP"
+	if not relative.is_empty(): picture.texture = texture("texture.mission_picture_"+relative.get_file().get_basename().to_lower(),relative)
 	layout.add_child(picture)
-	var body := str(mission.get("briefing","")) if selected else str(mission.get("welcome",""))
+	var body := str(info.get("briefing","")) if not info.is_empty() else str(content.get("briefing","")) if selected else str(mission.get("welcome",""))
 	if selected and not str(mission.get("response","")).is_empty(): body = str(mission.response)
-	var accept := button("accept_mission",Rect2(430,422,180,40))
-	accept.disabled = not mission.get("available",false) or not selected
-	var scroll := ScrollContainer.new(); scroll.position = Vector2(16,214); scroll.size = Vector2(605,190)
+	var accept: Button
+	if not information_only:
+		accept = button("accept_mission",Rect2(430,422,180,40),"",{"id":str(content.get("id",""))})
+		accept.disabled = not mission.get("available",false) or not selected
+	var can_accept := accept != null and not accept.disabled
+	var scroll := ScrollContainer.new(); scroll.name = "MissionBriefingScroll"; scroll.position = Vector2(16,214); scroll.size = Vector2(605,190)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; layout.add_child(scroll)
-	var briefing := RichTextLabel.new(); briefing.text = body; briefing.fit_content = true
+	var briefing := RichTextLabel.new(); briefing.name = "MissionBriefing"; briefing.text = body; briefing.fit_content = true
 	briefing.scroll_active = false; briefing.custom_minimum_size.x = 585; briefing.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	briefing.add_theme_font_size_override("normal_font_size",10); briefing.add_theme_color_override("default_color",text_colour)
 	scroll.add_child(briefing); scroll.focus_mode = Control.FOCUS_ALL
 	var done: Button = button_nodes[0]
 	# Keep every direction explicit: spatial fallback jumps between distant panels.
-	for control in [done,accept,scroll,row]:
+	for control in [done,accept,scroll]+rows:
 		if control == null: continue
-		for side in ["left","right","top","bottom"]:
-			control.set("focus_neighbor_" + side,control.get_path())
+		for side in ["left","right","top","bottom"]: control.set("focus_neighbor_"+side,control.get_path())
 	done.focus_neighbor_top = done.get_path_to(scroll)
-	accept.focus_neighbor_top = accept.get_path_to(scroll)
+	if accept != null: accept.focus_neighbor_top = accept.get_path_to(scroll)
 	scroll.focus_neighbor_left = scroll.get_path_to(done)
-	scroll.focus_neighbor_right = scroll.get_path_to(accept if not accept.disabled else done)
+	scroll.focus_neighbor_right = scroll.get_path_to(accept if can_accept else done)
 	scroll.focus_neighbor_bottom = scroll.get_path_to(done)
-	if row != null:
-		scroll.focus_neighbor_top = scroll.get_path_to(row)
-		row.focus_neighbor_bottom = row.get_path_to(scroll)
-	if not accept.disabled:
+	if not rows.is_empty():
+		scroll.focus_neighbor_top = scroll.get_path_to(rows.back())
+		for index in rows.size():
+			rows[index].focus_neighbor_top = rows[index].get_path_to(rows[maxi(0,index-1)])
+			rows[index].focus_neighbor_bottom = rows[index].get_path_to(rows[index+1] if index+1 < rows.size() else scroll)
+	if can_accept:
 		done.focus_neighbor_left = done.get_path_to(accept); done.focus_neighbor_right = done.get_path_to(accept)
 		accept.focus_neighbor_left = accept.get_path_to(done); accept.focus_neighbor_right = accept.get_path_to(done)
 	scroll.gui_input.connect(func(event: InputEvent) -> void:

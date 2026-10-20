@@ -93,7 +93,8 @@ func run() -> void:
 	var money = system.get_node("GiveTestingCredits")
 	var unlock = system.get_node("UnlockTestingEquipment")
 	var presets = system.get_node("TimeOfDayPresets")
-	check(unlock.get_index() == money.get_index() + 1 and presets.get_index() == unlock.get_index() + 1,"Equipment override and time buttons sit beneath money")
+	var missions = system.get_node("UnlockTestingMissions")
+	check(unlock.get_index() == money.get_index() + 1 and missions.get_index() == unlock.get_index() + 1 and presets.get_index() == missions.get_index() + 1,"Equipment, mission and time controls sit beneath money")
 	var stage: int = game.player_progress.campaign_stage
 	unlock.button_pressed = true
 	check(game.testing_all_equipment,"Developer button enables equipment testing")
@@ -111,9 +112,10 @@ func run() -> void:
 		"5":[0,0,0,0,0,0,0,0],
 		"6":[1600,14000,700,0,580,0,0,1400]}
 	check(stage == 1,"New game uses campaign stage one")
+	var baseline_items := ["shield","hullstr","radoff","deep_sea_lights","suckomat","zapper","magnet","grapple"]
 	for city_id in opening_prices:
-		for index in range(Shop.ITEMS.size()):
-			var id: String = Shop.ITEMS[index]
+		for index in range(baseline_items.size()):
+			var id: String = baseline_items[index]
 			var offer := Shop.offer(game.gameplay_catalogue,city_id,1,id,false)
 			var expected: int = opening_prices[city_id][index] if index < opening_prices[city_id].size() else 0
 			check(offer.available == (expected > 0) and offer.price == expected,"Original new-game stock and price: city %s / %s" % [city_id,id])

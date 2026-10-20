@@ -3,7 +3,7 @@
   "id": "test-3d-map-instrument",
   "name": "Test 3D HUD instruments",
   "version": "0.2",
-  "description": "Replaces all five HUD panels with physical 3D cockpit instruments and live illuminated displays.",
+  "description": "Replaces all five HUD panels with physical 3D cockpit instruments and live illuminated displays. AI GENERATED ASSETS Just for testing modding.",
   "assets": {
     "hud.tilt": {"file": "AttitudePanel.glb", "forward_axis": "+Z"},
     "hud.equipment": {"file": "ToolPanel.glb", "forward_axis": "+Z"},

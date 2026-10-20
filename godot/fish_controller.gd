@@ -41,6 +41,11 @@ var startle_timer := 0.0
 var startle_cooldown := 0.0
 var startle_direction := Vector3.ZERO
 var fleeing := false
+var attraction_remaining := 0.0
+var attraction_point := Vector3.ZERO
+var repulsion_remaining := 0.0
+var repulsion_point := Vector3.ZERO
+var herding_target: Node3D
 var ground_normal := Vector3.UP
 var ground_clearance := 0.1
 var walking_animation_rate := 1.0
@@ -94,6 +99,9 @@ func clear_ambient_state() -> void:
 	velocity = Vector3.ZERO; pushed_velocity = Vector3.ZERO; group_members = []
 	shoal = preload("res://wildlife_shoal.gd").new()
 	defense_timer = 0; startle_timer = 0; startle_cooldown = 0; fleeing = false
+	attraction_remaining = 0; attraction_point = Vector3.ZERO
+	repulsion_remaining = 0; repulsion_point = Vector3.ZERO
+	herding_target = null
 	avoidance_timer = 0; avoidance = Vector3.ZERO; offscreen_delta = 0
 	ground_initialized = false; ground_normal = Vector3.UP; crawl_stuck_time = 0
 	crawl_probe_timer = 0; support_cache.clear(); support_frame = -100
@@ -141,6 +149,12 @@ func _advance_ambient(delta: float) -> void:
 				ground_normal = contact.normal
 				global_position.y = float(contact.position.y) + ground_clearance / maxf(0.3,ground_normal.y)
 	var desired := (ambient_goal - position).normalized()
+	if attraction_remaining > 0:
+		attraction_remaining = maxf(0,attraction_remaining-delta)
+		desired = (attraction_point-global_position).normalized()
+	if repulsion_remaining > 0:
+		repulsion_remaining = maxf(0,repulsion_remaining-delta)
+		desired = (global_position-repulsion_point).normalized()
 	if mobility == "crawling": desired.y = 0; desired = desired.normalized()
 	_steer(desired,delta,turn_speed)
 	velocity = direction * (0.0 if ambient_blocked else swim_speed)
@@ -183,6 +197,9 @@ func take_damage(amount: float, _source: Vector3 = Vector3.ZERO) -> void:
 	visible = false; died.emit()
 
 func _ready() -> void:
+	add_to_group("marine_life")
+	var species := str(get_meta("species","")).to_lower()
+	if species in ["silver","silverback","mutantsilverback"]: add_to_group("attractable_fish")
 	# Bind playback to the live instance after its visual enters the scene.
 	animation = CreatureAnimation.new(get_child(1))
 	meshes = animation.meshes
@@ -393,8 +410,19 @@ func _choose_goal() -> void:
 	goal.y = clampf(goal.y, bounds.position.y + radius, surface_height - radius - 0.2)
 	turn_timer = rng.randf_range(3.0, 7.0)
 
+func attract_to(point: Vector3, duration: float) -> void:
+	if dead or mobility != "swimming": return
+	attraction_point = point; attraction_remaining = duration
+
+func repel_from(point: Vector3, duration: float) -> void:
+	if dead or mobility != "swimming": return
+	repulsion_point = point; repulsion_remaining = duration; attraction_remaining = 0
+	if combat != null: combat.target = null; combat.threat = null; combat._stop_weapon()
+
 func _physics_process(delta: float) -> void:
 	if dead or delta <= 0.0: return
+	if is_instance_valid(herding_target):
+		velocity = Vector3.ZERO; animation_time += delta*ANIMATION_SPEED; return
 	if population != null and population.streaming and not population.detailed(self):
 		if not ambient_mode and combat != null:
 			combat._stop_weapon(); combat.target = null; combat.threat = null
@@ -441,7 +469,7 @@ func _physics_process(delta: float) -> void:
 		var candidates: Array = population.nearby_submarines(global_position,maxf(attack_range,maxf(flee_range * 1.25,radius + 0.8)))
 		for candidate in candidates:
 			if candidate.get_world_3d() != get_world_3d(): continue
-			if candidate.dead or not candidate.active or not candidate.controls_enabled: continue
+			if candidate.dead or not candidate.active or not candidate.controls_enabled or candidate.get_meta("bubble_screened",false): continue
 			var distance: float = global_position.distance_squared_to(candidate.global_position)
 			if distance < nearest: nearest = distance; submarine = candidate
 	if submarine != null:
@@ -471,6 +499,14 @@ func _physics_process(delta: float) -> void:
 	# A frightened fish can leave its usual roaming area instead of turning
 	# straight back toward the submarine at the group's boundary.
 	if not escaping and not engaged and position.distance_to(home) > roam_radius: desired = (home - position).normalized()
+	if attraction_remaining > 0:
+		attraction_remaining = maxf(0,attraction_remaining-delta)
+		desired = (attraction_point-global_position).normalized()
+		fleeing = false; startle_timer = 0; escaping = true; engaged = false; speed = swim_speed
+	if repulsion_remaining > 0:
+		repulsion_remaining = maxf(0,repulsion_remaining-delta)
+		desired = (global_position-repulsion_point).normalized()
+		fleeing = true; startle_timer = 0; escaping = true; engaged = false; speed = swim_speed*1.6
 	avoidance_timer = maxf(0.0, avoidance_timer - delta)
 	if avoidance_timer > 0.0: desired = avoidance
 	if mobility == "crawling": desired.y = 0.0; desired = desired.normalized()

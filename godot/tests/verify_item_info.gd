@@ -35,8 +35,8 @@ func run() -> void:
 		check(not panel.has_node("Icon"),"Commodities keep the original empty icon space")
 		var pixels: Image = panel.get_node("Frame").texture.get_image()
 		check(pixels.get_pixel(300,100).a == 0 and pixels.get_pixel(100,100) == Color.BLACK,"Frame key exposes artwork and preserves black text panel")
-		var prefix := "TP" if race in [2,4] else "TB"
-		check(ui.info_done.held_art[0].texture == ui._button_texture(prefix + "-POPB") and ui.info_done.highlight_art[0].texture == ui._button_texture("ENGLISH/" + prefix + "-DN2"),"Original popup button assets, race %d" % race)
+		var prefix := "TP" if race == 2 else "TB"
+		check(ui.info_done.held_art[0].texture == ui._button_texture("BUTLIT2" if race == 4 else prefix + "-POPB") and ui.info_done.highlight_art[0].texture == ui._button_texture("ENGLISH/DONELIT2" if race == 4 else "ENGLISH/" + prefix + "-DN2"),"Original popup button assets, race %d" % race)
 		check(ui.info_done.position == Vector2(24,313) and ui.info_done.highlight_art[0].rect.position + ui.info_done.position == Vector2(89,330),"Original Done positions")
 		check(root.gui_get_focus_owner() == ui.info_done,"Controller focus stays in popup")
 		check(ui.info_done.find_next_valid_focus() == ui.info_done and ui.info_done.find_prev_valid_focus() == ui.info_done,"Keyboard Tab focus stays in popup")

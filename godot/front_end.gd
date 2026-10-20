@@ -5,7 +5,6 @@ const BMP = preload("res://legacy_bmp.gd")
 const Mods = preload("res://mod_registry.gd")
 const TITLE_PATH := "res://game_assets/ui/title.png"
 const TITLE_TEXTURE: Texture2D = preload(TITLE_PATH)
-const WEBSITE_URL := "https://github.com/Hendar23/OpenSC"
 const LegacyAudio = preload("res://legacy_audio.gd")
 const SoundTuning = preload("res://sound_tuning.gd")
 const MENU_SOUNDS := {"activate": "ACTIVATE", "over": "OVERBUTT", "off": "OFFBUTT"}
@@ -44,7 +43,7 @@ var effects_audio: Node
 var remember_preferences := true
 var back_shortcut_busy: Callable
 var menu_page := "main"
-const OPTION_BUTTONS := ["controls","graphics","audio","gameplay","mods","back"]
+const OPTION_BUTTONS := ["controls","graphics","audio","gameplay","back"]
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -139,7 +138,7 @@ func _build_menu() -> void:
 		if not entries.any(func(item: Dictionary) -> bool: return item.get("id") == entry.id): entries.append(entry)
 	for entry in entries:
 		var id := str(entry.get("id",""))
-		if id not in ["new_game","load","continue","options","back","controls","mods","audio","graphics","gameplay","website","exit"] or buttons.has(id): continue
+		if id not in ["new_game","load","continue","options","back","controls","mods","audio","graphics","gameplay","exit"] or buttons.has(id): continue
 		var button := Button.new(); button.text = str(entry.get("label",id))
 		if id == "gameplay": button.text = "General"
 		button.position = Vector2(rect[0],rect[1] + button_order.size() * float(menu_config.button_spacing))
@@ -149,7 +148,7 @@ func _build_menu() -> void:
 		var hover := normal.duplicate() as StyleBoxFlat; hover.bg_color = Color(0.04,0.23,0.28,0.95)
 		button.add_theme_stylebox_override("normal",normal); button.add_theme_stylebox_override("hover",hover)
 		button.add_theme_stylebox_override("pressed",hover); button.add_theme_stylebox_override("focus",hover)
-		button.set_meta("available",id in ["new_game","options","back","controls","audio","graphics","gameplay","mods","website","exit"])
+		button.set_meta("available",id in ["new_game","options","back","controls","audio","graphics","gameplay","mods","exit"])
 		if not button.get_meta("available"): button.tooltip_text = "Not available yet"
 		menu_layout.add_child(button); buttons[id] = button; button_order.append(id)
 		button.mouse_entered.connect(func() -> void: _enter_button(button))
@@ -284,7 +283,6 @@ func _activate_button(id: String) -> void:
 		"gameplay":
 			_set_audio_page_visible(true)
 			gameplay_menu.open_menu()
-		"website": OS.shell_open(WEBSITE_URL)
 		"exit": _exit_after_sound()
 
 func _set_audio_page_visible(open: bool) -> void:
@@ -325,17 +323,18 @@ func update_progress(message: String) -> void:
 	elif message.begins_with("Adding ambient fish"): value = 88.0
 	progress_bar.value = maxf(progress_bar.value,value)
 
-func show_menu(resume_available: bool) -> void:
+func show_menu(resume_available: bool, save_available: bool = false) -> void:
 	can_resume = resume_available
-	buttons["continue"].set_meta("available",can_resume)
-	buttons["continue"].tooltip_text = "" if can_resume else "Start a new game first"
+	var continue_available := can_resume or save_available
+	buttons["continue"].set_meta("available",continue_available)
+	buttons["continue"].tooltip_text = "" if continue_available else "Start a new game first"
 	loading_layer.hide(); menu_layer.show()
 	_set_menu_page("main")
 	for id in buttons: buttons[id].modulate.a = 1.0 if is_button_available(id) else 0.45
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	assigning_focus = true
-	buttons["continue" if can_resume else "new_game"].grab_focus()
-	active_button = buttons["continue" if can_resume else "new_game"]
+	buttons["continue" if continue_available else "new_game"].grab_focus()
+	active_button = buttons["continue" if continue_available else "new_game"]
 	assigning_focus = false
 
 func hide_menu() -> void:

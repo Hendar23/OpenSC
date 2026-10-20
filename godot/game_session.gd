@@ -7,6 +7,7 @@ const MapDocument = preload("res://map_document.gd")
 const HUD = preload("res://cockpit_hud.gd")
 const SessionDebris = preload("res://creature_death.gd")
 const SessionExplosion = preload("res://mine_explosion.gd")
+const SessionDemolition = preload("res://base_destruction.gd")
 const SessionMissile = preload("res://turret_missile.gd")
 const PlayerProgress = preload("res://player_progress.gd")
 
@@ -55,6 +56,7 @@ func _reset_loaded_world() -> void:
 	game.docking.greeted_ports.clear(); game.docking.greeting_port = {}; game.docking.greeting_remaining = 0.0
 	if game.docked_screen != null: game.docked_screen.hide()
 	game.weapons.update_fire(false,0); game.weapons.selected = 0; game.weapons.elapsed = 0.0
+	if game.weapons.arsenal != null: game.weapons.arsenal.reset()
 	for particle in game.weapons.hit_blood.particles: particle.node.free()
 	game.weapons.hit_blood.particles.clear()
 	for patch in game.plant_current.patches:
@@ -84,6 +86,11 @@ func _reset_loaded_world() -> void:
 	if game.weapons.depth_mount != null:
 		game.weapons.depth_mount.transform = game.weapons.depth_mount.get_meta("default_mount")
 		preload("res://submarine_mounts.gd").apply(game.weapons.depth_mount,game.pilot.visual,"depthl")
+	if game.weapons.arsenal != null:
+		for id in game.weapons.arsenal.mounts:
+			var mount: Node3D = game.weapons.arsenal.mounts[id]
+			mount.transform = mount.get_meta("default_mount")
+			preload("res://submarine_mounts.gd").apply(mount,game.pilot.visual,id)
 	game.weapons.set_upgraded(false)
 	game.equipment.apply_settings()
 	game.object_population.reset_population()
@@ -102,7 +109,7 @@ func _reset_loaded_world() -> void:
 
 func _clear_session_effects(node: Node) -> void:
 	for child in node.get_children():
-		if child is SessionDebris or child is SessionExplosion or child is SessionMissile:
+		if child is SessionDebris or child is SessionExplosion or child is SessionMissile or child is SessionDemolition:
 			child.free()
 		else: game._clear_session_effects(child)
 

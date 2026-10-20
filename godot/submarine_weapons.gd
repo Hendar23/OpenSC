@@ -38,6 +38,7 @@ var last_hit: Node3D
 var hit_blood: Node3D
 var depth_mount: Node3D
 var blood_cooldown := 0.0
+var arsenal: Node3D
 
 # Environmental and wildlife zappers share the player's crackle renderer.
 static func create_arc(owner_body: Node3D, textures: Array[Texture2D]) -> Node3D:
@@ -75,6 +76,12 @@ func setup(player: Node3D, folder: String, view: Camera3D, catalogue: Dictionary
 	var emitter := Marker3D.new(); emitter.name = "Emitter"; emitter.position = Vector3(0,bounds.get_center().y,bounds.position.z - 0.002); muzzle.add_child(emitter)
 	standard_emitter = emitter.position
 	upgraded_emitters = _emitter_tips(housing,bounds)
+	if preload("res://submarine_mounts.gd").is_original(player.visual):
+		# 0045dd30: regular arc (0,.22,.22), upgraded arcs (+/-.15,.17,.17),
+		# relative to the housing's (0,.15,.18) socket.
+		standard_emitter = Vector3(0,0.07,-0.04)
+		upgraded_emitters = [Vector3(-0.15,0.02,0.01),Vector3(0.15,0.02,0.01)]
+		emitter.position = standard_emitter
 	secondary_emitter = Marker3D.new(); secondary_emitter.name = "SecondEmitter"; secondary_emitter.position = upgraded_emitters[1]; muzzle.add_child(secondary_emitter)
 	var cache := {}
 	for index in range(1,4): frames.append(Assets._load_texture(folder,"ZAPPER%d" % index,"ZAPPER%dM" % index,cache))
@@ -99,10 +106,13 @@ func setup(player: Node3D, folder: String, view: Camera3D, catalogue: Dictionary
 	hit_blood = preload("res://creature_hit.gd").new(); add_child(hit_blood)
 	depth_mount = Node3D.new(); depth_mount.name = "DepthLauncherMount"; depth_mount.position = Vector3(0,-0.08,0.35); add_child(depth_mount)
 	var depth_housing := Assets.load_clump(folder.path_join("CLUMPS/DEPTHL.DFF"))
-	if depth_housing != null: depth_housing.rotation = Vector3(deg_to_rad(50),PI,0); depth_housing.scale *= player.VISUAL_SCALE; depth_mount.add_child(depth_housing)
+	if depth_housing != null:
+		depth_housing.rotation = Vector3(0 if preload("res://submarine_mounts.gd").is_original(player.visual) else deg_to_rad(50),PI,0)
+		depth_housing.scale *= player.VISUAL_SCALE; depth_mount.add_child(depth_housing)
 	preload("res://submarine_mounts.gd").apply(depth_mount,player.visual,"depthl")
 	available.append({"id":"depthl","name":"Depth Charge Launcher","icon":Assets._load_texture(folder,"DEPTH","",{})})
 	depth_mount.hide()
+	arsenal = preload("res://player_arsenal.gd").new(); add_child(arsenal); arsenal.setup(self,folder)
 
 static func _sound(folder: String, id: String, sample: String) -> AudioStream:
 	for replacement in Mods.candidates(id):
@@ -130,7 +140,10 @@ func configure(values: Dictionary) -> void:
 	if audio != null: audio.volume_db = settings.volume_db
 
 func cycle(amount: int) -> void:
-	if not mounted.is_empty(): selected = posmod(selected + amount,mounted.size())
+	if mounted.is_empty(): return
+	selected = posmod(selected + amount,mounted.size())
+	if current().get("id","") == "homers" and arsenal != null and arsenal.count("homers") <= 0:
+		selected = posmod(selected + amount,mounted.size())
 
 func current() -> Dictionary:
 	return {} if mounted.is_empty() else mounted[selected]
@@ -180,10 +193,13 @@ func _physics_process(delta: float) -> void:
 	update_fire(pilot.active and pilot.controls_enabled and _held(),delta)
 
 func update_fire(held: bool, delta: float) -> void:
+	if pilot.get("remote_controlled") == true: held = false
+	if arsenal != null: arsenal.update(held,delta)
 	if current().get("id","") == "depthl":
 		var equipment: Node3D = pilot.get_node_or_null("MountedEquipment")
 		if equipment != null and equipment.support_tools != null: equipment.support_tools.fire_depth(held)
 		held = false
+	elif current().get("id","") != "zapper": held = false
 	blood_cooldown = maxf(0.0,blood_cooldown - delta)
 	firing = held and not mounted.is_empty() and settings.range > 0
 	beam.visible = firing; spark.visible = firing
@@ -298,10 +314,21 @@ func _aim_direction(forward: Vector3) -> Vector3:
 	return aimed
 
 func set_installed(ids: Array) -> void:
+	var selected_id: String = current().get("id","")
 	mounted.clear()
 	for item in available:
-		if item.id in ids: mounted.append(item)
+		if item.id in ids and item.id != "homers" or item.id == "homers" and "missile" in ids: mounted.append(item)
 	selected = 0
+	select_id(selected_id)
 	muzzle.visible = "zapper" in ids
 	if depth_mount != null: depth_mount.visible = "depthl" in ids
+	if arsenal != null: arsenal.installed(ids)
 	if mounted.is_empty(): update_fire(false,0)
+
+func select_id(id: String) -> void:
+	for index in range(mounted.size()):
+		if mounted[index].id == id: selected = index; return
+
+func ammunition_count() -> int:
+	var id: String = current().get("id","")
+	return arsenal.count(id) if arsenal != null and id in ["depthl","missile","homers","ripper","electro"] else -1

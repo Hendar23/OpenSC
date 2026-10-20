@@ -106,6 +106,7 @@ var world_loading := false
 var pilot_mode := false
 var startup_complete := false
 var developer_ui_visible := false
+var developer_enabled := false
 var camera_follow := FollowCamera.new()
 var camera_was_frozen := false
 const SUB_RENDER_LAYER := 2
@@ -134,6 +135,7 @@ var docked_screen: ColorRect
 var docked_label: Label
 var map_overlay: CanvasLayer
 var expanded_map: Control
+var map_screen: Control
 var map_open := false
 var cockpit_hud: CanvasLayer
 var equipment: Node3D
@@ -213,7 +215,7 @@ func _build_interface() -> void:
 	loading_canvas = front_end.loading_layer
 	loading_label = front_end.loading_status
 	front_end.new_game_requested.connect(_begin_new_game)
-	front_end.resume_requested.connect(_resume_game)
+	front_end.resume_requested.connect(_continue_game)
 	front_end.load_requested.connect(func() -> void: front_end.menu_layer.hide(); dock_interface.open("load"))
 	front_end.mods_requested.connect(func() -> void: if not world_loading: mod_panel.open())
 	mod_panel.visibility_changed.connect(func() -> void: if not mod_panel.visible: front_end.restore_button_focus("mods"))
@@ -251,9 +253,10 @@ func _show_main_menu() -> void:
 	if weapons != null: weapons.update_fire(false,0)
 	if developer_ui_visible: _toggle_developer_ui()
 	dock_interface.dismiss()
-	front_end.buttons.load.set_meta("available",save_games.slots().any(func(slot: Dictionary) -> bool: return slot.valid))
+	var has_save: bool = save_games.latest_slot() >= -1
+	front_end.buttons.load.set_meta("available",has_save)
 	front_end.buttons.load.tooltip_text = "" if front_end.is_button_available("load") else "No saved games yet"
-	front_end.show_menu(has_started_game and (pilot == null or not pilot.dead))
+	front_end.show_menu(has_started_game and (pilot == null or not pilot.dead),not has_started_game and has_save)
 	if menu_backdrop != null:
 		menu_backdrop.open(); _update_daylight()
 	get_tree().paused = true
@@ -266,6 +269,15 @@ func _choose_game_folder(folder: String) -> void:
 	await _start_game(folder)
 	startup_complete = true
 	if show_start_menu and not has_started_game and pilot_mode: _show_main_menu()
+
+func _continue_game() -> void:
+	if world_loading or loading_save: return
+	if has_started_game: _resume_game(); return
+	var slot: int = save_games.latest_slot()
+	if slot < -1: _show_main_menu(); return
+	if not await _load_saved_game(slot):
+		var message: String = dock_interface.status
+		front_end.hide_menu(); dock_interface.open("load"); dock_interface.report(message)
 
 func _resume_game() -> void:
 	if not has_started_game or world_loading or pilot.dead: return
@@ -311,7 +323,7 @@ func _start_game(folder: String) -> void:
 	if dock_interface != null: dock_interface.dismiss(); dock_interface_active = false
 	_set_map_open(false)
 	if map_overlay != null:
-		map_overlay.free(); map_overlay = null; expanded_map = null
+		map_overlay.free(); map_overlay = null; expanded_map = null; map_screen = null
 	if world_loading: return
 	if not Paths.valid_game_folder(folder):
 		_fail_startup("Could not find CLUMPS/SUB.DFF and DATA/SCEN1.BSP in that folder.")
@@ -593,12 +605,18 @@ func _build_radio_feed() -> void:
 func _fail_startup(message: String) -> void:
 	world_loading = false
 	loading_canvas.visible = false
-	developer_ui_visible = true
-	canvas.visible = true
+	developer_ui_visible = developer_enabled
+	canvas.visible = developer_enabled
 	status_label.text = message
+	if not developer_enabled: _prompt_game_folder(message)
 
 func _input(event: InputEvent) -> void:
 	if get_tree().paused and front_end.menu_layer.visible: return
+	if _rov_prompt_active():
+		if Bindings.pressed(event,"dock_accept") or Bindings.pressed(event,"menu_accept"):
+			equipment.support_tools.rover.answer_docking(true); get_viewport().set_input_as_handled(); return
+		if Bindings.pressed(event,"dock_decline") or Bindings.pressed(event,"menu_cancel"):
+			equipment.support_tools.rover.answer_docking(false); get_viewport().set_input_as_handled(); return
 	if _delivery_prompt_active():
 		if Bindings.pressed(event,"dock_accept") or Bindings.pressed(event,"menu_accept"):
 			_answer_delivery(true); get_viewport().set_input_as_handled(); return
@@ -610,7 +628,7 @@ func _input(event: InputEvent) -> void:
 	elif map_open and Bindings.pressed(event,"menu_cancel"):
 		_set_map_open(false)
 		get_viewport().set_input_as_handled()
-	elif Bindings.pressed(event,"developer_toggle"):
+	elif developer_enabled and Bindings.pressed(event,"developer_toggle"):
 		_set_map_open(false)
 		_toggle_developer_ui()
 		get_viewport().set_input_as_handled()
@@ -662,15 +680,14 @@ func _build_expanded_map() -> void:
 	var backdrop := ColorRect.new(); backdrop.color = Color(0.002,0.005,0.015)
 	map_overlay.add_child(backdrop); backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	expanded_map = preload("res://hud_display.gd").new()
-	expanded_map.pilot = pilot; expanded_map.map_data = cockpit_hud.map_data
-	expanded_map.screen_only = true; expanded_map.full_world = true
-	map_overlay.add_child(expanded_map)
-	expanded_map.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	expanded_map.offset_left = 40; expanded_map.offset_top = 40
-	expanded_map.offset_right = -40; expanded_map.offset_bottom = -40
-	expanded_map.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	map_screen = preload("res://map_screen.gd").new(); map_overlay.add_child(map_screen)
+	map_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	map_screen.setup(pilot,cockpit_hud.map_data,gameplay_catalogue,_map_ui_model)
+	expanded_map = map_screen.map
 	map_overlay.hide()
+
+func _map_ui_model() -> Dictionary:
+	return {"credits":player_progress.status.credits,"cargo":player_progress.cargo.duplicate(),"hold":player_progress.hold.duplicate()}
 
 func _set_map_open(open: bool) -> void:
 	map_open = open and map_overlay != null
@@ -706,6 +723,7 @@ func _physics_process(_delta: float) -> void:
 	if developer_ui_visible and sound_panel != null and sound_panel.visible:
 		over_ui = over_ui or sound_panel.get_global_rect().has_point(pointer)
 	pilot.controls_enabled = pilot_mode and not pilot.dead and not map_open and not world_loading and not developer_ui_visible and not over_ui and not folder_dialog.visible and not export_all_dialog.visible and not mod_panel.visible and not tuning_panel.export_dialog.visible and (sound_panel == null or not sound_panel.export_dialog.visible) and (docking == null or docking.stage == Docking.Stage.IDLE)
+	pilot.remote_controlled = equipment != null and equipment.support_tools != null and is_instance_valid(equipment.support_tools.rover) and equipment.support_tools.rover.deployed
 
 func _process(delta: float) -> void:
 	var in_dock_menu: bool = docking != null and docking.stage == Docking.Stage.DOCKED and dock_interface_active and dock_interface.visible and dock_interface.page != "load"
@@ -767,15 +785,18 @@ func _update_radio_messages(delta: float) -> void:
 	else: radio_greeting = ""
 	var text: String = docking.message
 	if docking.greeting_remaining > 0 and text == docking.greeting_text: text = ""
-	var delivery := _delivery_prompt_active()
+	var rov_prompt := _rov_prompt_active()
+	var delivery := not rov_prompt and _delivery_prompt_active()
 	if delivery: text = "CITY DROP POINT : Do you want attached object to be automatically retrieved? (Y/N)"
-	var pinned: bool = delivery or (docking.stage == docking.Stage.IDLE and not docking.nearby.is_empty())
+	var pinned: bool = rov_prompt or delivery or (docking.stage == docking.Stage.IDLE and not docking.nearby.is_empty())
 	var transmission := {"speaker":"dock/" + str(docking._portrait_port().get("name","")),"text":text,"portrait":docking.portrait_texture(),"distorted_portrait":docking.distorted_portrait_texture()}
+	if rov_prompt:
+		transmission = equipment.support_tools.rover.transmission("rover1"); text = str(transmission.get("text",""))
 	radio_feed.set_prompt(transmission if pinned else {},docking.radio_static)
 	if not pinned and not text.is_empty() and text != radio_status: radio_feed.push_message(transmission,docking.radio_static)
 	radio_status = text
 	_age_radio(delta)
-	if docking.stage == docking.Stage.IDLE and docking.nearby.is_empty() and not _delivery_prompt_active():
+	if docking.stage == docking.Stage.IDLE and docking.nearby.is_empty() and not _delivery_prompt_active() and not rov_prompt:
 		if bounty_remaining <= 0 and not bounty_radio_queue.is_empty():
 			bounty_port = bounty_radio_queue.pop_front(); bounty_remaining = 7.0
 			if bounty_port.get("voice") != null and not bounty_port.get("voice_played",false):
@@ -783,6 +804,11 @@ func _update_radio_messages(delta: float) -> void:
 				voice.finished.connect(voice.queue_free); voice.play()
 
 func _update_follow_camera(delta: float, snap: bool = false) -> void:
+	if equipment != null and equipment.support_tools != null and is_instance_valid(equipment.support_tools.rover) and equipment.support_tools.rover.deployed:
+		camera.cull_mask &= ~preload("res://remote_vehicle.gd").RENDER_LAYER
+		camera.global_transform = equipment.support_tools.rover.camera_pose()
+		return
+	camera.cull_mask |= preload("res://remote_vehicle.gd").RENDER_LAYER
 	var pose := pilot.global_transform if snap else pilot.get_global_transform_interpolated()
 	if first_person:
 		camera.global_transform = pose * Transform3D(Basis.IDENTITY,cockpit_camera_offset)
@@ -1007,6 +1033,10 @@ func _map_signature() -> String:
 func _exploration_matches_map(signature: String) -> bool:
 	return session._exploration_matches_map(signature)
 
+func _rov_prompt_active() -> bool:
+	if not pilot_mode or world_loading or get_tree().paused or map_open or developer_ui_visible or pilot == null or pilot.dead or docking == null or docking.stage != Docking.Stage.IDLE: return false
+	return equipment != null and equipment.support_tools != null and is_instance_valid(equipment.support_tools.rover) and equipment.support_tools.rover.docking_prompt
+
 func _delivery_prompt_active() -> bool:
 	if not pilot_mode or world_loading or get_tree().paused or map_open or developer_ui_visible or pilot == null or pilot.dead or docking == null or docking.stage != Docking.Stage.IDLE: return false
 	if equipment == null or equipment.towing_tool() == null: return false
@@ -1062,7 +1092,7 @@ func _dock_ui_action(action: String, payload: Dictionary) -> void:
 	match action:
 		"accept_mission":
 			if docking.stage != Docking.Stage.DOCKED: return
-			var result: String = mission_runtime.accept(int(docking.current.node.get_meta("city_id")))
+			var result: String = mission_runtime.accept(int(docking.current.node.get_meta("city_id")),str(payload.get("id","")))
 			if result.is_empty(): dock_interface.open("home")
 			else: dock_interface.report(result)
 		"read_mail":
@@ -1103,7 +1133,7 @@ func _dock_ui_action(action: String, payload: Dictionary) -> void:
 			if docking.stage == Docking.Stage.DOCKED:
 				get_tree().paused = false
 				dock_interface.dismiss(); dock_interface_active = false; _request_docking()
-		"close": dock_interface.dismiss(); front_end.show_menu(has_started_game)
+		"close": _show_main_menu()
 		"save_slot":
 			if int(payload.get("slot",-1)) < 0: return
 			if docking.stage != Docking.Stage.DOCKED: dock_interface.report("Save games are available while docked."); return

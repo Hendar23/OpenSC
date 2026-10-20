@@ -31,22 +31,36 @@ var armour_clock := 0.0
 var base_guidance := false
 var base_instruction_clock := -1.0
 var reinforcements := false
+var reinforcement_radio_clock := -1.0
 var missile_template: Node3D
 var bubble_trail: Node3D
 var hitbox: CollisionObject3D
+var fishing: RefCounted
+var remaining: RefCounted
+
+func _exit_tree() -> void:
+	if fishing != null: fishing.clear(); fishing = null
+	if remaining != null: remaining.clear(); remaining = null
 
 func start(mission_id: String) -> void:
 	clear(); id = mission_id; age = 0; clock = 0; transfer = 0; warning = 0; delivered_city = 0
 	passengers = false; tapped = false; warned = false; convinced = false; dialogue = 0; interception_instruction = false; interception_cancelled = false
 	base_guidance = false; base_instruction_clock = -1.0; reinforcements = false; armour_clock = 0
+	reinforcement_radio_clock = -1.0
 	if id == "stranded": _start_stranded()
 	elif id in ["breakout","breakout2"]: _start_breakout()
+	elif id in ["fishing","bigherd"]:
+		fishing = preload("res://fishing_missions.gd").new(); fishing.jobs = self; fishing.start()
+	elif id in ["spytech","spytech2","escort","escort2","tagtech","eel","recontech","recontech2"]:
+		remaining = preload("res://stage_two_remaining.gd").new(); remaining.jobs = self; remaining.start()
 	else: _start_covert()
 
-func clear() -> void:
+func clear(reset_rover: bool = false) -> void:
+	if fishing != null: fishing.clear(); fishing = null
+	if remaining != null: remaining.clear(); remaining = null
 	id = ""; phase = ""
 	if game == null: return
-	if game.equipment != null and game.equipment.support_tools != null: game.equipment.support_tools.reset()
+	if game.equipment != null and game.equipment.support_tools != null: game.equipment.support_tools.reset(reset_rover)
 	for agent in vessels:
 		if not is_instance_valid(agent): continue
 		agent.running = false; agent.set_physics_process(false); agent.get_parent().hide()
@@ -55,16 +69,10 @@ func clear() -> void:
 		if is_instance_valid(agent.smoke): agent.smoke.free(); agent.smoke = null
 		if agent.body == hitbox: hitbox = null
 	for node in actors:
+		if is_instance_valid(node): game.cockpit_hud.map_data.actor_markers.erase(node)
 		if is_instance_valid(node): node.queue_free()
 	actors.clear(); vessels.clear(); escorts.clear(); vents.clear(); base_poses.clear(); door_poses.clear(); base_defences.clear()
 	target = null; missile_template = null; hitbox = null
-
-func objective() -> String:
-	if id == "stranded": return "Return the Bacau shuttle to a city." if delivered_city == 0 else "Dock for the rescue report."
-	if id in ["breakout","breakout2"]: return "Dock at Velcova or Tryton with the rescued prisoners." if passengers else "Attach an Escape Pod to the prison transport and complete the transfer."
-	if phase == "listen": return "Keep out of sight and listen to the intercepted transmission."
-	if phase == "base": return "Drop depth charges into all three open base vents."
-	return "Attach Big Ears to the Procha scout without being spotted."
 
 func radio(code: String, terminal: bool = false) -> void:
 	if id.is_empty(): return
@@ -92,6 +100,24 @@ func _boat(model_id: String, pose: Transform3D, faction: int, health: float, spe
 
 func _city(id_value: int) -> Vector3:
 	return game.submarine_traffic.port_by_id(id_value).get("entry",Vector3.ZERO)
+
+func _place_vessel_clear(agent: Node3D) -> void:
+	# Source markers may overlap our larger hull/navigation footprint. Find
+	# nearby water before activating a ship, including base reinforcements.
+	var model := agent.get_parent() as Node3D
+	var origin := model.global_position
+	var shape: CollisionShape3D = agent.body.get_child(0)
+	var query := PhysicsShapeQueryParameters3D.new(); query.shape = shape.shape; query.collision_mask = 1
+	for radius in [0.0,2.0,4.0,6.0]:
+		for direction in (1 if radius == 0 else 8):
+			var angle := float(direction)*TAU/8.0
+			for lift in [0.0,0.25,0.5,0.75,1.0,1.5,3.0,5.0,-0.5,-1.0,-2.0]:
+				var point := origin+Vector3(cos(angle)*radius,lift,sin(angle)*radius)
+				point.y = minf(point.y,game.pilot.surface_height-game.submarine_traffic.CLEARANCE-0.05)
+				if not game.submarine_traffic.segment_clear(point,point): continue
+				query.transform = Transform3D(model.global_basis,point)*shape.transform
+				if not get_world_3d().direct_space_state.intersect_shape(query,1).is_empty(): continue
+				model.global_position = point; agent.home = model.global_transform; model.reset_physics_interpolation(); return
 
 func _start_stranded() -> void:
 	phase = "tow"
@@ -191,6 +217,8 @@ func _physics_process(delta: float) -> void:
 	age += delta; clock -= delta; armour_clock = maxf(0,armour_clock - delta)
 	if id == "stranded": _step_stranded()
 	elif id in ["breakout","breakout2"]: _step_breakout(delta)
+	elif fishing != null: fishing.step(delta)
+	elif remaining != null: remaining.step(delta)
 	else: _step_covert(delta)
 
 func _step_stranded() -> void:
@@ -260,6 +288,10 @@ func _prison_arrived() -> void:
 	if not passengers: radio("y9",true); _resolve(false,0,2)
 
 func _step_covert(delta: float) -> void:
+	if reinforcement_radio_clock >= 0:
+		reinforcement_radio_clock -= delta
+		if reinforcement_radio_clock <= 0:
+			reinforcement_radio_clock = -1; radio("af6")
 	if phase in ["tag","listen","base"] and not reinforcements and is_instance_valid(target) and not target.dead and clock <= 0:
 		clock = 3.6
 		var offset: Vector3 = game.pilot.global_position - target.global_position
@@ -269,9 +301,11 @@ func _step_covert(delta: float) -> void:
 			var query := PhysicsRayQueryParameters3D.create(target.global_position,game.pilot.global_position,1)
 			if game.get_world_3d().direct_space_state.intersect_ray(query).is_empty():
 				if warned:
-					if tapped and not vents.is_empty(): _reinforce_base()
+					if tapped and not vents.is_empty():
+						radio("af5"); _reinforce_base()
 					else: radio("af14",true); _resolve(false,0,2); return
-				warned = true; radio("af6" if not tapped else "af5")
+				# Retail latches the first sighting, then reacts if spotted again.
+				warned = true
 	if tapped and phase in ["listen","base"]:
 		transfer += delta
 		while not interception_cancelled and dialogue < 5 and transfer >= float(dialogue + 1) * 8.0:
@@ -308,22 +342,27 @@ func _destroy_base() -> void:
 	effect.setup(models,smoke,game.submarine_traffic)
 
 func _reinforce_base() -> void:
-	reinforcements = true
+	reinforcements = true; interception_cancelled = true; reinforcement_radio_clock = 7.0
 	for index in range(4):
 		var angle := float(index) * TAU / 4.0
 		var position := base_poses[0].origin + Vector3(cos(angle) * 5.0,2.0,sin(angle) * 5.0)
 		var agent := _boat("TECHNEW" if index % 2 == 0 else "TECH2SUB",Transform3D(Basis.IDENTITY,position),2,15)
-		if agent != null: agent.engage_player = true
+		if agent != null:
+			_place_vessel_clear(agent)
+			agent.engage_player = true; agent.pursue_offscreen = true; agent.tuning.npc_detection = 1000.0
 
 func attach_listening_device(body: Node3D) -> bool:
-	if id != "spytrad2" or phase != "tag" or not is_instance_valid(target) or target.dead or body != target.body: return false
+	if remaining != null: return remaining.attach_listening(body)
+	if id not in ["spytrad","spytrad2"] or phase != "tag" or not is_instance_valid(target) or target.dead or body != target.body: return false
 	tapped = true; phase = "listen"; transfer = 0; dialogue = 0; radio("af1")
 	return true
 
 func can_attach_pod(body: Node3D) -> bool:
+	if remaining != null: return remaining.can_attach_pod(body)
 	return id in ["breakout","breakout2"] and not passengers and is_instance_valid(target) and not target.dead and body == target.body
 
 func delivery(body: Node3D, city: int) -> bool:
+	if remaining != null: return remaining.delivery(body,city)
 	if id != "stranded" or body != target or city not in [1,2,3,4] or delivered_city != 0: return false
 	delivered_city = city; target.delivered = true; target.set_meta("delivery_city",city)
 	target.set_meta("metal_tow_target",false); game.equipment.magnet.set_enabled(false)
@@ -338,6 +377,7 @@ func delivery(body: Node3D, city: int) -> bool:
 	return true
 
 func docked(city: int) -> void:
+	if remaining != null: remaining.docked(city); return
 	if id in ["breakout","breakout2"] and passengers and city in [1,2,3,4]:
 		runtime.active()["resolved_city"] = city
 		# Retail keeps the rescue success flag for the alternate Bohine return,

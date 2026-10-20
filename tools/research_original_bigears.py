@@ -38,6 +38,16 @@ def main():
     assert rows[35]["object"] == "LISTENINGDEVICE"
     assert read(0x4E65D8 + 35 * 80, "<I") == 0x432D50
     assert read(0x4E65D8 + 36 * 80, "<I") == 0x41B620
+    # Retail mission names have 12-byte slots and a parallel callback table.
+    # Both city offers run the same callback, which explicitly loads spytrad's
+    # placement set, rather than a separate placement set for spytrad2.
+    assert read(0x4DA490 + 32 * 12, "<12s").rstrip(b"\0") == b"spytrad"
+    assert read(0x4DA490 + 53 * 12, "<12s").rstrip(b"\0") == b"spytrad2"
+    assert read(0x4DF168 + 32 * 4, "<I") == 0x490640
+    assert read(0x4DF168 + 53 * 4, "<I") == 0x490640
+    order = catalogue["tables"]["source_texts"]["records"]["data.missord.csv"]["text"]
+    assert "#miss,stranded,,breakout,breakout2" in order
+    assert "#miss,spytrad,spytrad2,fishing," in order
     constants = {"thrust": read(0x4DA864), "surface_offset": read(0x4DA868),
                  "gravity_per_tick": read(0x4DB62C)}
     assert math.isclose(constants["thrust"], 0.0005, rel_tol=1e-6)
@@ -55,6 +65,7 @@ def main():
     device = function("0041b620")
     flight = function("0041b510")
     mission = function("00490640")
+    assert "s_spytrad_004f1814" in mission
     assert "FUN_004655b0(0x24" in launcher and "FUN_00464c00(iVar3,0x26" in launcher
     assert "puStack_38 == param_4" in device and "= 100;" in device
     assert "FUN_00460080" in flight and "_DAT_004da864" in flight
@@ -62,6 +73,10 @@ def main():
     evidence = {"executable_sha256": digest, "constants": constants,
                 "launcher_callback": "00432d50", "device_callback": "0041b620",
                 "flight_callback": "0041b510", "mission_callback": "00490640",
+                "covert_variants": {"spytrad": {"city": "Touka", "callback_index": 32},
+                                    "spytrad2": {"city": "Beluga", "callback_index": 53}},
+                "covert_shared_placements": "spytrad (MissionID 32)",
+                "covert_variant_exclusion": "Same MISSORD row; 00448bf0 excludes partner on acceptance",
                 "device_mass": 0.01, "device_retention": 0.9,
                 "powered_ticks": 100, "inherited_velocity": True,
                 "attachment": "Only launcher's designated target; surface offset .05",

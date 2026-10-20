@@ -43,6 +43,7 @@ static func alive(body: Node3D) -> bool:
 
 func attack(delta: float) -> void:
 	blood_timer = maxf(0,blood_timer - delta)
+	if is_instance_valid(target) and target.get_meta("bubble_screened",false): target = null
 	if is_instance_valid(target) and fish.population != null and (target == fish.population.player or target.is_in_group("npc_submarines")):
 		if not is_instance_valid(target) or not bool(target.get("active")) or not bool(target.get("controls_enabled")) or fish.response not in ["attack","defend"] or (fish.response == "defend" and fish.defense_timer <= 0) or fish.global_position.distance_to(target.global_position) >= fish.attack_range:
 			target = null

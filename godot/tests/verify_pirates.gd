@@ -25,7 +25,7 @@ func run() -> void:
 		var model := Document.load_model(id,folder); world.add_child(model)
 		var agent := Pirate.install_pirate(model,{})
 		agent.system = traffic; agent.running = true; agent.set_physics_process(false); traffic.traders.append(agent)
-		agent.reset(); agents.append(agent)
+		agent.reset(); agent.set_physics_process(false); agents.append(agent)
 		check(agent.health.remaining == 30 and agent.body.get_meta("faction") == 3,"Original pirate health and affiliation")
 		check(not agent.tuning.npc_respawn,"Placed pirates do not automatically replenish")
 	for i in range(1,agents.size()): agents[i].running = false; agents[i].body.collision_layer = 0; agents[i].get_parent().position.x = 100
@@ -50,12 +50,14 @@ func run() -> void:
 	var snapshot := traffic.snapshot()
 	check(traffic.valid_snapshot(snapshot),"Pirate state saves with other vessels")
 	traffic.restore(snapshot)
+	pirate.set_physics_process(false)
 	check(pirate.health.remaining < 30,"Pirate health restored")
 	target.position = Vector3(0,0,200); pirate.victim = null
 	pirate._physics_process(1)
 	check(pirate.victim == null and pirate.body.velocity == Vector3.ZERO,"No pursuit outside detection range")
 	pirate.reset()
 	target.position = Vector3(0,0,10)
+	pirate.set_physics_process(false)
 	var wall := StaticBody3D.new(); world.add_child(wall); wall.position = Vector3(0,0,4); wall.collision_layer = 1
 	var block := CollisionShape3D.new(); block.shape = BoxShape3D.new(); block.shape.size = Vector3(5,5,1); wall.add_child(block)
 	await physics_frame

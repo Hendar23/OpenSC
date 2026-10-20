@@ -129,6 +129,7 @@ func _run() -> void:
 	check(viewer.water_environment.fog_depth_end > old_visibility, "Longer visibility pushes distant fog back immediately")
 	viewer.fog_slider.value = 10.0
 	check(viewer.water_environment.fog_depth_end < old_visibility, "Shorter visibility brings distant fog closer immediately")
+	viewer.developer_enabled = true
 	viewer._toggle_tuning()
 	check(viewer.canvas.visible and viewer.tuning_panel.visible, "T reveals developer UI and movement tuning")
 	viewer._toggle_developer_ui()

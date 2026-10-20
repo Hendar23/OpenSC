@@ -24,11 +24,29 @@ func _run() -> void:
 	var key := InputEventKey.new()
 	key.pressed = true
 	key.keycode = KEY_F1
+	check(not game.developer_enabled,"Developer tools default to disabled")
+	game._input(key); game._toggle_developer_ui(); game._toggle_tuning(); game._toggle_sound_tuning()
+	check(not game.developer_ui_visible and not game.canvas.visible,"Disabled developer flag blocks F1 and tuning entry points")
+	var flag_path := "res://tests/developer-flag-test.cfg"
+	var flag_config := ConfigFile.new(); flag_config.set_value("developer","enabled",true); flag_config.save(flag_path)
+	game._load_preferences(flag_path)
+	check(game.developer_enabled,"Developer flag can explicitly enable the menu through settings")
 	game._input(key)
 	check(game.developer_ui_visible and game.canvas.visible, "F1 opens the developer menu")
+	flag_config.set_value("developer","enabled",false); flag_config.save(flag_path); game._load_preferences(flag_path)
+	check(not game.developer_ui_visible and not game.canvas.visible,"Disabling developer settings closes an open menu")
+	flag_config.set_value("developer","enabled",true); flag_config.save(flag_path); game._load_preferences(flag_path); game._input(key)
+	flag_config.set_value("developer","enabled","true"); flag_config.save(flag_path); game._load_preferences(flag_path)
+	check(not game.developer_enabled and not game.developer_ui_visible,"Developer flag requires an actual boolean and rejects malformed enabled settings")
+	flag_config.set_value("developer","enabled",true); flag_config.save(flag_path); game._load_preferences(flag_path)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(flag_path))
+	game._input(key)
 	game._unhandled_input(start_button)
 	check(game.developer_ui_visible,"Controller Start does not close the developer menu")
-	check(game.developer_tabs.get_tab_count() == 6 and not game.mod_panel.embedded, "Developer tabs exclude Mods; mod management is a main-menu popup")
+	var visible_tabs: Array[String] = []
+	for index in range(game.developer_tabs.get_tab_count()):
+		if not game.developer_tabs.is_tab_hidden(index): visible_tabs.append(game.developer_tabs.get_tab_title(index))
+	check(visible_tabs.size() == 6 and "Mods" not in visible_tabs and not game.mod_panel.embedded, "Developer tabs exclude inactive canopy controls; mod management is a main-menu popup")
 	check(game.fog_slider.max_value == 2000 and game.fog_start_slider.min_value == 0,"Visibility controls support a wide distance range")
 	game.fog_slider.value = 500; game.fog_start_slider.value = 100
 	check(game.fog_label.text.contains("Absolute view distance") and game.fog_start_label.text.contains("Fade start distance"),"Visibility controls identify both fade endpoints")

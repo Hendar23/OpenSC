@@ -25,6 +25,7 @@ var path := PackedVector3Array()
 var elapsed := 0.0
 var wait := 0.0
 var flee := 0.0
+var escape_replan := 0.0
 var attacker := Vector3.ZERO
 var last_obstacle := ""
 var blocked := 0.0
@@ -36,6 +37,10 @@ var steering := Vector3.ZERO
 var avoidance_clock := 0.0
 var avoidance := Vector3.ZERO
 var traffic_speed := 1.0
+var route_clock := 0.0
+var route_look := Vector3.INF
+var route_key := Vector3.INF
+var route_shortcut := false
 var progress_goal := Vector3.INF
 var progress_best := INF
 var progress_stalled := 0.0
@@ -78,6 +83,8 @@ static func install(model: Node3D, values: Dictionary, controller: Script = null
 	var source := str(model.get_meta("asset_id",model.get_meta("asset_source",""))).to_upper()
 	agent.twin_exhaust = source.contains("TECHSHUT")
 	agent.home = model.global_transform
+	agent.motion.turn_rate = deg_to_rad(clampf(95.0-agent.bounds.size.length()*9.0,42.0,78.0))
+	agent.motion.thrust_scale = clampf(3.0/maxf(1.0,agent.bounds.size.length()),0.65,1.1)
 	preload("res://entity_identity.gd").actor(model,agent,agent.body)
 	agent.random.seed = hash(str(model.get_path()))
 	return agent
@@ -93,7 +100,7 @@ static func rotor_nodes(model: Node3D, model_id: String = "") -> Array[Node3D]:
 		if not result.has(rotor): result.append(rotor)
 	if not model.get_meta("modern_model",false):
 		if model_id.is_empty(): model_id = str(model.get_meta("editor_model",str(model.get_meta("asset_source","")).get_file().get_basename())).to_upper()
-		var count := 2 if model_id in ["TRAD2","PRISON"] else 1 if model_id in ["TRADSHUT","TRAD-SUB"] else 0
+		var count := 2 if model_id in ["TRAD2","PRISON","TRADHERD"] else 1 if model_id in ["TRADSHUT","TRAD-SUB"] else 0
 		for index in range(1,count+1):
 			var rotor := model.get_node_or_null("Frame_0/Frame_"+str(index)) as Node3D
 			if rotor != null and not result.has(rotor): result.append(rotor)
@@ -112,6 +119,9 @@ func reset() -> void:
 	elapsed = 0; wait = random.randf_range(0,3); flee = 0; blocked = 0; respawn = 0; clock = 0; speed = 0; steering = Vector3.ZERO; avoidance = Vector3.ZERO; avoidance_clock = 0; journey_count = 0
 	motion.velocity = Vector3.ZERO; motion.bank = 0.0
 	progress_goal = Vector3.INF; progress_best = INF; progress_stalled = 0.0
+	escape_replan = 0.0
+	route_clock = 0; route_key = Vector3.INF; route_look = Vector3.INF
+	avoidance_clock = fmod(float(get_instance_id()%97)*0.037,0.12)
 	body.collision_layer = 10; get_parent().show()
 	if smoke != null: smoke.set_health(health.remaining * 10)
 
@@ -129,7 +139,13 @@ func _physics_process(delta: float) -> void:
 	advance(delta)
 
 func set_local_simulation(on: bool) -> void:
-	if local_simulation == on: return
+	if local_simulation == on:
+		# Reconcile the actual node as well as the cached activity flag. A ship
+		# already marked local must not remain disabled when it is approached.
+		if on and running and not dead:
+			if get_parent().process_mode == Node.PROCESS_MODE_DISABLED: get_parent().process_mode = Node.PROCESS_MODE_INHERIT
+			if not is_physics_processing(): set_physics_process(true)
+		return
 	local_simulation = on
 	if not on:
 		# Complete hidden hatch transitions without animating or reserving a dock.
@@ -198,11 +214,14 @@ func _advance_motion(delta: float) -> void:
 	if dead:
 		# The traffic manager replaces destroyed subs only behind the docked UI.
 		return
+	escape_replan = maxf(0.0,escape_replan-delta)
 	if stage != "travel": _dock_step(delta); return
 	if wait > 0: wait = maxf(0,wait - delta); _coast(delta); return
 	if flee > 0:
 		flee = maxf(0,flee - delta)
-		if path.is_empty():
+		if path.is_empty() and escape_replan <= 0.0:
+			# A trapped civilian must not rebuild an impossible route every tick.
+			escape_replan = 0.75
 			var away := (global_position - attacker).normalized()
 			if away.is_zero_approx(): away = get_parent().global_basis.z.normalized()
 			path = system.route(global_position,global_position + away * 18)
@@ -221,16 +240,11 @@ func _advance_motion(delta: float) -> void:
 		path = system.route(global_position,port.entry)
 		if path.is_empty(): destination = 0; wait = 2
 		return
-	while not path.is_empty():
-		var reach := 0.15
-		var distance := global_position.distance_to(path[0])
-		# Capture a passing corner before rounded steering can orbit it. Only
-		# shortcut when the next leg is actually clear of terrain/scenery.
-		var corner_reach := clampf(speed*0.6,0.2,0.75)
-		if path.size() > 1 and distance < corner_reach and system.segment_clear(global_position,path[1]): reach = corner_reach
-		if distance >= reach: break
-		path.remove_at(0)
-	if path.is_empty(): _coast(delta); return
+	var guidance := _route_direction(delta)
+	if path.is_empty():
+		if _continuous_route(): _flow_move(delta,get_parent().global_basis.z.normalized(),float(tuning.npc_speed))
+		else: _coast(delta)
+		return
 	if flee <= 0 and not port.is_empty() and global_position.distance_to(port.entry) < 4:
 		if Access.owner(port) != null and Access.owner(port) != self:
 			wait = 0.5; return
@@ -245,8 +259,8 @@ func _advance_motion(delta: float) -> void:
 		# Brake and request a fresh route instead of endlessly circling a close
 		# waypoint or repeatedly adding detours around an occupied point.
 		path.clear(); steering = Vector3.ZERO; progress_goal = Vector3.INF
-		wait = 0.4; _coast(delta); return
-	var direction := offset.normalized()
+		wait = 0.4 if blocked > 0 else 0.0; _coast(delta); return
+	var direction := guidance
 	avoidance_clock -= delta
 	if avoidance_clock <= 0:
 		avoidance_clock = 0.12
@@ -260,7 +274,7 @@ func _advance_motion(delta: float) -> void:
 	direction = steering
 	var model := get_parent() as Node3D
 	var desired_speed := float(tuning.npc_speed) * (1.5 if flee > 0 else 1.0) * traffic_speed
-	if path.size() == 1: desired_speed = minf(desired_speed,sqrt(maxf(0.0,2.0 * maxf(1.0,float(tuning.npc_speed)*0.85) * offset.length())))
+	if path.size() == 1 and not _continuous_route(): desired_speed = minf(desired_speed,sqrt(maxf(0.0,2.0 * maxf(1.0,float(tuning.npc_speed)*0.85) * offset.length())))
 	var hit := _flow_move(delta,direction,desired_speed)
 	if hit != null:
 		last_obstacle = str(hit.get_collider().get_path())
@@ -278,9 +292,37 @@ func _advance_motion(delta: float) -> void:
 			wait = random.randf_range(0.2,0.5); blocked = 0
 	else: blocked = 0
 
+func _continuous_route() -> bool:
+	return flee > 0
+
+func _route_direction(delta: float) -> Vector3:
+	route_clock = maxf(0,route_clock-delta)
+	while not path.is_empty():
+		var distance := global_position.distance_to(path[0])
+		var reach := maxf(0.3,speed*0.85) if path.size() == 1 and _continuous_route() else 0.15
+		if path.size() > 1 and distance < clampf(speed*0.85,0.4,2.0):
+			if route_clock <= 0 or route_key != path[0]:
+				route_shortcut = system.segment_clear(global_position,path[1]); route_key = path[0]
+				route_clock = 0.1+fmod(float(get_instance_id()%31)*0.017,0.04)
+			if route_shortcut: reach = clampf(speed*0.85,0.4,2.0)
+		if distance >= reach: break
+		path.remove_at(0); route_clock = 0; route_key = Vector3.INF; route_look = Vector3.INF
+	if path.is_empty(): return Vector3.ZERO
+	if route_clock <= 0 or route_key != path[0] or not route_look.is_finite():
+		route_key = path[0]; route_look = path[0]
+		if path.size() > 1:
+			var ahead := maxf(0,clampf(speed*1.0,0.6,2.5)-global_position.distance_to(path[0]))
+			var candidate := path[0].move_toward(path[1],ahead)
+			if ahead > 0 and system.segment_clear(global_position,candidate): route_look = candidate
+		route_clock = 0.1+fmod(float(get_instance_id()%31)*0.017,0.04)
+	return global_position.direction_to(route_look)
+
+func _precise_motion() -> bool:
+	return stage != "travel" or (not _continuous_route() and path.size() == 1 and global_position.distance_to(path[0]) < 1.5)
+
 func _flow_move(delta: float, direction: Vector3, desired_speed: float, aim: Vector3 = Vector3.ZERO) -> KinematicCollision3D:
 	var model := get_parent() as Node3D
-	model.global_basis = motion.step(delta,direction,desired_speed,float(tuning.npc_speed),model.global_basis,aim).scaled_local(home.basis.get_scale())
+	model.global_basis = motion.step(delta,direction,desired_speed,float(tuning.npc_speed),model.global_basis,aim,_precise_motion()).scaled_local(home.basis.get_scale())
 	var start := model.global_position
 	var hit := body.move_and_collide(motion.velocity * delta)
 	model.global_position = body.global_position; body.transform = Transform3D.IDENTITY
@@ -370,17 +412,23 @@ func _dock_step(delta: float) -> void:
 func take_weapon_damage(strength: float, source: Vector3 = Vector3.ZERO) -> void:
 	if not running or not local_simulation or dead or stage != "travel" or not health.hit(strength): return
 	if report_player_attack: attacked.emit(int(tuning.npc_faction))
-	attacker = source; flee = 8; path.clear(); wait = 0; destination = 0; release_port()
+	_react_to_damage(source)
 	if smoke != null: smoke.set_health(health.remaining * 10)
 	if health.remaining > 0: return
 	dead = true; release_port(); get_parent().hide(); body.collision_layer = 0
 	destroyed.emit(preload("res://entity_identity.gd").of(self),preload("res://entity_identity.gd").of(damage_attacker) if is_instance_valid(damage_attacker) else "")
 	respawn = float(tuning.npc_respawn_delay)
+	_destroy_visuals()
+
+func _destroy_visuals() -> void:
 	var wreck := preload("res://submarine_death.gd").new(); system.get_parent().add_child(wreck)
 	wreck.global_position = global_position; wreck.setup_machine(get_parent(),get_parent(),system.bubble_texture,[],body.velocity)
 	wreck.add_to_group("trader_wrecks")
 	var effect := preload("res://mine_explosion.gd").new(); system.get_parent().add_child(effect); effect.global_position = global_position
 	effect.setup(system.explosion_frames,maxf(0.4,bounds.size.length()),system.explosion_sound)
+
+func _react_to_damage(source: Vector3) -> void:
+	attacker = source; flee = 8; path.clear(); wait = 0; destination = 0; release_port()
 
 func apply_attributed_damage(strength: float, source: Vector3, owner_body: Node3D) -> void:
 	# City defence alerts target the player, so NPC combat must not raise them.

@@ -332,10 +332,11 @@ func _model_instrument(definition: Dictionary, display: Control) -> Control:
 			if definition.id == "equipment": display.show_equipment_counter = false
 			else: display.show_weapon_counter = false
 			var counter_view := SubViewport.new(); counter_view.name = definition.id.capitalize() + "Counter"
-			counter_view.size = Vector2i(51,30); counter_view.disable_3d = true
+			var counter_width := 26 if definition.id == "weapon" else 17
+			counter_view.size = Vector2i(counter_width*3,30); counter_view.disable_3d = true
 			counter_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS; view.add_child(counter_view)
 			var counter := Display.new(); counter.kind = definition.id + "_counter"; counter.pilot = pilot; counter.equipment = equipment; counter.weapons = weapons
-			counter.screen_only = true; counter.size = Vector2(17,10); counter.scale = Vector2.ONE * 3.0
+			counter.screen_only = true; counter.size = Vector2(counter_width,10); counter.scale = Vector2.ONE * 3.0
 			counter.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST; counter_view.add_child(counter)
 			var counter_material := material.duplicate() as StandardMaterial3D
 			counter_material.albedo_texture = counter_view.get_texture(); counter_material.emission_texture = counter_view.get_texture()

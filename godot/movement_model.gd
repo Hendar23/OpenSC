@@ -35,6 +35,7 @@ var yaw_velocity: float:
 var thrust_force := Vector3.ZERO
 var thrust_torque := Vector3.ZERO
 var cargo_mass := 0.0
+var boost_multiplier := 1.0
 var tilt := 0.0
 var pods_aligned := true
 var main_power := 0.0
@@ -77,6 +78,10 @@ func step(delta: float, basis: Basis, throttle: float, vertical: float, turn: fl
 	var right_force := pod_direction * right_power * float(settings.side_thrust)
 	var main_force := Vector3.FORWARD * throttle * float(settings.main_forward if throttle >= 0.0 else settings.main_reverse)
 	thrust_force = basis * (main_force + left_force + right_force)
+	if boost_multiplier > 1.0:
+		var local_thrust := basis.inverse()*thrust_force
+		local_thrust.z *= boost_multiplier
+		thrust_force = basis*local_thrust
 	# Forces at separate pod mounts naturally produce yaw, roll, or both.
 	thrust_torque = basis * (Vector3(-POD_ARM, 0, 0).cross(left_force) + Vector3(POD_ARM, 0, 0).cross(right_force))
 	var body_mass := maxf(1.0, float(settings.mass) + cargo_mass)
@@ -92,7 +97,7 @@ func step(delta: float, basis: Basis, throttle: float, vertical: float, turn: fl
 	local.z *= exp(-(float(settings.forward_drag) + resistance * absf(local.z)) * REFERENCE_MASS / body_mass * towing_drag * delta)
 	velocity = basis * local + thrust_force / body_mass * delta
 	local = basis.inverse() * velocity
-	local.z = clampf(local.z, -float(settings["forward_speed"]), float(settings["reverse_speed"]))
+	local.z = clampf(local.z, -float(settings["forward_speed"])*boost_multiplier, float(settings["reverse_speed"])*boost_multiplier)
 	local.y = clampf(local.y, -float(settings["vertical_speed"]), float(settings["vertical_speed"]))
 	velocity = basis * local
 	velocity.y = clampf(velocity.y, -float(settings.vertical_speed), float(settings.vertical_speed))

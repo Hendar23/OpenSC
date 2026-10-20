@@ -1,6 +1,7 @@
 extends RigidBody3D
 signal destroyed
 var health := 5.0
+var damage_sustain := 0.3
 var dead := false
 var shard := 0
 var delivered := false:
@@ -20,7 +21,7 @@ func _ready() -> void:
 	gravity_scale = 0; mass = 10; collision_layer = 9; collision_mask = 1 | 2 | 8
 	linear_damp = 1.0; angular_damp = 3.0
 	set_meta("metal_tow_target",true); set_meta("grapple_tow_target",false)
-	set_meta("damage_sustain",0.3)
+	set_meta("damage_sustain",damage_sustain)
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON
 
 func setup_damage_smoke(visual: Node3D, folder: String) -> void:
@@ -43,7 +44,7 @@ func take_damage(amount: float, _source: Vector3 = Vector3.ZERO) -> void:
 
 func take_weapon_damage(strength: float, _source: Vector3 = Vector3.ZERO) -> void:
 	if dead or delivered: return
-	health -= maxf(0,strength) * 0.3
+	health -= maxf(0,strength) * damage_sustain
 	if health <= 0:
 		dead = true; collision_layer = 0; _refresh_smoke(); destroyed.emit()
 

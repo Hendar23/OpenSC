@@ -70,6 +70,7 @@ func run() -> void:
 	check(is_equal_approx(saved.get_value(canopy.pack_id,"roughness_value"),0.22),"Canopy tuning persists per mod pack")
 	panel.sliders.roughness_value.value = previous_roughness; canopy.persist_settings(); game.remember_preferences = false
 	if DisplayServer.get_name() != "headless":
+		game.developer_enabled = true
 		game._toggle_developer_ui(); game.developer_tabs.current_tab = panel.get_index()
 		for frame in range(6): await process_frame
 		await RenderingServer.frame_post_draw

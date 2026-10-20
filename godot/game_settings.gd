@@ -16,6 +16,9 @@ func _load_preferences(path: String = "") -> void:
 	if path.is_empty(): path = preload("res://current_settings.gd").path("view_defaults.cfg")
 	var config := ConfigFile.new()
 	if config.load(path) != OK: return
+	var developer: Variant = config.get_value("developer","enabled",game.developer_enabled)
+	game.developer_enabled = developer is bool and developer
+	if not game.developer_enabled and game.developer_ui_visible: game._toggle_developer_ui()
 	game.loading_preferences = true
 	var ray_brightness: Variant = config.get_value("view","sun_ray_brightness",game.sun_shafts_brightness_slider.value / 100.0)
 	if (ray_brightness is float or ray_brightness is int) and is_finite(float(ray_brightness)):

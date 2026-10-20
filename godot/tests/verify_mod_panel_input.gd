@@ -3,6 +3,9 @@ const Mods = preload("res://mod_registry.gd")
 var checks := 0
 var failures := 0
 var applied := false
+class FixtureCapture extends "res://capture_overlay.gd":
+	func screenshot_folder() -> String:
+		return ProjectSettings.globalize_path("res://tests/cache-mod-input-captures")
 func _initialize() -> void: call_deferred("_run")
 func check(ok: bool, message: String) -> void:
 	checks += 1
@@ -24,6 +27,7 @@ func button(panel: Window, label: String) -> Button:
 func _run() -> void:
 	root.gui_embed_subwindows = true; root.size = Vector2i(1280,720)
 	Mods.initialize(false)
+	var capture := FixtureCapture.new(); root.add_child(capture)
 	var panel := preload("res://mod_panel.gd").new(); panel.persist_preferences = false
 	root.add_child(panel); panel.applied.connect(func() -> void: applied = true)
 	paused = true; panel.open()
@@ -35,6 +39,25 @@ func _run() -> void:
 		Mods.packs.append({"id":id,"name":"Input test %d" % index,"version":"1.0","description":"Scrolling test description.","valid":true,"errors":[],"assets":{},"movement":{}})
 	panel.open()
 	for frame in range(5): await process_frame
+	check(panel.description.text == "Scrolling test description." and panel.selected_id == "input-test-0","Focused mod shows its description in the shared details area")
+	check(panel.rows.find_children("*","Label",true,false).is_empty(),"Compact mod rows contain no repeated descriptions")
+	Mods.packs[1].description = "Second mod details."
+	panel.choices["input-test-1"].grab_focus()
+	check(panel.description.text == "Second mod details.","Changing controller/keyboard focus changes the displayed description")
+	panel.choices["input-test-0"].mouse_entered.emit()
+	check(panel.selected_id == "input-test-0" and panel.description.text == "Scrolling test description.","Mouse highlighting shows only the highlighted mod description")
+	if DisplayServer.get_name() != "headless":
+		var screenshot := InputEventKey.new(); screenshot.keycode = KEY_F12; screenshot.physical_keycode = KEY_F12; screenshot.pressed = true
+		Input.parse_input_event(screenshot)
+		for frame in range(120):
+			await process_frame
+			if not capture.last_screenshot.is_empty(): break
+		check(not capture.last_screenshot.is_empty() and FileAccess.file_exists(capture.last_screenshot),"Screenshot shortcut reaches capture while exclusive Mods window has focus")
+		if not capture.last_screenshot.is_empty():
+			var image := Image.load_from_file(capture.last_screenshot)
+			check(image.get_size() == root.size,"Mods screenshot captures the whole game, including its embedded popup")
+			DirAccess.remove_absolute(capture.last_screenshot)
+		capture.last_screenshot = ""
 	check(panel.can_process() and panel.choices.values()[0].can_process(),"Mod window and buttons receive input while main-menu gameplay is paused")
 	await click(panel,panel.choices["input-test-0"])
 	check("input-test-0" in panel.pending_enabled,"Mouse click toggles a mod while paused")
@@ -71,6 +94,14 @@ func _run() -> void:
 	await click(panel,panel.choices["input-test-0"])
 	await click(panel,button(panel,"Apply"))
 	check(panel.apply_confirmation.visible and not applied and Mods.enabled.is_empty(),"Apply warns before changing mods or ending the game")
+	if DisplayServer.get_name() != "headless":
+		var screenshot := InputEventKey.new(); screenshot.keycode = KEY_F12; screenshot.physical_keycode = KEY_F12; screenshot.pressed = true
+		Input.parse_input_event(screenshot)
+		for frame in range(120):
+			await process_frame
+			if not capture.last_screenshot.is_empty(): break
+		check(not capture.last_screenshot.is_empty(),"Screenshot shortcut also works in the nested Apply confirmation")
+		if not capture.last_screenshot.is_empty(): DirAccess.remove_absolute(capture.last_screenshot)
 	await click(panel.apply_confirmation,panel.apply_confirmation.get_cancel_button())
 	check(not panel.apply_confirmation.visible and panel.visible and not applied and Mods.enabled.is_empty(),"Confirmation Cancel keeps the mod menu and unapplied choices")
 	await click(panel,button(panel,"Apply"))
@@ -79,5 +110,8 @@ func _run() -> void:
 	panel.open(); for frame in range(3): await process_frame
 	await click(panel,button(panel,"Refresh installed mods"))
 	check(not panel.pending_order.has("input-test-0") and panel.pending_order == Mods.order,"Refresh rescans installed mods while paused")
+	if DisplayServer.get_name() != "headless":
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png("res://tests/mods-compact-preview.png")
 	paused = false; panel.queue_free(); await process_frame
 	print("Mod panel input: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

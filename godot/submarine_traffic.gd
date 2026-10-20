@@ -1,7 +1,9 @@
 extends Node
 const Identity = preload("res://entity_identity.gd")
+const Survivors = preload("res://mission_survivors.gd")
 var events: RefCounted
 var prepare_visual: Callable
+var asset_folder := ""
 ## One water navigation graph shared by all civilian vessels.
 signal pirate_defeated(position: Vector3)
 var roaming_population: Node3D
@@ -30,6 +32,7 @@ var space: PhysicsDirectSpaceState3D
 var probe := SphereShape3D.new()
 
 func setup(world: Node3D, folder: String, dock_ports: Array[Dictionary], terrain_map: RefCounted, observer: Node3D = null, alert: Callable = Callable()) -> void:
+	asset_folder = folder
 	space = world.get_world_3d().direct_space_state; probe.radius = 0.9
 	ports = dock_ports; map = terrain_map; player = observer
 	cruise = map.surface_height - 2.0
@@ -56,7 +59,7 @@ func register_vessel(agent: Node3D, world: Node3D, folder: String, alert: Callab
 	agent.system = self; traders.append(agent)
 	if events != null: agent.destroyed.connect(events.entity_destroyed.emit)
 	if agent.has_method("configure_resources"): agent.configure_resources(folder)
-	if not agent.has_method("configure_resources") and is_instance_valid(player) and player.get("submarine_audio") != null:
+	if not is_instance_valid(agent.dock_audio) and is_instance_valid(player) and player.get("submarine_audio") != null:
 		agent.dock_audio = preload("res://docking_audio.gd").new(); agent.add_child(agent.dock_audio)
 		agent.dock_audio.setup(player.submarine_audio,folder,agent.get_parent())
 	agent.smoke = preload("res://submarine_damage_smoke.gd").new(); world.add_child(agent.smoke); agent.smoke.setup(agent.get_parent(),folder)
@@ -75,6 +78,7 @@ func replenish_docked(delta: float) -> void:
 	if not navigation_ready or not simulating: return
 	for agent in traders:
 		if not agent.dead or not agent.mission_owner.is_empty(): continue
+		if agent.has_meta(Survivors.TAG): continue
 		if is_instance_valid(roaming_population) and roaming_population.ships.has(agent): continue
 		agent.reset()
 	if is_instance_valid(roaming_population): roaming_population.replenish_docked(delta)
@@ -119,13 +123,16 @@ func water_clear(point: Vector3) -> bool:
 	return true
 
 func segment_clear(a: Vector3, b: Vector3) -> bool:
+	# Reject impossible endpoints before sampling the whole leg.
+	if not water_clear(a) or not water_clear(b): return false
 	var steps := maxi(1,int(ceil(a.distance_to(b) / 0.4)))
-	for index in range(steps + 1):
+	for index in range(1,steps):
 		if not water_clear(a.lerp(b,float(index) / steps)): return false
 	if space != null:
 		var query := PhysicsShapeQueryParameters3D.new(); query.shape = probe
 		query.transform.origin = a; query.motion = b - a; query.collision_mask = 1
 		if not space.intersect_shape(query,1).is_empty(): return false
+		if a == b: return true
 		var fraction := space.cast_motion(query)
 		if not fraction.is_empty() and fraction[0] < 0.999: return false
 	return true
@@ -168,6 +175,9 @@ func can_activate(agent: Node3D) -> bool:
 
 func route(start: Vector3, finish: Vector3) -> PackedVector3Array:
 	if not navigation_ready: return PackedVector3Array()
+	# Every possible anchor connection includes its endpoint. If the hull
+	# already overlaps scenery, trying scores of anchors cannot succeed.
+	if not segment_clear(start,start) or not segment_clear(finish,finish): return PackedVector3Array()
 	if segment_clear(start,finish): return PackedVector3Array([finish])
 	var first := anchor(start); var last := anchor(finish)
 	if first < 0 or last < 0: return PackedVector3Array()
@@ -191,8 +201,9 @@ func avoidance(agent: Node3D, forward: Vector3) -> Dictionary:
 	var steer := Vector3.ZERO
 	var pace := 1.0
 	var actors: Array[Node3D] = []
+	var exceptions: Array[PhysicsBody3D] = agent.body.get_collision_exceptions()
 	for other in traders:
-		if other != agent and other.running and not other.dead and other.stage == "travel": actors.append(other.body)
+		if other != agent and other.running and not other.dead and other.stage == "travel" and not exceptions.has(other.body): actors.append(other.body)
 	var tether: WeakRef = agent.body.get_meta("rescue_pod_pilot") if agent.body.has_meta("rescue_pod_pilot") else null
 	if is_instance_valid(player) and (tether == null or tether.get_ref() != player): actors.append(player)
 	var velocity: Vector3 = forward * maxf(agent.speed,float(agent.tuning.npc_speed) * 0.6)
@@ -238,6 +249,7 @@ func set_simulating(value: bool) -> void:
 		agent.get_parent().reset_physics_interpolation()
 
 func reset() -> void:
+	Survivors.clear(self)
 	for wreck in get_tree().get_nodes_in_group("trader_wrecks"):
 		if get_parent().is_ancestor_of(wreck): wreck.free()
 	if bubbles != null: bubbles.clear()
@@ -251,6 +263,12 @@ func snapshot() -> Dictionary:
 	for agent in traders:
 		result[Identity.of(agent)] = {"mission_owner":agent.mission_owner,"pose":preload("res://map_document.gd").encode(agent.get_parent().global_transform),"health":agent.health.remaining,"stage":agent.stage,"destination":agent.destination,"last_city":agent.last_city,"elapsed":agent.elapsed,"wait":agent.wait,"flee":agent.flee,"attacker":[agent.attacker.x,agent.attacker.y,agent.attacker.z],"respawn":agent.respawn,"rng":str(agent.random.state),"start":[agent.transit_start.x,agent.transit_start.y,agent.transit_start.z]}
 		result[Identity.of(agent)].route = Array(agent.path).map(func(point: Vector3) -> Array: return [point.x,point.y,point.z])
+		if agent.has_meta(Survivors.TAG):
+			result[Identity.of(agent)][Survivors.TAG] = agent.get_meta(Survivors.TAG)
+			result[Identity.of(agent)]["survivor_hostile"] = agent.engage_player
+			if agent.retiring:
+				result[Identity.of(agent)]["survivor_retiring"] = true
+				result[Identity.of(agent)].destination = agent.dock_destination
 	return result
 
 static func valid_snapshot(value: Variant) -> bool:
@@ -259,6 +277,9 @@ static func valid_snapshot(value: Variant) -> bool:
 		if not Identity.valid(key) or not value[key] is Dictionary: return false
 		if not value[key].get("mission_owner","") is String or value[key].get("mission_owner","").length() > 256: return false
 		var entry: Dictionary = value[key]
+		if entry.has(Survivors.TAG) and entry[Survivors.TAG] not in Survivors.MODELS: return false
+		if entry.has("survivor_hostile") and not entry.survivor_hostile is bool: return false
+		if entry.has("survivor_retiring") and not entry.survivor_retiring is bool: return false
 		var route_points: Variant = entry.get("route",[])
 		if not route_points is Array or route_points.size() > 8192: return false
 		for point in route_points:
@@ -282,6 +303,7 @@ static func valid_snapshot(value: Variant) -> bool:
 	return true
 
 func restore(value: Dictionary) -> void:
+	Survivors.restore(self,value)
 	for agent in traders: agent.release_port()
 	for agent in traders:
 		var entry: Dictionary = value.get(Identity.of(agent),{})

@@ -81,3 +81,14 @@ func slots() -> Array[Dictionary]:
 func automatic_slot() -> Dictionary:
 	var data := read(-1)
 	return {"slot":-1,"name":"Auto Save","exists":FileAccess.file_exists(path(-1)),"valid":not data.is_empty(),"city":str(data.get("dock",{}).get("name","")),"saved_at":data.get("saved_at",""),"error":error}
+
+func latest_slot() -> int:
+	var latest := -2; var saved_at := ""; var modified := 0
+	for slot in range(-1,SLOT_COUNT):
+		var data := read(slot)
+		if data.is_empty(): continue
+		var stamp := str(data.saved_at)
+		var file_time := FileAccess.get_modified_time(path(slot))
+		if latest == -2 or stamp > saved_at or (stamp == saved_at and file_time > modified):
+			latest = slot; saved_at = stamp; modified = file_time
+	return latest

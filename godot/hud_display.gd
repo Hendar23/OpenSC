@@ -108,7 +108,7 @@ func _draw() -> void:
 	elif kind == "equipment":
 		var item: Dictionary = equipment.current()
 		if not item.is_empty():
-			var icon_index := equipment_icon_index(item)
+			var icon_index := clampi(equipment_icon_index(item),0,maxi(0,item.icons.size()-1))
 			var icon: Texture2D = item.icons[icon_index]
 			if icon != null: draw_texture_rect(icon, rect, false)
 			if show_equipment_counter: _draw_equipment_counter(counter_rect())
@@ -147,12 +147,11 @@ func counter_rect() -> Rect2:
 	return Rect2(Vector2(4,size.y - 14) if screen_only else Vector2(9.5,23.5),Vector2(17,10))
 
 func weapon_counter_rect() -> Rect2:
-	return Rect2(Vector2(size.x - 21,size.y - 14) if screen_only else Vector2(94.5,23.5),Vector2(17,10))
+	# Retail 00458970 draws three 8x10 digits at (93,18), nine pixels apart.
+	return Rect2(Vector2(size.x - 30,size.y - 14) if screen_only else Vector2(93,18),Vector2(26,10))
 
 func weapon_count() -> int:
-	if weapons == null or weapons.current().get("id","") != "depthl" or equipment == null or equipment.support_tools == null: return -1
-	var mission: Node = equipment.support_tools.runtime()
-	return clampi(int(mission.game.player_progress.hold.get("depth",0)),0,99) if mission != null else 0
+	return weapons.ammunition_count() if weapons != null else -1
 
 func equipment_icon_index(item: Dictionary) -> int:
 	if item.id in ["escape","bigears"]: return int(item.get("icon_state",0))
@@ -170,6 +169,7 @@ func equipment_count() -> int:
 	if id == "bigears" and equipment.support_tools != null:
 		var mission: Node = equipment.support_tools.runtime()
 		if mission != null: return clampi(int(mission.game.player_progress.ammunition.get("bigears",5)),0,99)
+	if id == "woosh" and equipment.extra_tools != null: return equipment.extra_tools.count(id)
 	return -1
 
 func _draw_equipment_counter(rect: Rect2) -> void:
@@ -177,10 +177,19 @@ func _draw_equipment_counter(rect: Rect2) -> void:
 
 func _draw_counter(rect: Rect2, count: int) -> void:
 	if count < 0 or equipment == null or equipment.counter_digits.size() != 10: return
-	var scale := rect.size / Vector2(17,10)
-	for digit in range(2):
-		var texture: Texture2D = equipment.counter_digits[(count / 10) if digit == 0 else (count % 10)]
-		if texture != null: draw_texture_rect(texture,Rect2(rect.position + Vector2(digit * 9,0) * scale,Vector2(8,10) * scale),false)
+	var digits := counter_digit_count()
+	count = clampi(count,0,999 if digits == 3 else 99)
+	# Energy uses two digits at the same size, right-aligned in the weapon well.
+	var cells := 3 if kind in ["weapon","weapon_counter"] else 2
+	var scale := rect.size / Vector2(cells*9-1,10)
+	var origin := rect.position + Vector2((cells-digits)*9,0)*scale
+	for digit in range(digits):
+		var texture: Texture2D = equipment.counter_digits[(count / int(pow(10,digits-digit-1))) % 10]
+		if texture != null: draw_texture_rect(texture,Rect2(origin + Vector2(digit * 9,0) * scale,Vector2(8,10) * scale),false)
+
+func counter_digit_count() -> int:
+	if kind not in ["weapon","weapon_counter"]: return 2
+	return 2 if weapons != null and weapons.current().get("id","") == "electro" else 3
 
 func radiation_symbol_visible() -> bool:
 	return pilot != null and bool(pilot.get("radiation_exposed")) and fmod(radiation_clock,0.5) < 0.25
@@ -218,7 +227,7 @@ func _draw_city_markers() -> void:
 				city_markers.draw_string(ThemeDB.fallback_font, text_position, str(marker.name).to_upper().left(18), HORIZONTAL_ALIGNMENT_LEFT, text_width, maxi(6, int(6 * marker_scale)), Color(0.15,0.85,0.2))
 
 	for actor in map_data.actor_markers:
-		if not is_instance_valid(actor) or not actor.active or not map_data.is_explored(actor.global_position): continue
+		if not is_instance_valid(actor) or actor.get("dead") == true or not (actor.get("active") == true or actor.get_meta("mission_marker",false)) or not map_data.is_explored(actor.global_position): continue
 		if full_world and not map_data.npc_in_range(pilot.global_position,actor.global_position): continue
 		var offset := Vector2(actor.global_position.x - point.x,actor.global_position.z - point.z) / span * rect.size
 		var position := rect.get_center() + offset

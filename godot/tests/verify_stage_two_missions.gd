@@ -24,6 +24,10 @@ func fresh() -> void:
 	game.player_progress.status.credits = 100000
 	game.equipment.set_installed(["deep_sea_lights","suckomat"]); game.weapons.set_installed(["zapper"])
 	game.pilot.active = true; game.pilot.controls_enabled = true
+func accept_covert(city: int) -> String:
+	fresh(); port(city)
+	if city == 1: game.player_progress.missions.completed["stranded"] = {"success":true,"city":1}
+	return runtime.accept(city)
 func capture(name: String, focus: Node3D = null) -> void:
 	if DisplayServer.get_name() == "headless" or not is_instance_valid(jobs.target): return
 	if focus == null: focus = jobs.target
@@ -31,6 +35,7 @@ func capture(name: String, focus: Node3D = null) -> void:
 	var target_position: Vector3 = focus.global_position + Vector3.UP * 0.2
 	for offset in [Vector3(5,2,5),Vector3(-5,2,-5),Vector3(-5,2,5),Vector3(5,2,-5),Vector3(0,3,5),Vector3(0,3,-5)]:
 		var candidate: Vector3 = target_position + offset
+		if name in ["fishing","bigherd"]: candidate.y = minf(candidate.y,game.pilot.surface_height-1.0)
 		var query := PhysicsRayQueryParameters3D.create(target_position,candidate,1); query.hit_back_faces = true
 		if game.get_world_3d().direct_space_state.intersect_ray(query).is_empty(): game.camera.global_position = candidate; break
 	game.camera.look_at(focus.global_position); game.camera.make_current()
@@ -40,7 +45,7 @@ func capture(name: String, focus: Node3D = null) -> void:
 		check(jobs.escorts.all(func(agent: Node3D) -> bool: return agent.local_simulation and agent.get_parent().visible),"Approaching the shuttle activates both visible guards through normal activity management")
 	for frame in range(6): await process_frame
 	await RenderingServer.frame_post_draw
-	if name in ["bacau","prison","covert"]:
+	if name in ["bacau","prison","covert","covert-touka","fishing","bigherd"]:
 		check(runtime.target_marker.target_point().is_finite(),"Green target brackets track the visible shuttle")
 		game.map_open = true
 		check(not runtime.target_marker.target_point().is_finite(),"Fullscreen map hides the shuttle's world brackets")
@@ -103,30 +108,38 @@ func run() -> void:
 	game.pilot.global_transform = camera_pose; game.pilot.velocity = camera_velocity; game.pilot.physics_interpolation_mode = interpolation; game.pilot.reset_physics_interpolation(); game.pilot.movement.settings.camera_distance = camera_distance; game._set_camera_mode(false)
 	fresh(); port(1)
 	var unlock: Button = game.developer_tabs.get_node("System/UnlockTestingMissions")
-	var picker: OptionButton = game.developer_tabs.get_node("System/TestingMission")
+	check(game.developer_tabs.get_node_or_null("System/TestingMission") == null,"Redundant mission dropdown removed")
 	game.player_progress.campaign_stage = 1; game.player_progress.status.credits = 0
 	game.player_progress.missions.completed["stranded"] = {"success":true}
 	game.player_progress.missions["unavailable"] = ["breakout","breakout2"]
 	unlock.button_pressed = true
-	check(runtime.testing_all_missions and not picker.disabled and picker.item_count == 8,"Dev button unlocks the eight implemented opening variants and side missions")
-	check(picker.get_item_text(picker.selected).begins_with("Rescue Bacau Shuttle"),"Mission selector has readable names even though the dev UI builds before catalogue loading")
-	for index in range(picker.item_count):
-		picker.select(index); picker.item_selected.emit(index)
-		var chosen: String = picker.get_item_metadata(index)
-		var origins := {"tradetrad":1,"tradetrad2":3,"tradetech":2,"tradetech2":4,"stranded":1,"spytrad2":3,"breakout":2,"breakout2":4}
-		for city in [1,2,3,4,5,6]:
-			check(runtime.board(city).available == (city == origins[chosen]) and runtime.board(city).id == (chosen if city == origins[chosen] else ""),"Testing unlock preserves the original station for " + chosen)
+	check(runtime.testing_all_missions and runtime.testing_missions().size() == 19,"Dev button unlocks all missions globally")
+	var origins := {"tradetrad":1,"tradetrad2":3,"tradetech":2,"tradetech2":4,"stranded":1,"spytrad":1,"spytrad2":3,"breakout":2,"breakout2":4,"fishing":2,"bigherd":3,"spytech":2,"spytech2":4,"escort":1,"escort2":3,"tagtech":4,"eel":3,"recontech":2,"recontech2":4}
+	for city in [1,2,3,4,5,6]:
+		var expected: Array = origins.keys().filter(func(id: String) -> bool: return origins[id] == city)
+		var offered: Array = runtime.board(city).offers.map(func(entry: Dictionary) -> String: return entry.id)
+		expected.sort(); offered.sort()
+		check(runtime.board(city).available == not expected.is_empty() and offered == expected,"Global testing toggle exposes every mission at its original dock: " + str(city))
 	check(game.player_progress.campaign_stage == 1 and game.player_progress.missions.completed.has("stranded") and game.player_progress.missions.unavailable.size() == 2,"Unlocking leaves campaign history and stage intact")
+	port(3); game.dock_interface.open("missions")
+	check(game.dock_interface.layout.get_node("choose_mission").text == "Prospectors Wanted!" and game.dock_interface.layout.get_node_or_null("MissionOffer_spytrad2") != null and game.dock_interface.layout.get_node_or_null("MissionOffer_bigherd") != null,"Beluga lists prospecting, covert operations and Protect Beluga Trawlers together")
+	game.dock_interface.layout.get_node("MissionOffer_bigherd").pressed.emit()
+	check(game.dock_interface.layout.get_node("MissionBriefingScroll/MissionBriefing").text == runtime.text("bigherd") and not game.dock_interface.layout.get_node("accept_mission").disabled,"Choosing the Beluga fishing row shows its own briefing and enables Accept")
+	game.dock_interface.layout.get_node("accept_mission").pressed.emit()
+	check(runtime.active().id == "bigherd" and runtime.active().city == 3 and jobs.fishing != null and jobs.fishing.herders.size() == 3,"Actual dock Accept action starts the selected Beluga fishing mission from the station board")
+	check(not runtime.can_save() and runtime.board(2).offers.is_empty(),"Accepting a testing job still hides other offers and blocks saving")
+	runtime.finish(false); await process_frame
 	port(1)
-	check(not runtime.accept(1).is_empty() and runtime.can_save(),"Testing cannot accept Tryton's selected mission at Touka")
+	check(not runtime.accept(1,"breakout2").is_empty() and runtime.can_save(),"Testing cannot accept Tryton's selected mission at Touka")
 	port(4)
 	var testing_error: String = runtime.accept(4)
 	check(testing_error.is_empty(),"Accept testing mission: " + testing_error)
 	check(not runtime.can_save() and not runtime.board(1).available,"Testing acceptance still enforces one mission and blocks saving")
 	fresh(); unlock.button_pressed = false
-	check(not runtime.testing_all_missions and picker.disabled and not runtime.board(5).available,"Turning testing off restores normal mission availability")
-	for row in [[1,"stranded","magnet",2500],[3,"spytrad2","bigears",5000],[2,"breakout","escape",5060],[4,"breakout2","escape",5060]]:
+	check(not runtime.testing_all_missions and not runtime.board(5).available,"Turning testing off restores normal mission availability")
+	for row in [[1,"stranded","magnet",2500],[1,"spytrad","bigears",4900],[3,"spytrad2","bigears",5000],[2,"breakout","escape",5060],[4,"breakout2","escape",5060]]:
 		fresh(); port(row[0]); game.player_progress.status.credits = row[3] - 1
+		if row[1] == "spytrad": game.player_progress.missions.completed["stranded"] = {"success":true,"city":1}
 		check(not runtime.board(row[0]).available,"Missing required tool hides unaffordable offer " + row[1])
 		game.player_progress.status.credits += 1
 		check(runtime.board(row[0]).available and runtime.board(row[0]).id == row[1],"Exact original affordability threshold reveals " + row[1])
@@ -138,6 +151,28 @@ func run() -> void:
 		check(runtime.board(5).available == false and runtime.board(6).available == false,"Special docks do not offer these jobs")
 		game.player_progress.campaign_stage = 1
 		check(runtime.board(row[0]).id != row[1],"Stage-two job requires the opening mission stage")
+	fresh(); port(1); runtime._publish_offers()
+	check(runtime.board(1).id == "stranded" and not game.player_progress.mail.available.has("spytrad"),"Touka covert job and its pre-mission bulletin stay locked behind Bacau")
+	for rescue_success in [true,false]:
+		game.player_progress.missions.completed["stranded"] = {"success":rescue_success,"city":1}
+		runtime._publish_offers()
+		check(runtime.board(1).id == "spytrad" and runtime.board(1).available and game.player_progress.mail.available.has("spytrad"),"Resolving Bacau unlocks Touka's second job and its bulletin, including after a failed rescue")
+	check(runtime.board(1).title == "Bohine Forces: Covert Operations" and runtime.board(1).briefing.contains("available here and at Beluga") and runtime.board(1).picture == "MISSSCRE/PIC24NEW.BMP","Touka uses its own original title, briefing and mission picture")
+	var old_beta := Progress.restore({"campaign_stage":2,"missions":{"version":1,"active":{},"completed":{"stranded":{"success":true},"spytrad2":{"success":true}}}})
+	check(Rules.next_offer(old_beta,1) == "escort","Published beta save advances to the escort without replaying Touka covert")
+	old_beta.missions.completed.spytrad2.success = false
+	check(Rules.next_offer(old_beta,1) == "escort","Failed Beluga variant also skips Touka covert and advances to escort")
+	fresh(); port(3); runtime.accept(3)
+	check("spytrad" in game.player_progress.missions.unavailable,"Accepting Beluga excludes Touka's paired source-row offer")
+	runtime.finish(false,0,2); await process_frame
+	check(runtime.board(1).id == "stranded","Accepting Beluga early preserves Touka's preceding Bacau rescue")
+	game.player_progress.missions.completed["stranded"] = {"success":true,"city":1}
+	check(runtime.board(1).id == "escort","Finishing Bacau later skips the excluded covert variant and exposes escort")
+	check(accept_covert(1).is_empty(),"Accept Touka after resolving Bacau")
+	if runtime.active().is_empty(): quit(1); return
+	check("spytrad2" in game.player_progress.missions.unavailable and not runtime.can_save(),"Touka excludes Beluga and preserves the mission saving restriction")
+	var restored := Progress.restore(JSON.parse_string(JSON.stringify(game.player_progress)))
+	check(restored.missions.active.id == "spytrad" and "spytrad2" in restored.missions.unavailable,"New variant and exclusion survive the existing save-state round trip")
 	fresh(); port(1)
 	check(runtime.accept(1).is_empty(),"Accept Bacau rescue")
 	check(jobs.target != null and jobs.escorts.size() == 2 and jobs.vessels.size() == 2,"Retail Bacau encounter contains the shuttle and two guards, without the unused surveillance craft")
@@ -192,8 +227,8 @@ func run() -> void:
 	check(runtime.can_save() and game.player_progress.missions.completed.stranded.success,"Subsequent docking preserves the already completed rescue")
 	check(game.player_progress.status.credits == 102000,"Bacau success pays original fixed 2000 credits")
 	check(game.player_progress.missions.stage2_successes == 1 and game.player_progress.missions.stage2_resolved == 1,"Side-job counts exclude opening mission")
-	check(not runtime.board(1).available,"Resolved rescue is not repeatable")
-	check(not runtime.board(1).report and runtime.board(1).id.is_empty() and runtime.board(1).response.is_empty(),"Completed rescue and its debrief no longer occupy the mission board")
+	check(runtime.board(1).available and runtime.board(1).id == "spytrad","Resolved rescue advances Touka to Covert Operations instead of repeating Bacau")
+	check(not runtime.board(1).report and runtime.board(1).id == "spytrad" and runtime.board(1).response.is_empty(),"Next offer replaces the completed rescue and its debrief on the mission board")
 	runtime.outcome.dismiss(); game.dock_interface.open("missions"); game.dock_interface.mission_selection = "stranded"; game.dock_interface.rebuild()
 	var picture: TextureRect = game.dock_interface.layout.find_child("MissionPicture",true,false)
 	var welcome_picture: Texture2D = game.dock_interface.texture("texture.mission_picture_bdefault","INTROTEX/BDEFAULT.BMP")
@@ -350,129 +385,138 @@ func run() -> void:
 	fresh(); port(2); runtime.accept(2); jobs.passengers = true; runtime.docked(1)
 	check(game.player_progress.missions.completed.breakout.success and game.player_progress.missions.completed.breakout.score == 0.5 and game.player_progress.status.credits == 103500,"Alternate Bohine prisoner return retains original rescue success, score and fixed reward")
 	await process_frame
-	fresh(); port(3); runtime.accept(3)
-	check(jobs.target != null and jobs.target.loop_route and jobs.target.waypoints.size() == 2,"Covert scout uses recovered two-way route")
-	check(runtime.target_marker.target_body() == jobs.target.body,"Big Ears mission assigns the scout its green world HUD target")
-	check(not game.submarine_traffic.route(jobs.target.global_position,jobs.target.waypoints[0]).is_empty(),"Both covert patrol endpoints connect through navigable water")
-	check(not jobs.attach_listening_device(game.pilot),"Tagging wrong actor does not advance objective")
-	for agent in jobs.vessels: agent.set_physics_process(false)
-	game.equipment.set_installed(["deep_sea_lights","bigears"])
-	game.equipment.selected = 1
-	var tool_display: Control = game.cockpit_hud.displays[1]
-	check(tool_display.equipment_count() == 5 and tool_display.equipment_icon_index(game.equipment.current()) == 0,"Unattached Big Ears displays original LISTEN1 and a 05 ammunition counter")
-	await capture("covert")
-	game.pilot.global_position = jobs.target.body.global_position - Vector3(0,0,1.0)
-	game.pilot.global_basis = Basis.looking_at(Vector3.BACK)
-	game.equipment.support_tools.fire_listening()
-	for frame in range(45): await physics_frame
-	check(jobs.tapped and jobs.phase == "listen","Big Ears projectile attaches to the scout and starts interception")
-	check(game.player_progress.ammunition.bigears == 4,"Listening shot consumes one of five probes")
-	check(tool_display.equipment_count() == 4,"Big Ears HUD counter follows ammunition after firing")
-	var listening_tools: Node = game.equipment.support_tools
-	var probe: RigidBody3D = listening_tools.projectiles.back()
-	check(probe.attached and probe.get_parent() == jobs.target.body and probe.freeze and probe.collision_layer == 0,"A physical Big Ears probe stays latched to its designated moving scout without pushing it")
-	listening_tools._physics_process(0.01)
-	check(game.equipment.available.any(func(item: Dictionary) -> bool: return item.id == "bigears" and item.get("icon_state",0) == 1),"Attached probe switches Big Ears to its original second HUD icon")
-	check(tool_display.equipment_icon_index(game.equipment.current()) == 1,"Attached Big Ears actually renders LISTEN2 rather than using its momentary fire button state")
-	game.pilot.global_position += Vector3(30,0,0)
-	for frame in range(4): jobs._step_covert(8)
-	check(jobs.vents.size() == 3,"Intercept reveals three base vents")
-	for base_vent in jobs.vents:
-		base_vent.set_process(false); base_vent.open = true; base_vent._process(0.5)
-		check(base_vent.door_meshes.size() > 0 and base_vent.door.transform.is_equal_approx(base_vent.shut_pose),"Original vent uses its mesh opening animation without translating vertically")
-		check(base_vent.door_meshes.all(func(mesh: MeshInstance3D) -> bool: return is_zero_approx(mesh.get_blend_shape_value(0))),"Vent reaches its original open base pose")
-		base_vent.open = false; base_vent._process(0.5)
-		check(base_vent.door_meshes.all(func(mesh: MeshInstance3D) -> bool: return is_equal_approx(mesh.get_blend_shape_value(0),1.0)),"Vent closes by bringing the morphed leaves together")
-		base_vent.set_process(true)
-	check(runtime.target_marker.target_body() == jobs.vents[0],"Green target transfers from the scout to the revealed base objective")
-	check(jobs.actors.filter(func(actor: Node) -> bool: return actor.get_node_or_null("SceneryCollision") is StaticBody3D).size() == 3,"Revealed military installations have solid scenery collision")
-	check(jobs.dialogue == 4 and not jobs.interception_instruction,"Original fourth line reveals the base at 800 ticks without the final instruction")
-	jobs._step_covert(8)
-	check(jobs.dialogue == 5 and not jobs.interception_instruction,"Fifth intercepted line plays at 1000 ticks; AF12 still waits")
-	jobs._step_covert(7.99)
-	check(not jobs.interception_instruction,"Final interception instruction does not play before tick 1200")
-	jobs._step_covert(0.01)
-	check(jobs.phase == "base","Full interception reaches base attack phase")
-	check(jobs.interception_instruction and is_equal_approx(jobs.transfer,48.0),"AF12 plays at 48 seconds, 400 ticks after base reveal, without double-advancing the clock")
-	for shot in range(3): listening_tools.fire_listening()
-	check(tool_display.equipment_count() == 1,"Big Ears HUD shows the last remaining probe")
-	listening_tools.fire_listening()
-	check(game.player_progress.ammunition.bigears == 0 and not game.equipment.mounted.any(func(item: Dictionary) -> bool: return item.id == "bigears"),"Fifth shot removes the spent launcher but preserves the deployed probes")
-	check(is_instance_valid(probe) and probe.attached and listening_tools.projectiles.size() == 5,"Exhausting ammunition does not delete attached or flying devices")
-	check(tool_display.equipment_count() == -1,"Counter clears when the exhausted launcher is removed and another tool is selected")
-	game.pilot.global_position = jobs.target.global_position + jobs.target.get_parent().global_basis.z.normalized()
-	jobs.warned = true; jobs.clock = 0; jobs._step_covert(0)
-	check(jobs.reinforcements and jobs.vessels.size() == 5 and not runtime.can_save(),"Being spotted after revealing the base summons four defenders rather than failing")
-	for agent in jobs.vessels: agent.set_physics_process(false)
-	var vent: Node3D = jobs.vents[0]
-	game.player_progress.hold.depth = 0
-	game.pilot.global_position = jobs.base_poses[0].origin + Vector3.UP * 2; jobs._step_covert(0)
-	check(jobs.base_guidance,"Approaching the base explains the depth-charge objective")
-	check(is_equal_approx(jobs.base_instruction_clock,6.0) and game.bounty_radio_queue.back().text == game.gameplay_catalogue.tables.radio_messages.records.af15.text,"Base arrival plays AF15 without immediately replacing its speech with the vent instruction")
-	game.pilot.global_position = jobs.base_poses[0].origin + Vector3(0,20,0)
-	jobs._step_covert(5.99)
-	check(jobs.base_instruction_clock > 0.0,"Vent instruction preserves the original six-second delay")
-	jobs._step_covert(0.02)
-	check(jobs.base_instruction_clock < 0.0 and game.bounty_radio_queue.back().text == game.gameplay_catalogue.tables.radio_messages.records.af16.text,"Delayed missing-ammunition speech plays even after leaving the base trigger")
-	await capture("base",vent)
-	vent.open = false; vent.take_weapon_damage(10000); vent.depth_charge(3)
-	check(not vent.dead,"Armour and closed vents reject direct fire and depth charges")
-	vent.open = true
-	vent._process(0.6)
-	game.player_progress.hold.depth = 1; game.weapons.set_installed(["zapper","depthl"]); game.weapons.selected = 1
-	game.pilot.active = true; game.pilot.controls_enabled = true
-	game.pilot.global_position = vent.global_position + Vector3(0,0.3,-0.35); game.pilot.global_basis = Basis.IDENTITY
-	game.pilot.linear_velocity = Vector3.ZERO
-	game.weapons.update_fire(true,0.02)
-	check(not game.player_progress.hold.has("depth") and not game.weapons.firing,"Weapon fire drops a charge, consumes ammo and leaves zapper off")
-	check(game.equipment.support_tools.projectiles.back().process_mode == Node.PROCESS_MODE_PAUSABLE,"Support projectiles pause during menus and docking")
-	for frame in range(100): await physics_frame
-	check(vent.health < 1.5,"Actual falling depth charge enters the open hatch and damages its internal target")
-	game.pilot.global_transform = Transform3D(Basis.IDENTITY,vent.global_position + Vector3(0,0.3,-0.35)); game.pilot.linear_velocity = Vector3.ZERO
-	game.pilot.active = true; game.pilot.controls_enabled = true; game.weapons.selected = 1
-	vent.open = true; vent._process(0.6)
-	game.player_progress.hold.depth = 1; game.equipment.support_tools.depth_cooldown = 0
-	game.weapons.update_fire(true,0.02)
-	check(not game.player_progress.hold.has("depth"),"A second launcher shot consumes the next charge")
-	for frame in range(100): await physics_frame
-	check(vent.dead,"A further charge finishes the damaged internal target")
-	var base_models: Array[Node3D] = []
-	for defence in jobs.base_defences: base_models.append(defence.model)
-	for other in jobs.vents:
-		if not other.dead: other.open = true; other.depth_charge(3)
-	jobs._step_covert(0)
-	check(runtime.can_save() and game.player_progress.status.credits == 105000,"Destroying all three vents completes covert operation for 5000 credits")
-	check(runtime.target_marker.target_body() == null,"Completed covert mission clears its green HUD target")
-	var demolition := get_first_node_in_group("base_destruction")
-	check(demolition != null and base_models.all(func(model: Node3D) -> bool: return is_instance_valid(model) and model.visible and not model.is_queued_for_deletion()),"Completed mission preserves buildings for staged demolition instead of immediately deleting them")
-	if demolition != null:
-		demolition.set_process(false)
-		var first_bursts: int = demolition.explosions
-		demolition._process(1.0)
-		check(demolition.explosions > first_bursts and demolition.wrecks == 0 and base_models.all(func(model: Node3D) -> bool: return model.visible),"Explosions build across all buildings while their structures remain visible")
-		if DisplayServer.get_name() != "headless":
-			var focus := base_models[0].global_position + Vector3.UP
-			game.camera.global_position = focus + Vector3(5,4,5); game.camera.look_at(focus); game.camera.make_current()
-			for frame in range(6): await process_frame
-			await RenderingServer.frame_post_draw
-			root.get_texture().get_image().save_png("res://tests/stage-two-base-demolition.png")
-		demolition._process(1.5)
-		check(demolition.explosions == 21 and demolition.wrecks == 3 and demolition.is_queued_for_deletion(),"Demolition finishes after roughly two seconds with seven bursts and submarine-style wreckage per building")
-	await process_frame
-	check(base_models.all(func(model: Variant) -> bool: return not is_instance_valid(model)),"Demolition removes its original building meshes after fragmentation")
-	fresh(); port(3); runtime.accept(3)
-	game.pilot.global_position = jobs.target.global_position + jobs.target.get_parent().global_basis.z.normalized() * 1.0
-	jobs.clock = 0; jobs._step_covert(0); jobs.clock = 0; jobs._step_covert(0)
-	check(runtime.can_save() and not game.player_progress.missions.completed.spytrad2.success,"Repeated clear sight by scout fails covert mission")
-	check(game.player_progress.campaign_stage == 2,"Side missions do not accidentally advance the core campaign")
-	await process_frame
-	fresh(); port(3); runtime.accept(3)
-	game.pilot.global_position = jobs.target.global_position + Vector3(30,0,0)
-	jobs.attach_listening_device(jobs.target.body); jobs._step_covert(32)
-	jobs.target.take_weapon_damage(1000)
-	check(not runtime.can_save() and jobs.interception_cancelled and jobs.vents.size() == 3,"Losing the scout after base reveal cancels interception without failing the base objective")
-	jobs._step_covert(16)
-	check(jobs.dialogue == 4 and jobs.interception_instruction and jobs.phase == "base","Scout loss cancels the remaining intercepted line but preserves the separately scheduled final instruction")
+	for covert_city in [3,1]:
+		check(accept_covert(covert_city).is_empty(),"Accept covert variant at its original station")
+		check(jobs.target != null and jobs.target.loop_route and jobs.target.waypoints.size() == 2,"Covert scout uses recovered two-way route")
+		check(runtime.target_marker.target_body() == jobs.target.body,"Big Ears mission assigns the scout its green world HUD target")
+		check(not game.submarine_traffic.route(jobs.target.global_position,jobs.target.waypoints[0]).is_empty(),"Both covert patrol endpoints connect through navigable water")
+		check(not jobs.attach_listening_device(game.pilot),"Tagging wrong actor does not advance objective")
+		for agent in jobs.vessels: agent.set_physics_process(false)
+		game.equipment.set_installed(["deep_sea_lights","bigears"])
+		game.equipment.selected = 1
+		var tool_display: Control = game.cockpit_hud.displays[1]
+		check(tool_display.equipment_count() == 5 and tool_display.equipment_icon_index(game.equipment.current()) == 0,"Unattached Big Ears displays original LISTEN1 and a 05 ammunition counter")
+		await capture("covert-touka" if covert_city == 1 else "covert")
+		game.pilot.global_position = jobs.target.body.global_position - Vector3(0,0,1.0)
+		game.pilot.global_basis = Basis.looking_at(Vector3.BACK)
+		game.equipment.support_tools.fire_listening()
+		for frame in range(45): await physics_frame
+		check(jobs.tapped and jobs.phase == "listen","Big Ears projectile attaches to the scout and starts interception")
+		check(game.player_progress.ammunition.bigears == 4,"Listening shot consumes one of five probes")
+		check(tool_display.equipment_count() == 4,"Big Ears HUD counter follows ammunition after firing")
+		var listening_tools: Node = game.equipment.support_tools
+		var probe: RigidBody3D = listening_tools.projectiles.back()
+		check(probe.attached and probe.get_parent() == jobs.target.body and probe.freeze and probe.collision_layer == 0,"A physical Big Ears probe stays latched to its designated moving scout without pushing it")
+		listening_tools._physics_process(0.01)
+		check(game.equipment.available.any(func(item: Dictionary) -> bool: return item.id == "bigears" and item.get("icon_state",0) == 1),"Attached probe switches Big Ears to its original second HUD icon")
+		check(tool_display.equipment_icon_index(game.equipment.current()) == 1,"Attached Big Ears actually renders LISTEN2 rather than using its momentary fire button state")
+		game.pilot.global_position += Vector3(30,0,0)
+		for frame in range(4): jobs._step_covert(8)
+		check(jobs.vents.size() == 3,"Intercept reveals three base vents")
+		for base_vent in jobs.vents:
+			base_vent.set_process(false); base_vent.open = true; base_vent._process(0.5)
+			check(base_vent.door_meshes.size() > 0 and base_vent.door.transform.is_equal_approx(base_vent.shut_pose),"Original vent uses its mesh opening animation without translating vertically")
+			check(base_vent.door_meshes.all(func(mesh: MeshInstance3D) -> bool: return is_zero_approx(mesh.get_blend_shape_value(0))),"Vent reaches its original open base pose")
+			base_vent.open = false; base_vent._process(0.5)
+			check(base_vent.door_meshes.all(func(mesh: MeshInstance3D) -> bool: return is_equal_approx(mesh.get_blend_shape_value(0),1.0)),"Vent closes by bringing the morphed leaves together")
+			base_vent.set_process(true)
+		check(runtime.target_marker.target_body() == jobs.vents[0],"Green target transfers from the scout to the revealed base objective")
+		check(jobs.actors.filter(func(actor: Node) -> bool: return actor.get_node_or_null("SceneryCollision") is StaticBody3D).size() == 3,"Revealed military installations have solid scenery collision")
+		check(jobs.dialogue == 4 and not jobs.interception_instruction,"Original fourth line reveals the base at 800 ticks without the final instruction")
+		jobs._step_covert(8)
+		check(jobs.dialogue == 5 and not jobs.interception_instruction,"Fifth intercepted line plays at 1000 ticks; AF12 still waits")
+		jobs._step_covert(7.99)
+		check(not jobs.interception_instruction,"Final interception instruction does not play before tick 1200")
+		jobs._step_covert(0.01)
+		check(jobs.phase == "base","Full interception reaches base attack phase")
+		check(jobs.interception_instruction and is_equal_approx(jobs.transfer,48.0),"AF12 plays at 48 seconds, 400 ticks after base reveal, without double-advancing the clock")
+		for shot in range(3): listening_tools.fire_listening()
+		check(tool_display.equipment_count() == 1,"Big Ears HUD shows the last remaining probe")
+		listening_tools.fire_listening()
+		check(game.player_progress.ammunition.bigears == 0 and not game.equipment.mounted.any(func(item: Dictionary) -> bool: return item.id == "bigears"),"Fifth shot removes the spent launcher but preserves the deployed probes")
+		check(is_instance_valid(probe) and probe.attached and listening_tools.projectiles.size() == 5,"Exhausting ammunition does not delete attached or flying devices")
+		check(tool_display.equipment_count() == -1,"Counter clears when the exhausted launcher is removed and another tool is selected")
+		game.pilot.global_position = jobs.target.global_position + jobs.target.get_parent().global_basis.z.normalized()
+		jobs.warned = true; jobs.clock = 0; jobs._step_covert(0)
+		check(jobs.reinforcements and jobs.vessels.size() == 5 and not runtime.can_save(),"Being spotted after revealing the base summons four defenders rather than failing")
+		check(game.bounty_radio_queue.back().text == game.gameplay_catalogue.tables.radio_messages.records.af5.text,"The reinforcement request plays when defenders are actually dispatched")
+		check(jobs.vessels.slice(1).all(func(agent: Node3D) -> bool: return agent.pursue_offscreen and game.submarine_traffic.segment_clear(agent.global_position,agent.global_position) and game.submarine_traffic.can_activate(agent)),"All four backup subs spawn in navigable water and pursue while distant")
+		var old_dialogue: int = jobs.dialogue
+		jobs._step_covert(7.0)
+		check(jobs.dialogue == old_dialogue and game.bounty_radio_queue.back().text == game.gameplay_catalogue.tables.radio_messages.records.af6.text,"Being discovered stops intercepted dialogue and preserves the original seven-second mercenary warning")
+		for agent in jobs.vessels: agent.set_physics_process(false)
+		var vent: Node3D = jobs.vents[0]
+		game.player_progress.hold.depth = 0
+		game.pilot.global_position = jobs.base_poses[0].origin + Vector3.UP * 2; jobs._step_covert(0)
+		check(jobs.base_guidance,"Approaching the base explains the depth-charge objective")
+		check(is_equal_approx(jobs.base_instruction_clock,6.0) and game.bounty_radio_queue.back().text == game.gameplay_catalogue.tables.radio_messages.records.af15.text,"Base arrival plays AF15 without immediately replacing its speech with the vent instruction")
+		game.pilot.global_position = jobs.base_poses[0].origin + Vector3(0,20,0)
+		jobs._step_covert(5.99)
+		check(jobs.base_instruction_clock > 0.0,"Vent instruction preserves the original six-second delay")
+		jobs._step_covert(0.02)
+		check(jobs.base_instruction_clock < 0.0 and game.bounty_radio_queue.back().text == game.gameplay_catalogue.tables.radio_messages.records.af16.text,"Delayed missing-ammunition speech plays even after leaving the base trigger")
+		await capture("base-touka" if covert_city == 1 else "base",vent)
+		vent.open = false; vent.take_weapon_damage(10000); vent.depth_charge(3)
+		check(not vent.dead,"Armour and closed vents reject direct fire and depth charges")
+		vent.open = true
+		vent._process(0.6)
+		game.player_progress.hold.depth = 1; game.weapons.set_installed(["zapper","depthl"]); game.weapons.selected = 1
+		game.pilot.active = true; game.pilot.controls_enabled = true
+		game.pilot.global_position = vent.global_position + Vector3(0,0.3,-0.35); game.pilot.global_basis = Basis.IDENTITY
+		game.pilot.linear_velocity = Vector3.ZERO
+		game.weapons.update_fire(true,0.02)
+		check(not game.player_progress.hold.has("depth") and not game.weapons.firing,"Weapon fire drops a charge, consumes ammo and leaves zapper off")
+		check(game.equipment.support_tools.projectiles.back().process_mode == Node.PROCESS_MODE_PAUSABLE,"Support projectiles pause during menus and docking")
+		for frame in range(100): await physics_frame
+		check(vent.health < 1.5,"Actual falling depth charge enters the open hatch and damages its internal target")
+		game.pilot.global_transform = Transform3D(Basis.IDENTITY,vent.global_position + Vector3(0,0.3,-0.35)); game.pilot.linear_velocity = Vector3.ZERO
+		game.pilot.active = true; game.pilot.controls_enabled = true; game.weapons.selected = 1
+		vent.open = true; vent._process(0.6)
+		game.player_progress.hold.depth = 1; game.equipment.support_tools.depth_cooldown = 0
+		game.weapons.update_fire(true,0.02)
+		check(not game.player_progress.hold.has("depth"),"A second launcher shot consumes the next charge")
+		for frame in range(100): await physics_frame
+		check(vent.dead,"A further charge finishes the damaged internal target")
+		var base_models: Array[Node3D] = []
+		for defence in jobs.base_defences: base_models.append(defence.model)
+		for other in jobs.vents:
+			if not other.dead: other.open = true; other.depth_charge(3)
+		jobs._step_covert(0)
+		check(runtime.can_save() and game.player_progress.status.credits == 105000,"Destroying all three vents completes covert operation for 5000 credits")
+		check(runtime.target_marker.target_body() == null,"Completed covert mission clears its green HUD target")
+		var completed_id := "spytrad" if covert_city == 1 else "spytrad2"
+		check(game.player_progress.missions.completed[completed_id].success and game.player_progress.mail.outcomes.get(completed_id) == 1.0,"Correct variant records success and publishes its original bulletin outcome")
+		check(runtime.board(1).id not in ["spytrad","spytrad2"] and runtime.board(3).id not in ["spytrad","spytrad2"],"Resolving one covert variant excludes replay of either city version while preserving unrelated jobs")
+		var demolition := get_first_node_in_group("base_destruction")
+		check(demolition != null and base_models.all(func(model: Node3D) -> bool: return is_instance_valid(model) and model.visible and not model.is_queued_for_deletion()),"Completed mission preserves buildings for staged demolition instead of immediately deleting them")
+		if demolition != null:
+			demolition.set_process(false)
+			var first_bursts: int = demolition.explosions
+			demolition._process(1.0)
+			check(demolition.explosions > first_bursts and demolition.wrecks == 0 and base_models.all(func(model: Node3D) -> bool: return model.visible),"Explosions build across all buildings while their structures remain visible")
+			if DisplayServer.get_name() != "headless":
+				var focus := base_models[0].global_position + Vector3.UP
+				game.camera.global_position = focus + Vector3(5,4,5); game.camera.look_at(focus); game.camera.make_current()
+				for frame in range(6): await process_frame
+				await RenderingServer.frame_post_draw
+				root.get_texture().get_image().save_png("res://tests/stage-two-base-demolition.png")
+			demolition._process(1.5)
+			check(demolition.explosions == 21 and demolition.wrecks == 3 and demolition.is_queued_for_deletion(),"Demolition finishes after roughly two seconds with seven bursts and submarine-style wreckage per building")
+		await process_frame
+		check(base_models.all(func(model: Variant) -> bool: return not is_instance_valid(model)),"Demolition removes its original building meshes after fragmentation")
+		check(accept_covert(covert_city).is_empty(),"Accept covert variant at its original station")
+		game.pilot.global_position = jobs.target.global_position + jobs.target.get_parent().global_basis.z.normalized() * 1.0
+		jobs.clock = 0; jobs._step_covert(0); jobs.clock = 0; jobs._step_covert(0)
+		check(runtime.can_save() and not game.player_progress.missions.completed["spytrad" if covert_city == 1 else "spytrad2"].success,"Repeated clear sight by scout fails covert mission")
+		check(game.player_progress.campaign_stage == 2,"Side missions do not accidentally advance the core campaign")
+		await process_frame
+		check(accept_covert(covert_city).is_empty(),"Accept covert variant at its original station")
+		game.pilot.global_position = jobs.target.global_position + Vector3(30,0,0)
+		jobs.attach_listening_device(jobs.target.body); jobs._step_covert(32)
+		jobs.target.take_weapon_damage(1000)
+		check(not runtime.can_save() and jobs.interception_cancelled and jobs.vents.size() == 3,"Losing the scout after base reveal cancels interception without failing the base objective")
+		jobs._step_covert(16)
+		check(jobs.dialogue == 4 and jobs.interception_instruction and jobs.phase == "base","Scout loss cancels the remaining intercepted line but preserves the separately scheduled final instruction")
 	fresh(); await process_frame
 	check(game.submarine_traffic.traders.size() == original_npcs,"All mission boats removed after failure")
 	var beta := Progress.restore({"campaign_stage":2,"missions":{"version":1,"active":{},"completed":{"tradetrad":{"success":true,"city":1}}}})

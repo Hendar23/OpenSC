@@ -12374,7 +12374,7 @@
       "food_role": "predator",
       "group_behaviour": "solitary",
       "groups_max": 12.0,
-      "groups_min": 6.0,
+      "groups_min": 3.0,
       "has_zapper": true,
       "id": "entity_210083360",
       "mobility": "swimming",

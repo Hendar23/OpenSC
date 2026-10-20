@@ -252,6 +252,9 @@ static func _build_mesh(data: PackedByteArray, geometry: int, end: int, path: St
 				surface_material.albedo_color = Color.WHITE
 				surface_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 				surface_material.texture_repeat = true
+				if texture.get_meta("terrain_mipmaps", false):
+					surface_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+					surface_material.set_meta("terrain_mipmaps", true)
 				if not str(reference["mask"]).is_empty():
 					surface_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 					surface_material.alpha_scissor_threshold = 0.5
@@ -312,10 +315,14 @@ static func _load_texture(game_folder: String, texture_name: String, mask_name: 
 	for replacement in Mods.candidates("texture." + texture_name):
 		var mod_image := _replacement_image(replacement.path)
 		if mod_image != null and not mod_image.is_empty():
+			if replacement.get("terrain_mipmaps", false) and mod_image.generate_mipmaps() != OK:
+				Mods.note("%s: could not generate terrain mipmaps for %s; using the next replacement or original." % [replacement.name, texture_name])
+				continue
 			# Modern replacement textures supply their own alpha rather than
 			# requiring an old, differently-sized mask texture.
 			var mod_texture := ImageTexture.create_from_image(mod_image)
 			mod_texture.set_meta("asset_mod", replacement.name)
+			if replacement.get("terrain_mipmaps", false): mod_texture.set_meta("terrain_mipmaps", true)
 			cache[key] = mod_texture
 			Cache.save_resource(disk_key, mod_texture)
 			return mod_texture
