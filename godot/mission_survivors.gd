@@ -47,7 +47,7 @@ static func release(jobs: Node, enemies: Array[Node3D]) -> void:
 		preload("res://entity_identity.gd").actor(model,agent,agent.body)
 		# Mission-local targets are about to disappear. Preserve the independent
 		# ships and release formations, without making passive guards hostile.
-		agent.follow = null; agent.combat_enabled = true
+		agent.follow = null; agent.combat_enabled = true; agent.dormant = false
 		agent.engage_player = agent.engage_player or is_instance_valid(agent.combat_target)
 		agent.combat_target = null; agent.victim = null
 		agent.waypoints.clear(); agent.dock_destination = 0

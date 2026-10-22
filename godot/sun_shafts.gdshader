@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode unshaded, blend_add, cull_front, depth_draw_never, depth_test_disabled, fog_disabled;
+#include "res://replay_clock.gdshaderinc"
 uniform sampler2D depth_texture : hint_depth_texture, repeat_disable, filter_nearest;
 uniform float beam_length = 30.0;
 uniform float beam_width = 3.0;
@@ -40,7 +41,7 @@ void fragment() {
 	for (int i=0;i<16;i++) {
 		vec3 p = camera+ray*(start+(float(i)+0.5)*step_size);
 		float edge = 1.0-smoothstep(0.2,0.5,length(p.xy)/beam_width);
-		float streak = smoothstep(0.38,0.78,noise(p.xy*2.0+vec2(seed+TIME*0.035,seed)));
+		float streak = smoothstep(0.38,0.78,noise(p.xy*2.0+vec2(seed+visual_time()*0.035,seed)));
 		vec3 world = (MODEL_MATRIX*vec4(p,1.0)).xyz;
 		float attenuation = 1.0-smoothstep(depth_start,depth_end,surface_height-world.y);
 		float along = p.z/beam_length+0.5;
@@ -50,6 +51,7 @@ void fragment() {
 	}
 	ALBEDO = mix(light_color,vec3(0.4,0.8,0.85),0.35);
 	float opacity = min(0.22,density*0.035)*strength;
-	// Additive volumes were tuned for Compatibility display-space blending.
-	ALPHA = OUTPUT_IS_SRGB ? opacity : pow(max(opacity,0.0),2.2);
+	// Scattering opacity is linear in either renderer. Gamma-correcting alpha
+	// made the already faint rays almost disappear in Forward+.
+	ALPHA = opacity;
 }

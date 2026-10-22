@@ -101,7 +101,7 @@ func run() -> void:
 	var radioactive := pop._create_thorium(Definitions.THORIUM,0,Transform3D.IDENTITY)
 	radioactive.freeze = true
 	var light: OmniLight3D = radioactive.get_node("ThoriumGlow")
-	check(light.light_color.r > light.light_color.b and light.light_energy == 1 and light.omni_range == 3 and not light.shadow_enabled,"Thorium has configurable yellow light without expensive shadows")
+	check(light.light_color.r > light.light_color.b and light.light_energy == 1 and light.omni_range == 3 and light.shadow_enabled and light.distance_fade_enabled,"Thorium has configurable yellow light with cave occlusion and distance fading")
 	check(radioactive.glow_materials.all(func(material: Material) -> bool: return material is ShaderMaterial and material.get_shader_parameter("self_illuminated") == true and material.get_shader_parameter("has_texture") == true),"Every crystal surface emits its original texture independently of light direction")
 	radioactive.set_process(false); radioactive._process(2.0)
 	check(is_equal_approx(light.light_energy,0.5),"Yellow light smoothly pulses down to half brightness after two seconds")

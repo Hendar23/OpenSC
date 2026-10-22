@@ -1,6 +1,7 @@
 shader_type spatial;
 render_mode unshaded, cull_disabled, fog_disabled;
 #include "res://natural_light.gdshaderinc"
+#include "res://replay_clock.gdshaderinc"
 uniform float daylight = 1.0;
 uniform float night_brightness = 0.18;
 uniform float wave_height = 0.04;
@@ -16,12 +17,12 @@ vec3 wave_sample(vec2 point) {
 	vec2 first = vec2(cos(wave_direction),sin(wave_direction));
 	vec2 second = vec2(cos(wave_direction + 1.2),sin(wave_direction + 1.2));
 	float frequency = 6.283185 / max(wave_size,0.2);
-	float a = dot(point,first) * frequency + TIME * wave_speed;
-	float b = dot(point,second) * frequency * 1.37 - TIME * wave_speed * 0.83;
+	float a = dot(point,first) * frequency + visual_time() * wave_speed;
+	float b = dot(point,second) * frequency * 1.37 - visual_time() * wave_speed * 0.83;
 	float height = wave_height * (sin(a) * 0.65 + sin(b) * 0.35);
 	vec2 slope = wave_height * frequency * (cos(a) * first * 0.65 + cos(b) * second * 0.35 * 1.37);
 	// Fine ripples contribute normals without needing a dense geometry grid.
-	float detail = dot(point,second) * frequency * 6.0 + TIME * wave_speed * 1.7;
+	float detail = dot(point,second) * frequency * 6.0 + visual_time() * wave_speed * 1.7;
 	slope += second * cos(detail) * wave_height * frequency * 0.3;
 	return vec3(height,slope.x,slope.y);
 }

@@ -60,7 +60,7 @@ func _setup_glow(visual: Node3D) -> void:
 	if glow_energy > 0 and radius > 0:
 		var light := OmniLight3D.new(); light.name = "ThoriumGlow"
 		light.light_color = colour; light.light_energy = glow_energy; light.omni_range = radius
-		light.shadow_enabled = false; light.distance_fade_enabled = true; light.distance_fade_begin = 20; light.distance_fade_length = 10
+		light.shadow_enabled = true; light.distance_fade_enabled = true; light.distance_fade_begin = 20; light.distance_fade_length = 10
 		add_child(light); glow_light = light
 	surface_emission_strength = float(stats.get("glow_emission",defaults.glow_emission)) * 4.0
 	glow_emission_colour = colour * float(stats.get("glow_emission",defaults.glow_emission))

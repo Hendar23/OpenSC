@@ -19,6 +19,9 @@ func _load_preferences(path: String = "") -> void:
 	var developer: Variant = config.get_value("developer","enabled",game.developer_enabled)
 	game.developer_enabled = developer is bool and developer
 	if not game.developer_enabled and game.developer_ui_visible: game._toggle_developer_ui()
+	# Developer overrides belong to this installation, not campaign save data.
+	var testing: Variant = config.get_value("developer","testing_all_missions",false)
+	game.mission_runtime.set_testing_missions(game.developer_enabled and testing is bool and testing)
 	game.loading_preferences = true
 	var ray_brightness: Variant = config.get_value("view","sun_ray_brightness",game.sun_shafts_brightness_slider.value / 100.0)
 	if (ray_brightness is float or ray_brightness is int) and is_finite(float(ray_brightness)):
@@ -142,6 +145,7 @@ func _save_preferences(path: String = "") -> Error:
 	if not game.remember_preferences or game.loading_preferences: return OK
 	if path.is_empty(): path = preload("res://current_settings.gd").path("view_defaults.cfg") if game.defaults_directory.is_empty() else game.defaults_directory.path_join("view_defaults.cfg")
 	var config := ConfigFile.new(); config.load(path)
+	config.set_value("developer","testing_all_missions",game.developer_enabled and game.mission_runtime.testing_all_missions)
 	var view = game._view_settings()
 	for key in view: config.set_value("view",key,view[key])
 	if config.has_section_key("view","hud_scale"): config.erase_section_key("view","hud_scale")

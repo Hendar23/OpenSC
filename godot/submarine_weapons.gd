@@ -283,6 +283,7 @@ func _build_ribbon(direction: Vector3, side: Vector3, tick: int) -> void:
 	arrays[Mesh.ARRAY_VERTEX] = vertices; arrays[Mesh.ARRAY_TEX_UV] = uvs; arrays[Mesh.ARRAY_INDEX] = indices
 	var ribbon := beam.mesh as ArrayMesh
 	ribbon.clear_surfaces(); ribbon.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+	beam.set_meta("replay_mutable_mesh",true)
 	beam.global_transform = Transform3D(Basis.IDENTITY,beam_start)
 
 func _crackle(index: int, tick: int) -> float:

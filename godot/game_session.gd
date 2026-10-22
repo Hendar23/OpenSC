@@ -31,6 +31,10 @@ func _begin_new_game() -> void:
 	game.cockpit_hud.set_rear_camera_enabled(false)
 	game.day_night.hour = 10.0
 	game.player_progress = PlayerProgress.restore()
+	# Starting a campaign clears testing cheats; loading an existing save does not.
+	game.mission_runtime.set_testing_missions(false,true)
+	game.testing_all_equipment = false
+	game.developer_tabs.get_node("System/UnlockTestingEquipment").set_pressed(false)
 	game._update_daylight()
 	game.has_started_game = true
 	game.front_end.can_resume = true

@@ -93,13 +93,21 @@ static func load_world(path: String, tree: SceneTree, progress: Callable) -> Nod
 			var coordinate_size := 128.0 / pow(2.0,coordinate_level)
 			# Convert legacy winding to Godot's clockwise front faces, moving
 			# each corner's UV and normal with its position.
+			var lid_normal := Vector3.ZERO
+			if str(references[material].texture).to_upper() == "CANTOP":
+				var a: Vector3 = vertices[int(data[p+1])]
+				var b: Vector3 = vertices[int(data[p+2])]
+				var c: Vector3 = vertices[int(data[p+3])]
+				# Its shared smooth normals mix the two coplanar sides, creating
+				# dark fan-shaped patches on an otherwise flat metal lid.
+				lid_normal = (b-a).cross(c-a).normalized()
 			for corner in PackedInt32Array([0, 2, 1]):
 				var index := int(data[p + 1 + corner])
 				if index >= vertex_count:
 					push_error("World triangle refers to an invalid vertex")
 					return null
 				positions.append(vertices[index])
-				vertex_normals.append(normals[index])
+				vertex_normals.append(lid_normal if not lid_normal.is_zero_approx() else normals[index])
 				var uv := uvs_offset + i * 8 + corner * 2
 				# BSP corners store U then V, unlike the packed DFF coordinates.
 				texture_coordinates.append(Vector2(float(data[uv]), float(data[uv + 1])) / coordinate_size)
@@ -153,6 +161,9 @@ static func _terrain_material(reference: Dictionary, folder: String, cache: Dict
 	material.roughness = 1.0
 	# Legacy terrain has mixed face winding. Keep caves and undersides visible.
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# The can lid explicitly authors both sides at the same depth. Drawing
+	# their backs too makes its opposite-facing triangle fans fight each other.
+	if str(reference.texture).to_upper() == "CANTOP": material.cull_mode = BaseMaterial3D.CULL_BACK
 	material.albedo_color = reference["color"]
 	var texture: Texture2D = Assets._load_texture(folder,reference["texture"],reference["mask"],cache)
 	if texture != null:

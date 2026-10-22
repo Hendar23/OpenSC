@@ -1,14 +1,18 @@
 extends CanvasLayer
 const Bindings = preload("res://input_bindings.gd")
+const SHUTTER_SOUND = preload("res://game_assets/audio/camera-shutter.mp3")
 var fps_label: Label
 var last_screenshot := ""
 var screenshot_label: Label
 var message_time := 0.0
+var shutter: AudioStreamPlayer
 
 func _ready() -> void:
 	preload("res://input_bindings.gd").install()
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 100
+	shutter = AudioStreamPlayer.new(); shutter.name = "ScreenshotShutter"; shutter.stream = SHUTTER_SOUND
+	shutter.volume_db = -8.0; add_child(shutter)
 	fps_label = Label.new()
 	add_child(fps_label)
 	fps_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
@@ -67,7 +71,7 @@ func screenshot_folder() -> String:
 	var folder := ProjectSettings.globalize_path("res://..").simplify_path() if OS.has_feature("editor") else OS.get_executable_path().get_base_dir()
 	return folder.path_join("Screenshots")
 
-func save_screenshot() -> void:
+func save_screenshot(notify: bool = true) -> void:
 	screenshot_label.hide()
 	await RenderingServer.frame_post_draw
 	var folder := screenshot_folder()
@@ -83,5 +87,9 @@ func save_screenshot() -> void:
 	result = get_viewport().get_texture().get_image().save_png(path)
 	if result == OK:
 		last_screenshot = path; print("Screenshot saved: " + path)
-		screenshot_label.text = "Screenshot saved"; screenshot_label.show(); message_time = 2.5
+		# Photo mode suspends existing controllers, including this overlay.
+		# Playback still needs to run while the world remains paused.
+		shutter.process_mode = Node.PROCESS_MODE_ALWAYS; shutter.play()
+		if notify:
+			screenshot_label.text = "Screenshot saved"; screenshot_label.show(); message_time = 2.5
 	else: push_warning("Cannot save screenshot: " + error_string(result))

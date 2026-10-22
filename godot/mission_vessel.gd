@@ -4,6 +4,7 @@ signal arrived
 signal player_attacked
 signal hull_damaged(attacker: Node3D)
 var combat_enabled := true
+var dormant := false
 var waypoints := PackedVector3Array()
 var waypoint := 0
 var loop_route := false
@@ -22,6 +23,59 @@ var pursuit_target := Vector3.INF
 var retiring := false
 var freighter_guns := false
 var staged_destruction := false
+var boarding := false
+var boarding_pod: Node3D
+
+func _physics_process(delta: float) -> void:
+	if not dormant: super._physics_process(delta)
+
+func boarding_goal() -> Vector3:
+	var goal: Vector3 = follow.get_parent().to_global(formation)
+	# The retail formation is above the host; our navigation envelope can be
+	# lower than that when the prison ship cruises near the water surface.
+	goal.y = minf(goal.y,system.map.surface_height-system.CLEARANCE-0.1)
+	return goal
+
+func _advance_boarding(delta: float) -> void:
+	var goal := boarding_goal()
+	var host_velocity: Vector3 = follow.body.velocity
+	var offset := goal-global_position
+	var cruise := float(tuning.npc_speed)
+	var intercept := goal+host_velocity*clampf(offset.length()/maxf(0.1,cruise),0,2.0)
+	intercept.y = minf(intercept.y,system.map.surface_height-system.CLEARANCE-0.1)
+	var direct := false
+	replan -= delta
+	if replan <= 0:
+		replan = 0.25
+		set_meta("boarding_direct",system.segment_clear(global_position,intercept))
+		if not get_meta("boarding_direct",false) and (path.is_empty() or pursuit_target.distance_to(intercept) > 2.0):
+			path = system.route(global_position,intercept); pursuit_target = intercept
+	direct = get_meta("boarding_direct",false)
+	var direction := offset.normalized()
+	var desired_speed := cruise
+	if direct:
+		path.clear()
+		# Feed-forward host motion keeps station over a moving hull rather than
+		# repeatedly stopping at a stale waypoint behind it.
+		var desired_velocity := (host_velocity+offset*1.8).limit_length(cruise)
+		direction = desired_velocity.normalized(); desired_speed = desired_velocity.length()
+	else:
+		direction = _route_direction(delta)
+		if path.is_empty(): _coast(delta); return
+	if offset.length() > 4.0:
+		avoidance_clock -= delta
+		if avoidance_clock <= 0:
+			avoidance_clock = 0.15
+			var decision: Dictionary = system.avoidance(self,direction)
+			avoidance = decision.direction; traffic_speed = decision.speed
+		direction = (direction+avoidance*0.5).normalized()
+		desired_speed *= maxf(0.75,traffic_speed)
+	var aim: Vector3 = follow.get_parent().global_basis.z if offset.length() < 4 else direction
+	var hit := _flow_move(delta,direction,desired_speed,aim)
+	if hit != null: replan = 0; path.clear()
+
+func _precise_motion() -> bool:
+	return (boarding and is_instance_valid(follow) and global_position.distance_to(boarding_goal()) < 4.0) or super._precise_motion()
 
 func arm_freighter(folder: String) -> void:
 	# FREIGHT 00456560/00455f90: fixed ship, fore/aft homing launchers,
@@ -93,6 +147,8 @@ func _advance_motion(delta: float) -> void:
 		_retire_if_docked(); return
 	if freighter_guns:
 		_freighter_fire(delta); _coast(delta); return
+	if boarding and is_instance_valid(follow) and not follow.dead:
+		_advance_boarding(delta); return
 	route_retry = maxf(0,route_retry-delta)
 	if stage != "travel":
 		if stage != "berth" or dock_destination == 0: _travel_without_target(delta)
@@ -112,9 +168,9 @@ func _advance_motion(delta: float) -> void:
 			else:
 				if dock_destination > 0:
 					destination = dock_destination; port = system.port_by_id(destination)
-					# Aquatraz's closed entrance blocks the final navigation probe.
+					# A closed entrance can block the final navigation probe.
 					# Reserve/open it from the approach, then move over the hatch.
-					if dock_destination == 5 and not port.is_empty() and global_position.distance_to(port.entry) < 8 and preload("res://dock_access.gd").acquire(port,self):
+					if not port.is_empty() and global_position.distance_to(port.entry) < 8 and preload("res://dock_access.gd").acquire(port,self):
 						_phase("open"); return
 					_travel_without_target(delta); return
 				_coast(delta)
@@ -131,7 +187,7 @@ func _continuous_route() -> bool:
 	return loop_route or waypoint < waypoints.size()-1 or (combat_enabled and (engage_player or is_instance_valid(combat_target)))
 
 func _dock_step(delta: float) -> void:
-	if dock_destination == 5 and stage == "open" and preload("res://dock_access.gd").owner(port) == self:
+	if dock_destination > 0 and stage == "open" and preload("res://dock_access.gd").owner(port) == self:
 		if elapsed + delta >= 1.2 and global_position.distance_to(port.entry) > 0.15:
 			# Keep the hatch open while physically aligning; the ordinary descent
 			# starts only after the transport is above the entrance.
@@ -180,7 +236,7 @@ func _mission_route(goal: Vector3) -> PackedVector3Array:
 
 func advance_abstract(delta: float) -> void:
 	# Mission travel/timers continue outside visual range, but no hidden combat.
-	if local_simulation or dead or not running or not system.navigation_ready: return
+	if dormant or local_simulation or dead or not running or not system.navigation_ready: return
 	if retiring:
 		if stage != "berth": super.advance_abstract(delta)
 		_retire_if_docked(); return
@@ -241,7 +297,7 @@ func _abstract_dock(delta: float) -> void:
 	if stage == "berth" and not arrival_reported: arrival_reported = true; arrived.emit()
 
 func _abstract_follow(delta: float) -> void:
-	var goal := follow.global_position+formation
+	var goal := boarding_goal() if boarding else follow.global_position+formation
 	if global_position.distance_to(goal) < 0.2: path.clear(); return
 	replan -= delta
 	if replan <= 0 and (path.is_empty() or pursuit_target.distance_to(goal) > 2):
@@ -260,7 +316,7 @@ func _abstract_follow(delta: float) -> void:
 func _react_to_damage(source: Vector3) -> void:
 	# Passive mission ships keep their fishing/convoy/docking orders. Damage,
 	# smoke and radio still apply, without a civilian escape route or port reset.
-	if combat_enabled: super._react_to_damage(source)
+	if combat_enabled and not boarding: super._react_to_damage(source)
 
 func _coast(delta: float, aim: Vector3 = Vector3.ZERO) -> void:
 	if level_when_idle and aim.is_zero_approx():
@@ -287,5 +343,5 @@ func take_weapon_damage_from(strength: float, source: Vector3, owner_body: Node3
 	if health.remaining < before: hull_damaged.emit(owner_body)
 	if not combat_enabled: flee = 0.0
 	if system != null and owner_body == system.player:
-		if combat_enabled and not dead: engage_player = true
+		if combat_enabled and not dead and not boarding: engage_player = true
 		player_attacked.emit()

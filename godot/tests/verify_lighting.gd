@@ -6,6 +6,7 @@ var checks := 0
 var failures := 0
 
 func _initialize() -> void:
+	preload("res://asset_cache.gd").enabled = false
 	call_deferred("_run")
 
 func check_front_faces(mesh: Mesh, label: String, minimum_agreement: float = 0.99) -> void:
@@ -38,7 +39,8 @@ func check_front_faces(mesh: Mesh, label: String, minimum_agreement: float = 0.9
 		push_error("%s: %d faces agree with normals, %d face backwards" % [label, aligned, reversed])
 
 func _run() -> void:
-	var folder := preload("res://asset_paths.gd").find_game_folder()
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = preload("res://asset_paths.gd").find_game_folder()
 	for file in ["DOCKING", "SUB"]:
 		var model := Assets._load_legacy(folder.path_join("CLUMPS/" + file + ".DFF"))
 		if model == null:
@@ -51,8 +53,18 @@ func _run() -> void:
 	if world == null:
 		failures += 1
 	else:
+		root.add_child(world)
+		var lids: Array[MeshInstance3D] = []
 		for node in world.get_children():
 			if node is MeshInstance3D: check_front_faces(node.mesh, str(node.name), 0.5)
+			if node.get_meta("terrain_material",-1) == 89: lids.append(node)
+		checks += 1
+		if lids.is_empty() or not lids.all(func(lid: MeshInstance3D) -> bool: return lid.get_active_material(0).cull_mode == BaseMaterial3D.CULL_BACK):
+			failures += 1; push_error("Can lid opposite-facing coplanar faces must be culled")
+		var light := preload("res://natural_light.gd").new(); light.attach(world)
+		checks += 1
+		if not lids.all(func(lid: MeshInstance3D) -> bool: return lid.get_active_material(0).get_shader_parameter("cull_backfaces") == true):
+			failures += 1; push_error("Natural lighting must preserve can-lid backface culling")
 		world.free()
 	print("Lighting verification: %d meshes, %d failures" % [checks, failures])
 	quit(1 if failures else 0)

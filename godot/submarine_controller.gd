@@ -319,6 +319,9 @@ func _contact_impact(state: PhysicsDirectBodyState3D) -> Dictionary:
 			var rumble_speed := maxf(maxf(0,-relative_rumble.dot(rumble_normal)),state.get_contact_impulse(index).length() / maxf(1,mass))
 			result.rumble_speed = maxf(result.rumble_speed,rumble_speed)
 		if body != null and body.has_method("receive_sub_push"):
+			if body.has_method("submarine_contact_damage") and not old_rumble_normals.any(func(old: Vector3) -> bool: return old.dot(rumble_normal) > 0.9):
+				var contact_damage: float = body.submarine_contact_damage(previous_velocity,rumble_normal)
+				if contact_damage > 0: take_damage.call_deferred(contact_damage,body.global_position)
 			body.call_deferred("receive_sub_push",previous_velocity if previous_velocity.length_squared() > state.linear_velocity.length_squared() else state.linear_velocity,collision_height() * 0.5)
 			continue
 		# The water ceiling still blocks motion, but is not a solid hull impact.

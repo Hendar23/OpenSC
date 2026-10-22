@@ -113,5 +113,5 @@ func _run() -> void:
 	if DisplayServer.get_name() != "headless":
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/mods-compact-preview.png")
-	paused = false; panel.queue_free(); await process_frame
+	paused = false; capture.shutter.stop(); capture.queue_free(); panel.queue_free(); await process_frame; await process_frame
 	print("Mod panel input: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

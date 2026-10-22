@@ -91,7 +91,11 @@ func run() -> void:
 	check(mission.ship.stage == "berth","Empty prison transport remains docked while player pursues the prisoners")
 	rescuer.get_parent().global_position = jobs._city(2)
 	mission._step_escort(0.1); mission._step_escort(0.1)
-	check(mission.flags.get("escaped",false) and mission.flags.get("escape_reported",false) and not runtime.active().is_empty(),"Rescuer reaching Velcova cannot turn the empty prison ship into a full success")
+	mission.step(7.0)
+	check(not mission.flags.get("escape_reported",false) and not runtime.active().is_empty() and rescuer.boarding_pod.is_visible_in_tree(),"Above Velcova is not escape: mission and loaded pod remain until docking")
+	rescuer.stage = "berth"; rescuer.last_city = 2; rescuer.get_parent().hide()
+	mission._step_escort(0.1)
+	check(mission.flags.get("escaped",false) and mission.flags.get("escape_reported",false) and not runtime.active().is_empty(),"Completed Velcova docking starts the delayed escape failure")
 	mission.step(6.1)
 	check(runtime.active().is_empty() and not game.player_progress.missions.completed.escort.success and game.player_progress.status.credits == 100000,"Escaped prisoners produce original delayed failure without a reward")
 	runtime._cleanup(); game.free(); await process_frame

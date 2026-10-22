@@ -34,12 +34,14 @@ func run() -> void:
 	if not center.is_finite(): game.free(); quit(1); return
 	game.pilot.global_position = Vector3(-100,20,-100); game.pilot.pending_reset = false
 	var host := actor("PRISON",center,false); host.combat_enabled = false
+	host.health.configure(10000.0,0.3)
 	var attacker := actor("PIRATE",center+Vector3(0,0,-12),true); attacker.victim = host.body
 	var patrol := actor("TRADSHUT",center+Vector3(-12,0,-9),false); patrol.combat_enabled = false; patrol.loop_route = true
 	patrol.waypoints = PackedVector3Array([center+Vector3(-12,0,7),center+Vector3(-4,0,7),center+Vector3(-4,0,-9),center+Vector3(-12,0,-9)])
 	game.camera.global_position = center+Vector3(15,-0.4,14); game.camera.look_at(center)
 	game.camera.make_current()
 	var phases := {}; var shots := 0; var moving := 0; var stationary_turns := 0; var previous: Basis = attacker.get_parent().basis
+	var fired := {}; var inaccurate := 0
 	for tick in range(1800):
 		attacker.advance(1.0/60.0); patrol.advance(1.0/60.0)
 		phases[attacker.attack_run.phase] = true
@@ -48,12 +50,18 @@ func run() -> void:
 			if attacker.speed < 0.1 and previous.get_rotation_quaternion().angle_to(attacker.get_parent().basis.get_rotation_quaternion()) > 0.001: stationary_turns += 1
 		previous = attacker.get_parent().basis
 		shots = maxi(shots,get_nodes_in_group("turret_missiles").size())
+		for shot in get_nodes_in_group("turret_missiles"):
+			if shot.source != attacker or fired.has(shot.get_instance_id()): continue
+			fired[shot.get_instance_id()] = true
+			if shot.age == 0 and shot.direction.dot(shot.global_position.direction_to(host.body.global_position)) < 0.9999: inaccurate += 1
 		if tick in [180,600,1200,1750] and DisplayServer.get_name() != "headless":
 			await RenderingServer.frame_post_draw
 			root.get_texture().get_image().save_png("res://tests/npc-world-flow-"+str(tick)+".png")
 		await physics_frame
 	check(phases.size() == 4 and attacker.attack_run.passes >= 2,"Actual pirate completes repeated runs around the real prison hull")
 	check(shots > 0,"Actual pirate fires original missiles during attack runs")
+	check(fired.size() >= 3 and inaccurate == 0,"Repeated moving attack runs aim shots from the muzzle at the target, not wide along the turn")
+	check(host.health.remaining < host.health.capacity,"Actual attack-run missiles strike the target hull and inflict damage")
 	check(float(moving)/1679 > 0.85 and stationary_turns < 30,"Real model stays in motion rather than turning on the spot")
 	check(host.global_position.distance_to(center) < 0.01,"Unarmed stationary host keeps its mission position")
 	check(patrol.global_position.distance_to(patrol.home.origin) > 1.0,"Actual civilian model follows its continuous patrol")

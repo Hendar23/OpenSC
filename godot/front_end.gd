@@ -170,13 +170,22 @@ func _set_menu_page(next_page: String) -> void:
 	menu_picture.visible = menu_page == "main"
 	active_button = null
 	var area: Array = menu_config.button_rect
+	var width := float(area[2])
+	if menu_page == "main":
+		width = 0.0
+		for id in button_order:
+			if id in OPTION_BUTTONS: continue
+			var button: Button = buttons[id]
+			width = maxf(width,button.get_theme_font("font").get_string_size(button.text,HORIZONTAL_ALIGNMENT_LEFT,-1,button.get_theme_font_size("font_size")).x+24.0)
 	var row := 0
 	for id in button_order:
 		var on_page: bool = (id in OPTION_BUTTONS) == (menu_page == "options")
 		buttons[id].visible = on_page
 		if on_page:
-			buttons[id].position = Vector2(area[0],area[1] + row * float(menu_config.button_spacing))
+			buttons[id].size.x = width
+			buttons[id].position = Vector2(float(area[0])+(float(area[2])-width)*0.5,area[1] + row * float(menu_config.button_spacing))
 			row += 1
+	_layout()
 	if menu_layer.visible: restore_button_focus("controls" if menu_page == "options" else "options")
 
 func restore_button_focus(id: String) -> void:

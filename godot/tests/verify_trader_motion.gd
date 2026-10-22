@@ -47,7 +47,8 @@ func run() -> void:
 	for tick in range(120): a._physics_process(1.0/60.0); await physics_frame
 	check(a.global_position.y > 0.4 and a.global_position.z > 1,"Climb includes forward travel")
 	check(a.get_parent().basis.z.y > 0.2,"Hull pitches into the climb")
-	var folder := ProjectSettings.globalize_path("res://../Original Sub Culture")
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
 	traffic.bubbles = preload("res://propeller_bubbles.gd").new(); traffic.add_child(traffic.bubbles)
 	traffic.bubbles.configure(preload("res://clump_loader.gd")._load_texture(folder,"BUBBLE","BUBBLEM",{}))
 	traffic.bubbles.set_physics_process(false)
@@ -98,10 +99,10 @@ func run() -> void:
 	for tick in range(120): shake._process(0.0167)
 	check(camera.h_offset == 0 and camera.v_offset == 0,"Shake settles without altering camera pose")
 	var menu := preload("res://gameplay_menu.gd").new(); menu.settings_path = "res://tests/cache-traffic-fixtures/effect-options.cfg"; menu.remember_preferences = false; root.add_child(menu)
-	check(menu.explosion_button.text == "Explosions: Enhanced","General options expose enhanced explosions")
-	menu._toggle_explosions(); check(not Explosion.enhanced_enabled and menu.explosion_button.text.ends_with("Classic"),"General option switches classic effects")
+	check(Explosion.enhanced_enabled and menu.replay_enabled,"General options always enable enhanced effects and default replay on")
+	menu._toggle_replay(); check(not menu.replay_enabled and Explosion.enhanced_enabled,"Replay switch leaves enhanced effects enabled")
 	menu.remember_preferences = true; menu._save(); menu.free()
 	menu = preload("res://gameplay_menu.gd").new(); menu.settings_path = "res://tests/cache-traffic-fixtures/effect-options.cfg"; root.add_child(menu)
-	check(not menu.enhanced_explosions and not Explosion.enhanced_enabled,"Explosion preference persists")
+	check(not menu.replay_enabled and Explosion.enhanced_enabled,"Replay preference persists while enhanced explosions stay on")
 	menu.free(); world.free(); Explosion.enhanced_enabled = true
 	print("Trader motion and explosions: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

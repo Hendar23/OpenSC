@@ -192,6 +192,7 @@ func _process(delta: float) -> void:
 	var mesh := tracer.mesh as ImmediateMesh; mesh.clear_surfaces(); mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	for point: Vector3 in [tracer_from-side,tracer_from+side,tracer_to+side,tracer_from-side,tracer_to+side,tracer_to-side]: mesh.surface_add_vertex(point)
 	mesh.surface_end(); tracer.mesh = mesh; tracer.global_transform = Transform3D.IDENTITY
+	tracer.set_meta("replay_mutable_mesh",true)
 
 func _sound(id: String, sample: String) -> void:
 	fire_audio.stream = weapons._sound(folder,id,sample)

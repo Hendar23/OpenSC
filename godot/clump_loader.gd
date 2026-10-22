@@ -158,6 +158,12 @@ static func _build_mesh(data: PackedByteArray, geometry: int, end: int, path: St
 		# The low 12 bits hold V. The upper field holds U with a 128-pixel
 		# bias. Coordinates are in pixels for the 128 by 128 texture atlas.
 		uvs[i] = Vector2((float(packed_uv >> 12) - 128.0) / 128.0, float(packed_uv & 0xfff) / 128.0)
+		if path.get_file().to_upper() == "ELECTRO.DFF":
+			# Its end caps collapse onto a single atlas column. Sampling exactly
+			# on that column's edge alternates neighbouring texels as the GPU
+			# interpolates, resembling flickering shadow even without lighting.
+			# Centre the original pixel coordinates; keep the mesh/mount intact.
+			uvs[i] += Vector2.ONE * (0.5 / 128.0)
 		if not vertices[i].is_finite() or not normals[i].is_finite():
 			push_error("Invalid vertex coordinates in %s" % path)
 			return null

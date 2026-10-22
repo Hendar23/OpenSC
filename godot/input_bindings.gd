@@ -2,7 +2,7 @@ extends Node
 
 # Two editable slots per action; button chords are evaluated before plain buttons.
 const KEYS := {
-	"map_toggle":KEY_M,"camera_toggle":KEY_V,
+	"map_toggle":KEY_M,"camera_toggle":KEY_V,"photo_mode":KEY_P,
 	"menu_accept":KEY_ENTER,"menu_cancel":KEY_ESCAPE,"menu_up":KEY_UP,"menu_down":KEY_DOWN,"menu_left":KEY_LEFT,"menu_right":KEY_RIGHT,
 	"main_menu":KEY_ESCAPE,"weapon_previous":KEY_PAGEUP,"weapon_next":KEY_PAGEDOWN,"fps_toggle":KEY_F11,"screenshot":KEY_F12,
 	"dock_accept":KEY_Y,"dock_decline":KEY_N,"equipment_previous":KEY_BRACKETLEFT,
@@ -13,7 +13,7 @@ const KEYS := {
 }
 const EDITOR_KEYS := {"editor_frame":KEY_F,"editor_fast":KEY_SHIFT,"editor_undo":KEY_Z,"editor_redo":KEY_Y,"editor_save":KEY_S}
 const BUTTONS := {
-	"camera_toggle":JOY_BUTTON_Y,"dock_accept":JOY_BUTTON_A,"dock_decline":JOY_BUTTON_B,
+	"camera_toggle":JOY_BUTTON_Y,"photo_mode":JOY_BUTTON_BACK,"dock_accept":JOY_BUTTON_A,"dock_decline":JOY_BUTTON_B,
 	"menu_accept":JOY_BUTTON_A,"menu_cancel":JOY_BUTTON_B,"menu_up":JOY_BUTTON_DPAD_UP,"menu_down":JOY_BUTTON_DPAD_DOWN,"menu_left":JOY_BUTTON_DPAD_LEFT,"menu_right":JOY_BUTTON_DPAD_RIGHT,
 	"equipment_toggle":JOY_BUTTON_B,"equipment_previous":JOY_BUTTON_DPAD_LEFT,
 	"equipment_next":JOY_BUTTON_DPAD_RIGHT,"weapon_previous":JOY_BUTTON_DPAD_UP,

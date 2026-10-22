@@ -230,11 +230,10 @@ func _build_interface() -> void:
 	var missions_button := Button.new(); missions_button.name = "UnlockTestingMissions"; missions_button.toggle_mode = true
 	missions_button.text = "All missions for testing: Off"; missions_button.focus_mode = Control.FOCUS_NONE
 	missions_button.toggled.connect(func(enabled: bool) -> void:
-		missions_button.text = "All missions for testing: " + ("On" if enabled else "Off")
-		game.mission_runtime.set_testing_missions(enabled)
+		game.mission_runtime.set_testing_missions(enabled,true)
 	)
 	system.add_child(missions_button)
-	missions_button.set_pressed(game.mission_runtime.testing_all_missions)
+	game.mission_runtime.set_testing_missions(game.mission_runtime.testing_all_missions)
 	var time_presets = HBoxContainer.new(); time_presets.name = "TimeOfDayPresets"; system.add_child(time_presets)
 	for preset in [["Day", 12.0], ["Sunset", 18.0], ["Night", 0.0], ["Sunrise", 6.0]]:
 		var button := Button.new(); button.text = preset[0]; button.focus_mode = Control.FOCUS_NONE

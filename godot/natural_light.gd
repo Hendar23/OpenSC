@@ -14,6 +14,8 @@ func _init() -> void:
 static func ensure_globals() -> void:
 	if registered: return
 	registered = true
+	RenderingServer.global_shader_parameter_add("osc_replay_active",RenderingServer.GLOBAL_VAR_TYPE_BOOL,false)
+	RenderingServer.global_shader_parameter_add("osc_replay_time",RenderingServer.GLOBAL_VAR_TYPE_FLOAT,0.0)
 	RenderingServer.global_shader_parameter_add("osc_cave_ambient",RenderingServer.GLOBAL_VAR_TYPE_FLOAT,0.03)
 	RenderingServer.global_shader_parameter_add("osc_sky_volume",RenderingServer.GLOBAL_VAR_TYPE_SAMPLER3D,null)
 	RenderingServer.global_shader_parameter_add("osc_volume_min",RenderingServer.GLOBAL_VAR_TYPE_VEC3,Vector3.ZERO)
@@ -140,6 +142,7 @@ func attach(node: Node) -> void:
 					material.set_shader_parameter("terrain_mipmaps", true)
 					material.set_shader_parameter("terrain_albedo_texture", original.albedo_texture)
 				material.set_shader_parameter("alpha_threshold",original.alpha_scissor_threshold if original.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR else 0.0)
+				material.set_shader_parameter("cull_backfaces",original.cull_mode == BaseMaterial3D.CULL_BACK)
 				material.set_shader_parameter("has_normal_texture",original.normal_enabled and original.normal_texture != null); material.set_shader_parameter("normal_texture",original.normal_texture); material.set_shader_parameter("normal_scale",original.normal_scale)
 				material.set_shader_parameter("has_roughness_texture",original.roughness_texture != null); material.set_shader_parameter("roughness_texture",original.roughness_texture); material.set_shader_parameter("roughness_channel",channel_mask(original.roughness_texture_channel))
 				material.set_shader_parameter("has_metallic_texture",original.metallic_texture != null); material.set_shader_parameter("metallic_texture",original.metallic_texture); material.set_shader_parameter("metallic_channel",channel_mask(original.metallic_texture_channel))

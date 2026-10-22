@@ -55,6 +55,20 @@ func run() -> void:
 	check(fish.position.x > 2.1,"Submarine contact pushes the creature aside")
 	check(joy.calls > before_fish,"Harmless wildlife collision also produces rumble")
 	fish.free()
+	pilot.restore_health(); pilot.reset_at(Vector3.ZERO)
+	var giant := preload("res://mission_creature.gd").new()
+	giant.setup(Node3D.new(),Vector3(2,0,0),AABB(Vector3.ONE*-100,Vector3.ONE*200),100,1.0,43)
+	giant.giant_eel = true; giant.collision_mask = 0
+	root.add_child(giant); giant.set_physics_process(false); giant.velocity = Vector3.ZERO
+	pilot.velocity = Vector3.RIGHT*4
+	for frame in range(90): await physics_frame
+	check(pilot.health < 100 and pilot.health >= 80,"Actual physics contact with giant eel deals capped impact damage even outside its bite controller")
+	check(giant.position.is_equal_approx(Vector3(2,0,0)),"Giant eel mass does not yield like an ordinary small fish")
+	var after_eel_hit := pilot.health
+	for frame in range(60):
+		pilot.velocity = Vector3.RIGHT*0.1; await physics_frame
+	check(is_equal_approx(pilot.health,after_eel_hit),"Resting against giant eel does not repeatedly drain shields")
+	giant.free()
 	pilot.apply_impact_damage(1000)
 	check(pilot.dead,"Fatal impact uses submarine destruction")
 	pilot.free()

@@ -27,6 +27,7 @@ var flee_range := 4.0
 var mobility := "swimming"
 var population: Node3D
 var mission_owner := ""
+var ignore_wildlife := false
 var ambient_clock := 0.0
 var ambient_goal := Vector3.ZERO
 var ambient_blocked := false
@@ -81,6 +82,7 @@ var death_texture: Texture2D
 var death_sound: AudioStream
 var death_frames: Array[Texture2D] = []
 var death_flesh_texture: Texture2D
+var death_particle_scale := 1.0
 var combat: Node3D
 var pushed_velocity := Vector3.ZERO
 var last_push_frame := -1
@@ -96,6 +98,7 @@ func configure_combat(species: Dictionary) -> void:
 func clear_ambient_state() -> void:
 	# Pool resources, never the identity or history of an offscreen creature.
 	position = Vector3.ZERO; home = Vector3.ZERO; goal = Vector3.ZERO
+	ignore_wildlife = false
 	velocity = Vector3.ZERO; pushed_velocity = Vector3.ZERO; group_members = []
 	shoal = preload("res://wildlife_shoal.gd").new()
 	defense_timer = 0; startle_timer = 0; startle_cooldown = 0; fleeing = false
@@ -193,7 +196,7 @@ func take_damage(amount: float, _source: Vector3 = Vector3.ZERO) -> void:
 	set_physics_process(false); set_process(false)
 	var holder: Node = population.world if population != null else get_parent()
 	var burst := Death.new(); holder.add_child(burst); burst.global_position = global_position
-	burst.setup(self,death_texture,death_sound,death_frames,death_flesh_texture)
+	burst.setup(self,death_texture,death_sound,death_frames,death_flesh_texture,null,[],death_particle_scale)
 	visible = false; died.emit()
 
 func _ready() -> void:

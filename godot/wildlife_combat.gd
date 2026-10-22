@@ -23,11 +23,11 @@ func perceive(delta: float) -> void:
 	if scan_timer > 0: return
 	scan_timer = 0.2
 	target = null; threat = null
-	if fish.population == null or settings.food_role == "neutral": return
+	if fish.population == null or fish.ignore_wildlife or settings.food_role == "neutral": return
 	var perception_range: float = fish.flee_range if settings.food_role == "prey" else fish.attack_range
 	var nearest: float = perception_range * perception_range
 	for other in fish.population.nearby_creatures(fish.global_position,perception_range):
-		if other == fish or not alive(other) or other.combat == null: continue
+		if other == fish or not alive(other) or other.ignore_wildlife or other.combat == null: continue
 		var distance: float = fish.global_position.distance_squared_to(other.global_position)
 		if distance > nearest: continue
 		if settings.food_role == "predator" and other.combat.settings.food_role == "prey":
@@ -43,6 +43,7 @@ static func alive(body: Node3D) -> bool:
 
 func attack(delta: float) -> void:
 	blood_timer = maxf(0,blood_timer - delta)
+	if is_instance_valid(target) and target.is_in_group("marine_life") and (fish.ignore_wildlife or target.ignore_wildlife): target = null
 	if is_instance_valid(target) and target.get_meta("bubble_screened",false): target = null
 	if is_instance_valid(target) and fish.population != null and (target == fish.population.player or target.is_in_group("npc_submarines")):
 		if not is_instance_valid(target) or not bool(target.get("active")) or not bool(target.get("controls_enabled")) or fish.response not in ["attack","defend"] or (fish.response == "defend" and fish.defense_timer <= 0) or fish.global_position.distance_to(target.global_position) >= fish.attack_range:

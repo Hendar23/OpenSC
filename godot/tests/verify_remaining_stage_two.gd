@@ -3,6 +3,7 @@ const Progress = preload("res://player_progress.gd")
 const Rules = preload("res://mission_rules.gd")
 const Shop = preload("res://equipment_shop.gd")
 const Mine = preload("res://floating_mine.gd")
+const CreatureDeath = preload("res://creature_death.gd")
 var game: Node
 var runtime: Node
 var jobs: Node
@@ -88,7 +89,7 @@ func run() -> void:
 			mission.rescuer.local_simulation = false
 			var departure: Vector3 = mission.rescuer.global_position
 			mission.rescuer.advance_abstract(0.25)
-			check(mission.rescuer.global_position.distance_to(departure) <= 0.51,"Distant rescue ship travels instead of teleporting to its host")
+			check(mission.rescuer.global_position.distance_to(departure) <= 0.9,"Faster distant rescue ship travels instead of teleporting to its host")
 			for tick in range(1200):
 				if mission.flags.get("escaped",false): break
 				mission.rescuer.advance_abstract(0.25); mission._step_escort(0.25)
@@ -108,13 +109,56 @@ func run() -> void:
 			check(game.player_progress.status.credits == 103000,"Canister reward paid")
 		elif id == "eel":
 			var mission: RefCounted = jobs.remaining
+			mission.creature.set_physics_process(false)
+			check(mission.eel_helpers.size() == 3 and jobs.vessels.size() == 3,"Three Bohine helpers exist from acceptance, before the approach trigger")
+			var waiting: Array[Vector3] = []
+			for helper in mission.eel_helpers:
+				waiting.append(helper.global_position); helper.advance_abstract(1.0)
+			check(mission.eel_helpers.all(func(helper: Node3D) -> bool: return not helper.running and helper.global_position == waiting[mission.eel_helpers.find(helper)]),"Helpers remain stationary before the player approaches")
+			game.pilot.global_position = mission.structure.global_position+Vector3.RIGHT*30
+			mission.step(8.1)
+			check(not mission.flags.get("help",false),"Elapsed time alone does not activate distant helpers")
+			game.pilot.global_position = mission.structure.global_position+Vector3.UP*4
+			mission.step(0.1)
+			check(jobs.vessels.size() == 3 and mission.eel_helpers.all(func(helper: Node3D) -> bool: return helper.running and not helper.waypoints.is_empty()),"Approach activates the same three ships without spawning replacements")
 			check(mission.creature.get_child(1).get_meta("asset_source","").to_upper().contains("MEEL"),"First eel uses MEEL rather than a draft marker")
 			check(not jobs.can_attach_pod(mission.structure),"Miners refuse rescue while the monster is alive")
 			mission.creature.take_weapon_damage(1000,mission.creature.global_position)
 			mission.step(6.1)
 			check(is_instance_valid(mission.creature) and not mission.creature.dead,"Larger second eel appears after six seconds")
+			var giant: Node3D = mission.creature
+			giant.set_physics_process(false)
+			check(giant.giant_eel and giant.collision_mask == 0 and giant.collision_layer == 8,"Real giant uses its original non-solid controller while remaining hittable")
+			giant.global_position = giant.home+Vector3.RIGHT*10; giant.direction = Vector3.LEFT
+			game.pilot.global_position = giant.home+Vector3.RIGHT*30
+			var before: float = giant.global_position.distance_to(giant.home)
+			giant._physics_process(1.0)
+			check(giant.global_position.distance_to(giant.home) < before,"Giant actively approaches the mine rather than roaming at the ambush point")
+			giant.global_position = giant.home+Vector3.RIGHT*3; giant.direction = Vector3.FORWARD
+			game.pilot.global_position = giant.global_position+Vector3.FORWARD*0.5
+			game.pilot.restore_health(); game.pilot.hull_rating = 100
+			giant._physics_process(0.2)
+			check(is_equal_approx(game.pilot.health,94.75),"Giant close-range attack applies recovered 0.3 raw strength per 25 Hz tick")
+			check(is_equal_approx(giant.velocity.length(),1.5),"Giant doubles its speed when pursuing the nearby player")
+			giant.velocity = Vector3.ZERO
+			check(giant.submarine_contact_damage(Vector3.RIGHT*0.1,Vector3.LEFT) == 0,"Gentle brushing against giant eel causes no impact damage")
+			check(is_equal_approx(giant.submarine_contact_damage(Vector3.RIGHT*2,Vector3.LEFT),10),"Giant eel collision damage scales with relative closing speed")
+			check(giant.submarine_contact_damage(Vector3.RIGHT*2,Vector3.LEFT) == 0,"One bump cannot damage the player repeatedly each frame")
+			giant.giant_impact_cooldown = 0
+			check(giant.submarine_contact_damage(Vector3.LEFT*2,Vector3.LEFT) == 0,"Moving away from the giant eel cannot count as a damaging impact")
+			check(giant.submarine_contact_damage(Vector3.RIGHT*20,Vector3.LEFT) == 20,"High-speed eel impact damage is capped")
+			check(giant.death_flesh_texture != null and giant.death_flesh_texture == game.wildlife.death_flesh_texture,"Mission eel inherits the wildlife flesh texture")
 			await capture("huge-eel")
 			mission.creature.take_weapon_damage(1000,mission.creature.global_position)
+			var chunks: Node3D = game.world_root.get_child(game.world_root.get_child_count()-1)
+			check(chunks is CreatureDeath and not chunks.pieces.is_empty() and chunks.pieces.all(func(piece: Dictionary) -> bool: return piece.material is ShaderMaterial and piece.material.get_shader_parameter("has_backface_texture") == true and piece.material.get_shader_parameter("backface_texture") == game.wildlife.death_flesh_texture),"Every actual giant-eel death fragment has flesh on its reverse side")
+			check(giant.death_particle_scale > 1 and not chunks.gore.is_empty() and not chunks.gore_frames.is_empty(),"Giant eel death emits original gore particles scaled for its larger body")
+			check(chunks.gore.any(func(particle: Dictionary) -> bool: return particle.node.position.length() > 0.2),"Large eel gore starts across its skin instead of hidden inside centre chunks")
+			check(chunks.bubbles != null and chunks.bubbles.emitting and chunks.bubbles.amount > 24,"Giant eel also produces a larger bubble burst")
+			if DisplayServer.get_name() != "headless":
+				for frame in range(3): await process_frame
+				await RenderingServer.frame_post_draw
+				root.get_texture().get_image().save_png("res://tests/remaining-eel-particles.png")
 			check(jobs.can_attach_pod(mission.structure),"Escape Pod accepts mine after the second eel dies")
 			game.equipment.set_installed(["escape"])
 			var tools: Node3D = game.equipment.support_tools
@@ -123,13 +167,55 @@ func run() -> void:
 			tools.pod.global_position = mission.structure.global_position+Vector3.UP*0.5
 			tools._attach_pod(mission.structure)
 			check(tools.pod_target == mission.structure and tools.pod_attached,"Physical Escape Pod seats on the mine hull through the real equipment contact handler")
+			var rescued_mine: Node3D = mission.structure
 			mission.step(12)
-			check(runtime.active().is_empty() and game.player_progress.status.credits == 105000,"Miners boarding completes and rewards the rescue")
+			check(not runtime.active().is_empty() and game.player_progress.status.credits == 100000 and not runtime.can_save(),"Miners boarding keeps rescue active and unpaid until docking")
+			tools._physics_process(1.0)
+			check(tools.passengers and not tools.pod_attached and game.equipment.available.any(func(item: Dictionary) -> bool: return item.id == "escape" and item.icon_state == 3),"Miners stay aboard and the Escape Pod HUD remains loaded while reeling in")
+			check(is_instance_valid(rescued_mine) and rescued_mine.is_visible_in_tree(),"Rescued mine remains visible during return phase")
+			var demolition: Node3D = rescued_mine.get_parent()
+			demolition.set_process(false); demolition.age = 0
+			demolition._process(2.9)
+			check(demolition.explosions == 0 and rescued_mine.collision_layer != 0,"Intact mine and collision survive the three-second delay")
+			demolition._process(0.2)
+			check(demolition.explosions > 0 and rescued_mine.collision_layer == 0,"Mine starts exploding after the delay and stops blocking the player")
+			demolition._process(2.2)
+			check(demolition.explosions == 7 and demolition.wrecks == 1 and game.player_progress.status.credits == 100000,"Mine has six staged bursts and final collapse without prematurely paying reward")
+			await physics_frame; await physics_frame
+			mission.step(20); tools._physics_process(1.0)
+			check(not runtime.active().is_empty() and tools.passengers,"Miners stay aboard after the demolished mine is gone")
+			jobs.docked(3)
+			check(runtime.active().is_empty() and game.player_progress.status.credits == 105000 and not tools.passengers,"Docking completes the rescue, pays once and unloads miners")
+			jobs.docked(3)
+			check(game.player_progress.status.credits == 105000,"Repeated dock notification cannot duplicate the rescue reward")
 		elif id == "recontech":
 			var mission: RefCounted = jobs.remaining
+			var preplaced: Array = mission.recon_reinforcements.duplicate()
+			var waiting_poses: Array[Transform3D] = []
+			var vessel_count: int = jobs.vessels.size()
+			check(preplaced.size() == 3 and vessel_count == 4,"All three Recon reinforcements exist with the initial guard at mission start")
+			for index in preplaced.size():
+				var agent: Node3D = preplaced[index]
+				check(agent.get_parent().get_meta("editor_model") == ("TRAD2" if index == 0 else "TRAD-SUB"),"Preplaced reinforcement retains original model")
+				var waiting_pose: Transform3D = agent.get_parent().global_transform
+				waiting_poses.append(waiting_pose)
+				check(waiting_pose.origin.distance_to(mission.poses[index].origin) < 8 and agent.home.is_equal_approx(waiting_pose),"Reinforcement uses original placement with normal hull clearance")
+				agent.set_local_simulation(true); agent._physics_process(1.0)
+				agent.local_simulation = false; agent.advance_abstract(1.0)
+				agent.set_physics_process(false)
+				check(agent.dormant and not agent.combat_enabled and agent.get_parent().global_transform.is_equal_approx(waiting_pose),"Dormant reinforcement stays still in local and offscreen simulation")
 			check(mission.turrets.size() == 3,"Cave outpost has three destructible turrets")
 			var mines: Array = jobs.actors.filter(func(actor: Node) -> bool: return actor is Mine)
-			check(mines.size() == 3 and mines.all(func(mine: Node3D) -> bool: return mine.position.distance_to(mine.home) < 0.07 and mine.home.length() > 1 and not mine.get_signal_connection_list("exploded").is_empty()),"Three original mines stay at their source positions and use the shared blast damage handler")
+			check(mines.is_empty(),"Unused ObjectID 3 rows do not add mines omitted by the released mission callback")
+			check(is_instance_valid(mission.recon_cable) and mission.recon_cable.visible and mission.recon_cable.get_meta("exclude_from_debris",false),"Initial guard has the original outpost cable without making it debris")
+			check(jobs.actors.any(func(actor: Node) -> bool: return actor.get_node_or_null("Beacon_Recon") != null),"ObjectID 4 creates the original pulse light rather than another cone")
+			game.pilot.global_position = mission.structure.global_position+Vector3.RIGHT*30
+			mission.step(8.1)
+			check(not mission.flags.get("greeted",false) and not mission.flags.get("alarm",false),"Time alone does not announce or alarm the hidden cave outpost")
+			game.pilot.global_position = mission.structure.global_position+Vector3.RIGHT*10
+			mission.step(2.1)
+			check(mission.flags.get("greeted",false) and not mission.flags.get("alarm",false),"Close first approach plays warning before triggering defenders")
+			game.pilot.global_position = mission.structure.global_position+Vector3.RIGHT*30
 			check(Shop.offer(game.gameplay_catalogue,"2",2,"rover").price == 10000,"ROV uses original Velcova price")
 			game.player_progress.hold["rover"] = 1
 			check(Shop.swap(game.player_progress,game.equipment,game.weapons,7,"rover").is_empty(),"ROV mounts in original slot seven")
@@ -153,13 +239,43 @@ func run() -> void:
 			if DisplayServer.get_name() != "headless":
 				rov.yaw = rov.global_rotation.y; rov.pitch = rov.global_rotation.x
 				game._update_follow_camera(0,true)
+				check(runtime.target_marker.target_point().is_finite(),"Green outpost target square projects through the active ROV camera")
 				for frame in range(5): await process_frame
 				await RenderingServer.frame_post_draw
 				root.get_texture().get_image().save_png("res://tests/remaining-rov-view.png")
 			mission.step(10.1)
 			check(mission.flags.get("recorded",false) and mission.enemies.size() == 4,"Confirmed footage triggers original three reinforcements")
+			check(jobs.vessels.size() == vessel_count and preplaced.all(func(agent: Node3D) -> bool: return mission.enemies.has(agent) and not agent.dormant and agent.running and agent.combat_enabled),"Alarm activates the exact preplaced ships without spawning replacements")
+			for index in preplaced.size():
+				check(preplaced[index].get_parent().global_transform.is_equal_approx(waiting_poses[index]),"Alarm does not teleport the waiting reinforcement")
+			mission._recon_alarm()
+			check(jobs.vessels.size() == vessel_count and mission.enemies.size() == 4,"Repeated Recon alarm cannot duplicate the wave")
+			check(not is_instance_valid(mission.recon_cable) and mission.enemies.all(func(agent: Node3D) -> bool: return agent.engage_player and agent.pursue_offscreen),"Alarm releases guard cable and makes all four ships pursue the player")
+			# The source wave targets the main submarine outside the cave, not
+			# the remotely piloted ROV beside the underground outpost.
+			game.pilot.global_position = Vector3(326,154,266)
+			game.pilot.pending_reset = false; game.pilot.restore_health(10000)
+			rov.set_physics_process(false)
+			var attackers: Array = mission.enemies.slice(1)
+			var fired := {}
+			var hit_player := false
+			for agent: Node3D in attackers: agent.set_local_simulation(true)
+			for frame in range(1200):
+				game.pilot.active = true; game.pilot.controls_enabled = true; game.pilot.restore_health(1000000)
+				await physics_frame
+				hit_player = hit_player or game.pilot.health < game.pilot.max_health
+				for missile in get_nodes_in_group("turret_missiles"):
+					if attackers.has(missile.source): fired[missile.source] = true
+				if fired.size() == 3 and hit_player: break
+			if fired.size() != 3:
+				for agent: Node3D in attackers:
+					print("Recon combat: ",agent.get_parent().get_meta("editor_model")," at ",agent.global_position," fired=",fired.has(agent)," dead=",agent.dead," dormant=",agent.dormant," running=",agent.running," local=",agent.local_simulation," processing=",agent.is_physics_processing()," path=",agent.path)
+			check(fired.size() == 3,"All three original reinforcement ships engage and fire at the main sub at the cave approach")
+			check(hit_player,"Reinforcement projectiles can hit the parked player while the ROV is controlled")
+			for agent: Node3D in attackers: agent.set_physics_process(false)
 			jobs.docked(2)
 			check(runtime.active().is_empty() and game.player_progress.status.credits == 105000,"Recorded footage succeeds on returning to city")
+			check(mission.enemies.is_empty() and game.submarine_traffic.traders.any(func(agent: Node3D) -> bool: return agent.has_meta("fishing_survivor") and agent.engage_player),"Live recon attackers persist after resolution with independent behavior")
 			check(rov.deployed and rov.launched,"Resolving a mission does not teleport or reclaim the player's ROV")
 			rov.reset()
 			check(game.save_games.write(0,game._save_snapshot("ROV loadout")) == OK,"Installed ROV and new mission history use the existing beta save format")
@@ -196,6 +312,23 @@ func run() -> void:
 	jobs.remaining.step(6.1)
 	check(runtime.active().is_empty() and not game.player_progress.missions.completed.eel.success,"Destroying the occupied mine fails with the original delayed report")
 	await fresh("recontech2")
+	var attacked_recon: RefCounted = jobs.remaining
+	game.pilot.global_position = attacked_recon.structure.global_position+Vector3.RIGHT*30
+	attacked_recon.structure.take_weapon_damage(1)
+	check(attacked_recon.flags.get("attacked",false) and not attacked_recon.flags.get("alarm",false) and attacked_recon.ship.engage_player and not is_instance_valid(attacked_recon.recon_cable),"Damaging distant outpost releases its guard but does not invent an immediate reinforcement wave")
+	var passive_survivors: Array = attacked_recon.recon_reinforcements.duplicate()
+	jobs.docked(4)
+	check(runtime.active().is_empty() and game.player_progress.missions.completed.recontech2.score == 0 and runtime.last_response == runtime.text("recontech2",3),"Returning after attacking without footage gives original propaganda response and no reward")
+	check(passive_survivors.all(func(agent: Node3D) -> bool: return is_instance_valid(agent) and agent.has_meta("fishing_survivor") and not agent.dormant and agent.running and agent.combat_enabled and not agent.engage_player),"Unalarmed preplaced ships survive early resolution as independent passive ships")
+	await fresh("recontech2")
+	var ambushed_recon: RefCounted = jobs.remaining
+	var lost_reinforcement: Node3D = ambushed_recon.recon_reinforcements[0]
+	lost_reinforcement.set_local_simulation(true)
+	lost_reinforcement.take_weapon_damage_from(1000,lost_reinforcement.global_position,game.pilot)
+	check(lost_reinforcement.dead,"Preplaced dormant reinforcement remains vulnerable to weapons")
+	game.pilot.global_position = ambushed_recon.structure.global_position+Vector3.RIGHT*10
+	ambushed_recon.step(8.1); ambushed_recon.step(2.1); ambushed_recon.step(0.5)
+	check(ambushed_recon.flags.get("alarm",false) and jobs.vessels.size() == 4 and lost_reinforcement.dead and ambushed_recon.recon_reinforcements.filter(func(agent: Node3D) -> bool: return not agent.dead and not agent.dormant and agent.engage_player).size() == 2,"Proximity alarm activates surviving preplaced ships without replacing a destroyed defender")
 	jobs.remaining.structure.take_weapon_damage(1000)
 	check(runtime.active().is_empty() and not game.player_progress.missions.completed.recontech2.success,"Destroying the outpost before confirmation fails recon")
 	check(runtime.last_response == runtime.text("recontech2",2),"Unconfirmed destruction selects the original hospital response")

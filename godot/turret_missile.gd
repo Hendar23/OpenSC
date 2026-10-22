@@ -54,7 +54,7 @@ func _physics_process(delta: float) -> void:
 			var strength := (2.0 if homing else inflict) * 10.0 * closing / Damage.TICKS_PER_SECOND
 			if body.has_method("receive_projectile_hit"):
 				body.receive_projectile_hit(strength,hit.position,velocity.normalized() * HIT_IMPULSE * clampf(closing / 3.75,0,1))
-			else: Damage.weapon(body,strength,hit.position,source)
+			else: Damage.weapon(body,strength,hit.position,source if is_instance_valid(source) else null)
 			if is_instance_valid(source): source.burst(hit.position,0.5)
 			queue_free(); return
 		global_position = next

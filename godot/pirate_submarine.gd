@@ -59,8 +59,11 @@ func _advance_motion(delta: float) -> void:
 	attack_run.advance(self,victim,delta)
 	if distance > float(tuning.npc_attack_range) or cooldown > 0 or shot_retry > 0 or missile_template == null: return
 	var heading: Vector3 = get_parent().global_basis.z.normalized()
-	if heading.dot(offset.normalized()) <= 0.85: return
 	var muzzle: Vector3 = get_parent().to_global(Vector3(0,-0.05,1))
+	# A passing hull is still turning. Aim the shot from its actual muzzle,
+	# rather than treating the broad forward firing cone as weapon accuracy.
+	var shot_direction := muzzle.direction_to(victim.global_position)
+	if heading.dot(shot_direction) <= 0.85: return
 	shot_retry = 0.12
 	var query := PhysicsRayQueryParameters3D.create(muzzle,victim.global_position,15,[body.get_rid()])
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
@@ -68,7 +71,7 @@ func _advance_motion(delta: float) -> void:
 	var missile := preload("res://turret_missile.gd").new()
 	system.get_parent().add_child(missile)
 	missile.inflict = 8.0
-	missile.setup(self,missile_template,muzzle,heading,victim,false)
+	missile.setup(self,missile_template,muzzle,shot_direction,victim,false)
 	missile.get_child(0).show()
 	cooldown = float(tuning.npc_fire_interval) * random.randf_range(0.8,1.2)
 

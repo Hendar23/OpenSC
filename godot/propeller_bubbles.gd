@@ -11,6 +11,7 @@ var random := RandomNumberGenerator.new()
 var instances: MultiMesh
 var material: StandardMaterial3D
 var surface_height := INF
+var replay_serial := 0
 
 func _ready() -> void:
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
@@ -63,7 +64,8 @@ func emit_from(index: int, origin: Vector3, exhaust: Vector3, power: float, rate
 		credits[index] -= 1.0
 		if particles.size() >= capacity: continue
 		var jitter := Vector3(random.randf_range(-0.04, 0.04), random.randf_range(-0.04, 0.04), random.randf_range(-0.04, 0.04))
-		particles.append({"position": origin + jitter, "drift": exhaust * signf(power) * random.randf_range(0.06, 0.14),
+		replay_serial += 1
+		particles.append({"replay_id":replay_serial,"position": origin + jitter, "drift": exhaust * signf(power) * random.randf_range(0.06, 0.14),
 			"rise": random.randf_range(0.8, 1.2), "age": 0.0, "size": random.randf_range(0.045, 0.10)})
 
 func _physics_process(delta: float) -> void:

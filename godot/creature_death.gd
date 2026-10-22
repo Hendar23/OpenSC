@@ -20,7 +20,7 @@ static func load_gore(folder: String) -> Array[Texture2D]:
 		if texture != null: frames.append(texture)
 	return frames
 
-func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, blood_frames: Array[Texture2D] = [], flesh_texture: Texture2D = null, visual_source: Node3D = null, additional_sources: Array[Node3D] = []) -> void:
+func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, blood_frames: Array[Texture2D] = [], flesh_texture: Texture2D = null, visual_source: Node3D = null, additional_sources: Array[Node3D] = [], particle_scale: float = 1.0) -> void:
 	name = "CreatureBurst"
 	chunk_fade_time = maxf(0,float(settings.chunk_lifetime))
 	lifetime = chunk_fade_time + 1.0
@@ -28,21 +28,28 @@ func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, bloo
 	gore_settle_speed = maxf(0.1,float(settings.get("gore_settle_speed",1.0)))
 	lifetime = maxf(lifetime,gore_lifetime)
 	var random := RandomNumberGenerator.new(); random.randomize()
+	var visual_meshes: Array[MeshInstance3D] = []
+	_collect_meshes(visual_source if visual_source != null else creature.get_child(1),visual_meshes)
+	for source in additional_sources: _collect_meshes(source,visual_meshes)
 	gore_frames = blood_frames
 	if not gore_frames.is_empty():
 		for index in range(clampi(int(settings.gore_amount),0,100)):
 			var sprite := Sprite3D.new(); sprite.texture = gore_frames[mini(2,gore_frames.size() - 1)]
 			sprite.material_override = preload("res://natural_light.gd").billboard_material(sprite.texture)
 			sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED; sprite.no_depth_test = false
-			sprite.pixel_size = random.randf_range(0.0015,0.004); sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			sprite.pixel_size = random.randf_range(0.0015,0.004)*particle_scale; sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			add_child(sprite)
 			var direction := Vector3(random.randf_range(-1,1),random.randf_range(-1,1),random.randf_range(-1,1)).normalized()
-			gore.append({"node":sprite,"velocity":direction * random.randf_range(1.2,3.5),"phase":random.randf_range(0,0.2)})
+			if particle_scale > 1.0 and not visual_meshes.is_empty():
+				# Large hull chunks conceal a small centre-only spray. Spread the
+				# burst across the creature's skin, retaining the original sprites.
+				var mesh := visual_meshes[random.randi_range(0,visual_meshes.size()-1)]
+				if mesh.mesh.get_surface_count() > 0:
+					var vertices: PackedVector3Array = mesh.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+					if not vertices.is_empty(): sprite.position = to_local(mesh.to_global(vertices[random.randi_range(0,vertices.size()-1)]))+direction*0.1
+			gore.append({"node":sprite,"velocity":direction * random.randf_range(1.2,3.5)*sqrt(particle_scale),"phase":random.randf_range(0,0.2)})
 	# Animation tracks only morph meshes; rigid bodies and articulated parts
 	# (including turtles and seahorses) must also become debris.
-	var visual_meshes: Array[MeshInstance3D] = []
-	_collect_meshes(visual_source if visual_source != null else creature.get_child(1),visual_meshes)
-	for source in additional_sources: _collect_meshes(source,visual_meshes)
 	for node in visual_meshes:
 		var pose: Transform3D = global_transform.affine_inverse() * node.global_transform
 		for surface in range(node.mesh.get_surface_count()):
@@ -95,6 +102,8 @@ func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, bloo
 		bubbles = CPUParticles3D.new(); bubbles.amount = 24; bubbles.lifetime = 1.2; bubbles.one_shot = true; bubbles.explosiveness = 1.0; bubbles.direction = Vector3.UP; bubbles.spread = 180
 		bubbles.initial_velocity_min = 0.5; bubbles.initial_velocity_max = 2.0; bubbles.gravity = Vector3(0,1,0); bubbles.scale_amount_min = 0.04; bubbles.scale_amount_max = 0.11
 		bubbles.mesh = preload("res://bubble_visual.gd").death_mesh(bubble_texture)
+		bubbles.amount = mini(96,int(24*particle_scale))
+		bubbles.scale_amount_min *= particle_scale; bubbles.scale_amount_max *= particle_scale
 		bubbles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(bubbles); bubbles.emitting = true
 	if sound != null:

@@ -31,10 +31,10 @@ void fragment() {
 	vec2 projected = world_position.xz + osc_sun_direction.xz * depth / max(osc_sun_direction.y,0.2);
 	vec2 flow = vec2(cos(osc_wave_direction),sin(osc_wave_direction));
 	vec2 uv = projected / max(osc_caustics_size * 12.0,0.1);
-	float clock = TIME * osc_wave_speed * osc_caustics_speed;
+	float clock = visual_time() * osc_wave_speed * osc_caustics_speed;
 	uv += vec2(sin(projected.y * 0.9 + clock),cos(projected.x * 0.8 - clock)) * 0.015;
-	float first = texture(osc_caustics_texture,uv + flow * TIME * osc_caustics_speed * 0.014).r;
-	float second = texture(osc_caustics_texture,uv * 1.13 - flow.yx * TIME * osc_caustics_speed * 0.01).r;
+	float first = texture(osc_caustics_texture,uv + flow * visual_time() * osc_caustics_speed * 0.014).r;
+	float second = texture(osc_caustics_texture,uv * 1.13 - flow.yx * visual_time() * osc_caustics_speed * 0.01).r;
 	float pattern = max(first,second * 0.65);
 	float fade = exp(-depth / max(osc_caustics_depth,0.1)) * smoothstep(0.0,0.35,osc_sun_direction.y);
 	fade *= natural_visibility(world_position);

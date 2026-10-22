@@ -4,6 +4,8 @@ const ListeningProbe = preload("res://listening_probe.gd")
 var jobs: Node3D
 var family := ""
 var enemies: Array[Node3D] = []
+var eel_helpers: Array[Node3D] = []
+var recon_reinforcements: Array[Node3D] = []
 var scheduled: Array[Dictionary] = []
 var ship: Node3D
 var cargo: Node3D
@@ -14,6 +16,8 @@ var poses: Array[Transform3D] = []
 var flags := {}
 var rescuer: Node3D
 var rescue_pod: Node3D
+var rescue_cable: MeshInstance3D
+var recon_cable: MeshInstance3D
 var transfer := 0.0
 var elapsed := 0.0
 var wave := 3
@@ -31,6 +35,8 @@ func start() -> void:
 		"recon": _start_recon()
 
 func clear() -> void:
+	_end_boarding()
+	_end_recon_link()
 	# Live attackers can outlast this mission. Their old signal closures must
 	# not resolve a different mission when one is attacked or destroyed later.
 	var sources: Array = Array(jobs.vessels)+Array(enemies)+[ship,cargo,creature,structure,rescuer]
@@ -39,7 +45,7 @@ func clear() -> void:
 		for signal_info in source.get_signal_list():
 			for connection in source.get_signal_connection_list(signal_info.name):
 				if connection.callable.get_object() == self: source.disconnect(signal_info.name,connection.callable)
-	scheduled.clear(); enemies.clear(); turrets.clear(); poses.clear()
+	scheduled.clear(); enemies.clear(); eel_helpers.clear(); recon_reinforcements.clear(); turrets.clear(); poses.clear()
 	ship = null; cargo = null; creature = null; structure = null; rescuer = null; rescue_pod = null
 
 func later(seconds: float, event: String) -> void:
@@ -105,7 +111,7 @@ func _structure(pose: Transform3D, health: float) -> Node3D:
 	jobs.game.natural_light.attach(model); jobs.game.water_visuals.attach(model)
 	return body
 
-func _fish(model: String, point: Vector3, health: float, sustain: float) -> Node3D:
+func _fish(model: String, point: Vector3, health: float, sustain: float, map_marker: bool = true) -> Node3D:
 	var visual: Node3D = jobs.Document.load_model(model,jobs.game.game_folder,true)
 	if visual == null: return null
 	var body := preload("res://mission_creature.gd").new()
@@ -121,9 +127,12 @@ func _fish(model: String, point: Vector3, health: float, sustain: float) -> Node
 	body.population = jobs.game.wildlife; body.response = "attack"; body.attack_range = 4
 	body.configure_combat({"model":model.to_lower(),"food_role":"predator","has_zapper":model in ["MUTANT","MJACK"],"bite_damage":1,"attack_range":4})
 	body.death_texture = jobs.game.wildlife.death_texture; body.death_sound = jobs.game.wildlife.death_sound; body.death_frames = jobs.game.wildlife.death_frames
+	body.death_flesh_texture = jobs.game.wildlife.death_flesh_texture
+	if model == "BIGEEL": body.death_particle_scale = clampf(bounds.size.length()/2.0,1.0,4.0)
 	jobs.game.world_root.add_child(body); jobs.actors.append(body)
 	body.set_meta("mission_target_center",Vector3.ZERO)
-	jobs.game.natural_light.attach(visual); jobs.game.water_visuals.attach(visual); _mark(body)
+	jobs.game.natural_light.attach(visual); jobs.game.water_visuals.attach(visual)
+	if map_marker: _mark(body)
 	return body
 
 func _start_spy() -> void:
@@ -218,33 +227,38 @@ func _step_escort(delta: float) -> void:
 		ship.waypoints = PackedVector3Array([_port_goal(5,ship.global_position)]); ship.dock_destination = 5
 		later(2,"aa1"); later(20,"escort_wave")
 	if flags.get("escaped",false):
-		if not flags.get("escape_reported",false) and is_instance_valid(rescuer) and not rescuer.dead and rescuer.global_position.distance_to(jobs._city(2)) < 8:
+		if not flags.get("escape_reported",false) and is_instance_valid(rescuer) and not rescuer.dead and rescuer.stage == "berth" and rescuer.last_city == 2:
 			radio("aa6"); later(6,"escort_escape"); flags["escape_reported"] = true
 		return
 	if ship.dead: return
 	if flags.get("started",false) and ship.stage == "berth" and ship.last_city == 5:
 		_prison_arrived(); return
 	if not is_instance_valid(rescuer) or rescuer.dead:
+		_end_boarding()
 		transfer = 0
 		for agent in enemies:
 			if not agent.dead and agent.get_meta("pod_rescuer",false):
-				rescuer = agent; agent.engage_player = false; agent.combat_target = null; agent.follow = ship; agent.formation = Vector3(0,2,-0.4); agent.path.clear()
+				rescuer = agent; agent.engage_player = false; agent.combat_target = null; agent.victim = null
+				agent.boarding = true; agent.follow = ship
+				agent.formation = Vector3(-0.3,2,-0.1) if agent.get_meta("pod_slot",1) == 0 else Vector3(0,2,-0.4)
+				agent.path.clear(); agent.replan = 0; agent.wait = 0; agent.flee = 0
 				# This deliberate boarding formation must not invoke the ships'
 				# ordinary collision/traffic separation against its own host.
 				agent.body.add_collision_exception_with(ship.body); ship.body.add_collision_exception_with(agent.body)
 				break
 	if is_instance_valid(rescuer) and not rescuer.dead:
-		if rescuer.global_position.distance_to(ship.global_position) <= 2.8:
+		if rescuer.global_position.distance_to(rescuer.boarding_goal()) <= 0.7:
 			if transfer == 0: _rescue_visual(); later(2,"escort_boarding")
+			_update_rescue_visual(delta)
 			transfer += delta
 			if transfer >= 16:
 				flags["escaped"] = true; radio("aa8"); ship.tuning.npc_speed = 1.5
-				if is_instance_valid(rescue_pod): rescue_pod.reparent(rescuer.get_parent(),true); rescue_pod.position = Vector3(0,-0.2,0)
+				_end_boarding()
 				rescuer.follow = null; rescuer.path.clear(); rescuer.waypoint = 0; rescuer.waypoints = PackedVector3Array([_port_goal(2,rescuer.global_position)])
-				rescuer.dock_destination = 0; rescuer.combat_enabled = false; rescuer.arrival_reported = false
+				rescuer.dock_destination = 2; rescuer.combat_enabled = false; rescuer.arrival_reported = false
 		else:
 			transfer = 0
-			if is_instance_valid(rescue_pod): rescue_pod.queue_free(); rescue_pod = null
+			_stow_rescue_pod()
 
 func _port_goal(city: int, from: Vector3) -> Vector3:
 	var traffic: Node = jobs.game.submarine_traffic
@@ -275,9 +289,27 @@ func _port_goal(city: int, from: Vector3) -> Vector3:
 
 func _escort_wave() -> void:
 	if wave < 0: return
-	var agent := _boat("TECH2SUB" if wave >= 2 else "TECHNEW",Transform3D(Basis.IDENTITY,jobs._city(2)+Vector3(wave*0.8,1,0)),2,15)
+	var traffic: Node = jobs.game.submarine_traffic
+	var launch: Vector3 = jobs._city(2)
+	var nearest := INF
+	for point_id in traffic.graph.get_point_ids():
+		var point: Vector3 = traffic.graph.get_point_position(point_id)
+		var distance := point.distance_squared_to(jobs._city(2))
+		if distance > 144.0 or distance >= nearest or not traffic.water_clear(point): continue
+		var occupied := false
+		for other in traffic.traders:
+			if not other.dead and other.stage == "travel" and other.global_position.distance_to(point) < maxf(2.5,other.bounds.size.length()+0.5): occupied = true; break
+		if not occupied: launch = point; nearest = distance
+	var agent := _boat("TECH2SUB" if wave >= 2 else "TECHNEW",Transform3D(Basis.IDENTITY,launch),2,15,3.5 if wave < 2 else 2.0)
 	if agent != null:
 		enemies.append(agent); _hostile(agent); agent.set_meta("pod_rescuer",wave < 2)
+		if wave < 2:
+			agent.set_meta("pod_slot",wave)
+			var pod: Node3D = jobs.Document.load_model("ESCAPE",jobs.game.game_folder)
+			if pod != null:
+				agent.get_parent().add_child(pod); pod.position = Vector3(0,-0.3,0)
+				pod.set_meta("exclude_from_debris",true); agent.boarding_pod = pod; jobs.actors.append(pod)
+				jobs.game.natural_light.attach(pod); jobs.game.water_visuals.attach(pod)
 		agent.destroyed.connect(func(_id: String,_attacker: String) -> void:
 			if agent == rescuer:
 				if is_instance_valid(rescue_pod): rescue_pod.queue_free(); rescue_pod = null
@@ -287,10 +319,41 @@ func _escort_wave() -> void:
 
 func _rescue_visual() -> void:
 	if is_instance_valid(rescue_pod): return
-	rescue_pod = jobs.Document.load_model("ESCAPE",jobs.game.game_folder)
-	if rescue_pod == null: return
-	ship.get_parent().add_child(rescue_pod); rescue_pod.position = Vector3(0,0.6,0); rescue_pod.set_meta("exclude_from_debris",true)
-	jobs.actors.append(rescue_pod)
+	rescue_pod = rescuer.boarding_pod
+	if not is_instance_valid(rescue_pod): return
+	rescue_pod.reparent(ship.get_parent(),true)
+	rescue_cable = MeshInstance3D.new(); var cable := CylinderMesh.new()
+	cable.top_radius = 0.004; cable.bottom_radius = 0.004; cable.height = 1.0; cable.radial_segments = 6
+	rescue_cable.mesh = cable
+	var material := StandardMaterial3D.new(); material.albedo_color = Color(0.3,0.35,0.36)
+	rescue_cable.material_override = material; rescue_cable.set_meta("exclude_from_debris",true)
+	jobs.game.world_root.add_child(rescue_cable); jobs.actors.append(rescue_cable)
+
+func _update_rescue_visual(delta: float) -> void:
+	if not is_instance_valid(rescue_pod): return
+	rescue_pod.position = rescue_pod.position.move_toward(Vector3(rescuer.formation.x,0.4,rescuer.formation.z),delta*3.0)
+	var start: Vector3 = rescuer.get_parent().to_global(Vector3(0,-0.2,0))
+	var span: Vector3 = rescue_pod.global_position-start
+	if not is_instance_valid(rescue_cable): return
+	rescue_cable.visible = span.length() > 0.005
+	rescue_cable.global_position = start+span*0.5
+	if rescue_cable.visible: rescue_cable.global_basis = Basis(Quaternion(Vector3.UP,span.normalized())).scaled(Vector3(1,span.length(),1))
+
+func _stow_rescue_pod() -> void:
+	if is_instance_valid(rescue_pod):
+		if is_instance_valid(rescuer) and not rescuer.dead:
+			rescue_pod.reparent(rescuer.get_parent(),true); rescue_pod.transform = Transform3D(Basis.IDENTITY,Vector3(0,-0.3,0))
+		else: rescue_pod.queue_free()
+	rescue_pod = null
+	if is_instance_valid(rescue_cable): rescue_cable.queue_free()
+	rescue_cable = null
+
+func _end_boarding() -> void:
+	_stow_rescue_pod()
+	if not is_instance_valid(rescuer): return
+	rescuer.boarding = false; rescuer.follow = null
+	if is_instance_valid(ship) and is_instance_valid(ship.body) and is_instance_valid(rescuer.body):
+		rescuer.body.remove_collision_exception_with(ship.body); ship.body.remove_collision_exception_with(rescuer.body)
 
 func _prison_arrived() -> void:
 	if jobs.id.is_empty() or jobs.phase == "finished" or ship.dead: return
@@ -311,6 +374,7 @@ func _start_tag() -> void:
 	creature = _fish("LIONFISH",start,10,0.25)
 	if creature != null:
 		creature.swim_speed = 0.8; creature.roam_radius = 0.2
+		creature.ignore_wildlife = true
 		for index in range(17):
 			if points.has(index): creature.route.append(points[index])
 		creature.died.connect(func() -> void:
@@ -321,25 +385,32 @@ func _start_tag() -> void:
 	for index in range(5):
 		var variant := random.randi_range(0,3)
 		var model: String = ["MUTANT","MUTANT","MSILVER","BABY"][variant]
-		var companion := _fish(model,start+Vector3(random.randf_range(-2,2),0,random.randf_range(-2,2)),10,[0.25,0.5,1.25,0.25][variant])
+		var companion := _fish(model,start+Vector3(random.randf_range(-2,2),0,random.randf_range(-2,2)),10,[0.25,0.5,1.25,0.25][variant],false)
 		if companion != null: companion.roam_radius = 4
 	for index in range(4):
 		var offset := Vector3(cos(index*TAU/4)*0.8,0.2,sin(index*TAU/4)*0.8)
-		_fish("MUTANT",deposit+offset,10,0.25)
-		var crystal: Node3D = jobs.game.object_population._create_thorium(preload("res://object_definitions.gd").THORIUM,0,Transform3D(Basis.IDENTITY,deposit+offset))
-		if crystal != null: crystal.set_meta("mission_owner",jobs.id); jobs.actors.append(crystal)
+		_fish("MUTANT",deposit+offset,10,0.25,false)
+		# Retail spawns these as independent world resources, not mission actors.
+		jobs.game.object_population._create_thorium(preload("res://object_definitions.gd").THORIUM,0,Transform3D(Basis.IDENTITY,deposit+offset))
 	var visual: Node3D = jobs.Document.load_model("CANISTER",jobs.game.game_folder)
 	if visual == null: return
 	cargo = preload("res://mission_cargo.gd").new(); jobs.game.world_root.add_child(cargo)
 	cargo.global_position = deposit; cargo.add_child(visual); cargo.mass = 1.5; cargo.health = 5; cargo.surface_height = jobs.game.pilot.surface_height
 	cargo.damage_sustain = 0.1; cargo.set_meta("damage_sustain",0.1)
 	cargo.stats = {"delivery_commodity":"Radioactive canister","delivery_quantity":1}; cargo.set_meta("mission_owner",jobs.id)
+	# CANISTER callback 004260f0 overrides inflict to 0.05, within four units.
+	cargo.stats.merge({"radiation_range":4.0,"radiation_strength":preload("res://original_damage.gd").radiation_strength(0.05)})
+	cargo.add_to_group("mission_radiation_sources")
 	var box := preload("res://submarine_equipment.gd")._bounds(preload("res://submarine_equipment.gd")._meshes(visual,Transform3D.IDENTITY))
 	var shape := CollisionShape3D.new(); shape.shape = BoxShape3D.new(); shape.shape.size = box.size; shape.position = box.get_center(); cargo.add_child(shape)
 	cargo.set_meta("mission_target_center",box.get_center()); jobs.actors.append(cargo)
 	jobs.game.natural_light.attach(visual); jobs.game.water_visuals.attach(visual)
-	cargo.destroyed.connect(func() -> void: radio("ii2",true); finish(false,0,2))
+	cargo.destroyed.connect(_canister_destroyed)
 	jobs.target = creature
+
+func _canister_destroyed() -> void:
+	jobs.burst(cargo.to_global(cargo.get_meta("mission_target_center",Vector3.ZERO)),1.5)
+	radio("ii2",true); finish(false,0,2)
 
 func _step_tag() -> void:
 	if not is_instance_valid(cargo) or cargo.dead: return
@@ -366,6 +437,10 @@ func _start_eel() -> void:
 		creature.home = structure.global_position+Vector3.UP*2; creature.roam_radius = 3; creature.swim_speed = 1.2
 		creature.contact_victim = structure
 		creature.died.connect(func() -> void: radio("c9"); later(6,"huge_eel"))
+	for index in range(3):
+		var helper := _boat("TRAD-SUB",Transform3D(Basis.IDENTITY,structure.global_position+Vector3(index*1.5-1.5,4,5)),1,10)
+		if helper != null:
+			helper.combat_enabled = false; helper.running = false; eel_helpers.append(helper)
 	jobs.target = structure
 
 func can_attach_pod(body: Node3D) -> bool:
@@ -376,17 +451,23 @@ func can_attach_pod(body: Node3D) -> bool:
 	return true
 
 func _step_eel(delta: float) -> void:
+	if flags.get("miners_aboard",false): return
 	if not is_instance_valid(structure) or structure.dead: return
 	if not flags.get("help",false) and elapsed >= 8 and jobs.game.pilot.global_position.distance_to(structure.global_position) < 9:
 		flags["help"] = true; radio("c6")
-		for index in range(3):
-			var helper := _boat("TRAD-SUB",Transform3D(Basis.IDENTITY,structure.global_position+Vector3(index*1.5-1.5,4,5)),1,10)
-			if helper != null: helper.combat_enabled = false; helper.waypoints = PackedVector3Array([_port_goal(int(jobs.runtime.active().city),helper.global_position)]); helper.dock_destination = int(jobs.runtime.active().city)
+		for helper in eel_helpers:
+			if is_instance_valid(helper) and not helper.dead:
+				helper.waypoints = PackedVector3Array([_port_goal(int(jobs.runtime.active().city),helper.global_position)]); helper.dock_destination = int(jobs.runtime.active().city); helper.running = true
 	if jobs.game.equipment.support_tools.pod_target == structure:
 		if transfer == 0: radio("c2")
 		transfer += delta
 		if transfer >= 12:
-			jobs.game.equipment.support_tools.passengers = true; radio("c5",true); finish(true)
+			flags["miners_aboard"] = true; jobs.phase = "return"
+			jobs.game.equipment.support_tools.passengers = true
+			jobs.game.equipment.support_tools._detach_pod()
+			jobs.game.cockpit_hud.map_data.actor_markers.erase(structure)
+			jobs.actors.erase(structure); structure.remove_meta("mission_owner"); structure.demolish_after(3.0)
+			radio("c5")
 	elif transfer > 0: transfer = 0; radio("c4")
 
 func _huge_eel() -> void:
@@ -397,7 +478,9 @@ func _huge_eel() -> void:
 	creature = _fish("BIGEEL",pose.origin,10,0.125)
 	if creature == null: return
 	creature.swim_speed = 1.5; creature.home = structure.global_position+Vector3.UP*2; creature.roam_radius = 4
-	creature.contact_victim = structure
+	# HUGEEEL is marked non-solid in OBJECTS.CSV. Retain layer eight so
+	# weapons can hit it, without wedging its long hull in the mine/terrain.
+	creature.collision_mask = 0; creature.giant_eel = true; creature.giant_player = jobs.game.pilot
 	creature.died.connect(func() -> void: flags["huge_dead"] = true; radio("c1"))
 
 func _start_recon() -> void:
@@ -408,30 +491,56 @@ func _start_recon() -> void:
 	if structure == null: return
 	jobs.target = structure
 	structure.attacked.connect(func() -> void:
-		if not flags.get("attacked",false): flags["attacked"] = true; radio("o2"); _recon_alarm())
+		if not flags.get("attacked",false): flags["attacked"] = true; radio("o2"); _end_recon_link(); _hostile(ship))
 	structure.destroyed.connect(func() -> void:
+		_end_recon_link()
 		if flags.get("recorded",false): radio("miss1",true); finish(true)
 		else: radio("o4",true); finish(false,0,2))
 	ship = _boat("TRAD-SUB",Transform3D(Basis.IDENTITY,structure.global_position+Vector3(2,1,0)),1,10)
-	if ship != null: ship.follow = structure; ship.formation = Vector3(2,1,0); enemies.append(ship)
+	if ship != null:
+		ship.follow = structure; ship.formation = Vector3(2,1,0); enemies.append(ship)
+		ship.player_attacked.connect(func() -> void: _end_recon_link(); _hostile(ship))
+		ship.destroyed.connect(func(_id: String,_attacker: String) -> void: _end_recon_link())
+		recon_cable = MeshInstance3D.new(); var line := CylinderMesh.new()
+		line.top_radius = 0.004; line.bottom_radius = 0.004; line.height = 1.0; line.radial_segments = 6
+		recon_cable.mesh = line
+		var material := StandardMaterial3D.new(); material.albedo_color = Color(0.3,0.35,0.36)
+		recon_cable.material_override = material; recon_cable.set_meta("exclude_from_debris",true)
+		jobs.game.world_root.add_child(recon_cable); jobs.actors.append(recon_cable)
+		_update_recon_link()
+	# Pre-place the alarm wave so an approaching camera never sees it pop in.
+	# Dormancy gates both local and offscreen movement, while retaining damage.
+	for index in poses.size():
+		var agent := _boat("TRAD2" if index == 0 else "TRAD-SUB",poses[index],1,10)
+		if agent == null: continue
+		agent.dormant = true; agent.combat_enabled = false
+		recon_reinforcements.append(agent); enemies.append(agent)
 	for row in jobs._rows(15):
 		if int(row.ObjectID) == 2: _recon_turret(jobs._pose(row))
-		elif int(row.ObjectID) == 3:
-			var mine := preload("res://floating_mine.gd").new()
-			var definition: Dictionary = preload("res://object_definitions.gd").FLOATING_MINE.duplicate(true)
-			var model: Node3D = preload("res://object_population.gd").appearance(definition,jobs.game.game_folder)
-			if model == null: continue
-			mine.setup(definition,model,jobs.game.submarine_traffic.explosion_sound,true); jobs.game.world_root.add_child(mine)
-			mine.global_transform = jobs._pose(row); mine.home = mine.position; mine.player = jobs.game.pilot; jobs.actors.append(mine)
-			mine.explosion_frames.assign(jobs.game.object_population.explosion_frames)
-			mine.exploded.connect(jobs.game.object_population._exploded.bind(float(definition.blast_force)))
-			mine.set_meta("mission_owner",jobs.id)
-		elif int(row.ObjectID) in [4,5]:
+		# Released 00480e60 skips the three ObjectID 3 rows entirely.
+		elif int(row.ObjectID) == 4:
+			var holder := Node3D.new(); jobs.game.world_root.add_child(holder); jobs.actors.append(holder)
+			preload("res://scenery_loader.gd")._add_light(holder,jobs._pose(row).origin,0.7,4.0,jobs.game.game_folder,"Recon")
+		elif int(row.ObjectID) == 5:
 			var beam: Node3D = jobs.Document.load_model("LITEBEEM",jobs.game.game_folder)
 			if beam != null:
 				jobs.game.world_root.add_child(beam); beam.global_transform = jobs._pose(row); jobs.actors.append(beam)
 				beam.set_meta("exclude_from_debris",true)
 				jobs.game.water_visuals.attach(beam)
+
+func _update_recon_link() -> void:
+	if not is_instance_valid(recon_cable): return
+	if not is_instance_valid(structure) or structure.dead or not is_instance_valid(ship) or ship.dead:
+		_end_recon_link(); return
+	var start: Vector3 = structure.to_global(Vector3(0.7,0.6,0))
+	var span: Vector3 = ship.get_parent().to_global(Vector3(0,-0.2,0))-start
+	recon_cable.visible = span.length() > 0.005
+	recon_cable.global_position = start+span*0.5
+	if recon_cable.visible: recon_cable.global_basis = Basis(Quaternion(Vector3.UP,span.normalized())).scaled(Vector3(1,span.length(),1))
+
+func _end_recon_link() -> void:
+	if is_instance_valid(recon_cable): recon_cable.queue_free()
+	recon_cable = null
 
 func _recon_turret(pose: Transform3D) -> void:
 	var model: Node3D = jobs.Document.load_model("TURRET",jobs.game.game_folder)
@@ -446,10 +555,17 @@ func _recon_turret(pose: Transform3D) -> void:
 	turrets.append(gun); jobs.game.natural_light.attach(model); jobs.game.water_visuals.attach(model)
 
 func _step_recon(delta: float) -> void:
+	_update_recon_link()
 	if not is_instance_valid(structure) or structure.dead: return
 	var distance: float = jobs.game.pilot.global_position.distance_to(structure.global_position)
-	if elapsed >= 8 and distance < 20 and not flags.get("greeted",false): flags["greeted"] = true; radio("o3")
-	if elapsed >= 8 and distance < 15 and not flags.get("alarm",false): _recon_alarm()
+	scan -= delta
+	# Original callback polls after eight seconds, then every fifty ticks.
+	# Give the warning first, even if the initial approach is already close.
+	if elapsed >= 8 and scan <= 0 and not flags.get("alarm",false):
+		scan = 2.0
+		if distance < 20 and not flags.get("greeted",false): flags["greeted"] = true; radio("o3")
+		elif distance < 15 and not flags.get("alarm_pending",false):
+			flags["alarm_pending"] = true; later(0.4,"recon_alarm")
 	if flags.get("alarm",false):
 		for gun in turrets:
 			if not gun.dead: gun.retaliation = 5
@@ -457,9 +573,10 @@ func _step_recon(delta: float) -> void:
 func _recon_alarm() -> void:
 	if flags.get("alarm",false): return
 	flags["alarm"] = true; radio("o6")
-	for index in poses.size():
-		var agent := _boat("TRAD2" if index == 0 else "TRAD-SUB",poses[index],1,10)
-		if agent != null: enemies.append(agent)
+	_end_recon_link()
+	for agent in recon_reinforcements:
+		if not is_instance_valid(agent) or agent.dead: continue
+		agent.dormant = false; agent.combat_enabled = true
 	for agent in enemies: _hostile(agent)
 
 func rov_recorded(quality: float) -> void:
@@ -469,6 +586,7 @@ func rov_recorded(quality: float) -> void:
 	jobs.runtime.active()["outcome_shown"] = true; jobs.runtime.outcome.play(jobs.game.game_folder,true)
 
 func docked(_city: int) -> void:
+	if family == "eel" and flags.get("miners_aboard",false): finish(true)
 	if family == "recon":
 		if flags.get("recorded",false): finish(true)
 		elif flags.get("attacked",false): finish(false,0,3)

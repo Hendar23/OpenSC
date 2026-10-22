@@ -505,7 +505,8 @@ func _equipment_shop(data: Dictionary) -> void:
 		slot_button.name = "EquipmentSlot%d" % index; slot_button.set_meta("slot",slot)
 		slot_button.tooltip_text = str(offers.get(id,{}).get("name","Empty"))
 		if not id.is_empty():
-			var icon := TextureRect.new(); icon.texture = texture("texture.ui_equipment_square_" + id,str(offers[id].square_bitmap))
+			var picture_id := "zapperup" if id == "zapper" and int(data.get("status",{}).get("zapper_upgrade",0)) > 0 else id
+			var icon := TextureRect.new(); icon.texture = texture("texture.ui_equipment_square_" + picture_id,str(offers[picture_id].square_bitmap))
 			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			slot_button.add_child(icon); icon.offset_left = 2; icon.offset_top = 2; icon.offset_right = -2; icon.offset_bottom = -2
 		elif slot != 0: slot_button.text = "EMPTY"

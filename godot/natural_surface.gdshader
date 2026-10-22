@@ -4,6 +4,7 @@ render_mode cull_disabled, ambient_light_disabled, fog_disabled;
 uniform sampler2D albedo_texture : source_color, filter_nearest, repeat_enable;
 uniform sampler2D terrain_albedo_texture : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform bool terrain_mipmaps = false;
+uniform bool cull_backfaces = false;
 uniform sampler2D backface_texture : source_color, filter_nearest, repeat_enable;
 uniform bool has_backface_texture = false;
 uniform sampler2D emission_texture : source_color, filter_nearest, repeat_enable;
@@ -42,6 +43,7 @@ void vertex() {
 	natural_position = (INV_VIEW_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX,1.0)).xyz;
 }
 void fragment() {
+	if (cull_backfaces && !FRONT_FACING) discard;
 	vec2 uv = UV * uv_scale.xy + uv_offset.xy;
 	vec4 color = albedo_color;
 	if (has_texture) {

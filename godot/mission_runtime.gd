@@ -22,10 +22,16 @@ func testing_mission_city(id: String) -> int:
 		if IDS[city] == id: return int(city)
 	return Rules.offering_city(id)
 
-func set_testing_missions(enabled: bool) -> void:
+func set_testing_missions(enabled: bool, persist: bool = false) -> void:
 	testing_all_missions = enabled
+	if game.developer_tabs != null:
+		var button: Button = game.developer_tabs.get_node_or_null("System/UnlockTestingMissions")
+		if button != null:
+			button.set_pressed_no_signal(enabled)
+			button.text = "All missions for testing: " + ("On" if enabled else "Off")
 	_publish_offers()
 	if game.dock_interface != null and game.dock_interface.visible: game.dock_interface.rebuild()
+	if persist: game._schedule_settings_save()
 
 func setup(context: Node) -> void:
 	game = context

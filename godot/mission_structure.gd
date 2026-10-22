@@ -41,3 +41,10 @@ func take_weapon_damage(strength: float, _source: Vector3 = Vector3.ZERO) -> voi
 
 func take_weapon_damage_from(strength: float, source: Vector3, _owner: Node3D) -> void:
 	take_weapon_damage(strength,source)
+
+func demolish_after(delay: float) -> void:
+	# Transfer the intact mine and its collider out of mission cleanup. The
+	# demolition disables collision when its first explosion starts.
+	dead = true
+	var effect := preload("res://base_destruction.gd").new(); game.world_root.add_child(effect)
+	effect.setup([self],[],game.submarine_traffic,delay)

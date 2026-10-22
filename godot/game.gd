@@ -38,6 +38,8 @@ var submarine_explosion_sound: AudioStream
 var submarine_bubble_texture: Texture2D
 const FrontEnd = preload("res://front_end.gd")
 const CaptureOverlay = preload("res://capture_overlay.gd")
+var capture_overlay: CanvasLayer
+var photo_mode: Node3D
 const PlantCurrent = preload("res://plant_current.gd")
 const WaterVisuals = preload("res://water_visuals.gd")
 const OriginalGameData = preload("res://original_game_data.gd")
@@ -162,7 +164,7 @@ func _ready() -> void:
 	# world is paused. Gameplay subtrees explicitly use PAUSABLE below.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	preload("res://input_bindings.gd").install()
-	add_child(CaptureOverlay.new())
+	capture_overlay = CaptureOverlay.new(); add_child(capture_overlay)
 	# Only the physics-driven submarine interpolates; camera and scenery keep
 	# their existing render-frame updates.
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
@@ -197,6 +199,7 @@ func _ready() -> void:
 	particles.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(particles)
 	_build_interface()
+	photo_mode = preload("res://photo_mode.gd").new(); add_child(photo_mode); photo_mode.setup(self)
 	_load_preferences()
 	_update_water_environment()
 	call_deferred("_bootstrap")
@@ -248,6 +251,7 @@ func _prompt_game_folder(message: String) -> void:
 	folder_prompt.popup_centered(Vector2i(520,180))
 
 func _show_main_menu() -> void:
+	if photo_mode != null and photo_mode.active: photo_mode.leave()
 	_set_map_open(false)
 	if world_loading: return
 	if weapons != null: weapons.update_fire(false,0)
@@ -303,6 +307,7 @@ func _apply_mods() -> void:
 	if pilot_mode: _show_main_menu()
 
 func _begin_new_game() -> void:
+	if photo_mode != null and photo_mode.active: photo_mode.leave()
 	await session._begin_new_game()
 
 func _world_asset_key() -> String:
@@ -312,12 +317,15 @@ func _can_reuse_world() -> bool:
 	return session._can_reuse_world()
 
 func _reset_loaded_world() -> void:
+	if photo_mode != null: photo_mode.replay.clear()
 	session._reset_loaded_world()
 
 func _clear_session_effects(node: Node) -> void:
 	session._clear_session_effects(node)
 
 func _start_game(folder: String) -> void:
+	if photo_mode != null and photo_mode.active: photo_mode.leave()
+	if photo_mode != null: photo_mode.replay.clear()
 	if menu_backdrop != null:
 		menu_backdrop.close(); menu_backdrop.free(); menu_backdrop = null
 	if dock_interface != null: dock_interface.dismiss(); dock_interface_active = false
@@ -622,7 +630,7 @@ func _input(event: InputEvent) -> void:
 			_answer_delivery(true); get_viewport().set_input_as_handled(); return
 		if Bindings.pressed(event,"dock_decline") or Bindings.pressed(event,"menu_cancel"):
 			_answer_delivery(false); get_viewport().set_input_as_handled(); return
-	if Bindings.pressed(event,"map_toggle") and pilot_mode and not world_loading and not get_tree().paused and not developer_ui_visible and docking.stage == Docking.Stage.IDLE:
+	if Bindings.pressed(event,"map_toggle") and pilot_mode and not world_loading and not get_tree().paused and not developer_ui_visible and docking.stage != Docking.Stage.DOCKED:
 		_set_map_open(not map_open)
 		get_viewport().set_input_as_handled()
 	elif map_open and Bindings.pressed(event,"menu_cancel"):
@@ -655,12 +663,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				_save_preferences()
 				get_viewport().set_input_as_handled()
 				return
-	if not developer_ui_visible and equipment != null and docking.stage == Docking.Stage.IDLE:
+	if not developer_ui_visible and equipment != null and docking.stage != Docking.Stage.DOCKED:
 		if Bindings.pressed(event,"weapon_previous") and weapons != null: weapons.cycle(-1)
 		elif Bindings.pressed(event,"weapon_next") and weapons != null: weapons.cycle(1)
 		if Bindings.pressed(event,"equipment_previous"): equipment.cycle(-1)
 		elif Bindings.pressed(event,"equipment_next"): equipment.cycle(1)
-		elif Bindings.pressed(event,"equipment_toggle"):
+		elif Bindings.pressed(event,"equipment_toggle") and docking.stage == Docking.Stage.IDLE:
 			if not Bindings.pressed(event,"dock_decline") or docking.nearby.is_empty(): equipment.toggle_selected()
 	if Bindings.pressed(event,"dock_accept"):
 		_request_docking()
@@ -946,6 +954,7 @@ func _exit_tree() -> void:
 
 func _reset_docked_wildlife() -> void:
 	# Cover the world before changing populations, after the doors finish closing.
+	_set_map_open(false)
 	if docked_screen != null: docked_screen.visible = true
 	if wildlife != null:
 		wildlife.reroll()
@@ -1142,6 +1151,7 @@ func _dock_ui_action(action: String, payload: Dictionary) -> void:
 		"load_slot": _load_saved_game(int(payload.slot))
 
 func _load_saved_game(slot: int) -> bool:
+	if photo_mode != null and photo_mode.active: photo_mode.leave()
 	return await session._load_saved_game(slot)
 
 func _submarine_health_changed(remaining: float, capacity: float) -> void:

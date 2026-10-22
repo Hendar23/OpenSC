@@ -29,7 +29,7 @@ func _visible_within(node: Node3D, root: Node3D) -> bool:
 		node = node.get_parent() as Node3D
 	return true
 
-func setup(models: Array[Node3D], smoke: Array[Node], traffic: Node) -> void:
+func setup(models: Array[Node3D], smoke: Array[Node], traffic: Node, initial_delay: float = 0.0) -> void:
 	name = "BaseDestruction"; add_to_group("base_destruction")
 	frames = traffic.explosion_frames; sound = traffic.explosion_sound; bubble_texture = traffic.bubble_texture
 	for model in models:
@@ -40,7 +40,7 @@ func setup(models: Array[Node3D], smoke: Array[Node], traffic: Node) -> void:
 			var box: AABB = mesh.global_transform * mesh.get_aabb()
 			bounds = bounds.merge(box) if found else box; found = true
 		if not found: bounds = AABB(model.global_position-Vector3.ONE,Vector3.ONE*2)
-		buildings.append({"model":model,"bounds":bounds,"next":0,"collapsed":false,"delay":float(buildings.size())*0.12})
+		buildings.append({"model":model,"bounds":bounds,"next":0,"collapsed":false,"delay":initial_delay+float(buildings.size())*0.12})
 	for plume in smoke:
 		if is_instance_valid(plume): plume.reparent(self,true)
 	_process(0.0)
@@ -51,6 +51,7 @@ func _process(delta: float) -> void:
 		var elapsed: float = age-float(building.delay)
 		var bounds: AABB = building.bounds
 		while int(building.next) < BURST_COUNT and elapsed >= float(building.next)*BURST_INTERVAL:
+			if int(building.next) == 0 and building.model is CollisionObject3D: building.model.collision_layer = 0
 			var index: int = building.next
 			var angle := float(index)*TAU/3.0
 			var offset := Vector3(cos(angle)*bounds.size.x*0.3,((-0.2) if index%2 == 0 else 0.25)*bounds.size.y,sin(angle)*bounds.size.z*0.3)

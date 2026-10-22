@@ -309,6 +309,7 @@ func restore_snapshot(entries: Array) -> void:
 				body.set_meta("delivery_city",int(entry.delivery_city)); body.set_meta("metal_tow_target",false)
 			body.health = minf(float(entry.health),float(definition.health))
 			body.linear_velocity = Document.vector(entry.velocity); body.angular_velocity = Document.vector(entry.spin)
+			_repair_roof_spawn(body)
 
 func _physics_process(delta: float) -> void:
 	_update_radiation(delta)
@@ -357,21 +358,49 @@ func _random_spawn_point(definition: Dictionary, startup: bool) -> Dictionary:
 	var above := Vector3(random.randf_range(world_bounds.position.x,world_bounds.end.x),surface_height + 5.0,random.randf_range(world_bounds.position.z,world_bounds.end.z))
 	if not _clear_of_docks(above,radius): return {}
 	var space := get_world_3d().direct_space_state
-	var floor_query := PhysicsRayQueryParameters3D.create(above,Vector3(above.x,world_bounds.position.y - 5.0,above.z),1)
-	var floor_hit := space.intersect_ray(floor_query)
+	var column := _spawn_column(above)
+	var floor_hit: Dictionary = column.floor
 	if floor_hit.is_empty() or floor_hit.normal.y < 0.25 or floor_hit.position.y + radius >= surface_height: return {}
 	var point := above
+	var roof_hit: Dictionary = column.roof
+	if not roof_hit.is_empty(): point.y = minf(point.y,roof_hit.position.y-radius-0.03)
 	if startup:
 		# Crystals rest on terrain. Other salvage starts on terrain one quarter
 		# of the time, otherwise 5–8.75 original units higher, capped at water.
 		var lift := 0.0
 		if definition.get("behavior","") == "salvage" and (random.randi() & 3) != 0:
 			lift = 5.0 + float(random.randi() & 15) * 0.25
-		point.y = minf(surface_height - radius,floor_hit.position.y + radius + 0.03 + lift)
+		point.y = minf(point.y,minf(surface_height - radius,floor_hit.position.y + radius + 0.03 + lift))
 	var sphere := SphereShape3D.new(); sphere.radius = maxf(0.01,radius * 0.9)
 	var clearance := PhysicsShapeQueryParameters3D.new(); clearance.shape = sphere; clearance.transform.origin = point; clearance.collision_mask = 9
 	if not space.intersect_shape(clearance,1).is_empty(): return {}
 	return {"position":point,"floor":floor_hit.position}
+
+func _spawn_column(above: Vector3, mask: int = 1) -> Dictionary:
+	var space := get_world_3d().direct_space_state
+	var floor_query := PhysicsRayQueryParameters3D.create(above,Vector3(above.x,world_bounds.position.y-5.0,above.z),mask)
+	# Cave roofs face the playable water below. Their back faces are not ground.
+	floor_query.hit_back_faces = false
+	var floor_hit := space.intersect_ray(floor_query)
+	var roof_hit := {}
+	if not floor_hit.is_empty():
+		var roof_query := PhysicsRayQueryParameters3D.create(floor_hit.position+Vector3.UP*0.03,above,mask)
+		roof_query.hit_back_faces = false; roof_hit = space.intersect_ray(roof_query)
+	return {"floor":floor_hit,"roof":roof_hit}
+
+func _repair_roof_spawn(body: Node3D) -> void:
+	# Repair unreachable random crystals in existing beta saves, without moving
+	# authored placements or delivered items. Use solid BSP, excluding foliage.
+	if not body is Thorium or body.has_meta("object_group") or body.has_meta("delivery_city") or not get_parent().has_node("TerrainLightCollision"): return
+	var point := body.global_position
+	var column := _spawn_column(Vector3(point.x,maxf(surface_height+5.0,point.y+0.1),point.z),16)
+	if column.floor.is_empty() or column.roof.is_empty() or point.y < float(column.roof.position.y): return
+	var radius := float(body.stats.size)*0.5
+	point.y = float(column.roof.position.y)-radius-0.03
+	if point.y <= float(column.floor.position.y)+radius+0.03: return
+	var sphere := SphereShape3D.new(); sphere.radius = maxf(0.01,radius*0.9)
+	var query := PhysicsShapeQueryParameters3D.new(); query.shape = sphere; query.transform.origin = point; query.collision_mask = 9; query.exclude = [body.get_rid()]
+	if get_world_3d().direct_space_state.intersect_shape(query,1).is_empty(): body.global_position = point
 
 func _clear_of_docks(position: Vector3, item_radius: float) -> bool:
 	var horizontal := Vector2(position.x,position.z)
@@ -394,4 +423,12 @@ func _update_radiation(delta: float) -> void:
 			var distance: float = body.global_position.distance_to(player.global_position)
 			if radius > 0 and distance < radius:
 				strength += preload("res://original_damage.gd").radiation(float(body.stats.get("radiation_strength",Definitions.THORIUM.radiation_strength)),distance)
+		# Mission cargo lives outside this population, but shares its one combined
+		# radiation update so a second source cannot clear the HUD warning.
+		for body in get_tree().get_nodes_in_group("mission_radiation_sources"):
+			if body.get_world_3d() != get_world_3d() or body.dead or body.delivered or body.is_queued_for_deletion(): continue
+			var radius := float(body.stats.get("radiation_range",0.0))
+			var distance: float = body.global_position.distance_to(player.global_position)
+			if radius > 0 and distance < radius:
+				strength += preload("res://original_damage.gd").radiation(float(body.stats.get("radiation_strength",0.0)),distance)
 	player.receive_radiation(strength,delta)
