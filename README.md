@@ -58,7 +58,7 @@ Mod support for visual and gameplay enhancements. A handful are available at the
 
 
 ## Credits
-- Screenshot shutter sound: “camera” by irinairinafomicheva, from Pixabay. Used under the Pixabay Content License.
+- Screenshot shutter sound: [“camera” by irinairinafomicheva](https://pixabay.com/sound-effects/technology-camera-13695/), from Pixabay. Used under the Pixabay Content License.
 - 3D Sea Mine model "sea mine\" (https://skfb.ly/onJQC) by AbsoluteMadLadd is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
 <img width="1920" height="1080" alt="OpenSC 2026-10-21 20-35-50" src="https://github.com/user-attachments/assets/9b6adf8d-ec6a-4b38-835e-adfb537182a9" />
