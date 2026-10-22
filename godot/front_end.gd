@@ -86,7 +86,8 @@ func _ready() -> void:
 	loading_status.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_menu()
 	var version_label := Label.new(); version_label.name = "VersionLabel"
-	version_label.text = "OpenSC v%s" % ProjectSettings.get_setting("application/config/version","")
+	var release_stage := str(ProjectSettings.get_setting("application/config/release_stage","")).strip_edges()
+	version_label.text = "OpenSC %sv%s" % [(release_stage+" ") if not release_stage.is_empty() else "",ProjectSettings.get_setting("application/config/version","")]
 	version_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	version_label.add_theme_font_size_override("font_size",14)
 	version_label.add_theme_color_override("font_color",Color(0.65,0.8,0.82))

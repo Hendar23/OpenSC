@@ -27,7 +27,7 @@ def release_view_settings(text: str) -> str:
     return text[:section.start()] + body + text[section.end():]
 
 
-def build(destination: Path, archive_output: bool = True) -> dict:
+def build(destination: Path, archive_output: bool = True, excluded_mods: set[str] | None = None) -> dict:
     if destination.exists():
         raise SystemExit(f"Refusing to overwrite an existing folder: {destination}")
     files = {Path("project.godot"), Path("game.tscn"), Path("input_bindings.gd")}
@@ -61,6 +61,8 @@ def build(destination: Path, archive_output: bool = True) -> dict:
     (destination / "Mods").mkdir()
     bundled_mods = []
     for pack in sorted((ROOT / "Mods").iterdir()):
+        if pack.name in (excluded_mods or set()):
+            continue
         if not pack.is_dir() or not (pack / "mod.json").is_file():
             continue
         manifest = json.loads((pack / "mod.json").read_text(encoding="utf-8"))
@@ -136,11 +138,11 @@ def stamp_windows_version(executable: Path, version: str) -> None:
     if not api.EndUpdateResourceW(handle, False): raise ctypes.WinError(ctypes.get_last_error())
 
 
-def standalone(destination: Path, engine: Path, template: Path) -> dict:
+def standalone(destination: Path, engine: Path, template: Path, excluded_mods: set[str] | None = None) -> dict:
     if destination.exists():
         raise SystemExit(f"Refusing to overwrite an existing folder: {destination}")
     stage = destination.with_name(destination.name + "-build")
-    report = build(stage, archive_output=False)
+    report = build(stage, archive_output=False, excluded_mods=excluded_mods)
     destination.mkdir()
     for name in ("Maps", "Mods"):
         shutil.copytree(stage / name, destination / name)
@@ -192,8 +194,10 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, default=ROOT / "dist" / ("OpenSC-clean-test-" + datetime.now().strftime("%Y%m%d-%H%M%S")))
     parser.add_argument("--engine", type=Path, help="Export a standalone Windows game using this Godot executable")
     parser.add_argument("--windows-template", type=Path, help="Matching windows_release_x86_64.exe export template")
+    parser.add_argument("--exclude-mod", action="append", default=[], help="Leave this mod folder out of the package; may be repeated")
     args = parser.parse_args()
     if args.engine and not args.windows_template:
         parser.error("--engine requires --windows-template")
-    result = standalone(args.output.resolve(), args.engine.resolve(), args.windows_template.resolve()) if args.engine else build(args.output.resolve())
+    excluded = set(args.exclude_mod)
+    result = standalone(args.output.resolve(), args.engine.resolve(), args.windows_template.resolve(), excluded_mods=excluded) if args.engine else build(args.output.resolve(), excluded_mods=excluded)
     print(json.dumps(result, indent=2))
