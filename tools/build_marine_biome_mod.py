@@ -144,6 +144,7 @@ def build(source: Path, destination: Path, plants: Path | None = None):
                 entry = {"node": stem, "size": size, "weight": 1.0}
                 if "Coral_Table_Acropora" in stem or "Coral_Plate_Montipora" in stem:
                     entry["ground_clearance"] = 0.08
+                if "Coral_Whip" in stem: entry["upright"] = True
                 entries.append(entry)
     if plants:
         with zipfile.ZipFile(plants) as outer:
@@ -157,7 +158,8 @@ def build(source: Path, destination: Path, plants: Path | None = None):
                     geometry = read_obj(models.read(name)); builder.model(stem, geometry)
                     sway = any(part in stem for part in ("Kelp", "eelGrass", "seaPlant", "scatterPlant"))
                     size = 1.2 if "Kelp" in stem else 1.5 if "Grass" in stem or "seaPlant" in stem else 0.7 if "scatterPlant" in stem or "treeWorm" in stem else 2.0
-                    entries.append({"node": stem, "size": size, "weight": 1.0, "sway": sway})
+                    upright = sway or any(part in stem for part in ("coralFan", "coralFinger", "coralSticks", "staghornCoral", "treeWorm"))
+                    entries.append({"node": stem, "size": size, "weight": 1.0, "sway": sway, "upright": upright})
                     if stem in {item[0] for item in REPLACEMENTS.values()}: selected[stem] = geometry
                 for original, (name, height, base, width_limit) in REPLACEMENTS.items():
                     vertices, normals, uvs, material = selected[name]
@@ -176,7 +178,7 @@ def build(source: Path, destination: Path, plants: Path | None = None):
                     replacement.save(destination / relative)
                     assets[f"model.{original}"] = {"file": relative, "forward_axis": "+Z"}
     size = builder.save(destination / 'marine-biome.glb')
-    manifest = {"schema_version": 1, "id": "marine-biome", "name": "Marine Biome", "version": "0.3" if plants else "0.1.2",
+    manifest = {"schema_version": 1, "id": "marine-biome", "name": "Marine Biome", "version": "0.3.1" if plants else "0.1.3",
         "description": "Scattered marine scenery and ocean plants. Replaces the five original plant models with matching ocean plants." if plants else "Scattered coral, shells, barnacles, starfish and urchins. Decorative scenery only.",
         "assets": assets, "scenery": {"file": "marine-biome.glb", "seed": 481516, "count": 10800 if plants else 3600, "patch_radius": 9.0, "models": entries}}
     (destination / 'mod.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')

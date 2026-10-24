@@ -101,6 +101,10 @@ static func _load_legacy(path: String, names: PackedStringArray = PackedStringAr
 		var instance := MeshInstance3D.new()
 		instance.name = "Mesh_%d" % i
 		instance.mesh = mesh
+		# Separate render visibility prevents feedback when environment captures
+		# render the scene. Main/auxiliary cameras still see this layer normally.
+		for surface in range(mesh.get_surface_count()):
+			if mesh.surface_get_material(surface).get_meta("exterior_canopy",false): instance.layers = 1 << 17
 		frames[frame_id].add_child(instance)
 	Cache.save_scene(cache_key, root)
 	return root
@@ -264,6 +268,16 @@ static func _build_mesh(data: PackedByteArray, geometry: int, end: int, path: St
 				if not str(reference["mask"]).is_empty():
 					surface_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 					surface_material.alpha_scissor_threshold = 0.5
+			# Original untextured, translucent blue materials identify canopy glazing.
+			# Do not guess from atlas pixels: painted hulls and mod textures stay intact.
+			var tint: Color = reference.color
+			if str(reference.texture).is_empty() and float(reference.alpha) < 1.0 and tint.b > maxf(tint.r,tint.g):
+				surface_material.set_meta("exterior_canopy",true)
+				surface_material.set_meta("canopy_original_color",surface_material.albedo_color)
+				surface_material.albedo_color = Color(0.06,0.24,0.36)
+				surface_material.roughness = 0.16
+				surface_material.metallic = 0.0
+				surface_material.metallic_specular = 0.8
 		mesh.surface_set_material(mesh.get_surface_count() - 1, surface_material)
 	return mesh
 
@@ -288,10 +302,12 @@ static func _material_references(data: PackedByteArray, start: int, end: int) ->
 					mask = _chunk_string(data, second, limit)
 				break
 		var color := Color.WHITE
+		var alpha := 1.0
 		if _fits(data, offsets[i] + 20, 4):
 			var c := offsets[i] + 20
+			alpha = float(data[c + 3]) / 255.0
 			color = Color(float(data[c]) / 255.0, float(data[c + 1]) / 255.0, float(data[c + 2]) / 255.0)
-		references.append({"texture": texture, "mask": mask, "color": color})
+		references.append({"texture": texture, "mask": mask, "color": color, "alpha": alpha})
 	return references
 
 

@@ -3,6 +3,12 @@ extends RefCounted
 const Assets = preload("res://clump_loader.gd")
 const CHUNK_SIZE := 48.0
 
+static func is_natural_ground(texture_name: String) -> bool:
+	var texture := texture_name.to_upper()
+	if texture.begins_with("CLIF") or texture.begins_with("SEAB") or texture.begins_with("GRAVELL") or texture.begins_with("BEABLEN"): return true
+	if texture.length() == 3 and texture.left(2) in ["SA", "SB"] and texture.right(1) in "123456789": return true
+	return texture in ["BEA7", "BEA8", "BEA9", "ROCKS", "ROCKSB", "CAVEY", "SANDY", "SANDYBLE", "SANDBURN", "STONEY6", "HONEY", "HONEY2", "VOLCGRAD"]
+
 # Decode the static atomic sectors in the supplied SCEN1.BSP. Game objects
 # and mission state are stored separately and are not reconstructed here.
 static func load_world(path: String, tree: SceneTree, progress: Callable) -> Node3D:
@@ -138,6 +144,7 @@ static func load_world(path: String, tree: SceneTree, progress: Callable) -> Nod
 		var instance := MeshInstance3D.new()
 		instance.name = "Material_%d_%d_%d" % [material_id,buffer.cell.x,buffer.cell.y]
 		instance.set_meta("terrain_material",material_id)
+		instance.set_meta("terrain_texture", str(references[material_id].texture).to_upper())
 		instance.set_meta("terrain_cell",buffer.cell)
 		instance.mesh = mesh
 		root.add_child(instance)
@@ -202,7 +209,7 @@ static func add_collision(root: Node3D, tree: SceneTree, progress: Callable) -> 
 		if not child is MeshInstance3D: continue
 		var center: Vector3 = child.mesh.get_aabb().get_center()
 		var cell: Vector2i = child.get_meta("terrain_cell",Vector2i(floori(center.x / CHUNK_SIZE),floori(center.z / CHUNK_SIZE)))
-		if not cells.has(cell): cells[cell] = {"faces":PackedVector3Array(),"solid":PackedVector3Array()}
+		if not cells.has(cell): cells[cell] = {"faces":PackedVector3Array(),"solid":PackedVector3Array(),"plantable":PackedByteArray()}
 		var buffer: Dictionary = cells[cell]
 		for surface in range(child.mesh.get_surface_count()):
 			var arrays: Array = child.mesh.surface_get_arrays(surface)
@@ -213,14 +220,19 @@ static func add_collision(root: Node3D, tree: SceneTree, progress: Callable) -> 
 			else:
 				for vertex in vertices: faces.append(child.transform * vertex)
 			buffer.faces.append_array(faces)
+			var plantable := PackedByteArray(); plantable.resize(faces.size() / 3)
+			plantable.fill(1 if is_natural_ground(str(child.get_meta("terrain_texture", ""))) else 0)
+			buffer.plantable.append_array(plantable)
 			# Leaves must not be mistaken for solid cave ceilings by shelter rays.
 			var material := child.mesh.surface_get_material(surface) as StandardMaterial3D
 			if material != null and material.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED: buffer.solid.append_array(faces)
 	var count := 0
+	var plantable_shapes: Array[PackedByteArray] = []
 	for cell in cells:
 		var buffer: Dictionary = cells[cell]
 		var shape := ConcavePolygonShape3D.new(); shape.backface_collision = true; shape.set_faces(buffer.faces)
 		var collider := CollisionShape3D.new(); collider.shape = shape; body.add_child(collider)
+		plantable_shapes.append(buffer.plantable)
 		if not buffer.solid.is_empty():
 			var light_shape := CollisionShape3D.new()
 			if buffer.solid.size() == buffer.faces.size(): light_shape.shape = shape
@@ -231,6 +243,7 @@ static func add_collision(root: Node3D, tree: SceneTree, progress: Callable) -> 
 		if count % 16 == 0:
 			progress.call("Building environment collision: %d chunks" % count)
 			await tree.process_frame
+	body.set_meta("plantable_faces", plantable_shapes)
 	root.set_meta("collision_ready", true)
 	var ceiling := StaticBody3D.new()
 	ceiling.name = "WaterSurfaceCollision"

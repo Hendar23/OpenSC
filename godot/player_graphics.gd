@@ -1,7 +1,7 @@
 extends Node
 
 const Storage = preload("res://player_storage.gd")
-const DEFAULTS := {"display_mode":0,"resolution":Vector2i.ZERO,"limit_resolutions":false,"vsync":true,"frame_limit":0,"anti_aliasing":0,"shadows":2,"brightness":100.0}
+const DEFAULTS := {"display_mode":0,"resolution":Vector2i.ZERO,"limit_resolutions":false,"vsync":true,"frame_limit":0,"anti_aliasing":0,"shadows":2,"reflective_canopies":true,"brightness":100.0}
 const FRAME_LIMITS := [0,30,60,90,120,144,165,240]
 const RESOLUTIONS := [
 	Vector2i(1280,720),Vector2i(1600,900),Vector2i(1920,1080),Vector2i(1920,1200),
@@ -54,6 +54,7 @@ func resolutions() -> Array[Vector2i]:
 func _validate() -> void:
 	for key in ["display_mode","anti_aliasing","shadows"]:
 		settings[key] = clampi(int(settings[key]),0,3 if key != "display_mode" else 2)
+	settings.reflective_canopies = bool(settings.reflective_canopies)
 	settings.vsync = bool(settings.vsync)
 	settings.limit_resolutions = bool(settings.limit_resolutions)
 	if int(settings.frame_limit) not in FRAME_LIMITS: settings.frame_limit = 0
@@ -104,6 +105,9 @@ func _apply_resolution() -> void:
 	get_viewport().scaling_3d_scale = clampf(minf(resolution.x / maxf(size.x,1.0),resolution.y / maxf(size.y,1.0)),0.1,1.0)
 
 func apply_rendering() -> void:
+	preload("res://exterior_reflections.gd").ensure_globals()
+	RenderingServer.global_shader_parameter_set("osc_exterior_enabled",settings.reflective_canopies)
+	get_tree().call_group("exterior_canopy_reflections","set_enabled",settings.reflective_canopies)
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if settings.vsync else DisplayServer.VSYNC_DISABLED,get_window().get_window_id())
 	Engine.max_fps = int(settings.frame_limit)
 	_configure_viewport(get_viewport())
@@ -113,6 +117,9 @@ func apply_rendering() -> void:
 
 func _configure_viewport(node: Node) -> void:
 	if not node is Viewport: return
+	if node.get_meta("exterior_capture",false):
+		node.msaa_3d = Viewport.MSAA_DISABLED; node.positional_shadow_atlas_size = 0
+		return
 	node.msaa_3d = int(settings.anti_aliasing)
 	node.positional_shadow_atlas_size = [0,1024,2048,4096][int(settings.shadows)]
 

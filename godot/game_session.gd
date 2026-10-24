@@ -25,6 +25,7 @@ func _begin_new_game() -> void:
 	game.scenery_seed = preload("res://scenery_scatter.gd").new_seed(game.scenery_seed)
 	if not game._can_reuse_world():
 		await game._start_game(game.game_folder)
+	else: await _refresh_scenery()
 	if not game.pilot_mode: return
 	game._reset_loaded_world()
 	game.object_population.populate_startup()
@@ -46,10 +47,35 @@ func _begin_new_game() -> void:
 func _world_asset_key() -> String:
 	var scenery := []
 	for pack in Mods.scenery_packs(): scenery.append([pack.id, pack.scenery])
-	return JSON.stringify([game.game_folder,Mods.layers,Mods.movement,scenery,game.scenery_seed if not scenery.is_empty() else 0])
+	return JSON.stringify([game.game_folder,Mods.layers,Mods.movement,scenery])
 
 func _can_reuse_world() -> bool:
 	return game.pilot_mode and is_instance_valid(game.world_root) and game.loaded_world_assets == game._world_asset_key()
+
+func _refresh_scenery() -> void:
+	var current: Node3D = game.world_root.get_node_or_null("ModScenery")
+	if current == null or int(current.get_meta("scenery_seed",0)) == game.scenery_seed: return
+	var old_plants := 0
+	for node in current.find_children("*","MultiMeshInstance3D",true,false):
+		if node.get_meta("marine_plant",false): old_plants += node.multimesh.instance_count
+	game.world_loading = true
+	var paused: bool = game.get_tree().paused; game.get_tree().paused = true
+	game.front_end.show_loading()
+	# Let the existing loading artwork reach the screen before generation starts.
+	await game.get_tree().process_frame
+	await game.get_tree().process_frame
+	var scenery: Node3D = await preload("res://scenery_scatter.gd").reroll(game.world_root,game.get_tree(),game.scenery_seed,func(fraction: float) -> void: game.front_end.progress_bar.value = fraction * 95.0)
+	if scenery != null:
+		# Existing meshes and material caches are shared across layouts. Only
+		# new batches need binding; terrain, actors and the light atlas stay loaded.
+		game.plant_current.plant_count -= old_plants
+		game.plant_current._collect(scenery)
+		game.water_visuals.attach(scenery); game.natural_light.attach(scenery)
+		game.water_visuals.sync_plants(game.plant_current)
+		scenery.show()
+	game.front_end.progress_bar.value = 100.0
+	game.loading_canvas.hide()
+	game.world_loading = false; game.get_tree().paused = paused
 
 func _reset_loaded_world() -> void:
 	if game.menu_backdrop != null: game.menu_backdrop.close()
@@ -160,6 +186,7 @@ func _load_saved_game(slot: int) -> bool:
 	game._set_camera_mode(false)
 	game.scenery_seed = int(data.get("scenery_seed", 0))
 	if not game._can_reuse_world(): await game._start_game(game.game_folder)
+	else: await _refresh_scenery()
 	if not game.pilot_mode: game.loading_save = false; return false
 	game._reset_loaded_world()
 	var port: Dictionary = {}

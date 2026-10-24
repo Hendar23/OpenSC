@@ -26,9 +26,17 @@ func _run() -> void:
 	var graphics: Node = front.player_graphics
 	check(menu.visible and menu.controls.display_mode.has_focus(),"Graphics opens with controller focus")
 	check(not front.buttons.graphics.visible and front.menu_layer.visible,"Graphics replaces the options while retaining the live backdrop")
-	check(menu.order.size() == 9 and not menu.controls.has("hud_scale"),"Eight settings and Back are navigable; HUD scaling is automatic")
+	check(menu.order.size() == 10 and not menu.controls.has("hud_scale"),"Nine settings and Back are navigable; HUD scaling is automatic")
 	check(menu.order.filter(func(control: Control) -> bool: return control is Button).all(func(control: Control) -> bool: return control.get_theme_font_size("font_size") == 14) and menu.labels.values().all(func(label: Label) -> bool: return label.get_theme_font_size("font_size") == 14),"Graphics uses the main menu font size")
 	check(menu.get_child(0).color.a == 0.0,"Graphics retains the live sea")
+	check(graphics.settings.reflective_canopies and menu.controls.reflective_canopies.text.contains("On"),"Reflective canopies default on")
+	var capture := preload("res://exterior_reflections.gd").new(); game.add_child(capture); capture.setup(root.world_3d)
+	menu._cycle("reflective_canopies",1)
+	check(not graphics.settings.reflective_canopies and not capture.enabled and not capture.is_processing() and menu.controls.reflective_canopies.text.contains("Off"),"Toggle disables reflections and capture work immediately while paused")
+	menu._cycle("reflective_canopies",1)
+	check(graphics.settings.reflective_canopies and capture.enabled and capture.is_processing(),"Toggle restores captures immediately")
+	var capture_view := SubViewport.new(); capture_view.set_meta("exterior_capture",true); game.add_child(capture_view)
+
 	check(front.menu_theme.default_font is FontFile and front.menu_theme.default_font.multichannel_signed_distance_field and menu.layout.theme == front.menu_theme,"Scaled menu text uses a shared sharp distance-field font")
 	paused = true
 	press(menu,"menu_up"); check(menu.back.has_focus(),"Up wraps to Back")
@@ -66,9 +74,17 @@ func _run() -> void:
 	graphics.settings_path = path; graphics.remember_preferences = true
 	check(graphics.set_value("brightness",125.0) == OK,"Graphics saves automatically")
 	config.load(path); check(config.get_value("audio","effects_volume") == 175,"Saving graphics preserves audio preferences")
+	graphics.set_value("reflective_canopies",false)
+	check(capture_view.positional_shadow_atlas_size == 0 and capture_view.msaa_3d == Viewport.MSAA_DISABLED,"Graphics changes keep reflection capture lightweight")
+
 	# Avoid display mode changes in this unit test; full display checks run in the native game test.
 	var restored := Graphics.new(); restored.settings_path = path; restored.remember_preferences = false; front.add_child(restored)
 	restored.load_preferences()
+	check(not restored.settings.reflective_canopies,"Disabled canopy preference persists across reload")
+	config.load(path); config.erase_section_key("graphics","reflective_canopies"); config.save(path)
+	restored.settings.reflective_canopies = true; restored.load_preferences()
+	check(restored.settings.reflective_canopies,"Older preferences without canopy setting default on")
+
 	check(restored.settings.brightness == 125.0 and restored.settings.shadows == 3 and restored.settings.anti_aliasing == 2,"All graphics settings persist")
 	var simulated := SimulatedGraphics.new(); simulated.remember_preferences = false; front.add_child(simulated)
 	for monitor in [Vector2i(1920,1080),Vector2i(2560,1440),Vector2i(2560,1600),Vector2i(3440,1440),Vector2i(3840,2160),Vector2i(5120,1440),Vector2i(5120,2160),Vector2i(5120,2880),Vector2i(7680,2160),Vector2i(7680,4320),Vector2i(3000,2000)]:

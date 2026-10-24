@@ -430,6 +430,9 @@ func _start_game(folder: String) -> void:
 		for template in wildlife.templates.values(): water_visuals.attach(template)
 	water_visuals.sync_plants(plant_current)
 	natural_light.materials.clear(); natural_light.attach(world_root)
+	var canopy_reflections := preload("res://exterior_reflections.gd").new()
+	canopy_reflections.name = "ExteriorCanopyReflections"; world_root.add_child(canopy_reflections)
+	canopy_reflections.setup(world_root.get_world_3d(),front_end.player_graphics.settings.reflective_canopies)
 	if wildlife != null:
 		for template in wildlife.templates.values(): natural_light.attach(template)
 	if pilot == null:

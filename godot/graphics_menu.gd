@@ -2,6 +2,7 @@ extends CanvasLayer
 
 const Bindings = preload("res://input_bindings.gd")
 signal closed
+const ROW_START := 144
 var graphics: Node
 var layout: Control
 var controls := {}
@@ -20,11 +21,11 @@ func _ready() -> void:
 	normal = StyleBoxFlat.new(); normal.bg_color = Color(0.01,0.05,0.07,0.82)
 	normal.border_color = Color(0.24,0.55,0.6,0.7); normal.set_border_width_all(1); normal.set_corner_radius_all(5)
 	hover = normal.duplicate(); hover.bg_color = Color(0.04,0.23,0.28,0.95)
-	for entry in [["display_mode","Display mode"],["resolution","Resolution"],["limit_resolutions","Limit to display"],["vsync","VSync"],["frame_limit","Frame-rate limit"],["anti_aliasing","Anti-aliasing"],["shadows","Shadow quality"],["brightness","Brightness"]]:
+	for entry in [["display_mode","Display mode"],["resolution","Resolution"],["limit_resolutions","Limit to display"],["vsync","VSync"],["frame_limit","Frame-rate limit"],["anti_aliasing","Anti-aliasing"],["shadows","Shadow quality"],["reflective_canopies","Reflective canopies"],["brightness","Brightness"]]:
 		_add_row(entry[0],entry[1])
 	status = Label.new(); status.position = Vector2(120,454); status.size = Vector2(400,23)
 	status.add_theme_font_size_override("font_size",12); layout.add_child(status)
-	back = _button("Back"); back.position = Vector2(216,174+controls.size()*30+5); back.size = Vector2(208,28)
+	back = _button("Back"); back.position = Vector2(216,ROW_START+controls.size()*30+5); back.size = Vector2(208,28)
 	layout.add_child(back); back.pressed.connect(close_menu); order.append(back)
 	get_viewport().size_changed.connect(_layout); _layout(); hide()
 
@@ -35,7 +36,7 @@ func _button(text: String) -> Button:
 	return button
 
 func _add_row(key: String,title: String) -> void:
-	var y := 174 + controls.size() * 30
+	var y := ROW_START + controls.size() * 30
 	var panel := Panel.new(); panel.position = Vector2(120,y); panel.size = Vector2(400,28)
 	panel.add_theme_stylebox_override("panel",normal); panel.mouse_filter = Control.MOUSE_FILTER_IGNORE; layout.add_child(panel)
 	var label := Label.new(); label.position = Vector2(130,y); label.size = Vector2(178,28)
@@ -56,7 +57,7 @@ func _choices(key: String) -> Array:
 	match key:
 		"display_mode": return [0,1,2]
 		"resolution": return graphics.resolutions()
-		"vsync","limit_resolutions": return [true,false]
+		"vsync","limit_resolutions","reflective_canopies": return [true,false]
 		"frame_limit": return graphics.FRAME_LIMITS
 		"anti_aliasing", "shadows": return [0,1,2,3]
 	return []
@@ -81,7 +82,7 @@ func _refresh() -> void:
 			match key:
 				"display_mode": text = ["Fullscreen","Borderless","Windowed"][int(value)]
 				"resolution": text = "%d × %d" % [value.x,value.y]
-				"vsync","limit_resolutions": text = "On" if value else "Off"
+				"vsync","limit_resolutions","reflective_canopies": text = "On" if value else "Off"
 				"frame_limit": text = "Unlimited" if int(value) == 0 else "%d FPS" % value
 				"anti_aliasing": text = ["Off","MSAA 2×","MSAA 4×","MSAA 8×"][int(value)]
 				"shadows": text = ["Off","Low","Medium","High"][int(value)]

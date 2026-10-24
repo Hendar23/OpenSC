@@ -173,6 +173,7 @@ static func _read_scenery(value: Variant, folder: String) -> Dictionary:
 	for model in models:
 		if not model is Dictionary or not model.get("node") is String or str(model.node).is_empty() or names.has(model.node): return {}
 		if model.has("sway") and not model.sway is bool: return {}
+		if model.has("upright") and not model.upright is bool: return {}
 		var clearance: Variant = model.get("ground_clearance", 0.0)
 		if not (clearance is int or clearance is float) or not is_finite(float(clearance)) or float(clearance) < 0.0 or float(clearance) > 1.0: return {}
 		names[model.node] = true

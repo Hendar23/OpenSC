@@ -14,6 +14,7 @@ func _init() -> void:
 static func ensure_globals() -> void:
 	if registered: return
 	registered = true
+	preload("res://exterior_reflections.gd").ensure_globals()
 	RenderingServer.global_shader_parameter_add("osc_replay_active",RenderingServer.GLOBAL_VAR_TYPE_BOOL,false)
 	RenderingServer.global_shader_parameter_add("osc_replay_time",RenderingServer.GLOBAL_VAR_TYPE_FLOAT,0.0)
 	RenderingServer.global_shader_parameter_add("osc_cave_ambient",RenderingServer.GLOBAL_VAR_TYPE_FLOAT,0.03)
@@ -28,7 +29,7 @@ static func background_colour(colour: Color) -> Color:
 	return colour if RenderingServer.get_current_rendering_method() == "gl_compatibility" else colour.linear_to_srgb()
 static func alpha_shader() -> Shader:
 	if transparent_shader == null:
-		transparent_shader = Shader.new(); transparent_shader.code = preload("res://natural_surface.gdshader").code.replace("// ALPHA_OUTPUT","ALPHA = color.a * opacity;")
+		transparent_shader = Shader.new(); transparent_shader.code = preload("res://natural_surface.gdshader").code.replace("#include ","#define NATURAL_ALPHA\n#include ")
 	return transparent_shader
 static func billboard_material(texture: Texture2D) -> ShaderMaterial:
 	ensure_globals()
@@ -137,7 +138,8 @@ func attach(node: Node) -> void:
 			if original == null or original.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED: continue
 			var material: ShaderMaterial = materials.get(original.get_instance_id())
 			if material == null:
-				material = ShaderMaterial.new(); material.shader = preload("res://natural_surface.gdshader")
+				material = ShaderMaterial.new(); material.shader = preload("res://exterior_canopy.gdshader") if original.get_meta("exterior_canopy",false) else preload("res://natural_surface.gdshader")
+				if original.get_meta("exterior_canopy",false): material.set_shader_parameter("canopy_original_color",original.get_meta("canopy_original_color",Color(0.28,0.34,0.40)))
 				if original.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA:
 					material.shader = alpha_shader()
 				for entry in [["albedo_color",original.albedo_color],["has_texture",original.albedo_texture != null],["albedo_texture",original.albedo_texture],["use_vertex_color",original.vertex_color_use_as_albedo],["roughness_value",original.roughness],["metallic_value",original.metallic],["specular_value",original.metallic_specular],["uv_scale",original.uv1_scale],["uv_offset",original.uv1_offset]]: material.set_shader_parameter(entry[0],entry[1])
