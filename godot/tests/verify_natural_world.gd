@@ -1,9 +1,15 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Game = preload("res://game.gd")
 var failures := 0
 func check(ok: bool,message: String) -> void:
 	if not ok: failures += 1; push_error(message)
-func _initialize() -> void: call_deferred("_run")
+func _initialize() -> void:
+	var storage = preload("res://player_storage.gd")
+	storage.root_override = "res://tests/cache-natural-world-fixtures"; storage.ensure_parent(storage.preferences_path())
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
+	var config := ConfigFile.new(); config.set_value("game","folder",folder); config.save(storage.preferences_path())
+	call_deferred("_run")
 func capture(name: String) -> void:
 	for frame in range(5): await process_frame
 	await RenderingServer.frame_post_draw

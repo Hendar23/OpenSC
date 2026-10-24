@@ -3,6 +3,8 @@ extends "res://pirate_submarine.gd"
 const PATROL_MODELS := ["TRADSHUT","PRISON","TRAD2","TECH2SUB"]
 const PATROL_DEFAULTS := {"npc_speed":2.0,"npc_health":10.0,"npc_sustain":0.3,"npc_respawn":true,"npc_respawn_delay":120.0,"npc_detection":25.0,"npc_attack_range":15.0,"npc_fire_interval":1.5,"npc_armed":false}
 const PATROL_LIMITS := {"npc_speed":[0.1,8.0],"npc_health":[0.1,10000.0],"npc_sustain":[0,100],"npc_respawn_delay":[1,3600],"npc_detection":[1,200],"npc_attack_range":[1,100],"npc_fire_interval":[0.1,60]}
+func health_multiplier() -> float:
+	return model_health_multiplier(get_parent())
 static func install_patrol(model: Node3D, values: Dictionary) -> Node3D:
 	var agent = preload("res://trader_submarine.gd").install(model,values,load("res://patrol_submarine.gd"))
 	agent.tuning = PATROL_DEFAULTS.merged({"npc_faction":int(values.get("npc_faction",1))})

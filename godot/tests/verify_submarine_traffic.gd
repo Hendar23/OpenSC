@@ -11,7 +11,9 @@ func _initialize() -> void:
 	var storage = preload("res://player_storage.gd")
 	storage.root_override = "res://tests/cache-traffic-fixtures"; storage.ensure_parent(storage.preferences_path())
 	var ignore := FileAccess.open(storage.root_override.path_join(".gdignore"),FileAccess.WRITE); ignore.store_string("")
-	var config := ConfigFile.new(); config.set_value("game","folder",ProjectSettings.globalize_path("res://../Original Sub Culture")); config.save(storage.preferences_path())
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
+	var config := ConfigFile.new(); config.set_value("game","folder",folder); config.save(storage.preferences_path())
 	call_deferred("run")
 func run() -> void:
 	var game = preload("res://game.gd").new(); game.remember_preferences = false; game.show_start_menu = true; root.add_child(game)
@@ -85,7 +87,11 @@ func run() -> void:
 	agent.wait = 0; agent.advance(0.1)
 	check(agent.stage == "berth","Departing trader waits for player transit")
 	game.docking.cancel(); check(Access.owner(port) == null,"Cancelled player docking releases the entrance")
-	agent.advance(0.1); check(agent.stage == "exit_open","Parked trader reserves the entrance again to leave")
+	agent.advance(0.1)
+	check(agent.stage == "berth" and Access.owner(port) == null,"NPC still waits when the player is above the hatch without reserving it")
+	game.pilot.global_position = port.entry+Vector3.RIGHT*5
+	await physics_frame; await physics_frame
+	agent.advance(0.3); check(agent.stage == "exit_open","Parked trader reserves the entrance to leave once the player hull is clear")
 	saved = traffic.snapshot(); traffic.reset(); traffic.restore(saved)
 	check(agent.stage == "exit_open" and Access.owner(port) == agent,"Exit transit restores its reservation")
 	for tick in range(120): agent.advance(0.1)
@@ -136,9 +142,10 @@ func run() -> void:
 	traffic.set_simulating(false); var pose: Transform3D = agent.get_parent().global_transform; agent._physics_process(1)
 	check(agent.get_parent().global_transform == pose,"Editor simulation toggle stops traders")
 	check(Document.valid(Document.load_active(false)),"Authored shared NPC templates and instances validate")
+	var asset_folder: String = game.game_folder
 	game.free(); await process_frame
 	var editor := preload("res://map_editor.gd").new(); root.add_child(editor)
-	await editor.open(ProjectSettings.globalize_path("res://../Original Sub Culture"))
+	await editor.open(asset_folder)
 	check(editor.loaded and editor.submarine_traffic == null,"Editor loads traders without building unused simulation routes")
 	editor.category.select(7); editor._refresh_list()
 	check(editor.list_keys.has("npc_type:bohine_trader") and editor.list_keys.has("npc_type:procha_trader"),"Trader templates appear under NPC types")

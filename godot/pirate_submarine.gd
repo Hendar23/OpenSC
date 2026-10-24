@@ -1,4 +1,5 @@
 extends "res://trader_submarine.gd"
+signal player_attack_started
 ## Authored enemies share vessel movement, damage, wakes and wreck effects.
 ## Mission activation and mission radio dialogue belong to the mission system.
 const PIRATE_MODELS := ["PIRATE","PIRATE2","PIRATE3"]
@@ -15,6 +16,7 @@ var attack_run = preload("res://npc_attack_run.gd").new()
 var shot_retry := 0.0
 var acquire_clock := 0.0
 var fallback_probe := 0
+var player_attack_announced := false
 
 static func install_pirate(model: Node3D, values: Dictionary) -> Node3D:
 	var agent = preload("res://trader_submarine.gd").install(model,values,load("res://pirate_submarine.gd"))
@@ -24,9 +26,14 @@ static func install_pirate(model: Node3D, values: Dictionary) -> Node3D:
 	agent.hitbox = agent.body
 	return agent
 
+func health_multiplier() -> float:
+	# Includes custom/mod pirate hulls, authored pirates and the opening mission.
+	return 2.0
+
 func reset() -> void:
 	super.reset()
 	victim = null; cooldown = 0; replan = 0; wait = 0; shot_retry = 0; acquire_clock = 0; fallback_probe = 0; attack_run.reset()
+	player_attack_announced = false
 
 func set_local_simulation(on: bool) -> void:
 	if on != local_simulation:
@@ -43,6 +50,10 @@ func configure_resources(folder: String) -> void:
 func _advance_motion(delta: float) -> void:
 	if dead:
 		super._advance_motion(delta); return
+	if _ambient_attacks_suppressed():
+		if is_instance_valid(victim):
+			victim = null; path.clear(); attack_run.reset()
+		_roam(delta); return
 	cooldown = maxf(0,cooldown - delta); replan -= delta; shot_retry = maxf(0,shot_retry-delta); acquire_clock -= delta
 	if not _valid_target(victim):
 		victim = null
@@ -68,6 +79,8 @@ func _advance_motion(delta: float) -> void:
 	var query := PhysicsRayQueryParameters3D.create(muzzle,victim.global_position,15,[body.get_rid()])
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if not hit.is_empty() and hit.collider != victim: return
+	if victim == system.player and not player_attack_announced:
+		player_attack_announced = true; player_attack_started.emit()
 	var missile := preload("res://turret_missile.gd").new()
 	system.get_parent().add_child(missile)
 	missile.inflict = 8.0
@@ -78,12 +91,28 @@ func _advance_motion(delta: float) -> void:
 func _continuous_route() -> bool:
 	return roaming or is_instance_valid(victim) or super._continuous_route()
 
+func _constrain_motion(delta: float, direction: Vector3) -> void:
+	# Turning inertia must not carry a combat hull outside navigable water.
+	# Once there, every route request rejects its own starting point.
+	if not is_instance_valid(victim) or motion.velocity.is_zero_approx(): return
+	if system.water_clear(global_position+motion.velocity*delta): return
+	var correction := direction.normalized()*minf(motion.velocity.length(),float(tuning.npc_speed)*0.65)
+	if not direction.is_zero_approx() and system.segment_clear(global_position,global_position+correction*delta):
+		motion.velocity = correction
+	else: motion.velocity = Vector3.ZERO
+
 func _valid_target(target: Node3D) -> bool:
+	if _ambient_attacks_suppressed(): return false
 	if not is_instance_valid(target) or not target.is_visible_in_tree(): return false
 	if target.get("dead") == true: return false
 	if target.get("active") == false: return false
 	if target.get_meta("bubble_screened",false): return false
 	return true
+
+func _ambient_attacks_suppressed() -> bool:
+	if not roaming or system == null: return false
+	var population: Node = system.get("roaming_population")
+	return is_instance_valid(population) and self in population.ships and population.attacks_suppressed()
 
 func prepare_abstract_route() -> bool:
 	# Ambient pirates/patrols roam without acquiring victims or firing unseen.

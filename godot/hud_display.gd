@@ -24,6 +24,8 @@ var city_markers: Control
 var casing_light := Color.WHITE
 var casing_panel: TextureRect
 var camera_feed: Texture2D
+var recording_icon: Texture2D
+var rov_recording := false
 func set_camera_feed(texture: Texture2D) -> void:
 	camera_feed = texture
 	material = null if texture != null else fog_material
@@ -103,7 +105,10 @@ func _draw() -> void:
 	if frame != null and not screen_only and kind != "map": draw_texture_rect(frame, Rect2(Vector2.ZERO,size), false,casing_light)
 	var rect := Rect2(Vector2.ZERO, size) if screen_only else screen
 	if kind == "map":
-		if camera_feed != null: draw_texture_rect(camera_feed,rect,false)
+		if camera_feed != null:
+			draw_texture_rect(camera_feed,rect,false)
+			if rov_recording and recording_icon != null:
+				draw_texture_rect(recording_icon,recording_rect(rect),false)
 		else: _draw_map(rect)
 	elif kind == "equipment":
 		var item: Dictionary = equipment.current()
@@ -142,6 +147,11 @@ func _draw() -> void:
 		if radiation_symbol_visible() and radiation_icon != null:
 			var icon_size := radiation_icon.get_size() * gauge_scale
 			draw_texture_rect(radiation_icon,Rect2(centre - icon_size * 0.5,icon_size),false)
+
+func recording_rect(rect: Rect2) -> Rect2:
+	# Retail 00422b40 scales REC's (30,30,75,23) rectangle by feed width/320.
+	var factor := rect.size.x/320.0
+	return Rect2(rect.position+(Vector2(30,30)*factor).floor(),(Vector2(75,23)*factor).floor())
 
 func counter_rect() -> Rect2:
 	return Rect2(Vector2(4,size.y - 14) if screen_only else Vector2(9.5,23.5),Vector2(17,10))
@@ -225,6 +235,24 @@ func _draw_city_markers() -> void:
 			var text_width := rect.end.x - text_position.x - 2.0
 			if text_width > 12.0 and map_data.city_known(marker):
 				city_markers.draw_string(ThemeDB.fallback_font, text_position, str(marker.name).to_upper().left(18), HORIZONTAL_ALIGNMENT_LEFT, text_width, maxi(6, int(6 * marker_scale)), Color(0.15,0.85,0.2))
+
+	# Retail landmarks are centred, multiline names rather than city dots.
+	var font := ThemeDB.fallback_font
+	var font_size := maxi(6,int(6*marker_scale))
+	for marker in map_data.landmarks.markers:
+		if not map_data.landmarks.known(marker): continue
+		var offset := Vector2(marker.position.x-point.x,marker.position.z-point.z)/span*rect.size
+		var position := rect.get_center()+offset
+		if not rect.has_point(position): continue
+		var lines: PackedStringArray = str(marker.name).split("\n")
+		var height := font.get_height(font_size)
+		var y := position.y-height*lines.size()*0.5+font.get_ascent(font_size)
+		for line in lines:
+			var width := font.get_string_size(line,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
+			var x := maxf(rect.position.x+2,position.x-width*0.5)
+			if y-font.get_ascent(font_size) >= rect.position.y and y+font.get_descent(font_size) <= rect.end.y:
+				city_markers.draw_string(font,Vector2(x,y),line,HORIZONTAL_ALIGNMENT_LEFT,rect.end.x-x-2,font_size,Color(0.15,0.85,0.2))
+			y += height
 
 	for actor in map_data.actor_markers:
 		if not is_instance_valid(actor) or actor.get("dead") == true or not (actor.get("active") == true or actor.get_meta("mission_marker",false)) or not map_data.is_explored(actor.global_position): continue

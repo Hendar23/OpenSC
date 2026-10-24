@@ -1,9 +1,17 @@
 extends SceneTree
 const Front = preload("res://front_end.gd")
 const Graphics = preload("res://player_graphics.gd")
+class SimulatedGraphics extends "res://player_graphics.gd":
+	var monitor := Vector2i(1920,1080)
+	func desktop_size() -> Vector2i: return monitor
+	func apply_display() -> void: pass # Exercise selection without changing a real window.
 var checks := 0
 var failures := 0
-func _initialize() -> void: call_deferred("_run")
+func _initialize() -> void:
+	var storage = preload("res://player_storage.gd")
+	storage.root_override = "res://tests/cache-graphics-menu-fixtures"; storage.ensure_parent(storage.preferences_path())
+	var ignore := FileAccess.open(storage.root_path().path_join(".gdignore"),FileAccess.WRITE); ignore.store_string(""); ignore.close()
+	call_deferred("_run")
 func check(condition: bool,message: String) -> void:
 	checks += 1
 	if not condition: failures += 1; push_error(message)
@@ -18,7 +26,7 @@ func _run() -> void:
 	var graphics: Node = front.player_graphics
 	check(menu.visible and menu.controls.display_mode.has_focus(),"Graphics opens with controller focus")
 	check(not front.buttons.graphics.visible and front.menu_layer.visible,"Graphics replaces the options while retaining the live backdrop")
-	check(menu.order.size() == 8 and not menu.controls.has("hud_scale"),"Seven settings and Back are navigable; HUD scaling is automatic")
+	check(menu.order.size() == 9 and not menu.controls.has("hud_scale"),"Eight settings and Back are navigable; HUD scaling is automatic")
 	check(menu.order.filter(func(control: Control) -> bool: return control is Button).all(func(control: Control) -> bool: return control.get_theme_font_size("font_size") == 14) and menu.labels.values().all(func(label: Label) -> bool: return label.get_theme_font_size("font_size") == 14),"Graphics uses the main menu font size")
 	check(menu.get_child(0).color.a == 0.0,"Graphics retains the live sea")
 	check(front.menu_theme.default_font is FontFile and front.menu_theme.default_font.multichannel_signed_distance_field and menu.layout.theme == front.menu_theme,"Scaled menu text uses a shared sharp distance-field font")
@@ -62,6 +70,39 @@ func _run() -> void:
 	var restored := Graphics.new(); restored.settings_path = path; restored.remember_preferences = false; front.add_child(restored)
 	restored.load_preferences()
 	check(restored.settings.brightness == 125.0 and restored.settings.shadows == 3 and restored.settings.anti_aliasing == 2,"All graphics settings persist")
+	var simulated := SimulatedGraphics.new(); simulated.remember_preferences = false; front.add_child(simulated)
+	for monitor in [Vector2i(1920,1080),Vector2i(2560,1440),Vector2i(2560,1600),Vector2i(3440,1440),Vector2i(3840,2160),Vector2i(5120,1440),Vector2i(5120,2160),Vector2i(5120,2880),Vector2i(7680,2160),Vector2i(7680,4320),Vector2i(3000,2000)]:
+		simulated.monitor = monitor; simulated.settings.resolution = monitor; simulated._validate()
+		var choices: Array = simulated.resolutions()
+		check(choices.has(monitor) and simulated.settings.resolution == monitor,"Native resolution remains selectable and valid on simulated %s" % monitor)
+		check(Graphics.RESOLUTIONS.all(func(value: Vector2i) -> bool: return choices.has(value)),"Simulated %s shows every resolution preset regardless of monitor size" % monitor)
+		check(choices.all(func(value: Vector2i) -> bool: return choices.find(value) == choices.rfind(value)),"Simulated %s has no duplicate resolution entries" % monitor)
+	simulated.monitor = Vector2i(7680,4320); simulated.settings.resolution = Vector2i(5120,2880)
+	check(Graphics.RESOLUTIONS.all(func(value: Vector2i) -> bool: return simulated.resolutions().has(value)),"8K display offers every common higher, ultrawide and 16:10 resolution")
+	menu.graphics = simulated; menu._refresh()
+	check(menu.controls.resolution.text.contains("5120 × 2880") and menu._choices("resolution").has(Vector2i(7680,4320)),"Menu displays 5K and offers 8K without changing the real window")
+	simulated.remember_preferences = true; simulated.settings_path = path
+	check(simulated.set_value("brightness",100.0) == OK,"High-resolution preference saves without applying a display change")
+	simulated.settings.resolution = Vector2i(1280,720); simulated.load_preferences()
+	check(simulated.settings.resolution == Vector2i(5120,2880),"High-resolution choice survives preference reload on a capable display")
+	simulated.monitor = Vector2i(1920,1080); simulated.load_preferences()
+	check(simulated.settings.resolution == Vector2i(5120,2880),"1080p monitor preserves the selected high-resolution preference instead of silently replacing it")
+	simulated.remember_preferences = false
+	var visited := {}
+	for step in simulated.resolutions().size():
+		menu._cycle("resolution",1); visited[simulated.settings.resolution] = true
+	check(Graphics.RESOLUTIONS.all(func(value: Vector2i) -> bool: return visited.has(value)),"Resolution control cycles through every preset on a 1080p display without getting stuck")
+	check(not simulated.settings.limit_resolutions,"Resolution restriction defaults off for existing preferences")
+	menu._cycle("limit_resolutions",1)
+	check(simulated.settings.limit_resolutions and menu.controls.limit_resolutions.text.contains("On"),"Resolution restriction toggles on through the normal menu button")
+	check(simulated.resolutions().all(func(value: Vector2i) -> bool: return value.x <= 1920 and value.y <= 1080) and simulated.settings.resolution == Vector2i(1920,1080),"Enabling restriction limits the list and replaces an oversized selection with native resolution")
+	simulated.remember_preferences = true; simulated.set_value("brightness",100.0)
+	simulated.settings.limit_resolutions = false; simulated.load_preferences()
+	check(simulated.settings.limit_resolutions,"Resolution restriction preference persists across reload")
+	menu._cycle("limit_resolutions",1)
+	check(not simulated.settings.limit_resolutions and simulated.resolutions().has(Vector2i(7680,4320)),"Turning restriction off restores all higher presets")
+	check(menu.controls.brightness.position.y+menu.controls.brightness.size.y < menu.back.position.y and menu.back.position.y+menu.back.size.y <= menu.status.position.y and menu.status.position.y+menu.status.size.y <= menu.layout.size.y,"Added toggle leaves Brightness, Back and status rows separate within the menu")
+	menu.graphics = graphics
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	press(menu,"menu_cancel"); check(not menu.visible and front.buttons.graphics.has_focus(),"Back restores Graphics option focus")
 	paused = false; game.free(); Engine.max_fps = 0

@@ -263,6 +263,8 @@ func snapshot() -> Dictionary:
 	for agent in traders:
 		result[Identity.of(agent)] = {"mission_owner":agent.mission_owner,"pose":preload("res://map_document.gd").encode(agent.get_parent().global_transform),"health":agent.health.remaining,"stage":agent.stage,"destination":agent.destination,"last_city":agent.last_city,"elapsed":agent.elapsed,"wait":agent.wait,"flee":agent.flee,"attacker":[agent.attacker.x,agent.attacker.y,agent.attacker.z],"respawn":agent.respawn,"rng":str(agent.random.state),"start":[agent.transit_start.x,agent.transit_start.y,agent.transit_start.z]}
 		result[Identity.of(agent)].route = Array(agent.path).map(func(point: Vector3) -> Array: return [point.x,point.y,point.z])
+		result[Identity.of(agent)].health_capacity = agent.health.capacity
+		if agent.get("player_attack_announced") is bool: result[Identity.of(agent)]["player_attack_announced"] = agent.player_attack_announced
 		if agent.has_meta(Survivors.TAG):
 			result[Identity.of(agent)][Survivors.TAG] = agent.get_meta(Survivors.TAG)
 			result[Identity.of(agent)]["survivor_hostile"] = agent.engage_player
@@ -277,6 +279,10 @@ static func valid_snapshot(value: Variant) -> bool:
 		if not Identity.valid(key) or not value[key] is Dictionary: return false
 		if not value[key].get("mission_owner","") is String or value[key].get("mission_owner","").length() > 256: return false
 		var entry: Dictionary = value[key]
+		if entry.has("health_capacity"):
+			var capacity: Variant = entry.health_capacity
+			if not (capacity is float or capacity is int) or not is_finite(capacity) or capacity <= 0 or capacity > 20000: return false
+		if entry.has("player_attack_announced") and not entry.player_attack_announced is bool: return false
 		if entry.has(Survivors.TAG) and entry[Survivors.TAG] not in Survivors.MODELS: return false
 		if entry.has("survivor_hostile") and not entry.survivor_hostile is bool: return false
 		if entry.has("survivor_retiring") and not entry.survivor_retiring is bool: return false
@@ -289,7 +295,7 @@ static func valid_snapshot(value: Variant) -> bool:
 		if entry.get("stage") not in ["travel","open","descend","close","berth","exit_open","ascend","exit_close"]: return false
 		for field in ["health","elapsed","wait","flee","respawn","destination","last_city"]:
 			var number: Variant = entry.get(field)
-			if not (number is float or number is int) or not is_finite(number) or number < 0 or number > 10000: return false
+			if not (number is float or number is int) or not is_finite(number) or number < 0 or number > (20000 if field == "health" else 10000): return false
 		for field in ["destination","last_city"]:
 			if entry[field] != floorf(entry[field]) or int(entry[field]) not in [0,1,2,3,4,6]: return false
 		if entry.stage != "travel" and int(entry.destination) == 0: return false
@@ -310,11 +316,16 @@ func restore(value: Dictionary) -> void:
 		if entry.is_empty(): continue
 		agent.set_local_simulation(true)
 		agent.mission_owner = entry.get("mission_owner","")
+		if agent.get("player_attack_announced") is bool: agent.player_attack_announced = entry.get("player_attack_announced",false)
 		agent.get_parent().global_transform = preload("res://map_document.gd").decode(entry.pose)
 		agent.get_parent().reset_physics_interpolation()
 		agent.motion.velocity = Vector3.ZERO; agent.motion.bank = 0.0; agent.speed = 0.0; agent.body.velocity = Vector3.ZERO
 		agent.progress_goal = Vector3.INF; agent.progress_best = INF; agent.progress_stalled = 0.0
-		agent.health.remaining = minf(entry.health,float(agent.tuning.npc_health)); agent.dead = agent.health.remaining <= 0
+		# Published betas stored health without a capacity. Preserve the damage
+		# fraction when applying the balance change, and avoid doubling on reload.
+		var old_capacity: float = entry.get("health_capacity",float(agent.tuning.npc_health))
+		agent.health.remaining = clampf(float(entry.health)/maxf(0.001,old_capacity),0,1)*agent.health.capacity
+		agent.dead = agent.health.remaining <= 0
 		agent.stage = entry.stage; agent.destination = int(entry.destination); agent.last_city = int(entry.last_city)
 		for field in ["elapsed","wait","flee","respawn"]: agent.set(field,float(entry[field]))
 		agent.transit_start = Vector3(entry.start[0],entry.start[1],entry.start[2]); agent.attacker = Vector3(entry.attacker[0],entry.attacker[1],entry.attacker[2])

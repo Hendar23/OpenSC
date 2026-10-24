@@ -68,8 +68,7 @@ func _handle_capture_input(event: InputEvent, viewport: Viewport) -> void:
 		viewport.set_input_as_handled()
 
 func screenshot_folder() -> String:
-	var folder := ProjectSettings.globalize_path("res://..").simplify_path() if OS.has_feature("editor") else OS.get_executable_path().get_base_dir()
-	return folder.path_join("Screenshots")
+	return ProjectSettings.globalize_path(preload("res://player_storage.gd").screenshots_path()).simplify_path()
 
 func save_screenshot(notify: bool = true) -> void:
 	screenshot_label.hide()

@@ -1,6 +1,9 @@
 extends CharacterBody3D
 ## ROVER 004209d0: remotely driven camera, four-second exposure, return/recovery.
 const RENDER_LAYER := 1 << 18
+const SIGNAL_FADE_DISTANCE := 25.0
+const SIGNAL_LOSS_DISTANCE := 30.0
+const ORIGINAL_TICKS_PER_SECOND := 25.0
 const Radio = preload("res://docking_radio.gd")
 var tools: Node3D
 var deployed := false
@@ -64,17 +67,17 @@ func transmission(code: String) -> Dictionary:
 	var runtime: Node = tools.runtime()
 	if runtime == null: return {}
 	var row: Dictionary = runtime.game.gameplay_catalogue.tables.get("radio_messages",{}).get("records",{}).get(code,{})
-	radio_lines[code] = {"speaker":"ship","key":"equipment/"+code,"text":str(row.get("text","")),"portrait":Radio.speaker_portrait(tools.folder,"ship"),"distorted_portrait":Radio.speaker_portrait(tools.folder,"ship",true)}
+	var voice: AudioStream = preload("res://legacy_audio.gd").load_file(tools.folder.path_join("WAVES/ENGLISH/"+code.to_upper()+".RAW"))
+	radio_lines[code] = {"speaker":"ship","key":"equipment/"+code,"text":str(row.get("text","")),"portrait":Radio.speaker_portrait(tools.folder,"ship"),"distorted_portrait":Radio.speaker_portrait(tools.folder,"ship",true),"voice":voice}
 	return radio_lines[code]
 
 func _radio(code: String, prompt: bool = false) -> void:
 	var message := transmission(code)
 	if message.is_empty(): return
-	var path: String = tools.folder.path_join("WAVES/ENGLISH/"+code.to_upper()+".RAW")
 	speech.stop()
 	# Several retail ship-computer lines have text but no corresponding sample.
-	# Display the original line without inventing speech or a replacement clip.
-	speech.stream = preload("res://legacy_audio.gd").load_file(path)
+	# Missing samples use the shared short radio burst when the card appears.
+	speech.stream = message.get("voice")
 	if speech.stream != null: speech.play()
 	if not prompt:
 		var runtime: Node = tools.runtime()
@@ -118,6 +121,11 @@ func socket() -> Node3D:
 
 func _physics_process(delta: float) -> void:
 	if tools.equipment.pilot.dead: reset(); return
+	var distance := global_position.distance_to(tools.equipment.pilot.global_position)
+	# ROVER 004209d0 removes the inventory item when distance - 25 > 5.
+	# This applies to a launched vehicle even while control is with the sub.
+	if launched and distance > SIGNAL_LOSS_DISTANCE:
+		_lose(); return
 	var mission: Node = tools.runtime()
 	if deployed and mission != null and mission.game.docking.stage != mission.game.Docking.Stage.IDLE:
 		for item in tools.equipment.available:
@@ -127,23 +135,48 @@ func _physics_process(delta: float) -> void:
 	if returning:
 		var mount := socket()
 		var offset: Vector3 = (mount.global_position if mount != null else tools.equipment.pilot.global_position)-global_position
-		velocity = offset.normalized()*3.0; move_and_slide()
+		velocity = offset.normalized()*3.0; _move_remote()
 		if offset.length() < 0.08: reset(false)
 		return
 	if not can_control():
 		if not deployed and launched:
-			velocity = velocity.move_toward(Vector3.ZERO,delta*4); move_and_slide()
+			advance_controls(Vector4.ZERO,delta,signal_response(distance)); _move_remote()
 		return
 	var controls := preload("res://pilot_input.gd").read()
-	yaw += controls.z*delta*1.5; pitch = clampf(pitch+controls.w*delta,-1.2,1.2)
-	global_basis = Basis.from_euler(Vector3(pitch,yaw,0))
-	var desired := -global_basis.z*controls.x*2.0+Vector3.UP*controls.y*1.5
-	velocity = velocity.lerp(desired,1-exp(-3.0*delta)); move_and_slide()
+	advance_controls(controls,delta,signal_response(distance)); _move_remote()
 	global_position.y = minf(global_position.y,tools.equipment.pilot.surface_height-0.2)
 	var pressed := preload("res://input_bindings.gd").strength("weapon_fire") > 0.5
 	if pressed and not fire_latched and recording <= 0: recording = 4.0; exposure = 0
 	fire_latched = pressed
 	if recording > 0: advance_recording(delta)
+
+func _move_remote() -> void:
+	var motion := velocity
+	move_and_slide()
+	for index in get_slide_collision_count():
+		var contact := get_slide_collision(index)
+		var body := contact.get_collider()
+		if body != null and body.has_method("receive_rov_push"):
+			body.receive_rov_push(-contact.get_normal()*maxf(0,-motion.dot(contact.get_normal())))
+
+static func signal_response(distance: float) -> float:
+	# Original control multiplier falls from 1 to .2 over the final five units.
+	return maxf(0.2,1.0-maxf(0.0,distance-SIGNAL_FADE_DISTANCE)*0.2)
+
+func advance_controls(controls: Vector4, delta: float, response: float = 1.0) -> void:
+	yaw += controls.z*delta*1.5*response
+	if is_zero_approx(controls.w):
+		# Retail buoyancy acts .01 above the centre of mass, righting pitch.
+		# Match its neutral response with the original .9 input decay at 25 Hz;
+		# keep yaw so releasing the stick does not turn back to an old heading.
+		pitch *= pow(0.9,delta*ORIGINAL_TICKS_PER_SECOND)
+	else: pitch = clampf(pitch+controls.w*delta*response,-1.2,1.2)
+	global_basis = Basis.from_euler(Vector3(pitch,yaw,0))
+	var desired := -global_basis.z*controls.x*2.0*response+Vector3.UP*controls.y*1.5*response
+	if is_zero_approx(controls.x) and is_zero_approx(controls.y):
+		# Original input decay (.9) plus the ROV's linear drag index 10 (.97).
+		velocity *= pow(0.9*0.97,delta*ORIGINAL_TICKS_PER_SECOND)
+	else: velocity = velocity.lerp(desired,1-exp(-3.0*delta))
 
 func advance_recording(delta: float) -> void:
 	var runtime: Node = tools.runtime()
@@ -169,13 +202,16 @@ func take_weapon_damage(strength: float, _point: Vector3 = Vector3.ZERO) -> void
 	if not launched or dead: return
 	health -= maxf(0,strength)*0.75
 	if health <= 0:
-		# 004209d0 message 3 removes retail inventory item 0x15. A destroyed
-		# ROV cannot be recovered by toggling it off and on for a free replacement.
-		reset(false); dead = true
-		var ids: Array = tools.equipment.mounted.map(func(item: Dictionary) -> String: return str(item.id))
-		ids.erase("rover"); tools.equipment.set_installed(ids)
-		var runtime: Node = tools.runtime()
-		if runtime != null: runtime.game._update_follow_camera(0,true)
+		_lose()
+
+func _lose() -> void:
+	# 004209d0 message 3 removes retail inventory item 0x15 for both damage
+	# and range loss. Switching equipment cannot recover a lost ROV.
+	reset(false); dead = true
+	var ids: Array = tools.equipment.mounted.map(func(item: Dictionary) -> String: return str(item.id))
+	ids.erase("rover"); tools.equipment.set_installed(ids)
+	var runtime: Node = tools.runtime()
+	if runtime != null: runtime.game._update_follow_camera(0,true)
 
 func take_weapon_damage_from(strength: float, point: Vector3, _owner: Node3D) -> void:
 	take_weapon_damage(strength,point)

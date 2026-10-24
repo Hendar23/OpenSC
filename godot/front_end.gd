@@ -43,7 +43,7 @@ var effects_audio: Node
 var remember_preferences := true
 var back_shortcut_busy: Callable
 var menu_page := "main"
-const OPTION_BUTTONS := ["controls","graphics","audio","gameplay","back"]
+const OPTION_BUTTONS := ["controls","graphics","audio","gameplay","player_folder","back"]
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -137,9 +137,14 @@ func _build_menu() -> void:
 	# Older custom menu layouts still get an entrance and return button.
 	for entry in [{"id":"options","label":"Options"},{"id":"gameplay","label":"General"},{"id":"back","label":"Back"}]:
 		if not entries.any(func(item: Dictionary) -> bool: return item.get("id") == entry.id): entries.append(entry)
+	if not entries.any(func(item: Dictionary) -> bool: return item.get("id") == "player_folder"):
+		var back := entries.size()
+		for index in entries.size():
+			if entries[index].get("id") == "back": back = index; break
+		entries.insert(back,{"id":"player_folder","label":"Open Player Folder"})
 	for entry in entries:
 		var id := str(entry.get("id",""))
-		if id not in ["new_game","load","continue","options","back","controls","mods","audio","graphics","gameplay","exit"] or buttons.has(id): continue
+		if id not in ["new_game","load","continue","options","back","controls","mods","audio","graphics","gameplay","player_folder","exit"] or buttons.has(id): continue
 		var button := Button.new(); button.text = str(entry.get("label",id))
 		if id == "gameplay": button.text = "General"
 		button.position = Vector2(rect[0],rect[1] + button_order.size() * float(menu_config.button_spacing))
@@ -149,7 +154,7 @@ func _build_menu() -> void:
 		var hover := normal.duplicate() as StyleBoxFlat; hover.bg_color = Color(0.04,0.23,0.28,0.95)
 		button.add_theme_stylebox_override("normal",normal); button.add_theme_stylebox_override("hover",hover)
 		button.add_theme_stylebox_override("pressed",hover); button.add_theme_stylebox_override("focus",hover)
-		button.set_meta("available",id in ["new_game","options","back","controls","audio","graphics","gameplay","mods","exit"])
+		button.set_meta("available",id in ["new_game","options","back","controls","audio","graphics","gameplay","player_folder","mods","exit"])
 		if not button.get_meta("available"): button.tooltip_text = "Not available yet"
 		menu_layout.add_child(button); buttons[id] = button; button_order.append(id)
 		button.mouse_entered.connect(func() -> void: _enter_button(button))
@@ -281,6 +286,9 @@ func _activate_button(id: String) -> void:
 		"continue": resume_requested.emit()
 		"load": load_requested.emit()
 		"options": _set_menu_page("options")
+		"player_folder":
+			var result := _open_player_folder()
+			if result != OK: push_warning("Cannot open player folder: "+error_string(result))
 		"back": _set_menu_page("main")
 		"mods": mods_requested.emit()
 		"controls": controls_menu.open_menu()
@@ -294,6 +302,9 @@ func _activate_button(id: String) -> void:
 			_set_audio_page_visible(true)
 			gameplay_menu.open_menu()
 		"exit": _exit_after_sound()
+
+func _open_player_folder() -> Error:
+	return preload("res://player_storage.gd").open_player_folder()
 
 func _set_audio_page_visible(open: bool) -> void:
 	for id in button_order:

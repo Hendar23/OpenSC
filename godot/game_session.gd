@@ -22,6 +22,7 @@ func _begin_new_game() -> void:
 	if game.menu_backdrop != null: game.menu_backdrop.close()
 	if game.dock_interface != null: game.dock_interface.dismiss()
 	game.get_tree().paused = false
+	game.scenery_seed = preload("res://scenery_scatter.gd").new_seed(game.scenery_seed)
 	if not game._can_reuse_world():
 		await game._start_game(game.game_folder)
 	if not game.pilot_mode: return
@@ -43,7 +44,9 @@ func _begin_new_game() -> void:
 	game.events.session_started.emit(false)
 
 func _world_asset_key() -> String:
-	return JSON.stringify([game.game_folder,Mods.layers,Mods.movement])
+	var scenery := []
+	for pack in Mods.scenery_packs(): scenery.append([pack.id, pack.scenery])
+	return JSON.stringify([game.game_folder,Mods.layers,Mods.movement,scenery,game.scenery_seed if not scenery.is_empty() else 0])
 
 func _can_reuse_world() -> bool:
 	return game.pilot_mode and is_instance_valid(game.world_root) and game.loaded_world_assets == game._world_asset_key()
@@ -136,6 +139,8 @@ func _save_snapshot(name: String) -> Dictionary:
 	explored.convert(Image.FORMAT_L8)
 	var result := {"version":game.save_games.VERSION,"name":name.left(64),"saved_at":Time.get_datetime_string_from_system(),"dock":{"id":int(game.docking.current.node.get_meta("city_id")),"name":game.docking.current.name},"pose":MapDocument.encode(game.pilot.global_transform),"hour":game.day_night.hour,"equipment":items,"weapons":arms,"equipment_selected":game.equipment.current().get("id",""),"weapon_selected":game.weapons.current().get("id",""),"explored":Marshalls.raw_to_base64(explored.get_data()),"discovered_cities":game.cockpit_hud.map_data.discovered_cities.keys(),"map_signature":game._map_signature(),"mods":Mods.active_ids(),"progress":game.player_progress.duplicate(true),"objects":game.object_population.snapshot(),"mines":game.object_population.mines.snapshot()}
 	if is_instance_valid(game.turret_system): result.turrets = game.turret_system.snapshot()
+	result["scenery_seed"] = game.scenery_seed
+	result["map_landmarks"] = game.cockpit_hud.map_data.landmarks.snapshot()
 	if is_instance_valid(game.ground_traffic): result.ground_traffic = game.ground_traffic.snapshot()
 	if is_instance_valid(game.submarine_traffic): result.submarine_traffic = game.submarine_traffic.snapshot()
 	return result
@@ -153,6 +158,7 @@ func _load_saved_game(slot: int) -> bool:
 	game.loading_save = true
 	game.front_end.hide_menu(); game.dock_interface.dismiss(); game.get_tree().paused = false
 	game._set_camera_mode(false)
+	game.scenery_seed = int(data.get("scenery_seed", 0))
 	if not game._can_reuse_world(): await game._start_game(game.game_folder)
 	if not game.pilot_mode: game.loading_save = false; return false
 	game._reset_loaded_world()
@@ -186,7 +192,8 @@ func _load_saved_game(slot: int) -> bool:
 	game.equipment.apply_settings()
 	for index in range(game.weapons.mounted.size()):
 		if game.weapons.mounted[index].id == data.get("weapon_selected",""): game.weapons.selected = index
-	if game._exploration_matches_map(data.map_signature):
+	var map_matches: bool = game._exploration_matches_map(data.map_signature)
+	if map_matches:
 		var bytes := Marshalls.base64_to_raw(data.explored)
 		game.cockpit_hud.map_data.explored = Image.create_from_data(HUD.Map.RESOLUTION,HUD.Map.RESOLUTION,false,Image.FORMAT_L8,bytes)
 		game.cockpit_hud.map_data.exploration_texture.update(game.cockpit_hud.map_data.explored)
@@ -202,6 +209,7 @@ func _load_saved_game(slot: int) -> bool:
 	if data.has("ground_traffic") and is_instance_valid(game.ground_traffic): game.ground_traffic.restore(data.ground_traffic)
 	if data.has("submarine_traffic") and is_instance_valid(game.submarine_traffic): game.submarine_traffic.restore(data.submarine_traffic)
 	game.player_progress = PlayerProgress.restore(data.get("progress",{}))
+	if map_matches: game.cockpit_hud.map_data.landmarks.restore(data.get("map_landmarks",{}),game.cockpit_hud.map_data)
 	game.weapons.set_upgraded(game.player_progress.status.zapper_upgrade == 1)
 	game._collect_city_deliveries(int(game.docking.current.node.get_meta("city_id")))
 	game.equipment.vacuum.storage.assign(game.player_progress.suckomat)

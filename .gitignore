@@ -19,6 +19,26 @@ __pycache__/
 /godot/tests/*-fixtures/
 /godot/tests/*-test.cfg
 
+# Local capture sessions, superseded probes and optional asset-pack checks.
+/godot/tests/capture_*.gd
+/godot/tests/capture_*.gd.uid
+/godot/tests/apply_movement_defaults.gd*
+/godot/tests/research_submarine_audio.py
+/godot/tests/verify_fog_render.gd*
+/godot/tests/verify_bubble_mod.gd*
+/godot/tests/verify_remastered_submarine.gd*
+/godot/tests/verify_building_textures.gd*
+/godot/tests/verify_plant_textures.gd*
+/godot/tests/verify_submarine_equipment_textures.gd*
+/godot/tests/verify_wildlife_textures.gd*
+/godot/tests/verify_upscaled_map_textures.gd*
+/godot/tests/verify_scenery_scatter.gd*
+/godot/tests/verify_scenery_sessions.gd*
+
+# Large optional texture downloads are distributed outside Git history.
+/Mods/detailed-*-textures/
+/Mods/upscaled-*-textures/
+
 # Temporary files and backups.
 *.7z
 *.bak

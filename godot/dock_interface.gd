@@ -3,6 +3,7 @@ const Bindings = preload("res://input_bindings.gd")
 signal action_requested(action: String, payload: Dictionary)
 const Mods = preload("res://mod_registry.gd")
 const BMP = preload("res://legacy_bmp.gd")
+const Saves = preload("res://save_games.gd")
 # The original load-screen rows are not spaced at a uniform 44 pixels.
 const LOAD_ROW_OFFSETS := [0.0,44.0,87.0,130.0,174.0,217.0,260.0,303.0]
 const DEFAULT_PAGES := {
@@ -323,12 +324,13 @@ func rebuild(new_page: bool = false) -> void:
 			var area := rect(pages[page].get("slots"))
 			var slots: Array = data.get("slots",[])
 			for slot in slots:
+				var stamp := Saves.display_timestamp(str(slot.saved_at))
 				var text := "%d  %s" % [int(slot.slot) + 1,slot.name]
-				if slot.valid and not str(slot.saved_at).is_empty(): text += " — " + str(slot.saved_at).replace("T"," ")
+				if slot.valid and not stamp.is_empty(): text += " — " + stamp
 				if slot.exists and not slot.valid: text = "%d  Unreadable save" % [int(slot.slot) + 1]
 				var node := button("choose_slot",Rect2(area.position + Vector2(0,LOAD_ROW_OFFSETS[int(slot.slot)] * area.size.y / 44.0 if page == "load" else int(slot.slot) * area.size.y),Vector2(area.size.x,36 if page == "load" else 25)),text,{"slot":slot.slot})
 				if page == "load": _load_slot_style(node)
-				node.tooltip_text = "%s — %s" % [slot.city,slot.saved_at]
+				node.tooltip_text = "%s — %s" % [slot.city,stamp]
 				node.disabled = (page == "load" and not slot.valid) or (page == "save" and not data.get("can_save",true))
 			label(status,Rect2(18,402,604,24) if page == "load" else Rect2(190,350,310,56),10 if page == "load" else 12,true)
 	if page == "home" and not data.get("can_save",true):
@@ -345,7 +347,7 @@ func rebuild(new_page: bool = false) -> void:
 		var automatic := button("choose_slot",Rect2(area.position + Vector2(0,LOAD_ROW_OFFSETS[7] * area.size.y / 44.0),Vector2(area.size.x,36)),"Auto Save",{"slot":-1})
 		_load_slot_style(automatic)
 		automatic.disabled = not auto.get("valid",false)
-		automatic.tooltip_text = str(auto.get("saved_at",""))
+		automatic.tooltip_text = Saves.display_timestamp(str(auto.get("saved_at","")))
 	var slot_controls: Array[Button] = []
 	if page in ["save","load"]: slot_controls = _wire_slot_focus()
 	var restored := layout.get_node_or_null(NodePath(focus_name)) as Control if not focus_name.is_empty() else null
@@ -766,11 +768,11 @@ func _choose_slot(slot: int) -> void:
 	if page == "load": action_requested.emit("load_slot",{"slot":slot}); return
 	pending_slot = slot
 	var data: Dictionary = model.call(); var record: Dictionary = data.slots[slot]
-	name_field.text = record.name if record.valid else (loaded_city if not loaded_city.is_empty() else "Saved game")
+	name_field.text = record.name if record.valid else Saves.default_name(slot)
 	name_dialog.popup_centered(Vector2i(390,120)); name_field.grab_focus(); name_field.select_all()
 func _confirm_name() -> void:
 	pending_name = name_field.text.strip_edges().left(64)
-	if pending_name.is_empty(): pending_name = loaded_city
+	if pending_name.is_empty(): pending_name = Saves.default_name(pending_slot)
 	var data: Dictionary = model.call()
 	if data.slots[pending_slot].exists: overwrite_dialog.popup_centered()
 	else: action_requested.emit("save_slot",{"slot":pending_slot,"name":pending_name})

@@ -26,6 +26,10 @@ var staged_destruction := false
 var boarding := false
 var boarding_pod: Node3D
 
+func health_multiplier() -> float:
+	# Mission vessels also include civilian shuttles, fishing boats and freighters.
+	return model_health_multiplier(get_parent())
+
 func _physics_process(delta: float) -> void:
 	if not dormant: super._physics_process(delta)
 
@@ -124,8 +128,8 @@ func _destroy_visuals() -> void:
 	var effect := preload("res://base_destruction.gd").new(); system.get_parent().add_child(effect)
 	effect.setup_vessel(get_parent(),system)
 
-static func install_mission(model: Node3D, values: Dictionary) -> Node3D:
-	var agent = preload("res://trader_submarine.gd").install(model,values,load("res://mission_vessel.gd"))
+static func install_mission(model: Node3D, values: Dictionary, controller: Script = null) -> Node3D:
+	var agent = preload("res://trader_submarine.gd").install(model,values,controller if controller != null else load("res://mission_vessel.gd"))
 	agent.tuning = preload("res://trader_submarine.gd").DEFAULTS.merged(PIRATE_DEFAULTS,true).merged(values,true)
 	agent.tuning.npc_respawn = false
 	agent.body.set_meta("faction",int(values.get("npc_faction",2)))

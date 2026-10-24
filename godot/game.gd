@@ -65,6 +65,7 @@ var model: Node3D
 var world_root: Node3D
 var camera: Camera3D
 var loaded_world_assets := ""
+var scenery_seed := 0
 var water_environment: Environment
 var sun: DirectionalLight3D
 var surface_material: ShaderMaterial
@@ -127,6 +128,7 @@ var docking: Node
 var radio_greeting := ""
 var radio_status := ""
 var radio_feed: Control
+var radio_message_audio: AudioStreamPlayer
 const RadioPortrait = preload("res://radio_portrait.gd")
 var mod_panel: Window
 var object_population: Node3D
@@ -386,6 +388,7 @@ func _start_game(folder: String) -> void:
 	var map_data := MapDocument.load_active() if use_map_overrides else {}
 	wildlife = null
 	if not map_data.is_empty(): MapDocument.apply_entities(world_root, folder, map_data)
+	await preload("res://scenery_scatter.gd").populate(world_root, folder, get_tree(), scenery_seed)
 	OriginalGameData.apply_city_names(world_root,gameplay_catalogue)
 	plant_current.attach(world_root)
 	_add_water_surface()
@@ -493,6 +496,7 @@ func _start_game(folder: String) -> void:
 	cockpit_hud.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(cockpit_hud)
 	cockpit_hud.setup(pilot, equipment, world_root, folder,weapons)
+	cockpit_hud.map_data.landmarks.setup(gameplay_catalogue)
 	cockpit_hud.setup_lighting(water_environment,sun)
 	cockpit_hud.natural_light = natural_light
 	if is_instance_valid(first_person_cockpit): first_person_cockpit.free()
@@ -540,6 +544,9 @@ func _start_game(folder: String) -> void:
 		await get_tree().process_frame
 	submarine_traffic.pirate_defeated.connect(_pirate_bounty)
 	submarine_traffic.enable_roaming_pirates(folder,map_data)
+	submarine_traffic.roaming_population.transmission.connect(func(message: Dictionary) -> void:
+		if radio_feed != null: radio_feed.push_message(message,docking.radio_static)
+	)
 	var activity := preload("res://actor_activity.gd").new()
 	activity.name = "ActorActivity"; activity.game = self
 	activity.submarines = submarine_traffic; activity.ground = ground_traffic
@@ -556,6 +563,7 @@ func _start_game(folder: String) -> void:
 	docking.docked.connect(func() -> void: events.city_docked.emit(int(docking.current.node.get_meta("city_id"))))
 	equipment.activated.connect(func(id: String, active: bool) -> void: events.equipment_activated.emit(id,active))
 	if radio_feed == null: _build_radio_feed()
+	radio_message_audio.setup(folder,radio_feed,pilot.submarine_audio.tuning)
 	dock_interface.setup(folder,_dock_ui_model)
 	pilot_mode = true
 	world_loading = false
@@ -608,6 +616,8 @@ func _build_radio_feed() -> void:
 	radio_feed.offset_left = 20; radio_feed.offset_right = 556
 	radio_feed.offset_top = -340; radio_feed.offset_bottom = -20
 	radio_feed.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	radio_message_audio = preload("res://radio_message_audio.gd").new()
+	radio_message_audio.name = "RadioMessageAudio"; add_child(radio_message_audio)
 
 
 func _fail_startup(message: String) -> void:
@@ -812,10 +822,6 @@ func _update_radio_messages(delta: float) -> void:
 				voice.finished.connect(voice.queue_free); voice.play()
 
 func _update_follow_camera(delta: float, snap: bool = false) -> void:
-	if equipment != null and equipment.support_tools != null and is_instance_valid(equipment.support_tools.rover) and equipment.support_tools.rover.deployed:
-		camera.cull_mask &= ~preload("res://remote_vehicle.gd").RENDER_LAYER
-		camera.global_transform = equipment.support_tools.rover.camera_pose()
-		return
 	camera.cull_mask |= preload("res://remote_vehicle.gd").RENDER_LAYER
 	var pose := pilot.global_transform if snap else pilot.get_global_transform_interpolated()
 	if first_person:

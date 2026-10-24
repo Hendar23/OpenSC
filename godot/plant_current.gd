@@ -6,6 +6,7 @@ var plant_count := 0
 var patches: Array[Dictionary] = []
 var world: Node3D
 var flexible_meshes := {}
+var batch_materials := {}
 var patch_cells := {}
 var indexed_patch_count := -1
 var recovering := {}
@@ -14,17 +15,49 @@ const CELL_SIZE := 8.0
 func attach(parent_world: Node3D) -> void:
 	world = parent_world
 	materials.clear(); patches.clear(); plant_count = 0
+	batch_materials.clear()
 	patch_cells.clear(); recovering.clear(); indexed_patch_count = -1
 	_collect(parent_world)
 	configure({})
 
 func _collect(node: Node) -> void:
+	if node is MultiMeshInstance3D and node.get_meta("marine_plant", false):
+		_prepare_batch(node)
+		return
 	var model := str(node.get_meta("editor_model","" )).to_upper().trim_prefix("MODEL.")
 	var source := str(node.get_meta("asset_source","")).get_file().get_basename().to_upper()
 	if model in ["REED","BUSH1","BUSH2","BUSH3","BUSH4"] or source in ["REED","BUSH1","BUSH2","BUSH3","BUSH4"]:
 		_prepare(node); plant_count += 1
 		return
 	for child in node.get_children(): _collect(child)
+
+func _prepare_batch(node: MultiMeshInstance3D) -> void:
+	if node.multimesh == null or node.multimesh.mesh == null: return
+	var mesh := node.multimesh.mesh
+	if mesh.get_surface_count() != 1: return
+	var original := mesh.surface_get_material(0) as StandardMaterial3D
+	if original == null: return
+	var id := mesh.get_instance_id()
+	var material: ShaderMaterial = batch_materials.get(id)
+	if material == null:
+		material = ShaderMaterial.new(); material.shader = preload("res://plant_current.gdshader")
+		var bounds := mesh.get_aabb()
+		material.set_shader_parameter("albedo_color", original.albedo_color)
+		material.set_shader_parameter("has_texture", original.albedo_texture != null)
+		material.set_shader_parameter("albedo_texture", original.albedo_texture)
+		material.set_shader_parameter("terrain_albedo_texture", original.albedo_texture)
+		material.set_shader_parameter("terrain_mipmaps", true)
+		material.set_shader_parameter("roughness_value", original.roughness)
+		material.set_shader_parameter("metallic_value", original.metallic)
+		material.set_shader_parameter("root_height", bounds.position.y)
+		material.set_shader_parameter("plant_height", bounds.size.y)
+		material.set_shader_parameter("root_center", bounds.get_center())
+		batch_materials[id] = material; materials.append(material)
+	node.material_override = material
+	node.extra_cull_margin = maxf(mesh.get_aabb().size.y, 1.0)
+	plant_count += node.multimesh.instance_count
+	# Ambient sway uses each instance's model matrix. Keep these shared batches
+	# out of point-based propeller wash so one nearby plant cannot bend a colony.
 
 func _prepare(node: Node) -> void:
 	if node is MeshInstance3D:

@@ -57,12 +57,7 @@ func setup(player: Node3D, folder: String) -> void:
 	mount.add_child(lamp)
 	var icons: Array[Texture2D] = []
 	for file in ["DEEPWP1", "DEEPWP2"]:
-		var image: Image
-		for replacement in Mods.candidates("texture." + file):
-			image = Assets._replacement_image(replacement.path)
-			if image != null: break
-		if image == null: image = Images.load_image(folder.path_join("GAMETEX/" + file + ".RAS"))
-		icons.append(ImageTexture.create_from_image(image) if image != null else null)
+		icons.append(Assets._load_raster_icon(folder,file))
 	mounted.append({"id": "deep_sea_lights", "name": "Deep-Sea Lights", "enabled": false, "mount": mount, "icons": icons})
 	_setup_cycle_audio(folder)
 	_setup_vacuum(player,folder)
@@ -290,12 +285,7 @@ func _setup_towing_tool(player: Node3D, folder: String, id: String, model: Strin
 	preload("res://submarine_mounts.gd").apply(mount,player.visual,id)
 	var icons: Array[Texture2D] = []
 	for file in [icon + "1",icon + "2",icon + "3"]:
-		var image: Image
-		for replacement in Mods.candidates("texture." + file):
-			image = Assets._replacement_image(replacement.path)
-			if image != null: break
-		if image == null: image = Images.load_image(folder.path_join("GAMETEX/" + file + ".RAS"))
-		icons.append(ImageTexture.create_from_image(image) if image != null else null)
+		icons.append(Assets._load_raster_icon(folder,file))
 	available.append({"id":id,"name":"Grappling Hook" if id == "grapple" else "Magnet","enabled":false,"mount":mount,"icons":icons})
 	var tool := preload("res://submarine_magnet.gd").new(); tool.tool_id = id; mount.add_child(tool); tool.setup(player,housing,folder)
 	tool.state_changed.connect(func(on: bool) -> void:

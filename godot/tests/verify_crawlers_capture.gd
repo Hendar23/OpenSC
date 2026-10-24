@@ -59,7 +59,7 @@ func _run() -> void:
 	var key := InputEventKey.new(); key.pressed = true; key.keycode = KEY_F11
 	capture._input(key); check(capture.fps_label.visible,"F11 shows the FPS counter")
 	capture._input(key); check(not capture.fps_label.visible,"F11 hides the FPS counter")
-	check(capture.screenshot_folder() == ProjectSettings.globalize_path("res://../Screenshots").simplify_path(),"Screenshots go in the main game folder")
+	check(capture.screenshot_folder() == ProjectSettings.globalize_path(preload("res://player_storage.gd").screenshots_path()).simplify_path(),"Screenshots use the shared personal-data folder")
 	if DisplayServer.get_name() != "headless":
 		key.keycode = KEY_F12; capture._input(key)
 		for frame in range(120):

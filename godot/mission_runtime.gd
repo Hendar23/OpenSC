@@ -129,6 +129,11 @@ func accept(city: int, selected_id: String = "") -> String:
 			var unavailable: Array = game.player_progress.missions.get("unavailable",[])
 			if not unavailable.has(Rules.PAIRED[id]): unavailable.append(Rules.PAIRED[id])
 			game.player_progress.missions["unavailable"] = unavailable
+		if id in Rules.CORE.values():
+			var unavailable: Array = game.player_progress.missions.get("unavailable",[])
+			for sibling in Rules.CORE.values():
+				if sibling != id and sibling not in unavailable: unavailable.append(sibling)
+			game.player_progress.missions["unavailable"] = unavailable
 		side_jobs.start(id)
 	else:
 		_spawn_opening()
@@ -152,39 +157,53 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	if active().is_empty(): return
 	var id := str(active().id)
 	last_response_id = id
+	var sponsor_city := int(active().city)
 	var city := int(active().get("resolved_city",active().city))
 	last_response_city = city
-	var side_job := Rules.IMPLEMENTED.has(id)
+	var core := id in Rules.CORE.values()
+	var side_job := Rules.IMPLEMENTED.has(id) and not core
 	var outcome_shown := bool(active().get("outcome_shown",false))
 	if score < 0: score = 1.0 if success else 0.0
 	if response > 0: last_response = text(id,response)
 	var rewards: Dictionary = game.gameplay_catalogue.tables.get("mission_rewards",{}).get("records",{}).get(id,{})
 	game.player_progress.missions.active = {}
 	game.player_progress.mission = "None"
-	if success or side_job:
+	if success or side_job or core:
 		game.player_progress.missions.completed[id] = {"success":success,"city":city,"score":score}
 	if side_job:
-		game.player_progress.missions["stage2_resolved"] = int(game.player_progress.missions.get("stage2_resolved",0)) + 1
-		if success: game.player_progress.missions["stage2_successes"] = int(game.player_progress.missions.get("stage2_successes",0)) + 1
+		var prefix := "stage%d_" % Rules.mission_stage(id)
+		game.player_progress.missions[prefix+"resolved"] = int(game.player_progress.missions.get(prefix+"resolved",0)) + 1
+		if success: game.player_progress.missions[prefix+"successes"] = int(game.player_progress.missions.get(prefix+"successes",0)) + 1
 	if success:
-		if not side_job: game.player_progress.campaign_stage = 2
+		if not side_job: game.player_progress.campaign_stage = 3 if core else 2
 		game.player_progress.campaign_jobs += 1
+		if core:
+			game.player_progress.campaign_jobs = 0
+			game.player_progress.missions["stage2_successes"] = 0
+			game.player_progress.missions["stage2_resolved"] = 0
+			# Retail post bulletins depend on the faction-family IDs, whereas
+			# each station has its own accepted mission record.
+			var bulletin_id := "walktrad" if sponsor_city in [1,3] else "walktech"
+			preload("res://mailbox.gd").mission_completed(game.player_progress,bulletin_id,score)
 		# 0041ec40 pays the fixed REWARD1 amount; score selects bulletins,
 		# rather than scaling the credit reward.
 		game.player_progress.status.credits += int(rewards.get("credits",0))
 		game.events.mission_completed.emit(id,score)
 	else:
-		if response == 0: last_response = "Mission failed." if side_job else "Mission failed. You can accept the prospecting job again at a city."
+		if response == 0: last_response = "Mission failed." if side_job or core else "Mission failed. You can accept the prospecting job again at a city."
 		if side_job: preload("res://mailbox.gd").mission_completed(game.player_progress,id,score)
 		game.events.mission_failed.emit(id)
 	# Retain reward reputation deltas separately from the existing coarse standing labels.
 	var reputation: Dictionary = game.player_progress.missions.get("reputation",{})
-	var faction := "1" if city in [1,3] else "2"
+	var faction := "1" if (sponsor_city if core else city) in [1,3] else "2"
 	var delta := (float(rewards.get("success",0.3)) if success else -float(rewards.get("fail",0.1))) * 0.2
 	reputation[faction] = float(reputation.get(faction,0)) + delta
 	var enemy := "2" if faction == "1" else "1"
 	if success: reputation[enemy] = float(reputation.get(enemy,0)) + delta * float(rewards.get("enemy",-0.5))
 	game.player_progress.missions["reputation"] = reputation
+	if side_jobs.stage_three != null: side_jobs.stage_three.release_survivors()
+	if side_jobs.genocide != null: side_jobs.genocide.release_survivors()
+	if side_jobs.terrorists != null: side_jobs.terrorists.release_survivor()
 	if side_jobs.fishing != null: preload("res://mission_survivors.gd").release(side_jobs,side_jobs.fishing.enemies)
 	if side_jobs.remaining != null: preload("res://mission_survivors.gd").release(side_jobs,side_jobs.remaining.enemies)
 	_cleanup(true)

@@ -1,6 +1,7 @@
 extends RefCounted
 
 const DEFAULT_ROOT := "res://../Mods"
+const MAX_SCENERY := 12000
 const MOVEMENT_KEYS := ["main_forward", "main_reverse", "side_thrust", "forward_speed", "reverse_speed", "vertical_speed", "forward_drag", "lateral_drag", "vertical_drag", "turn_acceleration", "turn_speed", "turn_drag", "tilt_speed", "camera_distance", "mass", "water_resistance", "pitch_acceleration", "pitch_speed", "upright_strength", "upright_damping", "propeller_spin_down", "bubble_rate", "impact_damage_threshold", "impact_damage_scale"]
 static var initialized := false
 static var root := ""
@@ -79,6 +80,12 @@ static func _read_pack(folder: String) -> Dictionary:
 	pack.name = str(manifest.get("name", pack.id))
 	pack.version = str(manifest.get("version", "1.0"))
 	pack.description = str(manifest.get("description", ""))
+	if manifest.has("scenery"):
+		var scatter := _read_scenery(manifest.scenery, folder)
+		if scatter.is_empty():
+			pack.valid = false
+			pack.errors.append("Invalid scenery settings or missing self-contained GLB.")
+		else: pack["scenery"] = scatter
 	var settings: Variant = manifest.get("movement", {})
 	if settings is Dictionary:
 		for key in settings:
@@ -150,6 +157,38 @@ static func _read_pack(folder: String) -> Dictionary:
 			pack.assets[asset_id]["glass"] = glass
 		if trigger == "model_radius": pack.assets[asset_id].trigger_distance = trigger
 	return pack
+
+static func _read_scenery(value: Variant, folder: String) -> Dictionary:
+	if not value is Dictionary: return {}
+	var relative := str(value.get("file", "")).replace("\\", "/")
+	var path := folder.path_join(relative).simplify_path()
+	if relative.is_absolute_path() or relative.get_extension().to_lower() != "glb" or not path.begins_with(folder + "/") or not FileAccess.file_exists(path): return {}
+	for entry in [["seed", 0, 2147483647], ["count", 1, MAX_SCENERY], ["patch_radius", 1.0, 32.0]]:
+		var number: Variant = value.get(entry[0])
+		if not (number is int or number is float) or not is_finite(float(number)) or float(number) < entry[1] or float(number) > entry[2]: return {}
+	if float(value.count) != floorf(float(value.count)) or float(value.seed) != floorf(float(value.seed)): return {}
+	var models: Variant = value.get("models")
+	if not models is Array or models.is_empty() or models.size() > 128: return {}
+	var names := {}
+	for model in models:
+		if not model is Dictionary or not model.get("node") is String or str(model.node).is_empty() or names.has(model.node): return {}
+		if model.has("sway") and not model.sway is bool: return {}
+		var clearance: Variant = model.get("ground_clearance", 0.0)
+		if not (clearance is int or clearance is float) or not is_finite(float(clearance)) or float(clearance) < 0.0 or float(clearance) > 1.0: return {}
+		names[model.node] = true
+		for entry in [["size", 0.02, 8.0], ["weight", 0.001, 100.0]]:
+			var number: Variant = model.get(entry[0])
+			if not (number is int or number is float) or not is_finite(float(number)) or float(number) < entry[1] or float(number) > entry[2]: return {}
+	var result: Dictionary = value.duplicate(true)
+	result.path = path
+	return result
+
+static func scenery_packs() -> Array[Dictionary]:
+	ensure()
+	var result: Array[Dictionary] = []
+	for pack in packs:
+		if pack.valid and str(pack.id) in enabled and pack.has("scenery"): result.append(pack)
+	return result
 
 static func canonical_id(id: String) -> String:
 	id = id.strip_edges().to_lower()

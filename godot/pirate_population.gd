@@ -1,14 +1,48 @@
 extends Node3D
+signal transmission(message: Dictionary)
 ## Two persistent slots; replacements are relocated into unseen open water.
 const MAX_PIRATES := 2
 const Pirate = preload("res://pirate_submarine.gd")
+const TAUNTS := [
+	"You're in the wrong waters, mate!",
+	"You've got something we want!",
+	"You're going down!",
+	"Say goodbye to your sub!",
+	"You should've stayed at home!",
+	"We're taking everything you've got!",
+	"You're easy pickings!",
+	"That sub's scrap!",
+	"You won't get away!",
+	"Prepare to be sunk!",
+	"Your cargo belongs to us!",
+	"Let's see how tough you are!",
+	"You're about to spring a leak!",
+	"Nothing personal, just business!",
+	"We've been waiting for you!",
+	"You're not getting out of this one!",
+	"Time to feed the fishes!",
+	"Nice sub. Shame about the owner!",
+	"Should've brought some backup!",
+	"Let's see what you've got!",
+	"You're swimming home!",
+	"Dump the cargo and we might let you swim!",
+	"That salvage belongs to us!",
+	"Fresh meat!",
+	"Wrong part of the ocean, pal!",
+	"You’re in our water now!",
+	"Another sucker!",
+]
 var traffic: Node
 var ships: Array[Node3D] = []
 var retry := 0.0
 var random := RandomNumberGenerator.new()
+var portrait: Texture2D
+var distorted_portrait: Texture2D
 
 func setup(manager: Node, folder: String, document: Dictionary) -> void:
 	traffic = manager; random.randomize()
+	portrait = preload("res://docking_radio.gd").speaker_portrait(folder,"pir")
+	distorted_portrait = preload("res://docking_radio.gd").speaker_portrait(folder,"pir",true)
 	for index in range(MAX_PIRATES):
 		var id: String = Pirate.PIRATE_MODELS[index % 2]
 		var values := Pirate.PIRATE_DEFAULTS.duplicate()
@@ -22,10 +56,22 @@ func setup(manager: Node, folder: String, document: Dictionary) -> void:
 		preload("res://entity_identity.gd").assign_id(model,"population/pirates/%d" % index)
 		var agent := Pirate.install_pirate(model,values); agent.roaming = true
 		traffic.register_vessel(agent,get_parent(),folder)
+		agent.player_attack_started.connect(_taunt.bind(agent))
 		ships.append(agent)
 		# Hidden until a safe first placement is found.
 		agent.dead = true; model.hide(); agent.body.collision_layer = 0
 	reset_population()
+
+func _taunt(agent: Node3D) -> void:
+	if attacks_suppressed(): return
+	var line: String = TAUNTS[random.randi_range(0,TAUNTS.size()-1)]
+	transmission.emit({"speaker":preload("res://entity_identity.gd").of(agent),"text":"PIRATE : "+line,"portrait":portrait,"distorted_portrait":distorted_portrait})
+
+func attacks_suppressed() -> bool:
+	# Derive this from the active encounter so completion, failure and session
+	# reset resume ambient attacks without leaving a saved/global toggle behind.
+	var mission := get_tree().get_first_node_in_group("mission_runtime")
+	return mission != null and str(mission.active().get("id","")) == "minefield"
 
 func reset_population() -> void:
 	for agent in ships:

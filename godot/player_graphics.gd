@@ -1,8 +1,14 @@
 extends Node
 
 const Storage = preload("res://player_storage.gd")
-const DEFAULTS := {"display_mode":0,"resolution":Vector2i.ZERO,"vsync":true,"frame_limit":0,"anti_aliasing":0,"shadows":2,"brightness":100.0}
+const DEFAULTS := {"display_mode":0,"resolution":Vector2i.ZERO,"limit_resolutions":false,"vsync":true,"frame_limit":0,"anti_aliasing":0,"shadows":2,"brightness":100.0}
 const FRAME_LIMITS := [0,30,60,90,120,144,165,240]
+const RESOLUTIONS := [
+	Vector2i(1280,720),Vector2i(1600,900),Vector2i(1920,1080),Vector2i(1920,1200),
+	Vector2i(2560,1080),Vector2i(2560,1440),Vector2i(2560,1600),Vector2i(3440,1440),
+	Vector2i(3840,1600),Vector2i(3840,2160),Vector2i(5120,1440),Vector2i(5120,2160),
+	Vector2i(5120,2880),Vector2i(7680,2160),Vector2i(7680,4320),
+]
 signal changed
 var settings := DEFAULTS.duplicate()
 var remember_preferences := true
@@ -39,8 +45,9 @@ func desktop_size() -> Vector2i:
 func resolutions() -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
 	var desktop := desktop_size()
-	for value in [Vector2i(1280,720),Vector2i(1600,900),Vector2i(1920,1080),Vector2i(2560,1440),Vector2i(3840,2160),desktop,settings.resolution]:
-		if value.x <= desktop.x and value.y <= desktop.y and value not in result: result.append(value)
+	for value in RESOLUTIONS + [desktop,settings.resolution]:
+		if settings.limit_resolutions and (value.x > desktop.x or value.y > desktop.y): continue
+		if value not in result: result.append(value)
 	result.sort_custom(func(a: Vector2i,b: Vector2i) -> bool: return a.x * a.y < b.x * b.y)
 	return result
 
@@ -48,17 +55,20 @@ func _validate() -> void:
 	for key in ["display_mode","anti_aliasing","shadows"]:
 		settings[key] = clampi(int(settings[key]),0,3 if key != "display_mode" else 2)
 	settings.vsync = bool(settings.vsync)
+	settings.limit_resolutions = bool(settings.limit_resolutions)
 	if int(settings.frame_limit) not in FRAME_LIMITS: settings.frame_limit = 0
 	if not settings.resolution is Vector2i: settings.resolution = desktop_size()
-	settings.resolution = settings.resolution.clamp(Vector2i(1050,600),desktop_size())
+	settings.resolution = settings.resolution.clamp(Vector2i(1050,600),RESOLUTIONS.back().max(desktop_size()))
+	if settings.limit_resolutions: settings.resolution = settings.resolution.min(desktop_size())
 	for key in ["brightness"]:
 		var value := float(settings[key])
 		settings[key] = clampf(value,50.0,150.0) if is_finite(value) else 100.0
 
 func set_value(key: String,value: Variant) -> Error:
 	if not settings.has(key): return ERR_INVALID_PARAMETER
+	var previous_resolution: Vector2i = settings.resolution
 	settings[key] = value; _validate()
-	if key in ["display_mode","resolution"]: apply_display()
+	if key in ["display_mode","resolution"] or settings.resolution != previous_resolution: apply_display()
 	apply_rendering(); changed.emit()
 	if not remember_preferences: return OK
 	var config := ConfigFile.new(); var result := config.load(settings_path)
@@ -74,7 +84,9 @@ func apply_display() -> void:
 	window.mode = Window.MODE_WINDOWED
 	window.borderless = mode == 1
 	if mode == 2:
-		window.size = settings.resolution
+		# Keep the selected preset visible, while fitting the actual window to
+		# the monitor when its physical display is smaller than that preset.
+		window.size = settings.resolution.min(desktop_size())
 		var usable := DisplayServer.screen_get_usable_rect(window.current_screen)
 		window.position = usable.position + (usable.size - window.size) / 2
 	else:

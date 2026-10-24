@@ -124,12 +124,7 @@ func _icon(folder: String, catalogue: Dictionary, hud_name: String = "") -> Text
 	var record: Dictionary = catalogue.get("tables",{}).get("equipment",{}).get("records",{}).get("zapper",{})
 	# Sq Pic is the shop illustration. ELECTRIC.RAS is the cockpit icon.
 	var name: String = str(record.get("HUD Pic","ELECTRIC")).to_upper() if hud_name.is_empty() else hud_name
-	var image: Image
-	for replacement in Mods.candidates("texture." + name):
-		image = Assets._replacement_image(replacement.path)
-		if image != null: break
-	if image == null: image = preload("res://legacy_bmp.gd").load_image(folder.path_join("GAMETEX/" + name + ".RAS"))
-	return ImageTexture.create_from_image(image) if image != null else null
+	return Assets._load_raster_icon(folder,name)
 
 func configure(values: Dictionary) -> void:
 	for key in DEFAULTS:
@@ -228,7 +223,7 @@ func update_fire(held: bool, delta: float) -> void:
 		impact.global_position = beam_end - forward * 0.025
 		if last_hit.has_method("take_damage"):
 			var previous_health: float = last_hit.health if last_hit is Creature else 0.0
-			preload("res://original_damage.gd").weapon(last_hit,effective_damage() * damage_ticks,beam_start,pilot)
+			preload("res://original_damage.gd").weapon(last_hit,effective_damage() * damage_ticks,beam_start,pilot,"zapper",hit)
 			if last_hit is Creature and last_hit.health < previous_health and blood_cooldown <= 0.0:
 				hit_blood.emit_hit(beam_end,hit.normal,last_hit.death_frames,settings.gore_amount,settings.gore_lifetime,settings.gore_settle_speed)
 				blood_cooldown = 0.15

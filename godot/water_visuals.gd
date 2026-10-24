@@ -65,9 +65,12 @@ func _update_caustics() -> void:
 			if owner != null: owner.next_pass = binding.overlay if enabled else binding.overlay.next_pass
 
 func attach(node: Node) -> void:
-	if node is MeshInstance3D and node.mesh != null:
-		for index in range(node.mesh.get_surface_count()):
-			var original: Material = node.get_active_material(index)
+	var mesh: Mesh = node.mesh if node is MeshInstance3D else node.multimesh.mesh if node is MultiMeshInstance3D and node.multimesh != null else null
+	# MultiMesh has one material override for the entire mesh.
+	if node is MultiMeshInstance3D and mesh != null and mesh.get_surface_count() != 1: mesh = null
+	if mesh != null:
+		for index in range(mesh.get_surface_count()):
+			var original: Material = node.get_active_material(index) if node is MeshInstance3D else node.material_override if node.material_override != null else mesh.surface_get_material(index)
 			if original == null or original.get_meta("caustics_attached",false): continue
 			# Spawned models may already have the natural-light shader wrapper.
 			# Keep that shader and its uniforms, reading surface flags from its source.
@@ -96,15 +99,20 @@ func attach(node: Node) -> void:
 				caustic_passes.append({"owners":owners,"overlay":overlay})
 				material.next_pass = overlay if caustics_active else overlay.next_pass
 				material.set_meta("caustics_attached",true)
-			node.set_surface_override_material(index,material)
+			if node is MeshInstance3D: node.set_surface_override_material(index,material)
+			else: node.material_override = material
 			if node.material_override != null:
 				node.material_override = material
 	for child in node.get_children(): attach(child)
 
 func sync_plants(current: RefCounted) -> void:
+	# Shared plant batches also need their caustic pass to follow sway settings.
+	for material in current.materials.duplicate():
+		var overlay: Material = material.get_meta("caustics_overlay",null)
+		if overlay != null and overlay not in current.materials: current.materials.append(overlay)
 	for patch in current.patches:
 		for material in patch.materials.duplicate():
 			var overlay: Material = material.get_meta("caustics_overlay",null)
 			if overlay != null:
-				patch.materials.append(overlay); current.materials.append(overlay)
+				if overlay not in patch.materials: patch.materials.append(overlay)
 	current.configure({})

@@ -10,6 +10,9 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 func target_body() -> CollisionObject3D:
+	if jobs.stage_three != null: return jobs.stage_three.target_body()
+	if jobs.terrorists != null: return jobs.terrorists.target_body()
+	if jobs.genocide != null: return jobs.genocide.target_body()
 	if jobs.remaining != null: return jobs.remaining.target_body()
 	if jobs.fishing != null: return jobs.fishing.target_body()
 	if jobs.id == "stranded":
@@ -31,7 +34,7 @@ func target_point() -> Vector2:
 	var camera: Camera3D = game.camera
 	var center: Vector3 = target.get_meta("mission_target_center",Vector3.ZERO)
 	if jobs.fishing != null: center = target.get_parent().get_node("Trader").bounds.get_center()
-	elif jobs.remaining == null and jobs.id != "stranded" and is_instance_valid(jobs.target) and target == jobs.target.body: center = jobs.target.bounds.get_center()
+	elif jobs.stage_three == null and jobs.genocide == null and jobs.remaining == null and jobs.id != "stranded" and is_instance_valid(jobs.target) and target == jobs.target.body: center = jobs.target.bounds.get_center()
 	var point: Vector3 = target.get_global_transform_interpolated() * center
 	if camera.is_position_behind(point) or camera.global_position.distance_to(point) > camera.far: return Vector2.INF
 	var projected := camera.unproject_position(point)

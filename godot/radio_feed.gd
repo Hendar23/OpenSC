@@ -1,4 +1,6 @@
 extends Control
+signal message_presented(message: Dictionary)
+signal cleared
 ## One bottom-aligned radio stack, with an active interaction pinned below history.
 const MAX_MESSAGES := 4
 const LIFETIME := 18.0
@@ -11,6 +13,7 @@ func clear() -> void:
 	entries.clear()
 	if not prompt.is_empty(): prompt.row.free()
 	prompt = {}
+	cleared.emit()
 
 func push_message(message: Dictionary, noise: Array[Texture2D] = []) -> void:
 	if str(message.get("text","")).is_empty(): return
@@ -44,11 +47,13 @@ func set_prompt(message: Dictionary, noise: Array[Texture2D] = []) -> void:
 	_limit_history()
 
 func _replace_entry(entry: Dictionary, message: Dictionary, noise: Array[Texture2D]) -> void:
+	var announce: bool = entry.closing or str(entry.message.get("text","")) != str(message.get("text",""))
 	if entry.closing: entry.portrait.reset_signal()
 	entry.message = message.duplicate(); entry.noise = noise
 	entry.age = 0.0; entry.closing = false; entry.exit_age = 0.0
 	entry.label.text = str(message.text); entry.row.reset_size()
 	entry.portrait.update_signal(message.get("portrait"),message.get("distorted_portrait"),noise,0)
+	if announce: message_presented.emit(message)
 
 func _create_entry(message: Dictionary, noise: Array[Texture2D]) -> Dictionary:
 	var text := str(message.get("text",""))
@@ -73,6 +78,7 @@ func _create_entry(message: Dictionary, noise: Array[Texture2D]) -> Dictionary:
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; label.add_theme_font_size_override("font_size",14)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE; content.add_child(label)
 	row.size.x = 536; row.position = Vector2(0,size.y + 8)
+	message_presented.emit(message)
 	return {"row":row,"portrait":portrait,"label":label,"message":message.duplicate(),"noise":noise,"age":0.0,"closing":false,"exit_age":0.0}
 
 func _begin_exit(entry: Dictionary) -> void:

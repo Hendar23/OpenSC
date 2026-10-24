@@ -1,6 +1,6 @@
 extends RefCounted
 ## Surviving encounter ships can outlast their mission without retaining callbacks.
-const MODELS := {"TRAD2":1,"TRAD-SUB":1,"TECHNEW":2,"TECH2SUB":2,"TRADSHUT":1}
+const MODELS := {"TRAD2":1,"TRAD-SUB":1,"TECHNEW":2,"TECH2SUB":2,"TRADSHUT":1,"FREIGHT":1,"PIRATE":3}
 const TAG := "fishing_survivor"
 
 static func depart(jobs: Node, agent: Node3D) -> void:
@@ -76,7 +76,7 @@ static func restore(traffic: Node, entries: Dictionary) -> void:
 		model.global_transform = preload("res://map_document.gd").decode(entry.pose)
 		model.set_meta("editor_model",model_id)
 		preload("res://entity_identity.gd").assign_id(model,identity)
-		var agent: Node3D = preload("res://mission_vessel.gd").install_mission(model,{"npc_faction":MODELS[model_id],"npc_health":10.0 if MODELS[model_id] == 1 else 15.0,"npc_speed":1.5 if model_id == "TRADSHUT" else 2.0,"npc_sustain":0.3,"npc_detection":1000.0})
+		var agent: Node3D = preload("res://mission_vessel.gd").install_mission(model,{"npc_faction":MODELS[model_id],"npc_health":3.0 if model_id == "FREIGHT" else 30.0 if model_id == "PIRATE" else 10.0 if MODELS[model_id] == 1 else 15.0,"npc_speed":1.5 if model_id in ["TRADSHUT","FREIGHT"] else 2.5 if model_id == "PIRATE" else 2.0,"npc_sustain":0.1 if model_id == "FREIGHT" else 0.3,"npc_detection":1000.0})
 		agent.set_meta(TAG,model_id); agent.engage_player = entry.get("survivor_hostile",true); agent.pursue_offscreen = true
 		agent.retiring = entry.get("survivor_retiring",false); agent.combat_enabled = not agent.retiring
 		if agent.retiring: agent.dock_destination = int(entry.get("destination",0))

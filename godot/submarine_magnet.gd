@@ -239,6 +239,7 @@ func _attach(body: Node) -> void:
  if not enabled or not is_instance_valid(head) or is_instance_valid(target) or not is_instance_valid(body) or not body is RigidBody3D: return
  if not body.get_meta("grapple_tow_target" if tool_id == "grapple" else "metal_tow_target",false) or body.has_meta("delivery_city") or bool(body.get("dead")) or body.freeze: return
  target = body
+ if target.has_method("set_towing_attached"): target.set_towing_attached(true)
  _seat_head(target)
  head.add_collision_exception_with(target)
  # World objects inherit the non-interpolated scenery branch. Match the
@@ -266,6 +267,7 @@ func release(recall: bool = true) -> void:
  if is_instance_valid(clamp_joint): clamp_joint.free()
  clamp_joint = null
  if is_instance_valid(target):
+  if target.has_method("set_towing_attached"): target.set_towing_attached(false)
   if is_instance_valid(head): head.remove_collision_exception_with(target)
   if not target_chain_mask: target.collision_mask &= ~CHAIN_LAYER
   if not target_query_layer: target.collision_layer &= ~CARGO_QUERY_LAYER

@@ -5,6 +5,18 @@ const MAX_FILE_BYTES := 16000000
 var folder := preload("res://player_storage.gd").saves_path()
 var error := ""
 var city_names := {}
+static func default_name(slot: int) -> String:
+	return "Save %d" % (slot+1)
+
+static func display_timestamp(value: String) -> String:
+	# Keep ISO timestamps in save files for compatibility and latest-save
+	# ordering. Only the displayed date uses the owner's British format.
+	var pattern := RegEx.new()
+	pattern.compile("^([0-9]{4})-([0-9]{2})-([0-9]{2})[T ]([0-9]{2}):([0-9]{2})")
+	var stamp := pattern.search(value)
+	if stamp == null: return value
+	return "%s/%s/%s %s:%s" % [stamp.get_string(3),stamp.get_string(2),stamp.get_string(1).right(2),stamp.get_string(4),stamp.get_string(5)]
+
 func path(slot: int) -> String:
 	return folder.path_join("before-mission.json" if slot == -1 else "slot-%d.json" % slot)
 func read(slot: int) -> Dictionary:
@@ -20,6 +32,9 @@ func read(slot: int) -> Dictionary:
 	return data
 static func valid(data: Variant) -> bool:
 	if not data is Dictionary or data.get("version") != VERSION: return false
+	if data.has("scenery_seed"):
+		var seed: Variant = data.scenery_seed
+		if not (seed is int or seed is float) or not is_finite(float(seed)) or float(seed) < 0.0 or float(seed) > 2147483647.0 or float(seed) != floorf(float(seed)): return false
 	if data.get("progress") is Dictionary and data.progress.has("missions") and not preload("res://mission_state.gd").valid(data.progress.missions): return false
 	if not data.get("dock") is Dictionary or not data.dock.get("id") is float and not data.dock.get("id") is int: return false
 	var dock_id := float(data.dock.id)
@@ -41,6 +56,7 @@ static func valid(data: Variant) -> bool:
 		weapon_ids[id] = true
 	if not data.get("explored") is String: return false
 	if not data.get("discovered_cities",[]) is Array or data.get("discovered_cities",[]).size() > 256: return false
+	if data.has("map_landmarks") and not preload("res://map_landmarks.gd").valid_snapshot(data.map_landmarks): return false
 	for id in data.get("discovered_cities",[]):
 		if not id is String or id.length() > 128: return false
 	if not data.get("equipment_selected","") is String or not data.get("weapon_selected","") is String: return false

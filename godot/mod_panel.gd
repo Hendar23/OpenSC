@@ -240,17 +240,7 @@ func _wire_focus(lines: Array[Array]) -> void:
 
 func _update_info() -> void:
 	info.text = "No mods installed." if Mods.packs.is_empty() else ""
-	var notes: Array[String] = []
-	var sources := {}
-	for id in pending_order:
-		for pack in Mods.packs:
-			if str(pack.id) != id or not pack.valid or id not in pending_enabled: continue
-			var keys: Array = pack.assets.keys()
-			for key in pack.movement: keys.append("movement." + str(key))
-			for key in keys:
-				if sources.has(key): notes.append("%s: %s overrides %s" % [key, pack.name, sources[key]])
-				sources[key] = pack.name
-	notes.append_array(Mods.runtime_warnings)
+	var notes: Array[String] = Mods.runtime_warnings.duplicate()
 	if not notes.is_empty(): info.text += "\n" + "\n".join(notes.slice(0, 5))
 	if notes.size() > 5: info.text += "\n%d more notes (hover to read)." % (notes.size() - 5)
 	info.tooltip_text = "\n".join(notes)

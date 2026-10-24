@@ -9,6 +9,7 @@ var cable: MeshInstance3D
 var pod_target: Node3D
 var pod_attached := false
 var pod_anchor := Vector3.ZERO
+var pod_anchor_basis := Basis.IDENTITY
 var passengers := false
 var pod_deployment := 0.0
 var pod_enabled := false
@@ -95,6 +96,7 @@ func _detach_pod(recall: bool = true) -> void:
 		if pod_target.has_meta("rescue_pod_pilot"): pod_target.remove_meta("rescue_pod_pilot")
 	pod_target = null
 	pod_attached = false
+	pod_anchor_basis = Basis.IDENTITY
 	if recall and pod_enabled: _recall_pod()
 
 func _recall_pod() -> void:
@@ -103,9 +105,12 @@ func _recall_pod() -> void:
 	activate("escape",false)
 
 func _attach_pod(body: Node) -> void:
-	if not pod_enabled or pod_deployment < 0.2 or passengers or not is_instance_valid(pod) or is_instance_valid(pod_target): return
+	if not pod_enabled or pod_deployment < 0.2 or not is_instance_valid(pod) or is_instance_valid(pod_target): return
 	var mission := runtime()
 	if mission == null or not mission.side_jobs.can_attach_pod(body): return
+	# Thwart Terrorists starts with the SWAT team already in the pod. Other
+	# rescues still require an empty pod; their mission eligibility enforces it.
+	if passengers and mission.side_jobs.terrorists == null and not (mission.side_jobs.stage_three != null and mission.side_jobs.id == "rovrtn"): return
 	# Seat the pod at the transport's visible surface, preserving its contact
 	# point as the convoy moves. The enclosing NPC collider includes empty space.
 	var agent: Node3D = mission.side_jobs.target
@@ -132,10 +137,13 @@ func _attach_pod(body: Node) -> void:
 	point = closest + normal * pod.radius
 	if equipment.pilot.global_position.distance_to(point) > 3.0: return
 	pod_target = body; pod_attached = true; pod_anchor = body.to_local(point)
+	# Keep the orientation at contact in the host's rotating frame, rather
+	# than leaving the frozen pod aligned to the world as the ship turns.
+	pod_anchor_basis = body.global_basis.orthonormalized().inverse() * pod.global_basis
 	pod.add_collision_exception_with(body); body.add_collision_exception_with(pod)
 	equipment.pilot.add_collision_exception_with(body)
 	body.set_meta("rescue_pod_pilot",weakref(equipment.pilot))
-	pod.freeze = true; pod.collision_mask = 0; pod.collision_layer = 0; pod.global_position = point; pod.reset_physics_interpolation()
+	pod.freeze = true; pod.angular_velocity = Vector3.ZERO; pod.collision_mask = 0; pod.collision_layer = 0; pod.global_position = point; pod.reset_physics_interpolation()
 
 func fire_listening() -> void:
 	var mission := runtime()
@@ -219,7 +227,7 @@ func _physics_process(delta: float) -> void:
 	var point: Vector3 = pod.global_position
 	if is_instance_valid(pod_target):
 		point = pod_target.to_global(pod_anchor)
-		pod.global_position = point
+		pod.global_transform = Transform3D(pod_target.global_basis.orthonormalized() * pod_anchor_basis,point)
 		var pull: Vector3 = point - equipment.pilot.global_position
 		if pull.length() > 0.8: equipment.pilot.apply_central_force(pull.normalized() * (pull.length() - 0.8) * equipment.pilot.mass * 6.0)
 	if not is_instance_valid(pod_target):

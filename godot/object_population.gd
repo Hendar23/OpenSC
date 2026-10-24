@@ -7,6 +7,7 @@ const Thorium = preload("res://thorium_body.gd")
 const Clam = preload("res://clam.gd")
 const Pearl = preload("res://pearl_body.gd")
 const Salvage = preload("res://salvage_body.gd")
+const DisabledMinelayer = preload("res://disabled_minelayer.gd")
 const Rock = preload("res://rock_body.gd")
 const Explosion = preload("res://mine_explosion.gd")
 const Identity = preload("res://entity_identity.gd")
@@ -185,7 +186,10 @@ func _thorium_template(definition: Dictionary, fragment: int) -> Node3D:
 func _create_thorium(definition: Dictionary, fragment: int, pose: Transform3D) -> RigidBody3D:
 	var template := _thorium_template(definition,fragment)
 	if template == null: return null
-	var body: RigidBody3D = Rock.new() if definition.get("behavior","") == "rock" else Pearl.new() if definition.get("behavior","") == "pearl" else Salvage.new() if definition.get("behavior","") == "salvage" else Thorium.new()
+	var body: RigidBody3D = DisabledMinelayer.new() if definition.get("id","") == "rescued_minelayer" else Rock.new() if definition.get("behavior","") == "rock" else Pearl.new() if definition.get("behavior","") == "pearl" else Salvage.new() if definition.get("behavior","") == "salvage" else Thorium.new()
+	if body is DisabledMinelayer:
+		var mission: Node = get_tree().get_first_node_in_group("mission_runtime")
+		if mission != null: body.game = mission.game
 	body.setup(definition,template.duplicate(),fragment,surface_height,simulating)
 	Identity.assign_id(body)
 	add_child(body); body.transform = pose

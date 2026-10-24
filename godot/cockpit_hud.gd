@@ -38,6 +38,7 @@ var bottom_view: SubViewport
 var bottom_camera: Camera3D
 var rear_camera_enabled := false
 var rear_camera: Camera3D
+var rov_camera: Camera3D
 var crt_reflection_strength := 0.25:
 	set(value):
 		crt_reflection_strength = clampf(value,0.0,1.0)
@@ -115,6 +116,7 @@ func setup(player: Node3D, mounted_equipment: Node3D, world: Node3D, folder: Str
 		display.shield_blue = Assets._load_texture(folder, "HBSEG", "HSEGMASK", cache)
 		display.shield_orange = Assets._load_texture(folder, "HOSEG", "HSEGMASK", cache)
 		display.radiation_icon = Assets._load_texture(folder, "RADIO", "RADIOM", cache)
+		if definition.id == "map": display.recording_icon = Assets._load_texture(folder,"REC","RECM",cache)
 		display.screen = definition.screen
 		display.size = definition.size
 		display.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -130,7 +132,7 @@ func setup(player: Node3D, mounted_equipment: Node3D, world: Node3D, folder: Str
 	_layout()
 
 func _setup_bottom_camera(world: Node3D) -> void:
-	# Both cameras share one feed; only the selected camera renders the world.
+	# Auxiliary cameras share one feed; only the selected one renders the world.
 	bottom_view = SubViewport.new(); bottom_view.name = "HUDCameraFeed"
 	bottom_view.size = Vector2i(384,246)
 	bottom_view.world_3d = world.get_world_3d()
@@ -145,6 +147,10 @@ func _setup_bottom_camera(world: Node3D) -> void:
 	rear_camera.near = 0.01; rear_camera.fov = 65
 	rear_camera.cull_mask &= ~(2 | preload("res://first_person_cockpit.gd").RENDER_LAYER)
 	bottom_view.add_child(rear_camera)
+	rov_camera = Camera3D.new(); rov_camera.name = "ROVCamera"
+	rov_camera.near = 0.01
+	rov_camera.cull_mask &= ~(preload("res://remote_vehicle.gd").RENDER_LAYER | preload("res://first_person_cockpit.gd").RENDER_LAYER)
+	bottom_view.add_child(rov_camera)
 	_update_bottom_camera()
 	_update_rear_camera()
 
@@ -152,17 +158,32 @@ func set_bottom_camera_enabled(on: bool) -> void:
 	bottom_camera_enabled = on
 	if on:
 		rear_camera_enabled = false
-		bottom_camera.make_current()
-	displays[2].set_camera_feed(bottom_view.get_texture() if bottom_camera_enabled or rear_camera_enabled else null)
 	_update_bottom_camera(); _refresh_views()
 
 func set_rear_camera_enabled(on: bool) -> void:
 	rear_camera_enabled = on
 	if on:
 		bottom_camera_enabled = false
-		rear_camera.make_current()
-	displays[2].set_camera_feed(bottom_view.get_texture() if bottom_camera_enabled or rear_camera_enabled else null)
 	_update_rear_camera(); _refresh_views()
+
+func controlled_rover() -> Node3D:
+	if not is_instance_valid(equipment) or equipment.support_tools == null: return null
+	var rover: Node3D = equipment.support_tools.rover
+	return rover if is_instance_valid(rover) and rover.deployed and not rover.dead else null
+
+func _refresh_camera_feed() -> void:
+	var rover := controlled_rover()
+	var selected: Camera3D = rov_camera if rover != null else rear_camera if rear_camera_enabled else bottom_camera if bottom_camera_enabled else null
+	if selected != null and bottom_view.get_camera_3d() != selected: selected.make_current()
+	var texture: Texture2D = bottom_view.get_texture() if selected != null else null
+	if displays[2].camera_feed != texture: displays[2].set_camera_feed(texture)
+	displays[2].rov_recording = rover != null and rover.recording > 0
+	if rover == null: return
+	rov_camera.global_transform = rover.camera_pose()
+	var main_camera := get_viewport().get_camera_3d()
+	if main_camera != null:
+		rov_camera.fov = main_camera.fov; rov_camera.far = main_camera.far
+		rov_camera.environment = main_camera.environment; rov_camera.attributes = main_camera.attributes
 
 func _update_rear_camera() -> void:
 	if rear_camera == null or not is_instance_valid(pilot): return
@@ -227,7 +248,8 @@ func _layout() -> void:
 
 func _refresh_views() -> void:
 	if bottom_view != null:
-		bottom_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if (bottom_camera_enabled or rear_camera_enabled) and visible and enabled[2] and instruments[2].visible and is_instance_valid(pilot) and not pilot.dead else SubViewport.UPDATE_DISABLED
+		_refresh_camera_feed()
+		bottom_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if displays[2].camera_feed != null and visible and enabled[2] and instruments[2].visible and is_instance_valid(pilot) and not pilot.dead else SubViewport.UPDATE_DISABLED
 	for i in range(displays.size()): displays[i].set_process(visible and instruments[i].visible)
 	for view in model_views:
 		view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if visible and view.get_parent().visible else SubViewport.UPDATE_DISABLED

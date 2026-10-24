@@ -16,6 +16,7 @@
     {"id": "graphics", "label": "Graphics"},
     {"id": "audio", "label": "Audio"},
     {"id": "gameplay", "label": "General"},
+    {"id": "player_folder", "label": "Open Player Folder"},
     {"id": "mods", "label": "Mods"},
     {"id": "exit", "label": "Exit"},
     {"id": "back", "label": "Back"}

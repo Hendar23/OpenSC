@@ -362,6 +362,26 @@ static func _load_texture(game_folder: String, texture_name: String, mask_name: 
 	Cache.save_resource(disk_key, texture)
 	return texture
 
+static func _load_raster_icon(folder: String, name: String) -> Texture2D:
+	Mods.ensure()
+	var path := folder.path_join("GAMETEX/" + name.to_upper() + ".RAS")
+	# GRAPPLE1.BMP is a metal hull atlas; GRAPPLE1.RAS is a HUD icon.
+	# A bare texture replacement normally targets the BMP, so only accept it
+	# for a RAS icon when there is no colliding original BMP name.
+	var candidates := Mods.candidates("texture." + name + ".ras")
+	if not FileAccess.file_exists(folder.path_join("GAMETEX/" + name.to_upper() + ".BMP")):
+		candidates.append_array(Mods.candidates("texture." + name))
+	for replacement in candidates:
+		var image := _replacement_image(replacement.path)
+		if image == null or image.is_empty(): continue
+		var texture := ImageTexture.create_from_image(image)
+		texture.set_meta("asset_mod",replacement.name); texture.set_meta("asset_source",replacement.path)
+		return texture
+	var original := LegacyBMP.load_image(path)
+	if original == null or original.is_empty(): return null
+	var texture := ImageTexture.create_from_image(original); texture.set_meta("asset_source",path)
+	return texture
+
 static func _replacement_image(path: String) -> Image:
 	return LegacyBMP.load_image(path) if path.get_extension().to_lower() in ["bmp", "ras"] else Image.load_from_file(path)
 

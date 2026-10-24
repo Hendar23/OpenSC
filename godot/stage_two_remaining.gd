@@ -90,10 +90,10 @@ func _mark(actor: Node3D, faction: int = 0) -> void:
 	body.set_meta("mission_marker",true); body.set_meta("faction",faction)
 	if not jobs.game.cockpit_hud.map_data.actor_markers.has(body): jobs.game.cockpit_hud.map_data.actor_markers.append(body)
 
-func _boat(model: String, pose: Transform3D, faction: int, health: float, speed: float = 2.0) -> Node3D:
+func _boat(model: String, pose: Transform3D, faction: int, health: float, speed: float = 2.0, separate_vessels: bool = false) -> Node3D:
 	var agent: Node3D = jobs._boat(model,pose,faction,health,speed)
 	if agent == null: return null
-	jobs._place_vessel_clear(agent); _mark(agent,faction)
+	jobs._place_vessel_clear(agent,separate_vessels); _mark(agent,faction)
 	return agent
 
 func _hostile(agent: Node3D) -> void:
@@ -111,10 +111,10 @@ func _structure(pose: Transform3D, health: float) -> Node3D:
 	jobs.game.natural_light.attach(model); jobs.game.water_visuals.attach(model)
 	return body
 
-func _fish(model: String, point: Vector3, health: float, sustain: float, map_marker: bool = true) -> Node3D:
+func _fish(model: String, point: Vector3, health: float, sustain: float, map_marker: bool = true, controller: Script = null) -> Node3D:
 	var visual: Node3D = jobs.Document.load_model(model,jobs.game.game_folder,true)
 	if visual == null: return null
-	var body := preload("res://mission_creature.gd").new()
+	var body: Node3D = (controller if controller != null else preload("res://mission_creature.gd")).new()
 	var meshes := preload("res://submarine_equipment.gd")._meshes(visual,Transform3D.IDENTITY)
 	var bounds := preload("res://submarine_equipment.gd")._bounds(meshes)
 	# Retail creature clumps retain their authoring offset. As with ambient
@@ -508,13 +508,6 @@ func _start_recon() -> void:
 		recon_cable.material_override = material; recon_cable.set_meta("exclude_from_debris",true)
 		jobs.game.world_root.add_child(recon_cable); jobs.actors.append(recon_cable)
 		_update_recon_link()
-	# Pre-place the alarm wave so an approaching camera never sees it pop in.
-	# Dormancy gates both local and offscreen movement, while retaining damage.
-	for index in poses.size():
-		var agent := _boat("TRAD2" if index == 0 else "TRAD-SUB",poses[index],1,10)
-		if agent == null: continue
-		agent.dormant = true; agent.combat_enabled = false
-		recon_reinforcements.append(agent); enemies.append(agent)
 	for row in jobs._rows(15):
 		if int(row.ObjectID) == 2: _recon_turret(jobs._pose(row))
 		# Released 00480e60 skips the three ObjectID 3 rows entirely.
@@ -574,10 +567,15 @@ func _recon_alarm() -> void:
 	if flags.get("alarm",false): return
 	flags["alarm"] = true; radio("o6")
 	_end_recon_link()
-	for agent in recon_reinforcements:
-		if not is_instance_valid(agent) or agent.dead: continue
-		agent.dormant = false; agent.combat_enabled = true
-	for agent in enemies: _hostile(agent)
+	# Keep the cave approach clear. The original alarm creates this wave,
+	# after the encounter is underway, rather than parking it outside early.
+	for index in poses.size():
+		var agent := _boat("TRAD2" if index == 0 else "TRAD-SUB",poses[index],1,10,3.5,true)
+		if agent == null: continue
+		recon_reinforcements.append(agent); enemies.append(agent)
+	for agent in enemies:
+		agent.wait = 0; agent.flee = 0
+		_hostile(agent)
 
 func rov_recorded(quality: float) -> void:
 	if family != "recon" or flags.get("recorded",false): return

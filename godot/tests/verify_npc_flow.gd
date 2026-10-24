@@ -11,6 +11,9 @@ class Target extends CharacterBody3D:
 	var dead := false
 class BlockedWater extends OpenWater:
 	func route(_from: Vector3,_goal: Vector3) -> PackedVector3Array: routes += 1; return PackedVector3Array()
+class ShoreWater extends OpenWater:
+	func water_clear(point: Vector3) -> bool: return point.x <= 0
+	func segment_clear(a: Vector3,b: Vector3) -> bool: probes += 1; return water_clear(a) and water_clear(b)
 var checks := 0
 var failures := 0
 func check(ok: bool,message: String) -> void:
@@ -55,10 +58,24 @@ func run() -> void:
 	check(minimum > 1.2,"Firing passes clear the target hull rather than ramming it")
 	check(traffic.routes < 130,"Combat route generation is bounded across a sixty-second encounter")
 	check(traffic.probes < 2500,"Look-ahead and avoidance queries remain throttled")
+	# Emerging from a tunnel must invalidate a pass aimed at the old position.
+	for phase in ["pass","extend","rejoin"]:
+		attack.attack_run.phase = phase; attack.attack_run.target_point = target.global_position
+		attack.attack_run.goal = target.global_position; attack.attack_run.decision_clock = 0
+		var old_goal: Vector3 = attack.attack_run.goal
+		target.position += Vector3.RIGHT*20
+		attack.attack_run.advance(attack,target,0.04)
+		check(attack.attack_run.phase == "approach" and attack.attack_run.goal.distance_to(old_goal) > 10,"Moving target replaces obsolete %s destination promptly" % phase)
 	var blocked := BlockedWater.new(); world.add_child(blocked); blocked.navigation_ready = true; blocked.set_physics_process(false); blocked.player = target
 	var trapped := boat(world,blocked,Vector3(60,0,-12),true)
 	for tick in range(300): trapped.advance(1.0/60.0)
 	check(blocked.routes <= 40,"Impossible combat routes have a small search budget rather than a per-frame angle sweep")
 	check(trapped.global_position.is_equal_approx(Vector3(60,0,-12)),"No valid route means holding safely rather than driving through scenery")
+	var shore := ShoreWater.new(); world.add_child(shore); shore.set_physics_process(false)
+	var turning := boat(world,shore,Vector3(-0.01,0,-30),true)
+	turning.victim = target; turning.motion.velocity = Vector3.RIGHT*2.5
+	turning._flow_move(0.04,Vector3.FORWARD,2.5)
+	check(shore.water_clear(turning.global_position),"Turning inertia cannot leave navigable water and invalidate future pursuit routes")
+	check(turning.global_position.z < -30 and turning.speed > 0,"Combat hull redirects along the clear route instead of becoming stranded at its boundary")
 	print("Flow metrics: cruise minimum ",minimum_cruise," target separation ",minimum," moving ",float(moving)/1399," passes ",attack.attack_run.passes," routes ",traffic.routes," probes ",traffic.probes)
 	world.free(); print("NPC continuous flow: %d/%d checks passed" % [checks-failures,checks]); quit(1 if failures else 0)

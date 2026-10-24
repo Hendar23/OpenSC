@@ -8,6 +8,7 @@ var actor_markers: Array[Node3D] = []
 var npc_view_span := Vector2(70,70.0 * 82.0 / 128.0)
 const CITY_DISCOVERY_RANGE := 12.0
 var discovered_cities := {}
+var landmarks = preload("res://map_landmarks.gd").new()
 
 func discover_cities(point: Vector3) -> void:
 	for marker in markers:
@@ -37,6 +38,7 @@ var last_explored := Vector2(INF,INF)
 var last_explored_height := INF
 func initialize_exploration() -> void:
 	discovered_cities.clear()
+	landmarks.reset()
 	# Exploration belongs to this game, independently of saved preferences.
 	explored = Image.create(RESOLUTION,RESOLUTION,false,Image.FORMAT_L8)
 	explored.fill(Color.BLACK)
@@ -46,6 +48,7 @@ func initialize_exploration() -> void:
 
 func explore(point: Vector3) -> void:
 	discover_cities(point)
+	landmarks.discover(point,CITY_DISCOVERY_RANGE)
 	if explored == null: return
 	var position := Vector2(point.x,point.z)
 	if position.distance_squared_to(last_explored) < 0.25 and absf(point.y - last_explored_height) < 0.25: return
@@ -87,6 +90,7 @@ func _visible_from(observer: Vector3, x: int, y: int) -> bool:
 
 func reset_exploration() -> void:
 	discovered_cities.clear()
+	landmarks.reset()
 	if explored == null: return
 	explored.fill(Color.BLACK)
 	exploration_texture.update(explored)
@@ -94,6 +98,7 @@ func reset_exploration() -> void:
 	last_explored_height = INF
 
 func reveal_all() -> void:
+	landmarks.reveal_all()
 	for marker in markers: discovered_cities[str(marker.get("id",marker.name))] = true
 	if explored == null: return
 	explored.fill(Color.WHITE)

@@ -56,6 +56,7 @@ var propeller_angle := 0.0
 var propeller_power := 0.0
 var twin_exhaust := false
 var report_player_attack := true
+var departure_probe := BoxShape3D.new()
 
 static func install(model: Node3D, values: Dictionary, controller: Script = null) -> Node3D:
 	var agent := model.get_node_or_null("Trader")
@@ -106,11 +107,18 @@ static func rotor_nodes(model: Node3D, model_id: String = "") -> Array[Node3D]:
 			if rotor != null and not result.has(rotor): result.append(rotor)
 	return result
 
+static func model_health_multiplier(model: Node3D) -> float:
+	var model_id := str(model.get_meta("editor_model",str(model.get_meta("asset_source","")).get_file().get_basename())).to_upper()
+	return 2.0 if model_id in ["TRAD-SUB","TRAD2","TECHNEW","TECH2SUB","PIRATE","PIRATE2","PIRATE3"] else 1.0
+
+func health_multiplier() -> float:
+	return model_health_multiplier(get_parent())
+
 func reset() -> void:
 	set_local_simulation(true)
 	release_port()
 	get_parent().global_transform = home; body.transform = Transform3D.IDENTITY; get_parent().reset_physics_interpolation()
-	health.configure(float(tuning.npc_health),float(tuning.npc_sustain))
+	health.configure(float(tuning.npc_health)*health_multiplier(),float(tuning.npc_sustain))
 	propeller_power = 0; propeller_angle = 0
 	if is_instance_valid(propeller): propeller.basis = propeller_rest
 	for rotor in propellers:
@@ -139,6 +147,8 @@ func _physics_process(delta: float) -> void:
 	advance(delta)
 
 func set_local_simulation(on: bool) -> void:
+	# A camera/activity change must not fast-forward an occupied departure.
+	if not on and stage in ["exit_open","ascend","exit_close"] and not _departure_clear(): return
 	if local_simulation == on:
 		# Reconcile the actual node as well as the cached activity flag. A ship
 		# already marked local must not remain disabled when it is approached.
@@ -179,6 +189,7 @@ func advance_abstract(delta: float) -> void:
 	flee = 0; wait = maxf(0,wait - step)
 	if wait > 0: return
 	if stage == "berth":
+		if not _departure_clear(): wait = 0.25; return
 		if not port.is_empty(): get_parent().global_position = port.entry
 		stage = "travel"; destination = 0; port = {}; path.clear()
 	if path.is_empty() and not prepare_abstract_route(): return
@@ -323,6 +334,7 @@ func _precise_motion() -> bool:
 func _flow_move(delta: float, direction: Vector3, desired_speed: float, aim: Vector3 = Vector3.ZERO) -> KinematicCollision3D:
 	var model := get_parent() as Node3D
 	model.global_basis = motion.step(delta,direction,desired_speed,float(tuning.npc_speed),model.global_basis,aim,_precise_motion()).scaled_local(home.basis.get_scale())
+	_constrain_motion(delta,direction)
 	var start := model.global_position
 	var hit := body.move_and_collide(motion.velocity * delta)
 	model.global_position = body.global_position; body.transform = Transform3D.IDENTITY
@@ -330,6 +342,9 @@ func _flow_move(delta: float, direction: Vector3, desired_speed: float, aim: Vec
 	if hit != null: motion.velocity = motion.velocity.slide(hit.get_normal())
 	speed = motion.velocity.length()
 	return hit
+
+func _constrain_motion(_delta: float, _direction: Vector3) -> void:
+	pass
 
 func _coast(delta: float, aim: Vector3 = Vector3.ZERO) -> void:
 	_flow_move(delta,Vector3.ZERO,0.0,aim)
@@ -377,11 +392,14 @@ func _update_dock_audio(previous: String = "") -> void:
 func _dock_step(delta: float) -> void:
 	if stage == "berth":
 		wait = maxf(0,wait - delta)
-		if wait > 0 or not Access.acquire(port,self): return
+		if wait > 0: return
+		if not _departure_clear(): wait = 0.25; return
+		if not Access.acquire(port,self): return
 		get_parent().show(); _phase("exit_open"); return
 	if Access.owner(port) != self:
 		get_parent().global_position = port.entry; get_parent().show(); body.collision_layer = 10
 		port = {}; destination = 0; _phase("travel"); return
+	if stage in ["exit_open","ascend"] and not _departure_clear(): return
 	elapsed += delta
 	var duration := 1.2 if stage in ["open","close","exit_open","exit_close"] else maxf(1.0,port.entry.distance_to(port.inside) / float(tuning.npc_speed))
 	var fraction := clampf(elapsed / duration,0,1)
@@ -408,6 +426,26 @@ func _dock_step(delta: float) -> void:
 		"exit_close":
 			port.collision.collision_layer = 1; Access.release(port,self); body.collision_layer = 10
 			port = {}; path.clear(); destination = 0; _phase("travel")
+
+func _departure_clear() -> bool:
+	if port.is_empty() or system == null or system.space == null: return true
+	var player: Node3D = system.player
+	if not is_instance_valid(player) or not player is CollisionObject3D or player.collision_layer == 0: return true
+	# Reserve the rising hull's full envelope, including room to move off the
+	# hatch. Query real player collision shapes, including rotated side pods.
+	var facing := preload("res://docking_controller.gd").upright_basis(get_parent().global_basis).scaled_local(home.basis.get_scale())
+	var start: Vector3 = port.inside+Vector3.UP*maxf(0,-bounds.position.y-0.25)
+	var finish: Vector3 = port.entry
+	var envelope: AABB = Transform3D(facing,start)*bounds
+	envelope = envelope.merge(Transform3D(facing,finish)*bounds)
+	envelope = envelope.merge(Transform3D(facing,finish+facing.z.normalized()*1.5)*bounds).grow(0.35)
+	departure_probe.size = envelope.size.max(Vector3.ONE*0.1)
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = departure_probe; query.transform.origin = envelope.get_center()
+	query.collision_mask = player.collision_layer; query.exclude = [body.get_rid()]
+	for hit in system.space.intersect_shape(query,32):
+		if hit.collider == player: return false
+	return true
 
 func take_weapon_damage(strength: float, source: Vector3 = Vector3.ZERO) -> void:
 	if not running or not local_simulation or dead or stage != "travel" or not health.hit(strength): return

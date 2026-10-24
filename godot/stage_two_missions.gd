@@ -36,9 +36,15 @@ var missile_template: Node3D
 var bubble_trail: Node3D
 var hitbox: CollisionObject3D
 var fishing: RefCounted
+var genocide: RefCounted
 var remaining: RefCounted
+var terrorists: RefCounted
+var stage_three: RefCounted
 
 func _exit_tree() -> void:
+	if stage_three != null: stage_three.clear(); stage_three = null
+	if terrorists != null: terrorists.clear(); terrorists = null
+	if genocide != null: genocide.clear(); genocide = null
 	if fishing != null: fishing.clear(); fishing = null
 	if remaining != null: remaining.clear(); remaining = null
 
@@ -47,7 +53,13 @@ func start(mission_id: String) -> void:
 	passengers = false; tapped = false; warned = false; convinced = false; dialogue = 0; interception_instruction = false; interception_cancelled = false
 	base_guidance = false; base_instruction_clock = -1.0; reinforcements = false; armour_clock = 0
 	reinforcement_radio_clock = -1.0
-	if id == "stranded": _start_stranded()
+	if id in ["disperse","rovrtn"]:
+		stage_three = preload("res://stage_three_missions.gd").new(); stage_three.jobs = self; stage_three.start()
+	elif id == "minefield":
+		terrorists = preload("res://thwart_terrorists.gd").new(); terrorists.jobs = self; terrorists.start()
+	elif id in runtime.Rules.CORE.values():
+		genocide = preload("res://genocide_weapon.gd").new(); genocide.jobs = self; genocide.start()
+	elif id == "stranded": _start_stranded()
 	elif id in ["breakout","breakout2"]: _start_breakout()
 	elif id in ["fishing","bigherd"]:
 		fishing = preload("res://fishing_missions.gd").new(); fishing.jobs = self; fishing.start()
@@ -56,6 +68,9 @@ func start(mission_id: String) -> void:
 	else: _start_covert()
 
 func clear(reset_rover: bool = false) -> void:
+	if stage_three != null: stage_three.clear(); stage_three = null
+	if terrorists != null: terrorists.clear(); terrorists = null
+	if genocide != null: genocide.clear(); genocide = null
 	if fishing != null: fishing.clear(); fishing = null
 	if remaining != null: remaining.clear(); remaining = null
 	id = ""; phase = ""
@@ -85,13 +100,13 @@ func _rows(mission_id: int) -> Array:
 func _pose(row: Dictionary) -> Transform3D:
 	return preload("res://scenery_loader.gd").placement(row,game.world_root.get_meta("database_offset",Vector3.ZERO))
 
-func _boat(model_id: String, pose: Transform3D, faction: int, health: float, speed: float = 2.0) -> Node3D:
+func _boat(model_id: String, pose: Transform3D, faction: int, health: float, speed: float = 2.0, controller: Script = null) -> Node3D:
 	var model := Document.load_model(model_id,game.game_folder)
 	if model == null: return null
 	game.world_root.add_child(model); model.global_transform = pose; actors.append(model)
 	model.set_meta("editor_model",model_id); model.set_meta("mission_owner",id)
 	preload("res://entity_identity.gd").assign_id(model,"mission/" + id + "/vessel/" + str(vessels.size()))
-	var agent: Node3D = Vessel.install_mission(model,{"npc_faction":faction,"npc_health":health,"npc_speed":speed,"npc_sustain":0.3})
+	var agent: Node3D = Vessel.install_mission(model,{"npc_faction":faction,"npc_health":health,"npc_speed":speed,"npc_sustain":0.1 if model_id == "FREIGHT" and id == "minefield" else 0.3},controller)
 	agent.mission_owner = id
 	game.submarine_traffic.register_vessel(agent,game.world_root,game.game_folder)
 	agent.report_player_attack = false; vessels.append(agent)
@@ -101,13 +116,33 @@ func _boat(model_id: String, pose: Transform3D, faction: int, health: float, spe
 func _city(id_value: int) -> Vector3:
 	return game.submarine_traffic.port_by_id(id_value).get("entry",Vector3.ZERO)
 
-func _place_vessel_clear(agent: Node3D) -> void:
+func _place_vessel_clear(agent: Node3D, separate_vessels: bool = false) -> void:
 	# Source markers may overlap our larger hull/navigation footprint. Find
 	# nearby water before activating a ship, including base reinforcements.
 	var model := agent.get_parent() as Node3D
 	var origin := model.global_position
 	var shape: CollisionShape3D = agent.body.get_child(0)
 	var query := PhysicsShapeQueryParameters3D.new(); query.shape = shape.shape; query.collision_mask = 1
+	var occupied: Array[AABB] = []
+	if separate_vessels:
+		# New bodies may not have reached the physics broadphase yet. Check
+		# existing hull bounds too, so a wave cannot start interpenetrating.
+		for other in game.submarine_traffic.traders:
+			if other != agent and not other.dead and other.running and other.stage == "travel":
+				occupied.append(other.get_parent().global_transform*other.bounds.grow(0.25))
+	if separate_vessels:
+		for lift in [0.0,0.5,1.0,1.5,3.0,-0.5,-1.0,-2.0,5.0]:
+			for radius in [0.0,2.0,4.0,6.0]:
+				for direction in (1 if radius == 0 else 8):
+					var angle := float(direction)*TAU/8.0
+					var point := origin+Vector3(cos(angle)*radius,lift,sin(angle)*radius)
+					point.y = minf(point.y,game.pilot.surface_height-game.submarine_traffic.CLEARANCE-0.05)
+					var hull: AABB = Transform3D(model.global_basis,point)*agent.bounds.grow(0.25)
+					if occupied.any(func(other: AABB) -> bool: return hull.intersects(other)): continue
+					if not game.submarine_traffic.segment_clear(point,point): continue
+					query.transform = Transform3D(model.global_basis,point)*shape.transform
+					if not get_world_3d().direct_space_state.intersect_shape(query,1).is_empty(): continue
+					model.global_position = point; agent.home = model.global_transform; model.reset_physics_interpolation(); return
 	for radius in [0.0,2.0,4.0,6.0]:
 		for direction in (1 if radius == 0 else 8):
 			var angle := float(direction)*TAU/8.0
@@ -215,7 +250,10 @@ func _start_covert() -> void:
 func _physics_process(delta: float) -> void:
 	if id.is_empty() or phase == "finished" or runtime.active().is_empty() or not game.pilot.active: return
 	age += delta; clock -= delta; armour_clock = maxf(0,armour_clock - delta)
-	if id == "stranded": _step_stranded()
+	if stage_three != null: stage_three.step(delta)
+	elif terrorists != null: terrorists.step(delta)
+	elif genocide != null: genocide.step(delta)
+	elif id == "stranded": _step_stranded()
 	elif id in ["breakout","breakout2"]: _step_breakout(delta)
 	elif fishing != null: fishing.step(delta)
 	elif remaining != null: remaining.step(delta)
@@ -358,10 +396,13 @@ func attach_listening_device(body: Node3D) -> bool:
 	return true
 
 func can_attach_pod(body: Node3D) -> bool:
+	if stage_three != null: return stage_three.can_attach_pod(body)
+	if terrorists != null: return terrorists.can_attach_pod(body)
 	if remaining != null: return remaining.can_attach_pod(body)
 	return id in ["breakout","breakout2"] and not passengers and is_instance_valid(target) and not target.dead and body == target.body
 
 func delivery(body: Node3D, city: int) -> bool:
+	if genocide != null: return genocide.delivery(body,city)
 	if remaining != null: return remaining.delivery(body,city)
 	if id != "stranded" or body != target or city not in [1,2,3,4] or delivered_city != 0: return false
 	delivered_city = city; target.delivered = true; target.set_meta("delivery_city",city)
@@ -377,6 +418,8 @@ func delivery(body: Node3D, city: int) -> bool:
 	return true
 
 func docked(city: int) -> void:
+	if stage_three != null: stage_three.docked(city); return
+	if terrorists != null: terrorists.docked(city); return
 	if remaining != null: remaining.docked(city); return
 	if id in ["breakout","breakout2"] and passengers and city in [1,2,3,4]:
 		runtime.active()["resolved_city"] = city
@@ -469,3 +512,6 @@ func burst(point: Vector3, size: float) -> void: _burst(point,size)
 func _burst(point: Vector3, size: float) -> void:
 	var effect := preload("res://mine_explosion.gd").new(); game.world_root.add_child(effect); effect.global_position = point
 	effect.setup(game.submarine_traffic.explosion_frames,size,game.submarine_traffic.explosion_sound)
+
+func _detach_walker_head() -> void:
+	if genocide != null: genocide.detach_head()

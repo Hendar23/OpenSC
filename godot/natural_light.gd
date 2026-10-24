@@ -121,16 +121,19 @@ func lighting(environment: Environment, fog_end: float, fog_start: float, fog_cu
 	RenderingServer.global_shader_parameter_set("osc_natural_fog_color",Vector4(fog.r,fog.g,fog.b,1))
 	RenderingServer.global_shader_parameter_set("osc_natural_fog",Vector3(fog_end if environment.fog_enabled else 1000000,fog_start,fog_curve))
 func attach(node: Node) -> void:
-	if node is MeshInstance3D and node.mesh != null:
-		for index in range(node.mesh.get_surface_count()):
-			var plant := node.get_active_material(index) as ShaderMaterial
+	var mesh: Mesh = node.mesh if node is MeshInstance3D else node.multimesh.mesh if node is MultiMeshInstance3D and node.multimesh != null else null
+	if node is MultiMeshInstance3D and mesh != null and mesh.get_surface_count() != 1: mesh = null
+	if mesh != null:
+		for index in range(mesh.get_surface_count()):
+			var active: Material = node.get_active_material(index) if node is MeshInstance3D else node.material_override if node.material_override != null else mesh.surface_get_material(index)
+			var plant := active as ShaderMaterial
 			if plant != null and plant.shader == preload("res://plant_current.gdshader"):
 				var parameters := {}
 				for parameter in plant.shader.get_shader_uniform_list(): parameters[parameter.name] = plant.get_shader_parameter(parameter.name)
 				plant.shader = preload("res://natural_plant.gdshader")
 				for key in parameters: plant.set_shader_parameter(key,parameters[key])
 				continue
-			var original := node.get_active_material(index) as StandardMaterial3D
+			var original := active as StandardMaterial3D
 			if original == null or original.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED: continue
 			var material: ShaderMaterial = materials.get(original.get_instance_id())
 			if material == null:
@@ -153,6 +156,7 @@ func attach(node: Node) -> void:
 				if original.has_meta("caustics_owners"):
 					original.get_meta("caustics_owners").append(weakref(material))
 					material.set_meta("caustics_attached",true)
-			node.set_surface_override_material(index,material)
+			if node is MeshInstance3D: node.set_surface_override_material(index,material)
+			else: node.material_override = material
 			if node.material_override != null: node.material_override = material
 	for child in node.get_children(): attach(child)

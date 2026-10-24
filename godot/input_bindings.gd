@@ -185,8 +185,11 @@ static func describe(value: Variant) -> String:
 	if value.kind == "button": return button_name(value.modifier) + " + " + button_name(value.button) if value.modifier >= 0 else button_name(value.button)
 	if value.kind == "axis":
 		var names := ["Left stick X","Left stick Y","Right stick X","Right stick Y","Left trigger","Right trigger"]
-		return str(names[value.axis] if value.axis < names.size() else "Axis %d" % value.axis) + (" +" if value.sign > 0 else " -")
-	return to_event(value).as_text()
+		return "Controller " + str(names[value.axis] if value.axis < names.size() else "Axis %d" % value.axis) + (" +" if value.sign > 0 else " -")
+	var event := to_event(value)
+	if event is InputEventKey and value.physical:
+		event.physical_keycode = 0; event.keycode = value.code
+	return event.as_text()
 static func button_name(button: int) -> String:
-	var names := {JOY_BUTTON_A:"A / Cross",JOY_BUTTON_B:"B / Circle",JOY_BUTTON_X:"X / Square",JOY_BUTTON_Y:"Y / Triangle",JOY_BUTTON_LEFT_SHOULDER:"Left shoulder",JOY_BUTTON_RIGHT_SHOULDER:"Right shoulder",JOY_BUTTON_START:"Start / Options",JOY_BUTTON_BACK:"Back / Select",JOY_BUTTON_DPAD_UP:"D-pad up",JOY_BUTTON_DPAD_DOWN:"D-pad down",JOY_BUTTON_DPAD_LEFT:"D-pad left",JOY_BUTTON_DPAD_RIGHT:"D-pad right"}
-	return str(names.get(button,"Controller button %d" % button))
+	var names := {JOY_BUTTON_A:"A",JOY_BUTTON_B:"B",JOY_BUTTON_X:"X",JOY_BUTTON_Y:"Y",JOY_BUTTON_LEFT_SHOULDER:"LB",JOY_BUTTON_RIGHT_SHOULDER:"RB",JOY_BUTTON_LEFT_STICK:"Left stick click",JOY_BUTTON_RIGHT_STICK:"Right stick click",JOY_BUTTON_GUIDE:"Xbox",JOY_BUTTON_START:"Menu",JOY_BUTTON_BACK:"View",JOY_BUTTON_DPAD_UP:"D-pad up",JOY_BUTTON_DPAD_DOWN:"D-pad down",JOY_BUTTON_DPAD_LEFT:"D-pad left",JOY_BUTTON_DPAD_RIGHT:"D-pad right"}
+	return "Controller " + str(names.get(button,"button %d" % button))

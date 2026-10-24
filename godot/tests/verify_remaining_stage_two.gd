@@ -190,20 +190,8 @@ func run() -> void:
 			check(game.player_progress.status.credits == 105000,"Repeated dock notification cannot duplicate the rescue reward")
 		elif id == "recontech":
 			var mission: RefCounted = jobs.remaining
-			var preplaced: Array = mission.recon_reinforcements.duplicate()
-			var waiting_poses: Array[Transform3D] = []
 			var vessel_count: int = jobs.vessels.size()
-			check(preplaced.size() == 3 and vessel_count == 4,"All three Recon reinforcements exist with the initial guard at mission start")
-			for index in preplaced.size():
-				var agent: Node3D = preplaced[index]
-				check(agent.get_parent().get_meta("editor_model") == ("TRAD2" if index == 0 else "TRAD-SUB"),"Preplaced reinforcement retains original model")
-				var waiting_pose: Transform3D = agent.get_parent().global_transform
-				waiting_poses.append(waiting_pose)
-				check(waiting_pose.origin.distance_to(mission.poses[index].origin) < 8 and agent.home.is_equal_approx(waiting_pose),"Reinforcement uses original placement with normal hull clearance")
-				agent.set_local_simulation(true); agent._physics_process(1.0)
-				agent.local_simulation = false; agent.advance_abstract(1.0)
-				agent.set_physics_process(false)
-				check(agent.dormant and not agent.combat_enabled and agent.get_parent().global_transform.is_equal_approx(waiting_pose),"Dormant reinforcement stays still in local and offscreen simulation")
+			check(mission.recon_reinforcements.is_empty() and vessel_count == 1,"Only the original outpost guard exists before the Recon alarm")
 			check(mission.turrets.size() == 3,"Cave outpost has three destructible turrets")
 			var mines: Array = jobs.actors.filter(func(actor: Node) -> bool: return actor is Mine)
 			check(mines.is_empty(),"Unused ObjectID 3 rows do not add mines omitted by the released mission callback")
@@ -224,7 +212,8 @@ func run() -> void:
 			var rov: CharacterBody3D = game.equipment.support_tools.rover
 			check(rov.deployed,"Equipment activation deploys the remote vehicle")
 			game._physics_process(0); game._update_follow_camera(0,true)
-			check(game.pilot.remote_controlled and game.pilot.controls_enabled and game.camera.cull_mask & rov.RENDER_LAYER == 0,"Remote control redirects player input without disabling AI hostility, and excludes its own camera housing")
+			game.cockpit_hud._refresh_views()
+			check(game.pilot.remote_controlled and game.pilot.controls_enabled and game.camera.cull_mask & rov.RENDER_LAYER != 0 and game.cockpit_hud.rov_camera.cull_mask & rov.RENDER_LAYER == 0,"Remote input drives the ROV while its camera feed replaces the minimap and the main camera can still see it")
 			mission.rov_recorded(0.0)
 			check(not mission.flags.get("recorded",false),"Unusable recording cannot complete recon")
 			var center: Vector3 = mission.structure.to_global(mission.structure.get_meta("mission_target_center",Vector3.ZERO))
@@ -239,17 +228,19 @@ func run() -> void:
 			if DisplayServer.get_name() != "headless":
 				rov.yaw = rov.global_rotation.y; rov.pitch = rov.global_rotation.x
 				game._update_follow_camera(0,true)
-				check(runtime.target_marker.target_point().is_finite(),"Green outpost target square projects through the active ROV camera")
+				check(game.cockpit_hud.bottom_view.get_camera_3d() == game.cockpit_hud.rov_camera,"ROV point of view renders in the centre HUD viewport")
 				for frame in range(5): await process_frame
 				await RenderingServer.frame_post_draw
 				root.get_texture().get_image().save_png("res://tests/remaining-rov-view.png")
 			mission.step(10.1)
 			check(mission.flags.get("recorded",false) and mission.enemies.size() == 4,"Confirmed footage triggers original three reinforcements")
-			check(jobs.vessels.size() == vessel_count and preplaced.all(func(agent: Node3D) -> bool: return mission.enemies.has(agent) and not agent.dormant and agent.running and agent.combat_enabled),"Alarm activates the exact preplaced ships without spawning replacements")
-			for index in preplaced.size():
-				check(preplaced[index].get_parent().global_transform.is_equal_approx(waiting_poses[index]),"Alarm does not teleport the waiting reinforcement")
+			check(jobs.vessels.size() == vessel_count+3 and mission.recon_reinforcements.size() == 3,"Recording alarm spawns all three original reinforcements")
+			for index in mission.recon_reinforcements.size():
+				var agent: Node3D = mission.recon_reinforcements[index]
+				check(agent.get_parent().get_meta("editor_model") == ("TRAD2" if index == 0 else "TRAD-SUB"),"Alarm reinforcement retains original model")
+				check(agent.get_parent().global_position.distance_to(mission.poses[index].origin) < 8 and not agent.dormant and agent.combat_enabled,"Alarm reinforcement spawns at its original position with normal hull clearance and active combat")
 			mission._recon_alarm()
-			check(jobs.vessels.size() == vessel_count and mission.enemies.size() == 4,"Repeated Recon alarm cannot duplicate the wave")
+			check(jobs.vessels.size() == vessel_count+3 and mission.enemies.size() == 4,"Repeated Recon alarm cannot duplicate the wave")
 			check(not is_instance_valid(mission.recon_cable) and mission.enemies.all(func(agent: Node3D) -> bool: return agent.engage_player and agent.pursue_offscreen),"Alarm releases guard cable and makes all four ships pursue the player")
 			# The source wave targets the main submarine outside the cave, not
 			# the remotely piloted ROV beside the underground outpost.
@@ -316,19 +307,15 @@ func run() -> void:
 	game.pilot.global_position = attacked_recon.structure.global_position+Vector3.RIGHT*30
 	attacked_recon.structure.take_weapon_damage(1)
 	check(attacked_recon.flags.get("attacked",false) and not attacked_recon.flags.get("alarm",false) and attacked_recon.ship.engage_player and not is_instance_valid(attacked_recon.recon_cable),"Damaging distant outpost releases its guard but does not invent an immediate reinforcement wave")
-	var passive_survivors: Array = attacked_recon.recon_reinforcements.duplicate()
+	check(attacked_recon.recon_reinforcements.is_empty() and jobs.vessels.size() == 1,"Attacking the outpost without raising its alarm does not create waiting reinforcements")
 	jobs.docked(4)
 	check(runtime.active().is_empty() and game.player_progress.missions.completed.recontech2.score == 0 and runtime.last_response == runtime.text("recontech2",3),"Returning after attacking without footage gives original propaganda response and no reward")
-	check(passive_survivors.all(func(agent: Node3D) -> bool: return is_instance_valid(agent) and agent.has_meta("fishing_survivor") and not agent.dormant and agent.running and agent.combat_enabled and not agent.engage_player),"Unalarmed preplaced ships survive early resolution as independent passive ships")
 	await fresh("recontech2")
 	var ambushed_recon: RefCounted = jobs.remaining
-	var lost_reinforcement: Node3D = ambushed_recon.recon_reinforcements[0]
-	lost_reinforcement.set_local_simulation(true)
-	lost_reinforcement.take_weapon_damage_from(1000,lost_reinforcement.global_position,game.pilot)
-	check(lost_reinforcement.dead,"Preplaced dormant reinforcement remains vulnerable to weapons")
+	check(ambushed_recon.recon_reinforcements.is_empty() and jobs.vessels.size() == 1,"Second city variant also leaves the cave approach clear before its alarm")
 	game.pilot.global_position = ambushed_recon.structure.global_position+Vector3.RIGHT*10
 	ambushed_recon.step(8.1); ambushed_recon.step(2.1); ambushed_recon.step(0.5)
-	check(ambushed_recon.flags.get("alarm",false) and jobs.vessels.size() == 4 and lost_reinforcement.dead and ambushed_recon.recon_reinforcements.filter(func(agent: Node3D) -> bool: return not agent.dead and not agent.dormant and agent.engage_player).size() == 2,"Proximity alarm activates surviving preplaced ships without replacing a destroyed defender")
+	check(ambushed_recon.flags.get("alarm",false) and jobs.vessels.size() == 4 and ambushed_recon.recon_reinforcements.filter(func(agent: Node3D) -> bool: return not agent.dead and not agent.dormant and agent.engage_player).size() == 3,"Proximity alarm spawns and activates all three reinforcements once")
 	jobs.remaining.structure.take_weapon_damage(1000)
 	check(runtime.active().is_empty() and not game.player_progress.missions.completed.recontech2.success,"Destroying the outpost before confirmation fails recon")
 	check(runtime.last_response == runtime.text("recontech2",2),"Unconfirmed destruction selects the original hospital response")

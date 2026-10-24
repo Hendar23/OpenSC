@@ -28,6 +28,11 @@ func advance(agent: Node3D, victim: Node3D, delta: float) -> void:
 	if decision_clock <= 0:
 		decision_clock = 0.25+fmod(float(agent.get_instance_id()%17)*0.023,0.12)
 		var speed: float = agent.tuning.npc_speed
+		# A player leaving a confined entrance must not be chased through an
+		# old pass/rejoin point inside it for the rest of that manoeuvre.
+		if target_point.is_finite() and target_point.distance_to(victim.global_position) > maxf(4.0,speed*1.5):
+			phase = "approach"; elapsed = 0; goal = Vector3.INF
+			target_point = victim.global_position; agent.path.clear(); route_clock = 0
 		var lead: Vector3 = victim.velocity if victim is CharacterBody3D else victim.linear_velocity if victim is RigidBody3D else Vector3.ZERO
 		var predicted: Vector3 = victim.global_position+lead*minf(0.8,offset.length()/maxf(1,speed)*0.2)
 		if phase == "approach":
@@ -63,4 +68,6 @@ func advance(agent: Node3D, victim: Node3D, delta: float) -> void:
 			# around scenery without unbounded path requests or ramming it.
 			agent.path = agent._attack_route(victim.global_position)
 	if not agent.path.is_empty(): agent._travel_without_target(delta)
-	else: agent._coast(delta)
+	# A blocked pass still leaves a gun target. Coasting without an aim order
+	# parked guards facing away indefinitely whenever navigation found no route.
+	else: agent._coast(delta,offset)

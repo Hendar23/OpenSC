@@ -19,7 +19,7 @@ func run() -> void:
 	for index in range(7): slots.append({"slot":index,"name":"Empty slot","exists":false,"valid":false,"city":"","saved_at":""})
 	var ui := Interface.new(); root.add_child(ui)
 	paused = true
-	ui.model = func() -> Dictionary: return {"city":"Touka Reef","slots":slots,"status":{}}
+	ui.model = func() -> Dictionary: return {"city":"Touka Reef","slots":slots,"status":{},"autosave":{"valid":true,"saved_at":"2026-10-24T00:04:59"}}
 	ui.action_requested.connect(func(action: String, payload: Dictionary) -> void:
 		if action == "save_slot": saved = payload.duplicate()
 	)
@@ -28,12 +28,12 @@ func run() -> void:
 	await pad(root,JOY_BUTTON_DPAD_DOWN)
 	check(root.gui_get_focus_owner().name == "choose_slot_1","D-pad moves directly between save slots")
 	await pad(root,JOY_BUTTON_A)
-	check(ui.name_dialog.visible and ui.name_field.text == "Touka Reef","Selecting an empty slot suggests the current city name")
+	check(ui.name_dialog.visible and ui.name_field.text == "Save 2","Selecting an empty slot suggests its one-based save number")
 	await pad(ui.name_dialog,JOY_BUTTON_A)
-	check(not ui.name_dialog.visible and saved.get("slot") == 1 and saved.get("name") == "Touka Reef","Controller confirm accepts the suggested name and saves")
+	check(not ui.name_dialog.visible and saved.get("slot") == 1 and saved.get("name") == "Save 2","Controller confirm accepts the numbered default and saves")
 	slots[1] = {"slot":1,"name":"My voyage","exists":true,"valid":true,"city":"Touka Reef","saved_at":"2026-10-08T22:15:30"}
 	ui.open("save"); ui._choose_slot(1); await process_frame
-	check(ui.button_nodes.any(func(node: Button) -> bool: return node.text.contains("My voyage — 2026-10-08 22:15:30")),"Save list shows the name with its saved date and time")
+	check(ui.button_nodes.any(func(node: Button) -> bool: return node.text.contains("My voyage — 08/10/26 22:15") and node.tooltip_text == "Touka Reef — 08/10/26 22:15"),"Save list and tooltip use British date and 24-hour time without seconds")
 	check(ui.name_field.text == "My voyage","Existing slots retain their saved name")
 	await pad(ui.name_dialog,JOY_BUTTON_B)
 	check(not ui.name_dialog.visible,"Controller cancel closes naming without saving")
@@ -48,6 +48,13 @@ func run() -> void:
 	await pad(root,JOY_BUTTON_DPAD_DOWN)
 	check(root.gui_get_focus_owner().name == "choose_slot_1","Slot navigation survives a menu refresh")
 	ui.open("load")
-	check(ui.button_nodes.any(func(node: Button) -> bool: return node.text.contains("My voyage — 2026-10-08 22:15:30")),"Load list also shows the saved date and time")
+	check(ui.button_nodes.any(func(node: Button) -> bool: return node.text.contains("My voyage — 08/10/26 22:15")),"Load list uses the same British timestamp")
+	check(ui.button_nodes.any(func(node: Button) -> bool: return node.text == "Auto Save" and node.tooltip_text == "24/10/26 00:04"),"Autosave tooltip uses the same format including midnight")
+	ui.open("save"); ui._choose_slot(6); await process_frame
+	check(ui.name_field.text == "Save 7","Last slot defaults to Save 7")
+	ui.name_field.text = "   "; ui._confirm_name()
+	check(saved.slot == 6 and saved.name == "Save 7","Blank input falls back to the slot's numbered default")
+	check(slots[1].name == "My voyage" and slots[1].saved_at == "2026-10-08T22:15:30","Formatting preserves existing custom names and stored ISO dates")
+	check(preload("res://save_games.gd").display_timestamp("").is_empty() and preload("res://save_games.gd").display_timestamp("test") == "test","Missing or legacy non-date text is handled without parsing errors")
 	paused = false; ui.free()
 	print("Save menu input: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)
