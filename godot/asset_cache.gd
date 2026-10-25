@@ -1,17 +1,17 @@
 extends RefCounted
 ## Disposable conversions only. Saves, settings and live world state never go here.
-const VERSION := 1
+const VERSION := 2
 static var enabled := true
 static var hits := 0
 static var misses := 0
 static var writes := 0
 static var _files := {}
 static var _directories := {}
-static var _code := ""
+static var _code := {}
 static var _unwritable := {}
 
 static func reset_session() -> void:
-	_files.clear(); _directories.clear(); _code = ""
+	_files.clear(); _directories.clear(); _code.clear()
 	hits = 0; misses = 0; writes = 0
 
 static func fingerprint(path: String) -> String:
@@ -41,24 +41,34 @@ static func _directory_records(path: String, records: Array[String]) -> void:
 	for name in folders:
 		if not name.begins_with("."): _directory_records(path.path_join(name), records)
 
-static func code_signature() -> String:
-	if _code.is_empty():
-		var records: Array[String] = [str(VERSION), str(Engine.get_version_info().get("hex")), str(ProjectSettings.get_setting("application/config/version", ""))]
-		var files := DirAccess.get_files_at("res://"); files.sort()
-		for name in files:
-			if name.ends_with(".gd") or name.ends_with(".gd.remap") or name.ends_with(".gdc"):
-				var path := "res://".path_join(name)
-				records.append(name + ":" + fingerprint(path))
-				# Exported scripts live behind remaps; hash the compiled script too.
-				var remap := ConfigFile.new()
-				var remap_path := path if name.ends_with(".remap") else path + ".remap"
-				if FileAccess.file_exists(remap_path) and remap.load(remap_path) == OK:
-					records.append(fingerprint(str(remap.get_value("remap", "path", ""))))
-		_code = JSON.stringify(records).sha256_text()
-	return _code
+# Converter dependencies are explicit: UI/mission edits and release versions do
+# not invalidate decoded assets. Hash source/compiled code to retain correctness
+# in both source checkouts and exports.
+const CONVERTERS := {
+	"image": ["res://legacy_bmp.gd"],
+	"texture": ["res://clump_loader.gd", "res://legacy_bmp.gd", "res://mod_registry.gd"],
+	"clump": ["res://clump_loader.gd", "res://legacy_bmp.gd", "res://mod_registry.gd"],
+	"world": ["res://world_loader.gd", "res://clump_loader.gd", "res://legacy_bmp.gd", "res://mod_registry.gd"],
+	"modern-model": ["res://modern_model.gd", "res://legacy_bmp.gd", "res://mod_registry.gd"],
+	"catalogue": ["res://original_game_data.gd", "res://scenery_loader.gd", "res://mailbox.gd", "res://submarine_weapons.gd"],
+	"scenery-database": ["res://scenery_loader.gd"],
+	"world-light": ["res://natural_light.gd", "res://world_cache.gd"],
+	"world-map": ["res://hud_map.gd", "res://world_cache.gd"],
+	"world-navigation": ["res://submarine_traffic.gd", "res://world_cache.gd"],
+}
+static func code_signature(kind: String = "") -> String:
+	if not _code.has(kind):
+		var records: Array = [VERSION, Engine.get_version_info().get("hex")]
+		for path in ["res://asset_cache.gd"] + CONVERTERS.get(kind, []):
+			records.append([path, fingerprint(path)])
+			var remap := ConfigFile.new()
+			if FileAccess.file_exists(path + ".remap") and remap.load(path + ".remap") == OK:
+				records.append(fingerprint(str(remap.get_value("remap", "path", ""))))
+		_code[kind] = var_to_bytes(records).hex_encode().sha256_text()
+	return _code[kind]
 
 static func key(kind: String, paths: Array, options: Variant = null) -> String:
-	var records: Array = [VERSION, code_signature(), kind, options]
+	var records: Array = [VERSION, code_signature(kind), kind, options]
 	for path in paths: records.append([ProjectSettings.globalize_path(str(path)).simplify_path(), fingerprint(str(path))])
 	return JSON.stringify(records).sha256_text()
 
@@ -145,5 +155,7 @@ static func save_data(key_value: String, data: Dictionary) -> void:
 	var temp := path + ".tmp"
 	var file := FileAccess.open(temp, FileAccess.WRITE)
 	if file != null:
-		file.store_buffer(var_to_bytes(data)); file.close(); _finish(temp, path)
+		file.store_buffer(var_to_bytes(data)); file.flush()
+		var result := file.get_error(); file.close()
+		if result == OK: _finish(temp, path)
 	else: _unwritable[path.get_base_dir()] = true

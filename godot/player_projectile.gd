@@ -5,6 +5,7 @@ const Damage = preload("res://original_damage.gd")
 # Player launcher 0045a5d0 multiplies HMISSILE's CSV inflict by twelve.
 # NPC homing missiles do not pass through that launcher.
 const HOMING_INFLICT := 2.0*12.0
+const TORPEDO_DAMAGE_MULTIPLIER := 2.0
 const STANDARD_LIFETIME := 40.0 / Damage.TICKS_PER_SECOND
 const HOMING_LIFETIME := 133.333333 / Damage.TICKS_PER_SECOND
 const STANDARD_THRUST := 0.0075
@@ -108,7 +109,7 @@ func advance(delta: float) -> void:
 			else:
 				var body: Node3D = hit.collider
 				var relative: Vector3 = velocity - (body.linear_velocity if body is RigidBody3D else body.velocity if body is CharacterBody3D else Vector3.ZERO)
-				var strength := (HOMING_INFLICT if kind == "homers" else 8.0) * 10.0 * maxf(0,relative.dot(direction)) / Damage.TICKS_PER_SECOND
+				var strength := (HOMING_INFLICT if kind == "homers" else 8.0) * TORPEDO_DAMAGE_MULTIPLIER * 10.0 * maxf(0,relative.dot(direction)) / Damage.TICKS_PER_SECOND
 				var damage_source: Vector3 = global_position if body.has_method("take_typed_weapon_damage") else hit.position
 				Damage.weapon(body,strength,damage_source,pilot,kind,hit); finish(true)
 			return

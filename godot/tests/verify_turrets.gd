@@ -33,7 +33,7 @@ func _initialize() -> void:
 	var ignore := FileAccess.open(storage.root_override.path_join(".gdignore"),FileAccess.WRITE)
 	ignore.store_string("")
 	var config := ConfigFile.new()
-	config.set_value("game","folder",ProjectSettings.globalize_path("res://../Original Sub Culture"))
+	config.set_value("game","folder",OS.get_environment("OPENSC_TEST_GAME_FOLDER") if not OS.get_environment("OPENSC_TEST_GAME_FOLDER").is_empty() else ProjectSettings.globalize_path("res://../Original Sub Culture"))
 	config.save(storage.preferences_path())
 	call_deferred("run")
 func run() -> void:
@@ -150,6 +150,7 @@ func run() -> void:
 		await process_frame
 	check(game.startup_complete,"Game starts with turret support")
 	if not game.startup_complete: quit(1); return
+	await game._begin_new_game()
 	check(game.turret_system.turrets.size() == 22,"Five generic and seventeen dedicated startup turrets are present")
 	check(not game.world_root.has_node("Scenery/TURRET_71") and game.world_root.has_node("Scenery/TURRET_30"),"Tryton retains its dedicated defence without the overlapping generic turret")
 	var velcova := game.world_root.get_node("Scenery/TURRET_91") as Node3D

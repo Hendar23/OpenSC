@@ -5,7 +5,10 @@ const LegacyBMP = preload("res://legacy_bmp.gd")
 static func load_model(path: String, descriptor: Dictionary = {}) -> Node3D:
 	Mods.ensure()
 	var cache := preload("res://asset_cache.gd")
-	var cache_key := cache.key("modern-model", [path], [descriptor, cache.directory_signature(Mods.root), Mods.enabled, Mods.order])
+	var dependencies: Array = []
+	for id in descriptor.get("material_textures", {}).values():
+		for entry in Mods.candidates(str(id)): dependencies.append([entry, cache.fingerprint(entry.path)])
+	var cache_key := cache.key("modern-model", [path], [descriptor, dependencies])
 	var cached := cache.load_scene(cache_key)
 	if cached != null: return cached
 	# Drop-in GLBs must be self-contained; this also makes them portable.

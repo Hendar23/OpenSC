@@ -399,9 +399,8 @@ func _mail_panel(data: Dictionary) -> void:
 	if unread > 0:
 		var count := label("%d Unread %s" % [unread,"Mail" if unread == 1 else "Mails"],Rect2(289,218,220,17),12)
 		count.name = "UnreadMail"
-		for position in [Vector2(269,218),Vector2(232,12)]:
-			var envelope := TextureRect.new(); envelope.texture = _mail_texture(prefix + "LETTERL")
-			envelope.position = position; envelope.mouse_filter = Control.MOUSE_FILTER_IGNORE; layout.add_child(envelope)
+		var envelope := TextureRect.new(); envelope.name = "UnreadEnvelope"; envelope.texture = _mail_texture(prefix + "LETTERL")
+		envelope.position = Vector2(269,218); envelope.mouse_filter = Control.MOUSE_FILTER_IGNORE; layout.add_child(envelope)
 	if mail_view == "welcome":
 		var welcome := str(data.get("welcome",""))
 		_welcome(welcome if not welcome.is_empty() else "Welcome to %s." % loaded_city,Rect2(100,81,412,119))

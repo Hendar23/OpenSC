@@ -29,7 +29,7 @@ static func creature_combat(species: Dictionary) -> Dictionary:
 	defaults.has_zapper = model in ["mutant","mjack"]
 	for key in defaults: defaults[key] = species.get(key,defaults[key])
 	return defaults
-const POPULATION_DEFAULTS := {"random_spawn": false, "groups_min": 3, "groups_max": 8, "count_min": 1, "count_max": 10, "spawn_chance": 100.0, "roam_radius": 10.0}
+const POPULATION_DEFAULTS := {"random_spawn": false, "groups_min": 3, "groups_max": 8, "count_min": 1, "count_max": 10, "roam_radius": 10.0}
 static func empty() -> Dictionary:
 	return {"schema_version": 1, "seed": 8675309, "entities": {}, "species": [], "groups": [], "object_types": [ObjectDefinitions.FLOATING_MINE.duplicate(true), ObjectDefinitions.THORIUM.duplicate(true), ObjectDefinitions.inert_thorium()] + ObjectDefinitions.metal_types() + [ObjectDefinitions.CIGARETTE.duplicate(true),ObjectDefinitions.CLAM.duplicate(true),ObjectDefinitions.PEARL.duplicate(true)] + ObjectDefinitions.rock_types(), "object_groups": [], "entity_types": [], "npc_types": []}
 static func creature_health(species: Dictionary, catalogue: Dictionary) -> float:
@@ -73,13 +73,12 @@ static func valid(data: Variant) -> bool:
 			if not finite_array([combat_value],1) or float(combat_value) < (0.05 if combat_key == "attack_interval" else 0.0) or float(combat_value) > 100000.0: return false
 		if species.has("random_spawn") and not species.random_spawn is bool: return false
 		if species.has("health") and (not finite_array([species.health],1) or float(species.health) <= 0.0): return false
-		for key in ["groups_min","groups_max","count_min","count_max","spawn_chance","roam_radius"]:
+		for key in ["groups_min","groups_max","count_min","count_max","roam_radius"]:
 			if not finite_array([species.get(key,POPULATION_DEFAULTS[key])],1): return false
 		for prefix in ["groups","count"]:
 			var minimum := float(species.get(prefix + "_min",POPULATION_DEFAULTS[prefix + "_min"]))
 			var maximum := float(species.get(prefix + "_max",POPULATION_DEFAULTS[prefix + "_max"]))
 			if minimum != floorf(minimum) or maximum != floorf(maximum) or minimum < (0 if prefix == "groups" else 1) or maximum < minimum or maximum > 100: return false
-		if float(species.get("spawn_chance",100.0)) < 0 or float(species.get("spawn_chance",100.0)) > 100: return false
 		if float(species.get("roam_radius",10.0)) < 0.5 or float(species.get("roam_radius",10.0)) > 1000: return false
 		if str(species.get("model", "")).is_empty() or species.get("mobility") not in ["swimming", "crawling"]: return false
 		if species.get("group_behaviour") not in GROUP_BEHAVIOURS or species.get("response") not in RESPONSES: return false
@@ -208,11 +207,15 @@ static func load_active(include_mod_wildlife: bool = true) -> Dictionary:
 static func save(data: Dictionary, path: String = DEFAULT_PATH) -> Error:
 	if not valid(data): return ERR_INVALID_DATA
 	var absolute := preload("res://runtime_paths.gd").external(path)
-	DirAccess.make_dir_recursive_absolute(absolute.get_base_dir())
+	var result := DirAccess.make_dir_recursive_absolute(absolute.get_base_dir())
+	if result != OK: return result
 	var file := FileAccess.open(absolute + ".tmp", FileAccess.WRITE)
 	if file == null: return FileAccess.get_open_error()
 	file.store_string(JSON.stringify(data, "  ") + "\n")
+	file.flush()
+	result = file.get_error()
 	file.close()
+	if result != OK: return result
 	return DirAccess.rename_absolute(absolute + ".tmp", absolute)
 static func capture(world: Node3D, catalogue: Dictionary = {}) -> Dictionary:
 	var data := empty()

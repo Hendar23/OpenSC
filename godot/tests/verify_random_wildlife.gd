@@ -102,12 +102,11 @@ func _run() -> void:
 	game.wildlife_density_slider.value = 0
 	check(pop.random_groups.is_empty() and pop.get_child_count() == 0,"Zero density disables the random population")
 	game.wildlife_density_slider.value = 100
+	# Legacy maps may retain an unused chance field; it no longer reduces groups.
 	species.spawn_chance = 0; pop.reroll()
-	check(pop.random_groups.is_empty(),"Zero species spawn chance prevents random groups")
-	species.spawn_chance = 50
-	var appeared := 0
-	for cycle in range(12): pop.reroll(); appeared += pop.random_groups.size()
-	check(appeared > 25 and appeared < 70,"Species chance creates varied populations across generations")
+	check(pop.random_groups.size() == 8,"Legacy zero chance cannot override the authored group count")
+	species.spawn_chance = 60; pop.reroll()
+	check(pop.random_groups.size() == 8,"Legacy sixty-percent chance cannot reduce authored groups")
 	species.random_spawn = false
 	pop.document.groups = []
 	for index in range(2): pop.document.groups.append({"id":"overlap_%d" % index,"species":species.id,"position":Document.array(home),"chance":100.0,"count_min":1,"count_max":1,"radius":10.0})

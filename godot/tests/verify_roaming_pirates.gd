@@ -9,7 +9,7 @@ func check(ok: bool, message: String) -> void:
 func _initialize() -> void:
 	var storage = preload("res://player_storage.gd")
 	storage.root_override = "res://tests/cache-traffic-fixtures"; storage.ensure_parent(storage.preferences_path())
-	var config := ConfigFile.new(); config.set_value("game","folder",ProjectSettings.globalize_path("res://../Original Sub Culture")); config.save(storage.preferences_path())
+	var config := ConfigFile.new(); config.set_value("game","folder",OS.get_environment("OPENSC_TEST_GAME_FOLDER") if not OS.get_environment("OPENSC_TEST_GAME_FOLDER").is_empty() else ProjectSettings.globalize_path("res://../Original Sub Culture")); config.save(storage.preferences_path())
 	call_deferred("run")
 func run() -> void:
 	var game = preload("res://game.gd").new(); game.remember_preferences = false; game.show_start_menu = true; root.add_child(game)
@@ -18,6 +18,7 @@ func run() -> void:
 		await process_frame
 	check(game.startup_complete,"Game starts with roaming pirates")
 	if not game.startup_complete: quit(1); return
+	await game._begin_new_game()
 	game.front_end.hide_menu(); paused = false
 	var traffic = game.submarine_traffic
 	game.world_root.get_node("ActorActivity").set_physics_process(false)
@@ -26,7 +27,7 @@ func run() -> void:
 	var population = traffic.roaming_population
 	check(population != null and population.ships.size() == 2,"Two random pirate slots created")
 	check(population.ships.all(func(agent: Node3D) -> bool: return not agent.dead),"Two pirates spawn alive")
-	check(population.ships.all(func(agent: Node3D) -> bool: return agent.get_parent().get_meta("editor_model",agent.get_parent().get_meta("asset_id","")).to_upper().find("PIRATE3") == -1),"Pirate model 3 excluded")
+	check(population.ships.all(func(agent: Node3D) -> bool: return str(agent.get_parent().get_meta("asset_id",str(agent.get_parent().get_meta("asset_source","")).get_file().get_basename())).trim_prefix("model.").to_upper() == "PIRATE"),"Random pirates use only the yellow hull")
 	for agent in population.ships:
 		check(traffic.water_clear(agent.global_position),"Pirate starts in navigable water")
 		check(agent.global_position.distance_to(game.pilot.global_position) >= 80,"Pirate starts away from player")
@@ -40,9 +41,9 @@ func run() -> void:
 	Damage.weapon(pirate.body,10000,ordinary.global_position,ordinary)
 	check(pirate.dead and game.player_progress.status.credits == credits,"NPC kills earn no player bounty")
 	check(population.replace(pirate) and not pirate.dead,"Destroyed pirate is replaced in safe water")
-	check(is_equal_approx(pirate.health.remaining,30.0),"Roaming pirate resets to full original health")
+	check(is_equal_approx(pirate.health.remaining,60.0),"Roaming pirate resets to the doubled combat-sub health")
 	Damage.weapon(pirate.body,2.5,game.pilot.global_position,game.pilot)
-	check(not pirate.dead and is_equal_approx(pirate.health.remaining,29.25),"Single standard zapper tick applies sustain once")
+	check(not pirate.dead and is_equal_approx(pirate.health.remaining,59.25),"Single standard zapper tick applies sustain once")
 	Damage.weapon(pirate.body,10000,ordinary.global_position,ordinary)
 	check(pirate.dead and game.player_progress.status.credits == credits,"Player damage followed by NPC killing blow earns no bounty")
 	check(population.replace(pirate),"Reset pirate after shared combat")

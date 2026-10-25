@@ -115,8 +115,8 @@ func run() -> void:
 	game.player_progress.missions.completed["stranded"] = {"success":true}
 	game.player_progress.missions["unavailable"] = ["breakout","breakout2"]
 	unlock.button_pressed = true
-	check(runtime.testing_all_missions and runtime.testing_missions().size() == 24,"Dev button unlocks all missions globally")
-	var origins := {"tradetrad":1,"tradetrad2":3,"tradetech":2,"tradetech2":4,"stranded":1,"spytrad":1,"spytrad2":3,"breakout":2,"breakout2":4,"fishing":2,"bigherd":3,"spytech":2,"spytech2":4,"escort":1,"escort2":3,"tagtech":4,"eel":3,"recontech":2,"recontech2":4,"walktrad":3,"walktrad2":1,"walktech":2,"walktech2":4,"minefield":1}
+	check(runtime.testing_all_missions and runtime.testing_missions().size() == 26,"Dev button unlocks all missions globally")
+	var origins := {"tradetrad":1,"tradetrad2":3,"tradetech":2,"tradetech2":4,"stranded":1,"spytrad":1,"spytrad2":3,"breakout":2,"breakout2":4,"fishing":2,"bigherd":3,"spytech":2,"spytech2":4,"escort":1,"escort2":3,"tagtech":4,"eel":3,"recontech":2,"recontech2":4,"walktrad":3,"walktrad2":1,"walktech":2,"walktech2":4,"minefield":1,"disperse":2,"rovrtn":3}
 	for city in [1,2,3,4,5,6]:
 		var expected: Array = origins.keys().filter(func(id: String) -> bool: return origins[id] == city)
 		var offered: Array = runtime.board(city).offers.map(func(entry: Dictionary) -> String: return entry.id)
@@ -295,7 +295,7 @@ func run() -> void:
 		check(game.equipment.support_tools.pod_target == ship.body,"Deployed Escape Pod physically finds prison hull")
 		check(game.equipment.support_tools.pod is RigidBody3D and game.equipment.current().icon_state == 2,"Escape Pod has physical collision and attached HUD state through ordinary equipment input")
 		var attached_pod: RigidBody3D = game.equipment.support_tools.pod
-		check(attached_pod.collision_layer == 0 and ship.body.get_collision_exceptions().has(attached_pod) and attached_pod.get_collision_exceptions().has(ship.body) and game.pilot.get_collision_exceptions().has(ship.body),"Attached pod and tethered player cannot collide with or push the prison hull")
+		check(attached_pod.collision_layer == 0 and ship.body.get_collision_exceptions().has(attached_pod) and attached_pod.get_collision_exceptions().has(ship.body) and not game.pilot.get_collision_exceptions().has(ship.body),"Only the seated pod ignores its host; player and prison hull retain solid collision")
 		var observer: Node3D = game.submarine_traffic.player
 		game.submarine_traffic.player = null
 		var unobserved: Dictionary = game.submarine_traffic.avoidance(ship,Vector3.FORWARD)

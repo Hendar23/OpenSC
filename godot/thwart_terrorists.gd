@@ -31,7 +31,7 @@ func start() -> void:
 	points.resize(9)
 	for row in jobs._rows(18):
 		if int(row.ObjectID) == 1: points[clampi(int(row.get("param1",0)),0,8)] = jobs._pose(row)
-	ship = jobs._boat("FREIGHT",points[0],1,3.0,1.5,Hull)
+	ship = jobs._boat("FREIGHT",points[0],1,3.0,1.05,Hull)
 	if ship == null: return
 	jobs.target = ship; ship.combat_enabled = false; ship.staged_destruction = true
 	ship.body.set_meta("mission_target_center",ship.bounds.get_center())
@@ -173,7 +173,7 @@ func _contacts() -> void:
 
 func _city_collision() -> void:
 	if lost or city_hit: return
-	city_hit = true; crash_clock = 5.0
+	city_hit = true; crash_clock = 0.0 # Impact starts the staged explosion on the next mission tick.
 	if won: jobs.radio("r17")
 
 func _destroyed(_entity: String, _attacker: String) -> void:

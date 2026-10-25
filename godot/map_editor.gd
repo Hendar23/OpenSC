@@ -454,7 +454,6 @@ func select(key: String) -> void:
 		number("groups_max","Maximum groups",entry.get("groups_max",8),0,100,1)
 		number("count_min","Minimum creatures per group",entry.get("count_min",1),1,100,1)
 		number("count_max","Maximum creatures per group",entry.get("count_max",10),1,100,1)
-		number("spawn_chance","Group spawn chance (%)",entry.get("spawn_chance",100.0),0,100,1)
 		number("roam_radius","Group roaming radius",entry.get("roam_radius",10.0),0.5,1000,0.5)
 		choice("mobility", "Mobility", ["swimming", "crawling"], entry.mobility)
 		choice("group_behaviour", "Group movement", Document.GROUP_BEHAVIOURS, entry.group_behaviour)

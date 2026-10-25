@@ -4,9 +4,11 @@ signal notification_played
 const SECONDS := 0.25
 const RATE := 11025
 var tuning: RefCounted
+var playback_allowed := Callable()
 
-func setup(folder: String, feed: Control, sound_tuning: RefCounted) -> void:
+func setup(folder: String, feed: Control, sound_tuning: RefCounted, allowed: Callable = Callable()) -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
+	playback_allowed = allowed
 	tuning = sound_tuning; stop(); stream = load_notification(folder)
 	if not feed.message_presented.is_connected(message_presented): feed.message_presented.connect(message_presented)
 	if not feed.cleared.is_connected(stop): feed.cleared.connect(stop)
@@ -21,7 +23,12 @@ static func load_notification(folder: String) -> AudioStreamWAV:
 	clip.set_meta("asset_source",path)
 	return clip
 
+func _process(_delta: float) -> void:
+	if playing and playback_allowed.is_valid() and not playback_allowed.call(): stop()
+
 func message_presented(message: Dictionary) -> void:
+	if playback_allowed.is_valid() and not playback_allowed.call():
+		stop(); return
 	if stream == null or str(message.get("text","")).is_empty(): return
 	if message.get("voice") != null or message.get("voice_played",false): return
 	var master := float(tuning.settings.master_volume) if tuning != null else 0.0

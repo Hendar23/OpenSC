@@ -22,6 +22,7 @@ func run() -> void:
 		await process_frame
 	check(game.startup_complete,"Full game loads with civilian submarine traffic")
 	if not game.startup_complete: quit(1); return
+	await game._begin_new_game()
 	game.front_end.hide_menu(); paused = false
 	var traffic: Node = game.submarine_traffic
 	# This fixture exercises detailed journeys manually, independently of visibility.

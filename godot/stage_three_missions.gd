@@ -23,6 +23,11 @@ var breach_stage := 0
 var fail_clock := -1.0
 var poll_clock := 0.0
 var radio_stage := 0
+var damaged_dock: Dictionary = {}
+var dock_smoke: Node3D
+var progress_clock := 0.0
+var attack_site := Vector3.ZERO
+var attack_smoke: Node3D
 
 func start() -> void:
 	if jobs.id == "disperse": _start_fish()
@@ -30,16 +35,23 @@ func start() -> void:
 
 func _start_fish() -> void:
 	jobs.phase = "defend"
+	damaged_dock = jobs.game.submarine_traffic.port_by_id(4)
+	if not damaged_dock.is_empty():
+		damaged_dock.node.set_meta("mission_dock_disabled",true)
+		dock_smoke = _smoke_at(damaged_dock.node.global_position + Vector3.UP*2.0)
 	var utility := preload("res://stage_two_remaining.gd").new(); utility.jobs = jobs
 	for row in jobs._rows(12):
 		if int(row.ObjectID) != 1: continue
-		var center: Vector3 = jobs._pose(row).origin-Vector3.UP*2
+		attack_site = jobs._pose(row).origin
+		var center: Vector3 = attack_site-Vector3.UP*2
 		for index in range(10):
 			var point := center+Vector3(randi_range(0,3),0,randi_range(0,3))
 			var actor: Node3D = utility._fish("BADJELLY",point,10,0.3,false,Jelly)
 			if actor == null: continue
 			actor.combat.settings.has_zapper = true; actor.combat.settings.bite_damage = 4.0
-			actor.city_target = center; actor.player = jobs.game.pilot; actor.city_attacker = index >= 6
+			actor.navigation = jobs.game.submarine_traffic
+			actor.city_target = actor.above_seabed(center); actor.player = jobs.game.pilot; actor.city_attacker = index >= 6
+			actor.global_position = actor.above_seabed(point); actor.home = actor.global_position
 			actor.ignore_wildlife = true; actor.swim_speed = 1.0; actor.turn_speed = 70
 			actor.animation_time = index*2.0
 			actor.died.connect(_fish_died); fish.append(actor)
@@ -49,10 +61,18 @@ func _start_fish() -> void:
 
 func _fish_died() -> void:
 	if jobs.id != "disperse" or jobs.phase == "finished": return
-	kills += 1
+	# Retail checks one defeat flag per creature as well as its dialogue counter.
+	# Reconcile actual tracked actors: missed/duplicate signals cannot leave a
+	# dead invisible creature owing a kill, or count the same death twice.
+	var defeated := 0
+	for actor in fish:
+		if not is_instance_valid(actor) or actor.dead or actor.health <= 0: defeated += 1
+	if defeated <= kills: return
+	var previous := kills; kills = defeated
 	var lines := {1:"l9",2:"l8",4:"l7",6:"l6",8:"l5"}
-	if lines.has(kills): jobs.radio(lines[kills])
-	if kills == 8:
+	for count in range(previous+1,kills+1):
+		if lines.has(count): jobs.radio(lines[count])
+	if kills >= 8:
 		for actor in fish:
 			if is_instance_valid(actor) and not actor.dead: actor.pursue_player = true
 	if kills == 10:
@@ -131,10 +151,16 @@ func step(delta: float) -> void:
 	if jobs.id.is_empty() or jobs.phase == "finished": return
 	elapsed += delta; poll_clock -= delta
 	if jobs.id == "disperse":
+		progress_clock -= delta
+		if progress_clock <= 0:
+			progress_clock = 0.2; _fish_died()
+			if jobs.id != "disperse" or jobs.phase == "finished": return
 		var deadlines := [20.0,32.0,200.0]
 		var lines := ["l1","l4","l2"]
 		while radio_stage < deadlines.size() and elapsed >= deadlines[radio_stage]:
-			jobs.radio(lines[radio_stage]); radio_stage += 1
+			jobs.radio(lines[radio_stage])
+			if radio_stage == 2: attack_smoke = _smoke_at(attack_site)
+			radio_stage += 1
 		return
 	if fail_clock >= 0:
 		fail_clock -= delta
@@ -221,8 +247,18 @@ func release_survivors() -> void:
 		ship.mass = 0.2; ship.remove_meta("mission_owner"); jobs.actors.erase(ship)
 
 func clear() -> void:
+	if not damaged_dock.is_empty() and is_instance_valid(damaged_dock.node): damaged_dock.node.remove_meta("mission_dock_disabled")
+	if is_instance_valid(dock_smoke): dock_smoke.enabled = false
+	if is_instance_valid(attack_smoke): attack_smoke.enabled = false
+	damaged_dock = {}
 	for actor in Array(fish)+Array(mines)+[ship]:
 		if not is_instance_valid(actor): continue
 		for info in actor.get_signal_list():
 			for connection in actor.get_signal_connection_list(info.name):
 				if connection.callable.get_object() == self: actor.disconnect(info.name,connection.callable)
+
+func _smoke_at(point: Vector3) -> Node3D:
+	var effect := preload("res://smoke_emitter.gd").new()
+	jobs.game.world_root.add_child(effect); jobs.actors.append(effect)
+	effect.global_position = point; effect.configure(jobs.game.game_folder,{})
+	return effect

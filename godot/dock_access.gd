@@ -5,7 +5,11 @@ static func owner(port: Dictionary) -> Node:
 	var value: Variant = port.node.get_meta("dock_owner",null)
 	return value.get_ref() if value is WeakRef else null
 
+static func disabled(port: Dictionary) -> bool:
+	return not port.is_empty() and is_instance_valid(port.get("node")) and bool(port.node.get_meta("mission_dock_disabled",false))
+
 static func acquire(port: Dictionary, actor: Node) -> bool:
+	if disabled(port): return false
 	var existing := owner(port)
 	if existing != null and existing != actor: return false
 	port.node.set_meta("dock_owner",weakref(actor)); return true

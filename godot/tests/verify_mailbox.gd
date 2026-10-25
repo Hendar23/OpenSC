@@ -6,7 +6,9 @@ var failures := 0
 func check(ok: bool, message: String) -> void:
 	checks += 1
 	if not ok: failures += 1; push_error(message)
-func _initialize() -> void: call_deferred("run")
+func _initialize() -> void:
+	preload("res://asset_cache.gd").enabled = false
+	call_deferred("run")
 func capture(name: String) -> void:
 	if DisplayServer.get_name() == "headless": return
 	await process_frame; await RenderingServer.frame_post_draw
@@ -49,6 +51,7 @@ func run() -> void:
 	ui.open("home")
 	check(ui.mail_button.position == Vector2(100,203) and ui.mail_button.normal_art.size() == 1,"Original mailbox button artwork and position")
 	check(ui.layout.has_node("UnreadMail"),"Unread notification on dock screen")
+	check(ui.layout.get_node("UnreadEnvelope").position == Vector2(269,218) and not ui.layout.get_children().any(func(node: Node) -> bool: return node is TextureRect and node.position == Vector2(232,12)),"Unread envelope stays beside the mail count without overlapping the city title")
 	ui.mail_button.pressed.emit()
 	check(ui.mail_view == "list" and ui.mail_list.item_count > 0,"Mailbox toggle shows available message list")
 	await capture("list")

@@ -73,6 +73,7 @@ func run() -> void:
 	var mission: RefCounted = await fresh()
 	check(game.submarine_traffic.roaming_population.attacks_suppressed(),"Accepting Thwart Terrorists suppresses ambient pirate attacks")
 	check(mission.ship.get_parent().get_meta("editor_model") == "FREIGHT","Original FREIGHT model, not a prison or shuttle substitute")
+	check(is_equal_approx(float(mission.ship.tuning.npc_speed),1.05),"Runaway freighter cruises at 70% of its original speed")
 	check(mission.points.size() == 9 and mission.ship.waypoints.size() == 8,"All nine original route markers decoded in numeric order")
 	check(mission.ship.get_parent().global_transform.is_equal_approx(mission.points[0]),"Freighter starts at exact source pose")
 	check(mission.ship.body.get_child_count() == 12,"Original twelve hull spheres avoid empty-space contacts")
@@ -94,6 +95,13 @@ func run() -> void:
 	game.pilot.global_position = tools.pod.global_position+Vector3.UP*0.4
 	tools._attach_pod(mission.ship.body)
 	check(tools.pod_target == mission.ship.body and tools.pod_attached,"Actual physical pod attachment works with SWAT aboard")
+	check(not game.pilot.get_collision_exceptions().has(mission.ship.body) and tools.pod.get_collision_exceptions().has(mission.ship.body),"Seated pod ignores the freighter but the player hull does not")
+	var saved_mask: int = game.pilot.collision_mask; game.pilot.collision_mask = 2
+	var contact := KinematicCollision3D.new()
+	var approach := Transform3D(mission.ship.get_parent().global_basis,mission.ship.body.to_global(Vector3(0,0,4)))
+	check(game.pilot.test_move(approach,mission.ship.get_parent().global_basis*Vector3(0,0,-2),contact) and contact.get_collider() == mission.ship.body,"A real player-body sweep hits the freighter while the pod is attached")
+	game.pilot.collision_mask = saved_mask
+
 	var host: Node3D = mission.ship.get_parent()
 	var contact_pose: Transform3D = host.global_transform
 	var relative_basis: Basis = host.global_basis.orthonormalized().inverse()*tools.pod.global_basis
@@ -149,7 +157,9 @@ func run() -> void:
 	check(runtime.active().is_empty() and not game.player_progress.missions.completed.minefield.success and runtime.last_response.contains("mines"),"Loss before rescue fails with source minefield response")
 	check(not game.submarine_traffic.roaming_population.attacks_suppressed(),"Failed mission also releases ambient pirate suppression")
 	check(game.player_progress.status.credits == 100000,"Failure pays nothing")
-	mission = await fresh(); mission._city_collision(); mission.step(5.01); mission.step(9.21)
+	mission = await fresh(); mission._city_collision(); mission.step(0.01)
+	check(mission.ship.dead and mission.lost,"City impact begins freighter destruction immediately, without a five-second idle delay")
+	mission.step(9.21)
 	check(runtime.active().is_empty() and runtime.last_response.contains("Beluga"),"Unrescued city crash fails with source response two")
 	mission = await fresh()
 	# A real mine overlapping the nose sphere must detonate and hurt the hull.

@@ -25,6 +25,7 @@ var activity: Node
 var pool := {}
 var pooled_count := 0
 var spawn_budget := 0
+var stream_cursor := 0
 var gameplay_catalogue := {}
 var death_texture: Texture2D
 var death_sound: AudioStream
@@ -149,7 +150,7 @@ func reroll(advance: bool = true) -> void:
 		if child.mission_owner.is_empty(): child.free()
 	spawned_groups.clear()
 	creature_cells.clear(); cells_frame = -1
-	random_groups.clear()
+	random_groups.clear(); stream_cursor = 0
 	var random := RandomNumberGenerator.new()
 	random.seed = session_seed + generation * 104729
 	for group in document.groups:
@@ -164,11 +165,15 @@ func reroll(advance: bool = true) -> void:
 		var scaled := amount * density
 		amount = int(floorf(scaled)) + (1 if random.randf() < scaled - floorf(scaled) else 0)
 		for index in range(amount):
-			if random.randf() * 100.0 >= float(species.get("spawn_chance",100.0)): continue
 			var home := _random_home(species,random)
 			if not home.is_finite(): continue
 			var group := {"id": "random_%s_%d" % [species.id,index], "species": species.id,"position": Document.array(home),"count_min": species.get("count_min",1),"count_max": species.get("count_max",10),"radius": species.get("roam_radius",10.0)}
 			random_groups.append({"group": group,"seed": random.randi(),"members": [],"attempted": false})
+	# The document lists species in editor order. Randomise scheduling once per
+	# generation so capacity limits cannot consistently favour that ordering.
+	for index in range(random_groups.size() - 1,0,-1):
+		var other := random.randi_range(0,index)
+		var swap := random_groups[index]; random_groups[index] = random_groups[other]; random_groups[other] = swap
 	_stream_update(true)
 	world.set_meta("ambient_fish_count",active_count())
 
@@ -229,12 +234,28 @@ func _limit_activity(center: Vector3, viewer: Vector3, planes: Array, activation
 		else:
 			_set_awake(fish,false); _update_activity(fish,viewer,planes)
 	candidates.sort_custom(func(a: Dictionary,b: Dictionary) -> bool: return a.priority < b.priority)
-	for index in range(candidates.size()):
-		var fish: Node3D = candidates[index].fish
-		if max_active > 0 and index >= max_active and fish.mission_owner.is_empty(): _retire(fish)
-		else:
-			_set_awake(fish,true)
-			_update_activity(fish,viewer,planes)
+	# Apply capacity to whole shoals, not the nearest few individuals of each.
+	# Unmarked/manual creatures are independent; mission creatures never compete
+	# with ambient wildlife for admission.
+	var shoals := {}
+	var order: Array = []
+	for candidate in candidates:
+		var fish: Node3D = candidate.fish
+		var key := str(fish.get_meta("spawn_group","individual_%d" % fish.get_instance_id()))
+		if not shoals.has(key): shoals[key] = []; order.append(key)
+		shoals[key].append(fish)
+	var admitted := 0
+	for key in order:
+		var ambient := 0
+		for fish in shoals[key]:
+			if fish.mission_owner.is_empty(): ambient += 1
+		var fits := max_active == 0 or admitted + ambient <= max_active
+		for fish in shoals[key]:
+			if not fits and fish.mission_owner.is_empty(): _retire(fish)
+			else:
+				_set_awake(fish,true)
+				_update_activity(fish,viewer,planes)
+		if fits: admitted += ambient
 
 func _stream_update(initial: bool = false) -> void:
 	var center: Vector3 = player.global_position if is_instance_valid(player) else world.get_meta("player_spawn",world.get_meta("bounds").get_center())
@@ -253,14 +274,18 @@ func _stream_update(initial: bool = false) -> void:
 			if fish.dead or not retained: _retire(fish)
 		_limit_activity(center,viewer,planes,activation,retirement,initial)
 	var awake_count := active_count()
-	for state in random_groups:
+	var start := stream_cursor
+	for offset in range(random_groups.size()):
+		var state: Dictionary = random_groups[(start + offset) % random_groups.size()]
 		var group: Dictionary = state.group
 		var home := Document.vector(group.position)
 		var members: Array = state.members
 		if not members.is_empty(): continue
-		if state.attempted or budget <= 0: continue
+		if budget <= 0 or (streaming and spawn_budget <= 0): break
+		if state.attempted: continue
 		if streaming and max_active > 0 and awake_count >= max_active: continue
 		if streaming and (home.distance_to(center) > activation or (not initial and _visible_spawn(home,center))): continue
+		stream_cursor = (start + offset + 1) % random_groups.size()
 		var random := RandomNumberGenerator.new(); random.seed = int(state.seed)
 		state.members = _spawn_group(group,random,streaming and not initial,streaming)
 		awake_count += state.members.size()
@@ -319,9 +344,9 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 	var home := Document.vector(group.position)
 	var player_position: Vector3 = player.global_position if is_instance_valid(player) else world.get_meta("player_spawn",home)
 	var count := random.randi_range(int(group.count_min),int(group.count_max))
-	if streaming and limit_to_visible_range and max_active > 0: count = mini(count,maxi(0,max_active - active_count()))
+	# Capacity may postpone a shoal, but must never silently shrink its roll.
+	if streaming and limit_to_visible_range and max_active > 0 and count > maxi(0,max_active - active_count()): return members
 	for member in range(count):
-		if streaming and spawn_budget <= 0: break
 		var size := random.randf_range(float(species.scale_min), float(species.scale_max)) / 100.0
 		var available: Array = pool.get(str(species.id),[])
 		if streaming and not available.is_empty(): size = float(available.back().get_meta("spawn_size",size))
@@ -385,6 +410,11 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 		fish.set_physics_process(simulating)
 		fish.set_process(simulating)
 		members.append(fish)
+	# Terrain, fog boundaries or visible-water avoidance can reject positions.
+	# Do not mark a truncated under-minimum group as successfully populated.
+	if members.size() < int(group.count_min):
+		for fish in members: fish.free()
+		members.clear()
 	if not members.is_empty(): spawned_groups.append(group.id)
 	return members
 func floor_point(point: Vector3, radius: float) -> Vector3:

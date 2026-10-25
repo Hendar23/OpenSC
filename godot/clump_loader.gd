@@ -5,10 +5,44 @@ const Mods = preload("res://mod_registry.gd")
 const Modern = preload("res://modern_model.gd")
 const Cache = preload("res://asset_cache.gd")
 
+# Only textures named by this source can affect its conversion. The small list
+# is cached by content hash; no directory walk or disabled-mod hashing is needed.
+static var _texture_references := {}
+static func texture_dependencies(folder: String, names: Array) -> Array:
+	Mods.ensure()
+	var result: Array = []
+	for name: String in names:
+		if name.is_empty(): continue
+		for extension in ["BMP", "RAS"]:
+			var path := folder.path_join("GAMETEX").path_join(name.to_upper() + "." + extension)
+			result.append([path, Cache.fingerprint(path)])
+		# Include the entire ordered fallback chain, including invalid candidates:
+		# repairing a previously broken higher-priority image must invalidate it.
+		result.append(replacement_dependencies("texture." + name))
+	return result
+
+static func replacement_dependencies(id: String) -> Array:
+	var result: Array = []
+	for entry in Mods.candidates(id): result.append([entry, Cache.fingerprint(entry.path)])
+	return result
+
 static func conversion_key(kind: String, path: String, options: Variant = null) -> String:
 	Mods.ensure()
-	var textures := path.get_base_dir().get_base_dir().path_join("GAMETEX")
-	return Cache.key(kind, [path], [options, Cache.directory_signature(textures), Cache.directory_signature(Mods.root), Mods.enabled, Mods.order])
+	var source_key := path + ":" + Cache.fingerprint(path)
+	if not _texture_references.has(path) or _texture_references[path].source != source_key:
+		var data := FileAccess.get_file_as_bytes(path)
+		var names: Array = []
+		for offset in range(0, data.size() - 16, 4):
+			if not _has_tag(data, offset, "rxet") or not _has_tag(data, offset + 8, "gnts"): continue
+			var texture := _chunk_string(data, offset + 8, data.size())
+			if not texture.is_empty() and texture not in names: names.append(texture)
+			var second := offset + 16 + int(data.decode_u32(offset + 12))
+			if _has_tag(data, second, "gnts"):
+				var mask := _chunk_string(data, second, data.size())
+				if not mask.is_empty() and mask not in names: names.append(mask)
+		_texture_references[path] = {"source":source_key, "names":names}
+	var folder := path.get_base_dir().get_base_dir()
+	return Cache.key(kind, [path], [options, texture_dependencies(folder, _texture_references[path].names)])
 
 static func load_submarine(path: String) -> Node3D:
 	return load_clump(path, PackedStringArray(["Hull", "RearPropeller", "LeftPod", "RightPod", "RightPropeller", "LeftPropeller"]))
@@ -250,6 +284,11 @@ static func _build_mesh(data: PackedByteArray, geometry: int, end: int, path: St
 		surface_material.metallic = 0.1
 		surface_material.roughness = 0.7
 		surface_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		# PIRATE has ten reverse-facing dark interior panels coplanar with
+		# its textured outer hull. Drawing both sides makes those panels fight
+		# through the underside; retain each panel only on its intended side.
+		if path.get_file().to_upper() == "PIRATE.DFF" and int(material_id) in [1,3]:
+			surface_material.cull_mode = BaseMaterial3D.CULL_BACK
 		if int(material_id) < references.size():
 			var reference: Dictionary = references[int(material_id)]
 			# TRAD2 leaves the shared rotor's mask name blank; other original hulls
@@ -330,7 +369,7 @@ static func _load_texture(game_folder: String, texture_name: String, mask_name: 
 	if cache.has(key):
 		return cache[key]
 	Mods.ensure()
-	var disk_key := Cache.key("texture", [], [ProjectSettings.globalize_path(game_folder), key, Cache.directory_signature(game_folder.path_join("GAMETEX")), Cache.directory_signature(Mods.root), Mods.enabled, Mods.order])
+	var disk_key := Cache.key("texture", [], [ProjectSettings.globalize_path(game_folder), key, texture_dependencies(game_folder, [texture_name, mask_name])])
 	var cached := Cache.load_resource(disk_key) as Texture2D
 	if cached != null:
 		cache[key] = cached; return cached

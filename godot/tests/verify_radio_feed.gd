@@ -118,9 +118,21 @@ func run() -> void:
 	feed.push_message({"speaker":"muted","text":"Muted"})
 	check(heard[0] == 5,"Master mute suppresses notifications")
 	feed.clear(); check(not audio.playing,"Clearing radio for a new session stops its notification")
+	tuning.settings.master_volume = 0.0
+	var loading := [true]
+	audio.playback_allowed = func() -> bool: return not loading[0]
+	feed.push_message({"speaker":"loading","text":"Unseen loading message"})
+	check(heard[0] == 5 and not audio.playing,"Loading messages cannot trigger a radio click")
+	loading[0] = false
+	feed.push_message({"speaker":"ready","text":"Visible gameplay message"})
+	check(heard[0] == 6 and audio.playing,"Normal radio clicks resume after loading")
+	loading[0] = true; audio._process(0.0)
+	check(not audio.playing,"Beginning a load stops any active radio click")
+	loading[0] = false
+
 	tuning.settings.master_volume = 0.0; audio.stream = null
 	feed.push_message({"text":"Missing optional audio"})
-	check(heard[0] == 5,"Missing fallback asset leaves message presentation working")
+	check(heard[0] == 6,"Missing fallback asset leaves message presentation working")
 	audio.free()
 	print("Radio feed: %d checks, %d failures" % [checks,failures])
 	quit(1 if failures else 0)

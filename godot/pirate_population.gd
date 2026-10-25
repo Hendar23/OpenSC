@@ -44,7 +44,7 @@ func setup(manager: Node, folder: String, document: Dictionary) -> void:
 	portrait = preload("res://docking_radio.gd").speaker_portrait(folder,"pir")
 	distorted_portrait = preload("res://docking_radio.gd").speaker_portrait(folder,"pir",true)
 	for index in range(MAX_PIRATES):
-		var id: String = Pirate.PIRATE_MODELS[index % 2]
+		var id := "PIRATE" # Yellow hull for random encounters.
 		var values := Pirate.PIRATE_DEFAULTS.duplicate()
 		for type in document.get("npc_types",[]):
 			if type.get("family") == "pirate" and type.get("model") == id:

@@ -48,6 +48,8 @@ func setup(owner_game: Node3D) -> void:
 	_position_camera()
 	submarine = Node3D.new(); submarine.name = "MenuSubmarine"; add_child(submarine)
 	var visual: Node3D = game.model.duplicate(0); submarine.add_child(visual)
+	if game.pilot == null: visual.rotation.y += PI
+	game.water_visuals.attach(visual); game.natural_light.attach(visual)
 	pass_visuals.append(visual); _register_propellers(visual,"SUB")
 	for id in PASS_MODELS:
 		var ship := preload("res://map_document.gd").load_model(id,game.game_folder)
@@ -62,14 +64,12 @@ func setup(owner_game: Node3D) -> void:
 		ship.rotation.y += PI # NPC hulls face +Z; the menu travel frame faces -Z.
 		ship.hide(); pass_visuals.append(ship); _register_propellers(ship,id)
 	wake = Bubbles.new(); add_child(wake); wake.set_physics_process(false)
-	wake.configure(game.pilot.bubbles.material.albedo_texture)
-	wake.surface_height = game.pilot.surface_height
+	wake.configure(preload("res://clump_loader.gd")._load_texture(game.game_folder,"BUBBLE","BUBBLEM",{}))
+	wake.surface_height = _surface_height()
 	propeller_audio = AudioStreamPlayer3D.new()
 	propeller_audio.name = "MenuPropellerAudio"
-	var original: AudioStreamPlayer = game.pilot.submarine_audio.players.get("main_propeller")
-	if original != null:
-		propeller_audio.stream = original.stream
-		propeller_audio.bus = original.bus
+	var source := preload("res://submarine_audio.gd").load_sound(game.game_folder,"main_propeller")
+	propeller_audio.stream = preload("res://audio_loop.gd").prepare(source,true,float(game.front_end.audio_tuning.settings.loop_blend_ms))
 	propeller_audio.unit_size = 6.0
 	propeller_audio.max_distance = 30.0
 	propeller_audio.volume_db = -80.0
@@ -95,7 +95,7 @@ func _position_camera() -> void:
 	var config: Dictionary = game.front_end.menu_config
 	var anchor := Vector3(config.camera_anchor[0],config.camera_anchor[1],config.camera_anchor[2])
 	view.position = anchor + Vector3(config.camera_offset[0],config.camera_offset[1],config.camera_offset[2])
-	view.position.y = minf(view.position.y,game.pilot.surface_height - 0.4)
+	view.position.y = minf(view.position.y,_surface_height() - 0.4)
 	view.look_at(anchor + Vector3(config.look_offset[0],config.look_offset[1],config.look_offset[2]))
 	view.far = game.camera.far
 
@@ -168,7 +168,7 @@ func _process(delta: float) -> void:
 		pass_time += delta
 		var direction := view.global_basis.x * pass_direction
 		submarine.global_position = view.global_position - view.global_basis.z * pass_depth + direction * (-9.0 + pass_time * 1.2) + view.global_basis.y * pass_height
-		submarine.global_position.y = minf(submarine.global_position.y,game.pilot.surface_height - 1.0)
+		submarine.global_position.y = minf(submarine.global_position.y,_surface_height() - 1.0)
 		submarine.global_basis = Basis.looking_at(direction)
 		_update_propeller_audio()
 		_animate_propellers()
@@ -184,14 +184,14 @@ func _spawn_fish_group(candidate: Dictionary, group: int) -> void:
 	var box: AABB = candidate.box
 	var home := view.global_position - view.global_basis.z * (7.0 + group * 2.0)
 	home += view.global_basis.x * (-3.0 if group % 2 == 0 else 3.0)
-	home.y = minf(home.y - 1.0,game.pilot.surface_height - 1.5)
+	home.y = minf(home.y - 1.0,_surface_height() - 1.5)
 	for member in range(random.randi_range(int(species.get("count_min",3)),int(species.get("count_max",5)))):
 		var size := random.randf_range(float(species.get("scale_min",65)),float(species.get("scale_max",95))) / 100.0
 		var radius := maxf(0.08,box.size.length() * 0.5 * size)
 		var point := Vector3(INF,INF,INF)
 		for attempt in range(40):
 			var proposed := home + Vector3(random.randf_range(-3,3),random.randf_range(-1,1),random.randf_range(-3,3))
-			proposed.y = minf(proposed.y,game.pilot.surface_height - radius - 0.2)
+			proposed.y = minf(proposed.y,_surface_height() - radius - 0.2)
 			if species.get("mobility","swimming") == "crawling": proposed = menu_population.floor_point(proposed,radius)
 			if proposed.is_finite() and Creatures._clear(game.world_root,proposed,radius): point = proposed; break
 		if not point.is_finite(): continue
@@ -199,7 +199,7 @@ func _spawn_fish_group(candidate: Dictionary, group: int) -> void:
 		visual.scale *= size; visual.position -= box.get_center() * size
 		var fish := Fish.new()
 		fish.name = "MenuFish_%d_%d" % [group,member]
-		fish.setup(visual,point,game.world_root.get_meta("bounds"),game.pilot.surface_height,radius,random.randi())
+		fish.setup(visual,point,game.world_root.get_meta("bounds"),_surface_height(),radius,random.randi())
 		# Terrain still blocks these fish, but weapons and player queries cannot see them.
 		fish.collision_layer = 0
 		fish.collision_mask = 5
@@ -229,7 +229,7 @@ func _spawn_fish_group(candidate: Dictionary, group: int) -> void:
 
 func _update_propeller_audio() -> void:
 	if propeller_audio.stream == null: return
-	var settings: Dictionary = game.pilot.submarine_audio.tuning.settings
+	var settings: Dictionary = game.front_end.audio_tuning.settings
 	var gain := float(settings.master_volume) + float(settings.main_propeller_volume)
 	var fade := minf(clampf(pass_time,0.0,1.0),clampf(15.0 - pass_time,0.0,1.0))
 	propeller_audio.volume_db = -80.0 if float(settings.master_volume) <= -60.0 or float(settings.main_propeller_volume) <= -60.0 else gain + linear_to_db(maxf(0.0001,fade * 0.7))
@@ -271,3 +271,6 @@ func _refresh_wildlife() -> void:
 	group_count = random.randi_range(2,3) if not candidates.is_empty() else 0
 	for group in range(group_count):
 		_spawn_fish_group(candidates[group % candidates.size()],group)
+
+func _surface_height() -> float:
+	return float(game.world_root.get_meta("surface_height"))

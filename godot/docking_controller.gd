@@ -119,6 +119,7 @@ func update_approach() -> void:
 	nearby = {}
 	var nearest := approach_radius
 	for port in ports:
+		if Access.disabled(port): continue
 		var distance: float = pilot.global_position.distance_to(port.entry)
 		if distance < nearest:
 			nearest = distance

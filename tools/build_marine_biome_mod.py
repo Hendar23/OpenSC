@@ -97,9 +97,22 @@ class GlbBuilder:
 
     def model(self, name, geometry):
         vertices, normals, uvs, material = geometry
-        attrs = {"POSITION": self.accessor(vertices, "VEC3"), "NORMAL": self.accessor(normals, "VEC3"), "TEXCOORD_0": self.accessor(uvs, "VEC2")}
+        # Match the exact exported float32 tuple, including seams/hard normals.
+        # Preserve triangle/corner order; this changes storage, not geometry.
+        unique, indices, positions, directions, texcoords = {}, [], [], [], []
+        for position, normal, uv in zip(vertices, normals, uvs):
+            key = struct.pack('<8f', *position, *normal, *uv)
+            if key not in unique:
+                unique[key] = len(positions)
+                positions.append(position); directions.append(normal); texcoords.append(uv)
+            indices.append(unique[key])
+        attrs = {"POSITION": self.accessor(positions, "VEC3"), "NORMAL": self.accessor(directions, "VEC3"), "TEXCOORD_0": self.accessor(texcoords, "VEC2")}
+        short = len(positions) <= 65535  # glTF reserves the maximum index value.
+        index_accessor = len(self.doc["accessors"])
+        self.doc["accessors"].append({"bufferView": self.view(struct.pack('<' + ('H' if short else 'I') * len(indices), *indices), 34963),
+            "componentType": 5123 if short else 5125, "count": len(indices), "type": "SCALAR"})
         index = len(self.doc["meshes"])
-        self.doc["meshes"].append({"name": name, "primitives": [{"attributes": attrs, "material": self.material_ids[material]}]})
+        self.doc["meshes"].append({"name": name, "primitives": [{"attributes": attrs, "indices": index_accessor, "material": self.material_ids[material]}]})
         self.doc["nodes"].append({"name": name, "mesh": index})
         self.doc["scenes"][0]["nodes"].append(index)
 
@@ -179,7 +192,7 @@ def build(source: Path, destination: Path, plants: Path | None = None):
                     assets[f"model.{original}"] = {"file": relative, "forward_axis": "+Z"}
     size = builder.save(destination / 'marine-biome.glb')
     manifest = {"schema_version": 1, "id": "marine-biome", "name": "Marine Biome", "version": "0.3.1" if plants else "0.1.3",
-        "description": "Scattered marine scenery and ocean plants. Replaces the five original plant models with matching ocean plants." if plants else "Scattered coral, shells, barnacles, starfish and urchins. Decorative scenery only.",
+        "description": "Scattered marine scenery and ocean plants by lugiagames. Replaces the five original plant models with matching ocean plants." if plants else "Scattered coral, shells, barnacles, starfish and urchins. Decorative scenery only.",
         "assets": assets, "scenery": {"file": "marine-biome.glb", "seed": 481516, "count": 10800 if plants else 3600, "patch_radius": 9.0, "models": entries}}
     (destination / 'mod.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     provenance = ["Local conversion of Nature Assets - Marine Biome" + (" and Nature Assets - Ocean Plants." if plants else "."),

@@ -1,5 +1,5 @@
 extends CanvasLayer
-## Original COMPLL/FAILEDL masks, animated with a settling ripple.
+## Original mission-result and GAMEOVER masks, animated with a settling ripple.
 var graphic: TextureRect
 var age := 0.0
 const DURATION := 5.0
@@ -16,11 +16,18 @@ func dismiss() -> void:
 	hide(); age = 0
 	if audio != null: audio.stop()
 func play(folder: String, success: bool) -> void:
-	var key := folder + str(success)
+	var base := folder.path_join("GAMETEX/ENGLISH")
+	_play(folder+str(success),base.path_join("COMPLL.BMP" if success else "FAILEDL.BMP"),base.path_join("COMPLM.BMP" if success else "FAILEDLM.BMP"),folder.path_join("WAVES/MISSCOMP.RAW" if success else "WAVES/MISSFAIL.RAW"))
+
+func play_game_over(folder: String) -> void:
+	var base := folder.path_join("GAMETEX")
+	_play(folder+"game_over",base.path_join("GAMEOVER.BMP"),base.path_join("GAMEM.BMP"))
+
+func _play(key: String, image_path: String, mask_path: String, sound_path: String = "") -> void:
+	dismiss()
 	if not textures.has(key):
-		var base := folder.path_join("GAMETEX/ENGLISH")
-		var image := preload("res://legacy_bmp.gd").load_image(base.path_join("COMPLL.BMP" if success else "FAILEDL.BMP"))
-		var mask := preload("res://legacy_bmp.gd").load_image(base.path_join("COMPLM.BMP" if success else "FAILEDLM.BMP"))
+		var image := preload("res://legacy_bmp.gd").load_image(image_path)
+		var mask := preload("res://legacy_bmp.gd").load_image(mask_path)
 		if image == null or mask == null: return
 		image = image.duplicate(); image.convert(Image.FORMAT_RGBA8)
 		for y in range(image.get_height()):
@@ -28,7 +35,7 @@ func play(folder: String, success: bool) -> void:
 				var colour := image.get_pixel(x,y); colour.a = mask.get_pixel(x,y).r; image.set_pixel(x,y,colour)
 		textures[key] = ImageTexture.create_from_image(image)
 	graphic.texture = textures[key]; age = 0; show(); _process(0)
-	audio.stream = preload("res://legacy_audio.gd").load_file(folder.path_join("WAVES/MISSCOMP.RAW" if success else "WAVES/MISSFAIL.RAW"))
+	audio.stream = preload("res://legacy_audio.gd").load_file(sound_path) if not sound_path.is_empty() else null
 	if audio.stream != null: audio.play()
 func _process(delta: float) -> void:
 	if not visible or graphic == null: return

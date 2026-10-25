@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var storage = preload("res://player_storage.gd")
 	storage.root_override = "res://tests/cache-traffic-fixtures"; storage.ensure_parent(storage.preferences_path())
 	var ignore := FileAccess.open(storage.root_override.path_join(".gdignore"),FileAccess.WRITE); ignore.store_string("")
-	var config := ConfigFile.new(); config.set_value("game","folder",ProjectSettings.globalize_path("res://../Original Sub Culture")); config.save(storage.preferences_path())
+	var config := ConfigFile.new(); config.set_value("game","folder",OS.get_environment("OPENSC_TEST_GAME_FOLDER") if not OS.get_environment("OPENSC_TEST_GAME_FOLDER").is_empty() else ProjectSettings.globalize_path("res://../Original Sub Culture")); config.save(storage.preferences_path())
 	call_deferred("run")
 func run() -> void:
 	preload("res://mod_registry.gd").initialize(false)
@@ -69,6 +69,7 @@ func run() -> void:
 		await process_frame
 	check(game.startup_complete,"Full game loads with traffic")
 	if game.startup_complete:
+		await game._begin_new_game()
 		game.world_root.get_node("ActorActivity").set_physics_process(false)
 		for vehicle in game.ground_traffic.vehicles: vehicle.set_local_simulation(true)
 		check(game.ground_traffic.vehicles.size() == 8,"Three original cars and five trucks spawn")

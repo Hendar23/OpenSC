@@ -9,7 +9,7 @@ func _initialize() -> void:
 	storage.root_override = "res://tests/cache-mission-fixtures"
 	storage.ensure_parent(storage.preferences_path())
 	var ignore := FileAccess.open(storage.root_override.path_join(".gdignore"),FileAccess.WRITE); ignore.store_string("")
-	var config := ConfigFile.new(); config.set_value("game","folder",ProjectSettings.globalize_path("res://../Original Sub Culture")); config.save(storage.preferences_path())
+	var config := ConfigFile.new(); config.set_value("game","folder",OS.get_environment("OPENSC_TEST_GAME_FOLDER") if not OS.get_environment("OPENSC_TEST_GAME_FOLDER").is_empty() else ProjectSettings.globalize_path("res://../Original Sub Culture")); config.save(storage.preferences_path())
 	call_deferred("run")
 func run() -> void:
 	var game := preload("res://game.gd").new(); game.remember_preferences = false; game.show_start_menu = true; root.add_child(game)
@@ -18,7 +18,7 @@ func run() -> void:
 		await process_frame
 	check(game.startup_complete,"Game loads mission runtime")
 	if not game.startup_complete: quit(1); return
-	game._begin_new_game(); game.pilot.set_physics_process(false); game.pilot.freeze = true
+	await game._begin_new_game(); game.pilot.set_physics_process(false); game.pilot.freeze = true
 	game.docking.set_physics_process(false)
 	var runtime: Node = game.mission_runtime
 	var initial_npcs: int = game.submarine_traffic.traders.size()
@@ -43,7 +43,7 @@ func run() -> void:
 		var credits: int = game.player_progress.status.credits
 		check(runtime.accept(city).is_empty(),"Accept first mission %d" % city)
 		check(runtime.spawned.size() == 6,"Five mission crystals and one pirate are mission-owned; cave ore and bonus salvage persist separately")
-		check(runtime.pirate.patrol.size() == 5 and is_equal_approx(runtime.pirate.health.remaining,9.0),"Original patrol and weakened pirate")
+		check(runtime.pirate.patrol.size() == 5 and is_equal_approx(runtime.pirate.health.remaining,18.0),"Original patrol and weakened pirate retain the doubled combat-sub health")
 		check(game.save_games.read(-1).progress.missions.active.is_empty(),"Autosave records state before acceptance")
 		var before_mission := FileAccess.get_file_as_string(game.save_games.path(-1))
 		game._autosave_docked()
@@ -83,7 +83,7 @@ func run() -> void:
 	check(await game._load_saved_game(-1),"Before-mission save is loadable while a job is active")
 	check(runtime.can_save() and game.player_progress.campaign_stage == 1,"Loading restores pre-mission progression")
 	check(game.submarine_traffic.traders.size() == initial_npcs,"Loading clears temporary encounter")
-	game._begin_new_game()
+	await game._begin_new_game()
 	for port in game.docking.ports:
 		if int(port.node.get_meta("city_id")) == 1: game.docking.current = port
 	game.docking.stage = game.Docking.Stage.DOCKED; game.dock_interface_active = true; paused = true
@@ -161,7 +161,17 @@ func run() -> void:
 		if body.has_meta("mission_owner") and body.get("shard") != null and body.shard > 0: shards += 1
 	check(shards == 3,"Shattered mission crystals retain ownership for cleanup")
 	game._submarine_destroyed()
-	check(runtime.can_save() and runtime.outcome.visible,"Death triggers failed outcome and releases mission")
-	game._begin_new_game()
+	check(runtime.can_save() and runtime.outcome.visible,"Death displays an outcome and releases mission")
+	check(game.submarine_explosion_sound != null and str(game.submarine_explosion_sound.get_meta("asset_source","")).get_file().to_upper() == "EXPL.RAW","Player death uses the original sample 0x0c EXPL sound")
+	check(game.world_root.get_children().any(func(node: Node) -> bool: return node.get_script() == preload("res://mine_explosion.gd") and node.audio != null and node.audio.stream == game.submarine_explosion_sound),"Player wreck explosion actually plays the original death sound")
+	check(runtime.outcome.graphic.texture == runtime.outcome.textures.get(game.game_folder+"game_over"),"Player death displays original GAMEOVER art instead of mission-failed art")
+	runtime.outcome._process(0.5)
+	check(runtime.outcome.graphic.modulate.a > 0 and is_equal_approx(float(runtime.outcome.graphic.material.get_shader_parameter("age")),0.5),"Game Over uses the animated mission-result presentation")
+	await game._begin_new_game()
 	check(runtime.can_save() and runtime.last_response.is_empty(),"New Game clears mission and response")
+	check(not runtime.outcome.visible,"New Game dismisses Game Over")
+	game._submarine_destroyed()
+	check(runtime.outcome.visible and runtime.outcome.graphic.texture == runtime.outcome.textures.get(game.game_folder+"game_over"),"Death without an active mission also displays Game Over")
+	runtime.outcome._process(runtime.outcome.DURATION)
+	check(not runtime.outcome.visible,"Game Over finishes through the shared result animation lifecycle")
 	game.free(); print("First mission: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

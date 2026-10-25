@@ -38,7 +38,9 @@ func run() -> void:
 	Mods.initialize(false)
 	var warm := "warm" in OS.get_cmdline_user_args()
 	var started := Time.get_ticks_msec()
-	var folder := ProjectSettings.globalize_path("res://../Original Sub Culture")
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = preload("res://asset_paths.gd").find_game_folder()
+	if folder.is_empty(): push_error("Set OPENSC_TEST_GAME_FOLDER to the original game installation"); quit(1); return
 	var result := {}
 	for model in ["SUB", "CLAM", "JACKFISH", "AQUATRAZ"]:
 		var node := Assets.load_submarine(folder.path_join("CLUMPS/SUB.DFF")) if model == "SUB" else Assets.load_clump(folder.path_join("CLUMPS/" + model + ".DFF"), PackedStringArray(), true)
@@ -47,7 +49,13 @@ func run() -> void:
 		result[model] = signature(node)
 		if model == "SUB": check(node.get_node_or_null("Hull/LeftPod") != null or node.find_child("LeftPod", true, false) != null,"Cached submarine retains movable pods")
 		node.free()
-	var modern := preload("res://modern_model.gd").load_model("res://../Mods/3d-bubbles/bubble.glb")
+	var fixture_model := Storage.root_path().path_join("fixture.glb")
+	if not FileAccess.file_exists(fixture_model):
+		var node := MeshInstance3D.new(); node.name = "FixtureBox"; node.mesh = BoxMesh.new(); node.mesh.material = StandardMaterial3D.new()
+		var document := GLTFDocument.new(); var state := GLTFState.new()
+		check(document.append_from_scene(node,state) == OK and document.write_to_filesystem(state,fixture_model) == OK,"Self-contained model fixture is generated")
+		node.free()
+	var modern := preload("res://modern_model.gd").load_model(fixture_model)
 	check(modern != null,"Modern mod model loads")
 	if modern != null: result["modern"] = signature(modern); modern.free()
 	var catalogue := Data.load_catalogue(folder, false)
@@ -98,7 +106,7 @@ func run() -> void:
 	Cache.reset_session()
 	check(before != Cache.key("fixture", [fixture]),"Same-size source edit invalidates cache on the next launch")
 	var base_key := Assets.conversion_key("clump", folder.path_join("CLUMPS/SUB.DFF"))
-	Mods.apply(["3d-bubbles"], Mods.order, false)
-	check(base_key != Assets.conversion_key("clump", folder.path_join("CLUMPS/SUB.DFF")),"Changing active mods invalidates converted assets")
+	Mods.apply(["unrelated-fixture"], Mods.order, false)
+	check(base_key == Assets.conversion_key("clump", folder.path_join("CLUMPS/SUB.DFF")),"Unrelated mod IDs do not invalidate converted assets")
 	check(not Cache.path_for("test", "res").begins_with("res://game_assets"),"Conversions are separate from distributed game assets")
 	print("Asset cache: %d checks, %d failures" % [checks, failures]); quit(1 if failures else 0)

@@ -92,7 +92,7 @@ func setup(player: Node3D, mounted_equipment: Node3D, world: Node3D, folder: Str
 	weapons = mounted_weapons
 	name = "CockpitHUD"
 	layer = 0
-	map_data.setup(world,player.collision_height() + 2.0 * player.safe_margin)
+	if map_data.texture == null: map_data.setup(world,player.collision_height() + 2.0 * player.safe_margin)
 	map_data.initialize_exploration()
 	map_data.bake_world(world,get_tree())
 	holder = Control.new()

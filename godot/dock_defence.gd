@@ -44,6 +44,8 @@ func _physics_process(delta: float) -> void:
 		clock = maxf(0.0,clock - 1.0)
 		for state in ports:
 			if not is_instance_valid(state.node): continue
+			if state.node.get_meta("mission_dock_disabled",false):
+				state.target = null; _stop(state); continue
 			if population.activity != null and not population.activity.nearby(state.node.to_global(SEARCH_CENTER),RANGE,2.0):
 				_stop(state)
 				continue

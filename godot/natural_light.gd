@@ -46,44 +46,62 @@ func configure(values: Dictionary) -> void:
 	for key in DEFAULTS: RenderingServer.global_shader_parameter_set("osc_" + key,settings[key])
 func build(world: Node3D, progress: Callable = Callable(), resolution: int = 512) -> void:
 	bounds = world.get_meta("bounds"); surface = world.get_meta("surface_height")
-	image = Image.create(resolution,resolution,false,Image.FORMAT_RF)
-	var space := world.get_world_3d().direct_space_state
-	var ray := PhysicsRayQueryParameters3D.new(); ray.collision_mask = 1; ray.hit_back_faces = true
-	for z in range(resolution):
-		for x in range(resolution):
-			var point := Vector3(bounds.position.x + (x + 0.5) * bounds.size.x / resolution,surface + 0.1,bounds.position.z + (z + 0.5) * bounds.size.z / resolution)
-			ray.from = point; ray.to = Vector3(point.x,bounds.position.y - 2,point.z)
-			var hit := space.intersect_ray(ray)
-			image.set_pixel(x,z,Color(float(hit.position.y) if not hit.is_empty() else bounds.position.y - 100,0,0))
-		if z % 16 == 0:
-			if progress.is_valid(): progress.call("Checking sunlight shelter: %d%%" % (z * 100 / resolution))
-			await world.get_tree().process_frame
+	var cache := preload("res://asset_cache.gd")
+	var dimensions := Vector3i(128,64,96)
+	var volume_size := Vector3(bounds.size.x,surface - bounds.position.y,bounds.size.z)
+	var signature := preload("res://world_cache.gd").collision_signature(world, 1 | 16) if cache.enabled else ""
+	var key := cache.key("world-light", [], [signature, resolution, dimensions]) if not signature.is_empty() else ""
+	var stored := cache.load_data(key) if not key.is_empty() else {}
+	var slices: Variant = stored.get("slices")
+	var valid: bool = stored.get("overhead") is PackedByteArray and stored.overhead.size() == resolution * resolution * 4 and slices is Array and slices.size() == dimensions.z
+	if valid:
+		for bytes in slices:
+			if not bytes is PackedByteArray or bytes.size() != dimensions.x * dimensions.y: valid = false; break
+	if valid:
+		image = Image.create_from_data(resolution,resolution,false,Image.FORMAT_RF,stored.overhead)
+		light_slices.clear()
+		for bytes in slices: light_slices.append(Image.create_from_data(dimensions.x,dimensions.y,false,Image.FORMAT_R8,bytes))
+	else:
+		image = Image.create(resolution,resolution,false,Image.FORMAT_RF)
+		var space := world.get_world_3d().direct_space_state
+		var ray := PhysicsRayQueryParameters3D.new(); ray.collision_mask = 1; ray.hit_back_faces = true
+		for z in range(resolution):
+			for x in range(resolution):
+				var point := Vector3(bounds.position.x + (x + 0.5) * bounds.size.x / resolution,surface + 0.1,bounds.position.z + (z + 0.5) * bounds.size.z / resolution)
+				ray.from = point; ray.to = Vector3(point.x,bounds.position.y - 2,point.z)
+				var hit := space.intersect_ray(ray)
+				image.set_pixel(x,z,Color(float(hit.position.y) if not hit.is_empty() else bounds.position.y - 100,0,0))
+			if z % 16 == 0:
+				if progress.is_valid(): progress.call("Checking sunlight shelter: %d%%" % (z * 100 / resolution))
+				await world.get_tree().process_frame
+		# Only terrain can enclose a cave. Buildings and bridges retain outdoor
+		# ambient light and use the ordinary sun shadow map.
+		light_slices.clear()
+		ray.collision_mask = 16
+		ray.hit_back_faces = false # Ground backfaces must not become cave roofs.
+		for z in range(dimensions.z):
+			var slice := Image.create(dimensions.x,dimensions.y,false,Image.FORMAT_R8)
+			for y in range(dimensions.y):
+				for x in range(dimensions.x):
+					var point := bounds.position + (Vector3(x,y,z) + Vector3.ONE * 0.5) / Vector3(dimensions) * volume_size
+					ray.from = point; ray.to = Vector3(point.x,surface + 0.2,point.z)
+					var ceiling := space.intersect_ray(ray)
+					# Steep cliff faces do not form enclosed ceilings. Counting them
+					# as roofs let coarse voxels wrap cave darkness around ridges.
+					var exposed: bool = ceiling.is_empty() or ceiling.normal.y > -0.4
+					slice.set_pixel(x,y,Color.WHITE if exposed else Color.BLACK)
+			light_slices.append(slice)
+			if z % 4 == 0:
+				if progress.is_valid(): progress.call("Checking cave light: %d%%" % (z * 100 / dimensions.z))
+				await world.get_tree().process_frame
+		if not key.is_empty():
+			var bytes: Array = []
+			for slice in light_slices: bytes.append(slice.get_data())
+			cache.save_data(key, {"overhead":image.get_data(), "slices":bytes})
 	RenderingServer.global_shader_parameter_set("osc_overhead",ImageTexture.create_from_image(image))
 	RenderingServer.global_shader_parameter_set("osc_overhead_bounds",Vector4(bounds.position.x,bounds.position.z,bounds.size.x,bounds.size.z))
 	RenderingServer.global_shader_parameter_set("osc_overhead_pixel",Vector2.ONE / resolution)
 	RenderingServer.global_shader_parameter_set("osc_natural_surface",surface)
-	# Only terrain can enclose a cave. Buildings and bridges retain outdoor
-	# ambient light and use the ordinary sun shadow map.
-	light_slices.clear()
-	var dimensions := Vector3i(128,64,96)
-	var volume_size := Vector3(bounds.size.x,surface - bounds.position.y,bounds.size.z)
-	ray.collision_mask = 16
-	ray.hit_back_faces = false # Ground backfaces must not become cave roofs.
-	for z in range(dimensions.z):
-		var slice := Image.create(dimensions.x,dimensions.y,false,Image.FORMAT_R8)
-		for y in range(dimensions.y):
-			for x in range(dimensions.x):
-				var point := bounds.position + (Vector3(x,y,z) + Vector3.ONE * 0.5) / Vector3(dimensions) * volume_size
-				ray.from = point; ray.to = Vector3(point.x,surface + 0.2,point.z)
-				var ceiling := space.intersect_ray(ray)
-				# Steep cliff faces do not form enclosed ceilings. Counting them
-				# as roofs let coarse voxels wrap cave darkness around ridges.
-				var exposed: bool = ceiling.is_empty() or ceiling.normal.y > -0.4
-				slice.set_pixel(x,y,Color.WHITE if exposed else Color.BLACK)
-		light_slices.append(slice)
-		if z % 4 == 0:
-			if progress.is_valid(): progress.call("Checking cave light: %d%%" % (z * 100 / dimensions.z))
-			await world.get_tree().process_frame
 	light_volume = ImageTexture3D.new()
 	light_volume.create(Image.FORMAT_R8,dimensions.x,dimensions.y,dimensions.z,false,light_slices)
 	RenderingServer.global_shader_parameter_set("osc_sky_volume",light_volume)

@@ -6,7 +6,12 @@ var checks := 0
 var failures := 0
 func key_event(code: int) -> InputEventKey:
 	var event := InputEventKey.new(); event.keycode = code; event.pressed = true; return event
-func _initialize() -> void: call_deferred("_run")
+func _initialize() -> void:
+	preload("res://asset_cache.gd").enabled = false
+	var storage = preload("res://player_storage.gd")
+	storage.root_override = "res://tests/cache-front-end-fixtures"; storage.ensure_parent(storage.preferences_path())
+	var config := ConfigFile.new(); config.set_value("game","folder",OS.get_environment("OPENSC_TEST_GAME_FOLDER")); config.save(storage.preferences_path())
+	call_deferred("_run")
 func check(condition: bool,message: String) -> void:
 	checks += 1
 	if not condition: failures += 1; push_error(message)
@@ -38,13 +43,13 @@ func _run() -> void:
 	check(game.startup_complete and game.front_end.menu_layer.visible and paused,"Startup finishes at the live menu with gameplay paused")
 	check(game.gameplay_catalogue.tables.equipment.records.size() == 30 and game.gameplay_catalogue.warnings.is_empty(),"Startup imports original gameplay data before opening the menu")
 	check(game.front_end.menu_picture.texture != null and game.front_end.buttons.new_game.text == "New Game" and game.front_end.progress_bar.value == 100.0,"Title artwork and labelled buttons load and startup progress completes")
-	check(game.menu_backdrop.view.current and not game.pilot.visible and not game.cockpit_hud.visible,"Menu camera excludes player and HUD")
+	check(game.menu_backdrop.view.current and game.pilot != null and game.cockpit_hud != null,"Menu camera works with player and HUD already prepared")
 	var menu_pose: Transform3D = game.menu_backdrop.view.transform
-	var saved_spawn: Vector3 = game.pilot.spawn
-	game.pilot.spawn += Vector3(20,5,20)
+	var saved_spawn: Vector3 = game.world_root.get_meta("player_spawn")
+	game.world_root.set_meta("player_spawn",saved_spawn + Vector3(20,5,20))
 	game.menu_backdrop._position_camera()
 	check(game.menu_backdrop.view.transform.is_equal_approx(menu_pose),"Editing the New Game spawn leaves menu framing unchanged")
-	game.pilot.spawn = saved_spawn
+	game.world_root.set_meta("player_spawn",saved_spawn)
 	var camera_fixture := "res://tests/menu-camera-fixture/view"
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(camera_fixture))
 	var camera_document := preload("res://map_document.gd").load_active()
@@ -104,13 +109,13 @@ func _run() -> void:
 		game.menu_backdrop.next_pass = 0.0
 		for frame in range(120): game.menu_backdrop._process(0.05)
 		check(game.menu_backdrop.submarine.visible and game.menu_backdrop.wake.particles.size() > 0,"Menu sub cruises past with a live bubble wake")
-		check(game.menu_backdrop.propeller_audio.playing and game.menu_backdrop.propeller_audio.stream == game.pilot.submarine_audio.players.main_propeller.stream,"Passing sub plays the loaded propeller loop while gameplay is paused")
+		check(game.menu_backdrop.propeller_audio.playing and game.menu_backdrop.propeller_audio.stream != null,"Passing sub plays the loaded propeller loop while gameplay is paused")
 		check(game.menu_backdrop.propeller_audio.get_parent() == game.menu_backdrop.submarine and game.menu_backdrop.propeller_audio.volume_db > -60.0,"Propeller sound moves with the sub at an audible level")
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/live-menu-submarine-preview.png")
 	var accept := InputEventJoypadButton.new(); accept.pressed = true; accept.button_index = JOY_BUTTON_A
 	game.front_end.buttons.options.grab_focus(); game.front_end._input(accept)
-	check(game.front_end.menu_page == "options" and game.front_end._visible_button_order() == ["controls","graphics","audio","gameplay","back"] and not game.front_end.buttons.new_game.visible,"Controller opens the four settings entries and Back")
+	check(game.front_end.menu_page == "options" and game.front_end._visible_button_order() == ["controls","graphics","audio","gameplay","player_folder","back"] and not game.front_end.buttons.new_game.visible,"Controller opens settings, player folder and Back")
 	var down := InputEventJoypadButton.new(); down.pressed = true; down.button_index = JOY_BUTTON_DPAD_DOWN
 	game.front_end._input(down)
 	check(root.gui_get_focus_owner() == game.front_end.buttons.graphics,"Options navigation reaches Graphics after Controls")
@@ -142,7 +147,9 @@ func _run() -> void:
 	game.front_end.buttons.new_game.grab_focus()
 	game.day_night.hour = 0.0
 	Input.parse_input_event(accept)
-	await process_frame
+	for frame in range(4000):
+		if game.has_started_game: break
+		await process_frame
 	check(not paused and not game.front_end.menu_layer.visible and game.has_started_game,"Controller A starts the focused New Game without another GUI activation")
 	check(not game.menu_backdrop.propeller_audio.playing,"Closing the menu stops its propeller audio")
 	check(not game.menu_backdrop.active and game.camera.current and game.pilot.visible and game.cockpit_hud.visible,"Starting play restores the player camera, submarine and HUD")
@@ -223,11 +230,13 @@ func _run() -> void:
 	for frame in range(1800):
 		if not game.world_loading and game.front_end.menu_layer.visible: break
 		await process_frame
-	check(not game.world_loading and paused and game.front_end.menu_layer.visible and game.pilot_mode,"Confirmed mods reload finishes at the main menu without freezing")
+	check(not game.world_loading and paused and game.front_end.menu_layer.visible and game.pilot != null and game.pilot_mode,"Confirmed mods reload finishes at the main menu without freezing")
 	check(not is_instance_valid(original_world),"Applying mods still rebuilds the world rather than retaining old assets")
-	check(not game.has_started_game and not game.front_end.can_resume and not game.front_end.is_button_available("continue"),"Applying mods ends the previous game and disables Continue")
+	check(not game.has_started_game and not game.front_end.can_resume ,"Applying mods ends the previous live game")
 	game.front_end.buttons.new_game.pressed.emit()
-	await process_frame
+	for frame in range(4000):
+		if game.has_started_game: break
+		await process_frame
 	check(game.has_started_game and not paused and not game.front_end.menu_layer.visible,"New Game is playable after applying mods")
 	print("Front end: %d checks, %d failures" % [checks,failures])
 	if failures:

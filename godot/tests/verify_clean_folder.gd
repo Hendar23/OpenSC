@@ -3,7 +3,7 @@ const Game = preload("res://game.gd")
 const Storage = preload("res://player_storage.gd")
 const Paths = preload("res://asset_paths.gd")
 const Mods = preload("res://mod_registry.gd")
-const RELEASE_MODS := ["clownfish","example.png-texture","sea-mine-model","test-3d-map-instrument"]
+const RELEASE_MODS := ["clownfish","sea-mine-model","test-3d-map-instrument"]
 var failures := 0
 var checks := 0
 func _initialize() -> void:
@@ -22,7 +22,7 @@ func run() -> void:
 	var assets: String = args[0]; var phase: String = args[1]
 	preload("res://input_bindings.gd").reset_defaults()
 	Mods.initialize(true)
-	check(Mods.packs.size() == RELEASE_MODS.size() and Mods.packs.all(func(pack: Dictionary) -> bool: return str(pack.id) in RELEASE_MODS) and Mods.active_ids().is_empty(), "Only the four release-ready mods are bundled, disabled by default")
+	check(Mods.packs.size() == RELEASE_MODS.size() and Mods.packs.all(func(pack: Dictionary) -> bool: return str(pack.id) in RELEASE_MODS) and Mods.active_ids().is_empty(), "Only the three existing release mods are bundled, disabled by default")
 	for pack in Mods.packs:
 		check(pack.valid and pack.errors.is_empty(), "Bundled mod manifest and assets validate: " + str(pack.name))
 	if phase == "mods":
@@ -66,7 +66,7 @@ func run() -> void:
 	check(game.status_label.text != "Could not automatically save settings.", "Shared settings load without a persistence error")
 	check(Paths.find_game_folder() == assets, "Selected original-game folder persists in isolated preferences")
 	if phase == "first":
-		game._begin_new_game()
+		await game._begin_new_game()
 		check(game.has_started_game and not paused and is_equal_approx(game.day_night.hour,10), "New Game starts at 10:00")
 		check(game.equipment.mounted.size() == 2 and game.weapons.mounted.size() == 1, "Starting tools and weapon load")
 		check(game.world_root.get_meta("searchlight_count",0) == 10 and not game.object_population.snapshot().is_empty(), "Searchlights and world items load in the clean project")
@@ -98,7 +98,7 @@ func run() -> void:
 	else:
 		check(not game.pilot.visual.get_meta("modern_model", false), "Inactive remastered submarine is not bundled")
 		check(not game.cockpit_hud.model_views.is_empty(), "Bundled 3D HUD instruments load")
-		game._begin_new_game()
+		await game._begin_new_game()
 		check(game.has_started_game and not paused, "New Game runs with all bundled mods enabled")
 		check(Mods.runtime_warnings.is_empty(), "No mod asset fallback warnings")
 		for frame in range(60): await physics_frame

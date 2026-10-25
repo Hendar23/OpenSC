@@ -141,7 +141,7 @@ func _attach_pod(body: Node) -> void:
 	# than leaving the frozen pod aligned to the world as the ship turns.
 	pod_anchor_basis = body.global_basis.orthonormalized().inverse() * pod.global_basis
 	pod.add_collision_exception_with(body); body.add_collision_exception_with(pod)
-	equipment.pilot.add_collision_exception_with(body)
+	# Only the seated pod ignores its host; the player hull must remain solid.
 	body.set_meta("rescue_pod_pilot",weakref(equipment.pilot))
 	pod.freeze = true; pod.angular_velocity = Vector3.ZERO; pod.collision_mask = 0; pod.collision_layer = 0; pod.global_position = point; pod.reset_physics_interpolation()
 

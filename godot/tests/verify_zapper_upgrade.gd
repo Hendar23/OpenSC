@@ -21,7 +21,7 @@ func run() -> void:
 		await process_frame
 	check(game.startup_complete,"Game loads upgrade support")
 	if not game.startup_complete: quit(1); return
-	game._begin_new_game(); game.pilot.set_physics_process(false); game.pilot.freeze = true
+	await game._begin_new_game(); game.pilot.set_physics_process(false); game.pilot.freeze = true
 	game.docking.set_physics_process(false); game.docking.stage = game.Docking.Stage.DOCKED
 	var final_prices := {"Beluga":4400,"Touka":4230,"Tryton":3250,"Velcova":3800}
 	for port in game.docking.ports:
@@ -52,6 +52,6 @@ func run() -> void:
 	game.weapons.set_upgraded(false); game.player_progress.status.zapper_upgrade = 0
 	check(await game._load_saved_game(0),"Upgrade save loads")
 	check(game.weapons.upgraded and game.weapons.muzzle.visible and game.weapons.effective_damage() == 5,"Loading restores permanent upgrade effects")
-	game._begin_new_game()
+	await game._begin_new_game()
 	check(not game.weapons.upgraded and game.player_progress.status.zapper_upgrade == 0,"New Game clears the permanent zapper upgrade")
 	game.free(); print("Zapper upgrade: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

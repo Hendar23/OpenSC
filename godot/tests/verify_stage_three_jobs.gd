@@ -60,6 +60,16 @@ func run() -> void:
 	check(runtime.testing_mission_city("disperse") == 2 and runtime.testing_mission_city("rovrtn") == 3,"Dev unlock uses source cities")
 	var mission: RefCounted = await fresh("disperse")
 	check(mission.fish.size() == 10,"Ten original BADJELLY attackers")
+	check(mission.fish.all(func(fish: Node3D) -> bool: var hit: Dictionary = game.wildlife.floor_contact(fish.global_position); return hit.is_empty() or fish.global_position.y >= float(hit.position.y)+fish.radius*0.5),"All ten attackers spawn above the seabed rather than inside solid terrain")
+	var tryton: Dictionary = game.submarine_traffic.port_by_id(4)
+	check(preload("res://dock_access.gd").disabled(tryton) and not preload("res://dock_access.gd").acquire(tryton,game.docking),"Tryton dock rejects all reservations during the attack")
+	var player_pose: Transform3D = game.pilot.global_transform
+	game.pilot.global_position = tryton.entry; game.docking.update_approach()
+	check(game.docking.nearby.is_empty() and not game.docking.request_docking(),"Disabled Tryton presents no docking prompt and cannot be entered")
+	game.pilot.global_transform = player_pose
+	mission.dock_smoke._process(0.25)
+	check(mission.dock_smoke.puffs.size() > 0,"Damaged Tryton dock visibly emits smoke")
+
 	check(mission.fish.all(func(actor: Node3D) -> bool: return actor.health == 10 and actor.damage_sustain == 0.3 and actor.get_child(1).get_meta("asset_source","").contains("BADJELLY")),"Correct models, shield and sustain")
 	check(mission.fish.filter(func(actor: Node3D) -> bool: return actor.city_attacker).size() == 4,"Four source attackers assigned directly to city")
 	check(mission.fish.all(func(actor: Node3D) -> bool: return not game.cockpit_hud.map_data.actor_markers.has(actor)),"No invented blue wildlife dots")
@@ -79,6 +89,14 @@ func run() -> void:
 	for tick in range(20): actor._physics_process(1.0/60.0)
 	if actor.global_position.x >= separation_start.x-0.02: print("Separation displacement ",actor.global_position-separation_start," radius ",actor.radius," neighbours ",actor.shoal.positions.size()," heading ",actor.direction)
 	check(actor.global_position.x < separation_start.x-0.02,"Attack horde separates close neighbours instead of stacking on the city marker")
+	var neighbour_target: Vector3 = neighbour.city_target
+	neighbour.global_position = actor.global_position; neighbour.city_target = actor.city_target
+	actor.direction = Vector3.BACK; neighbour.direction = Vector3.BACK
+	for tick in range(30):
+		actor.shoal.frame = -1
+		actor._physics_process(1.0/60.0); neighbour._physics_process(1.0/60.0)
+	check(actor.global_position.distance_to(neighbour.global_position) > 0.02,"Exactly coincident attackers separate instead of appearing to be one fish")
+	neighbour.city_target = neighbour_target
 	actor.global_position = point; actor.city_target = city_target; neighbour.global_transform = neighbour_pose
 	actor.repel_from(actor.global_position+Vector3.RIGHT,1.0)
 	actor._physics_process(0.1)
@@ -86,13 +104,42 @@ func run() -> void:
 	mission.step(20.01); check(radio_sent("l1"),"Original hurry message at twenty seconds")
 	mission.step(12); check(radio_sent("l4"),"Original docking servo damage message")
 	mission.step(168); check(radio_sent("l2") and not runtime.active().is_empty(),"Late warning does not invent timed mission failure")
+	check(is_instance_valid(mission.attack_smoke) and mission.attack_smoke.global_position.is_equal_approx(mission.attack_site),"Late warning creates the original second smoke effect at the attack marker")
 	var credits: int = game.player_progress.status.credits
 	for index in range(8): mission.fish[index].take_weapon_damage(1000)
 	check(mission.kills == 8 and radio_sent("l5"),"Original kill-count dialogue")
+	mission._fish_died()
+	check(mission.kills == 8,"Duplicate death callbacks cannot inflate the kill count")
+
 	check(mission.fish[8].pursue_player and mission.fish[9].pursue_player,"Final two survivors pursue player")
+	# The retail downward offset places this source marker below the seabed.
+	# The last survivor must physically leave it and reach reachable water,
+	# not merely set a pursuit flag or request an unusable submarine route.
+	var survivor: Node3D = mission.fish[9]
+	mission.fish[8].set_physics_process(false); survivor.set_physics_process(false)
+	var saved_player_pose: Transform3D = game.pilot.global_transform
+	var saved_layer: int = game.pilot.collision_layer; var saved_mask: int = game.pilot.collision_mask
+	game.pilot.collision_layer = 0; game.pilot.collision_mask = 0
+	for offset in [Vector3(12,0,0),Vector3(-12,0,0),Vector3(0,0,12),Vector3(0,0,-12)]:
+		survivor.global_position = survivor.city_target; survivor.direction = Vector3.FORWARD
+		survivor.route.clear(); survivor.route_clock = 0; survivor.probe_clock = 0; survivor.avoidance = Vector3.ZERO
+		var graph: AStar3D = game.submarine_traffic.graph
+		game.pilot.global_position = graph.get_point_position(graph.get_closest_point(mission.attack_site+offset))
+		var nearest := INF
+		for tick in range(2400):
+			game.pilot.restore_health(); game.pilot.active = true; game.pilot.controls_enabled = true
+			survivor._physics_process(1.0/60.0)
+			nearest = minf(nearest,survivor.global_position.distance_to(game.pilot.global_position))
+			if nearest < 1.5: break
+			if tick % 30 == 0: await physics_frame
+		check(nearest < 1.5 and survivor.visible and not survivor.dead,"Last mutant remains above seabed and reaches the player from "+str(offset))
+	game.pilot.global_transform = saved_player_pose; game.pilot.collision_layer = saved_layer; game.pilot.collision_mask = saved_mask
 	mission.fish[8].take_weapon_damage(1000)
 	check(not runtime.active().is_empty(),"Nine kills cannot complete")
+	mission.fish[9].died.disconnect(mission._fish_died)
 	mission.fish[9].take_weapon_damage(1000)
+	mission.step(0.21)
+	check(not preload("res://dock_access.gd").disabled(tryton),"Tryton dock is restored after the attack")
 	check(runtime.active().is_empty() and game.player_progress.status.credits == credits+6000,"Tenth kill completes and pays original 6000 credits")
 	check(game.player_progress.missions.stage3_successes == 1 and not game.player_progress.missions.has("stage2_successes"),"Independent stage-three counters")
 	check(preload("res://mailbox.gd").messages(game.gameplay_catalogue,game.player_progress,2).any(func(row: Dictionary) -> bool: return row.id == "421"),"Original success bulletin")

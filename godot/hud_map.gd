@@ -230,35 +230,58 @@ func _passage_blocked(x: int,y: int) -> bool:
 	return false
 
 func setup(world: Node3D, clearance: float = 1.1) -> void:
+	_setup(world, clearance, null)
+
+func setup_async(world: Node3D, clearance: float, tree: SceneTree) -> void:
+	await _setup(world, clearance, tree)
+
+func _setup(world: Node3D, clearance: float, tree: SceneTree) -> void:
 	bounds = world.get_meta("bounds")
 	surface_height = float(world.get_meta("surface_height",bounds.end.y))
 	passage_clearance = clearance
-	blocked_samples.clear()
-	height_samples.resize(RESOLUTION * RESOLUTION)
-	height_samples.fill(-INF)
-	# Height data supplies the immediate map and cliff outlines. The detailed
-	# scenery render follows separately; dock markers retain editable positions.
-	for node in world.get_children():
-		if not node is MeshInstance3D: continue
-		if node.name == "WaterSurface": continue
-		var faces: PackedVector3Array = node.mesh.get_faces()
-		for index in range(0, faces.size(), 3):
-			var a: Vector3 = node.transform * faces[index]
-			var b: Vector3 = node.transform * faces[index + 1]
-			var c: Vector3 = node.transform * faces[index + 2]
-			_triangle(a, b, c)
-	blocked_samples.resize(RESOLUTION * RESOLUTION)
-	for y in range(RESOLUTION):
-		for x in range(RESOLUTION): blocked_samples[y * RESOLUTION + x] = 1 if _passage_blocked(x,y) else 0
-	var image := Image.create(RESOLUTION, RESOLUTION, false, Image.FORMAT_RGB8)
-	image.fill(Color(0.015, 0.02, 0.025))
-	for y in range(RESOLUTION):
-		for x in range(RESOLUTION):
-			var height := height_samples[y * RESOLUTION + x]
-			if not is_finite(height): continue
-			var shade := lerpf(0.1, 0.85, clampf((height - bounds.position.y) / maxf(bounds.size.y, 1.0), 0.0, 1.0))
-			image.set_pixel(x, y, Color(shade, shade, shade))
-	texture = ImageTexture.create_from_image(image)
+	markers.clear(); actor_markers.clear(); scenery_baked = false
+	var cache := preload("res://asset_cache.gd")
+	var key := cache.key("world-map", [], [preload("res://world_cache.gd").terrain_signature(world), clearance, RESOLUTION, PASSAGE_MARGIN]) if cache.enabled else ""
+	var stored := cache.load_data(key) if not key.is_empty() else {}
+	var count := RESOLUTION * RESOLUTION
+	if stored.get("heights") is PackedFloat32Array and stored.heights.size() == count and stored.get("blocked") is PackedByteArray and stored.blocked.size() == count and stored.get("image") is PackedByteArray and stored.image.size() == count * 3:
+		height_samples = stored.heights; blocked_samples = stored.blocked
+		texture = ImageTexture.create_from_image(Image.create_from_data(RESOLUTION,RESOLUTION,false,Image.FORMAT_RGB8,stored.image))
+	else:
+		blocked_samples.clear()
+		height_samples.resize(RESOLUTION * RESOLUTION)
+		height_samples.fill(-INF)
+		# Height data supplies the immediate map and cliff outlines. The detailed
+		# scenery render follows separately; dock markers retain editable positions.
+		var slice_start := Time.get_ticks_usec()
+		for node in world.get_children():
+			if not node is MeshInstance3D: continue
+			if node.name == "WaterSurface": continue
+			var faces: PackedVector3Array = node.mesh.get_faces()
+			for index in range(0, faces.size(), 3):
+				var a: Vector3 = node.transform * faces[index]
+				var b: Vector3 = node.transform * faces[index + 1]
+				var c: Vector3 = node.transform * faces[index + 2]
+				_triangle(a, b, c)
+			if tree != null and Time.get_ticks_usec() - slice_start >= 4000:
+				await tree.process_frame; slice_start = Time.get_ticks_usec()
+		blocked_samples.resize(RESOLUTION * RESOLUTION)
+		for y in range(RESOLUTION):
+			for x in range(RESOLUTION): blocked_samples[y * RESOLUTION + x] = 1 if _passage_blocked(x,y) else 0
+			if tree != null and Time.get_ticks_usec() - slice_start >= 4000:
+				await tree.process_frame; slice_start = Time.get_ticks_usec()
+		var image := Image.create(RESOLUTION, RESOLUTION, false, Image.FORMAT_RGB8)
+		image.fill(Color(0.015, 0.02, 0.025))
+		for y in range(RESOLUTION):
+			for x in range(RESOLUTION):
+				var height := height_samples[y * RESOLUTION + x]
+				if not is_finite(height): continue
+				var shade := lerpf(0.1, 0.85, clampf((height - bounds.position.y) / maxf(bounds.size.y, 1.0), 0.0, 1.0))
+				image.set_pixel(x, y, Color(shade, shade, shade))
+			if tree != null and Time.get_ticks_usec() - slice_start >= 4000:
+				await tree.process_frame; slice_start = Time.get_ticks_usec()
+		texture = ImageTexture.create_from_image(image)
+		if not key.is_empty(): cache.save_data(key, {"heights":height_samples, "blocked":blocked_samples, "image":image.get_data()})
 	for node in world.find_children("*", "Node3D", true, false):
 		if node.has_meta("city_id"):
 			markers.append({"id":int(node.get_meta("city_id")),"position": node.global_position, "name": str(node.get_meta("city_name", "Dock"))})

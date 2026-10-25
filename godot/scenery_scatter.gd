@@ -94,6 +94,11 @@ static func _placements(world: Node3D, settings: Dictionary, models: Array[Dicti
 	var surface := float(world.get_meta("surface_height"))
 	var space := world.get_world_3d().direct_space_state
 	var terrain := world.get_node_or_null("WorldCollision")
+	# Ground against BSP terrain only. Authored objects have separate clearance
+	# bounds, while their live collision poses can change during a saved reroll.
+	var ray_exclusions: Array[RID] = []
+	for body in world.find_children("*", "PhysicsBody3D", true, false):
+		if body != terrain and (body.collision_layer & 1) != 0: ray_exclusions.append(body.get_rid())
 	var exclusion_grid := _index_exclusions(exclusions)
 	var patch := Vector2.ZERO
 	var index := 0
@@ -118,7 +123,7 @@ static func _placements(world: Node3D, settings: Dictionary, models: Array[Dicti
 		var model := models[index]
 		var scale := float(model.size) * rng.randf_range(0.7, 1.3) / float(model.width)
 		var footprint := float(model.width) * scale * 0.55
-		var query := PhysicsRayQueryParameters3D.create(Vector3(point.x, surface - 0.05, point.y), Vector3(point.x, bounds.position.y - 1.0, point.y), 1)
+		var query := PhysicsRayQueryParameters3D.create(Vector3(point.x, surface - 0.05, point.y), Vector3(point.x, bounds.position.y - 1.0, point.y), 1, ray_exclusions)
 		query.hit_back_faces = true
 		var hit := space.intersect_ray(query)
 		if not _natural_hit(hit, terrain): continue
@@ -216,6 +221,11 @@ static func _authored_exclusions(world: Node3D) -> Array[AABB]:
 			if node.has_meta("editor_dropoff"):
 				boxes.append(AABB(node.global_position - Vector3.ONE * 2.5, Vector3.ONE * 5.0))
 			if not node is MeshInstance3D or node.mesh == null: continue
+			# Searchlight beams sweep while the level loads and do not occupy
+			# space. Excluding their changing bounds makes saved layouts repeatable.
+			if node.name == "SoftBeam":
+				var grandparent: Node = node.get_parent().get_parent() if node.get_parent() != null else null
+				if grandparent != null and grandparent.get_script() == preload("res://searchlight.gd"): continue
 			var owner: Node = node.get_parent()
 			if owner != null and (owner.has_meta("approximate_scatter") or str(owner.name).begins_with("Plant")): continue
 			boxes.append((node.global_transform * node.mesh.get_aabb()).grow(BUILDING_MARGIN))
@@ -243,7 +253,9 @@ static func _batch(parent: Node3D, models: Array[Dictionary], poses: Array[Dicti
 		node.set_meta("marine_plant", bool(models[batch.model].get("sway", false)))
 		node.position = anchor
 		node.visibility_range_end = 100.0; node.visibility_range_end_margin = 12.0
-		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# Reuse the existing lights and Graphics shadow quality/distance limits.
+		# The spatial batches remain culled at their normal visibility range.
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		parent.add_child(node)
 		if tree != null and Time.get_ticks_usec() - slice_start >= WORK_SLICE_USEC:
 			await tree.process_frame

@@ -74,7 +74,7 @@ func _refresh_scenery() -> void:
 		game.water_visuals.sync_plants(game.plant_current)
 		scenery.show()
 	game.front_end.progress_bar.value = 100.0
-	game.loading_canvas.hide()
+	if not game.loading_save: game.loading_canvas.hide()
 	game.world_loading = false; game.get_tree().paused = paused
 
 func _reset_loaded_world() -> void:
@@ -82,6 +82,7 @@ func _reset_loaded_world() -> void:
 	game.dock_interface.dismiss(); game.dock_interface_active = false
 	game._set_map_open(false)
 	game.docking.cancel()
+	game.docking.set_physics_process(true)
 	game.bounty_radio_queue.clear(); game.bounty_remaining = 0; game.bounty_port = {}
 	if game.radio_feed != null: game.radio_feed.clear()
 	game.radio_greeting = ""; game.radio_status = ""
@@ -175,25 +176,30 @@ func _load_saved_game(slot: int) -> bool:
 	if game.loading_save or game.world_loading: return false
 	var data = game.save_games.read(slot)
 	if data.is_empty(): game.dock_interface.report(game.save_games.error); return false
-	var port_exists: bool = game.docking.ports.any(func(port: Dictionary) -> bool: return int(port.node.get_meta("city_id")) == int(data.dock.id))
-	if not port_exists: game.dock_interface.report("The saved dock is not present in this map."); return false
-	for item in data.equipment:
-		if not game.equipment.available.any(func(mounted: Dictionary) -> bool: return mounted.id == item.id): game.dock_interface.report("Required equipment is unavailable: " + item.id); return false
-	for id in data.weapons:
-		if not game.weapons.available.any(func(mounted: Dictionary) -> bool: return mounted.id == id): game.dock_interface.report("Required weapon is unavailable: " + id); return false
 	game.loading_save = true
-	game.front_end.hide_menu(); game.dock_interface.dismiss(); game.get_tree().paused = false
+	game.front_end.hide_menu(); game.dock_interface.dismiss()
+	game.front_end.show_loading(); game.get_viewport().gui_release_focus()
+	game.get_tree().paused = false
+	# Paint the loading artwork before actor creation, scenery or save restore.
+	await game.get_tree().process_frame
+	await game.get_tree().process_frame
+	var port_exists: bool = game.docking.ports.any(func(port: Dictionary) -> bool: return int(port.node.get_meta("city_id")) == int(data.dock.id))
+	if not port_exists: return _load_failed("The saved dock is not present in this map.")
+	for item in data.equipment:
+		if not game.equipment.available.any(func(mounted: Dictionary) -> bool: return mounted.id == item.id): return _load_failed("Required equipment is unavailable: " + item.id)
+	for id in data.weapons:
+		if not game.weapons.available.any(func(mounted: Dictionary) -> bool: return mounted.id == id): return _load_failed("Required weapon is unavailable: " + id)
 	game._set_camera_mode(false)
 	game.scenery_seed = int(data.get("scenery_seed", 0))
 	if not game._can_reuse_world(): await game._start_game(game.game_folder)
 	else: await _refresh_scenery()
-	if not game.pilot_mode: game.loading_save = false; return false
+	if not game.pilot_mode: return _load_failed(game.status_label.text)
 	game._reset_loaded_world()
 	var port: Dictionary = {}
 	for candidate in game.docking.ports:
 		if int(candidate.node.get_meta("city_id")) == int(data.dock.id): port = candidate; break
 	if port.is_empty():
-		game.loading_save = false; game._show_main_menu(); game.dock_interface.open("load"); game.dock_interface.report("The saved dock is unavailable."); return false
+		return _load_failed("The saved dock is unavailable.")
 	game.docking.current = port; game.docking.saved_collision_mask = game.pilot.collision_mask
 	game.pilot.active = false; game.pilot.controls_enabled = false; game.pilot.collision_mask = 0
 	game.pilot.global_transform = MapDocument.decode(data.pose); game.pilot.global_position = port.inside
@@ -246,7 +252,13 @@ func _load_saved_game(slot: int) -> bool:
 	game.pilot.restore_health(100.0,float(game.player_progress.status.shields))
 	game.dock_interface.open("home"); game.dock_interface_active = true
 	game.get_tree().paused = true
-	game.loading_save = false; game._update_mouse_pointer()
+	game.loading_canvas.hide(); game.loading_save = false; game._update_mouse_pointer()
 	game.events.session_started.emit(true)
 	return true
 
+
+func _load_failed(message: String) -> bool:
+	game.loading_canvas.hide(); game.loading_save = false
+	game.dock_interface.open("load"); game.dock_interface.report(message)
+	game.get_tree().paused = true
+	return false

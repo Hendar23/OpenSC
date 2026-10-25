@@ -15,6 +15,9 @@ const CELL_SIZE := 8.0
 func attach(parent_world: Node3D) -> void:
 	world = parent_world
 	materials.clear(); patches.clear(); plant_count = 0
+	# Full world replacement releases derived meshes and their source materials.
+	# Scenery-only rerolls call _collect(), preserving their shared resources.
+	flexible_meshes.clear()
 	batch_materials.clear()
 	patch_cells.clear(); recovering.clear(); indexed_patch_count = -1
 	_collect(parent_world)

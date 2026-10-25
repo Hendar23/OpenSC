@@ -10,7 +10,7 @@ func check(ok: bool, message: String) -> void:
 func _initialize() -> void:
 	var storage = preload("res://player_storage.gd")
 	storage.root_override = "res://tests/cache-traffic-fixtures"; storage.ensure_parent(storage.preferences_path())
-	var config := ConfigFile.new(); config.set_value("game","folder",ProjectSettings.globalize_path("res://../Original Sub Culture")); config.save(storage.preferences_path())
+	var config := ConfigFile.new(); config.set_value("game","folder",OS.get_environment("OPENSC_TEST_GAME_FOLDER") if not OS.get_environment("OPENSC_TEST_GAME_FOLDER").is_empty() else ProjectSettings.globalize_path("res://../Original Sub Culture")); config.save(storage.preferences_path())
 	call_deferred("run")
 func run() -> void:
 	var game = preload("res://game.gd").new(); game.remember_preferences = false; game.show_start_menu = true; root.add_child(game)
@@ -19,6 +19,7 @@ func run() -> void:
 		await process_frame
 	check(game.startup_complete,"Complete world starts")
 	if not game.startup_complete: quit(1); return
+	await game._begin_new_game()
 	game.front_end.hide_menu(); paused = false
 	var data: Dictionary = Document.load_path(Document.DEFAULT_PATH)
 	check(Document.valid(data),"Extended authored map validates")

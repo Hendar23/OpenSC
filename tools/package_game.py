@@ -30,6 +30,15 @@ def release_view_settings(text: str) -> str:
 def build(destination: Path, archive_output: bool = True, excluded_mods: set[str] | None = None) -> dict:
     if destination.exists():
         raise SystemExit(f"Refusing to overwrite an existing folder: {destination}")
+    approved = json.loads((ROOT / "tools/release_mods.json").read_text(encoding="utf-8"))
+    if not isinstance(approved, list) or any(not isinstance(name, str) or not name or Path(name).name != name or name in {".", ".."} or "/" in name or "\\" in name for name in approved):
+        raise SystemExit("Release mod allowlist must contain plain folder names")
+    if len(set(approved)) != len(approved):
+        raise SystemExit("Release mod allowlist contains duplicates")
+    release_mods = set(approved)
+    for name in release_mods - (excluded_mods or set()):
+        if not (ROOT / "Mods" / name / "mod.json").is_file():
+            raise SystemExit(f"Approved release mod is missing: {name}")
     files = {Path("project.godot"), Path("game.tscn"), Path("input_bindings.gd")}
     files.update(Path(name) for name in ("submarine_tuning.cfg", "submarine_audio.cfg", "view_defaults.cfg"))
     files.update(p.relative_to(PROJECT) for p in (PROJECT / "game_assets").rglob("*") if p.is_file() and p.suffix != ".import")
@@ -61,7 +70,7 @@ def build(destination: Path, archive_output: bool = True, excluded_mods: set[str
     (destination / "Mods").mkdir()
     bundled_mods = []
     for pack in sorted((ROOT / "Mods").iterdir()):
-        if pack.name in (excluded_mods or set()):
+        if pack.name not in release_mods or pack.name in (excluded_mods or set()):
             continue
         if not pack.is_dir() or not (pack / "mod.json").is_file():
             continue
@@ -170,7 +179,7 @@ texture_format/etc2_astc=false
 ''' % json.dumps(template.as_posix())
     (stage / "godot/export_presets.cfg").write_text(preset, encoding="utf-8")
     flags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-    common = [str(engine), "--headless", "--path", str(stage / "godot")]
+    common = [str(engine), "--headless", "--audio-driver", "Dummy", "--path", str(stage / "godot")]
     for label, args in [("import", ["--editor", "--import"]),
                         ("export", ["--export-release", "Windows Desktop", str(destination / "OpenSC.exe")])]:
         with (stage / (label + ".log")).open("w", encoding="utf-8") as log:

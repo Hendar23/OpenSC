@@ -30,6 +30,7 @@ var cursor := 0
 var cruise := 0.0
 var space: PhysicsDirectSpaceState3D
 var probe := SphereShape3D.new()
+var navigation_cache_key := ""
 
 func setup(world: Node3D, folder: String, dock_ports: Array[Dictionary], terrain_map: RefCounted, observer: Node3D = null, alert: Callable = Callable()) -> void:
 	asset_folder = folder
@@ -53,6 +54,7 @@ func setup(world: Node3D, folder: String, dock_ports: Array[Dictionary], terrain
 	for agent in world.find_children("Trader","Node3D",true,false):
 		if not agent is Trader: continue
 		register_vessel(agent,world,folder,alert)
+	_prepare_navigation_cache(world)
 
 func register_vessel(agent: Node3D, world: Node3D, folder: String, alert: Callable = Callable()) -> void:
 	if prepare_visual.is_valid(): prepare_visual.call(agent.get_parent())
@@ -105,7 +107,36 @@ func build_graph(budget: int) -> void:
 				if cells.has(other) and segment_clear(point,graph.get_point_position(cells[other])):
 					graph.connect_points(cursor,cells[other])
 		cursor += 1; budget -= 1
-	navigation_ready = cursor >= width * depth
+	var completed := cursor >= width * depth
+	if completed and not navigation_ready and not navigation_cache_key.is_empty():
+		var points: Array = []
+		for id in graph.get_point_ids(): points.append([id, graph.get_point_position(id), graph.get_point_connections(id)])
+		preload("res://asset_cache.gd").save_data(navigation_cache_key, {"points":points, "cells":cells})
+	navigation_ready = completed
+
+func _prepare_navigation_cache(world: Node3D) -> void:
+	var cache := preload("res://asset_cache.gd")
+	if not cache.enabled: return
+	var signature := preload("res://world_cache.gd").collision_signature(world, 1)
+	if signature.is_empty(): return
+	navigation_cache_key = cache.key("world-navigation", [], [signature, preload("res://world_cache.gd").digest(map.height_samples), map.bounds, map.surface_height, map.RESOLUTION, obstacles, STEP, CLEARANCE, probe.radius, cruise, width, depth])
+	var data := cache.load_data(navigation_cache_key)
+	if not data.get("points") is Array or not data.get("cells") is Dictionary: return
+	var ids := {}
+	for point in data.points:
+		if not point is Array or point.size() != 3 or not point[0] is int or point[0] < 0 or point[0] >= width * depth or ids.has(point[0]) or not point[1] is Vector3 or not point[1].is_finite() or not point[2] is PackedInt64Array: return
+		ids[point[0]] = true
+	if data.cells.size() != ids.size(): return
+	for cell in data.cells:
+		if not cell is Vector2i or cell.x < 0 or cell.y < 0 or cell.x >= width or cell.y >= depth or data.cells[cell] != cell.y * width + cell.x or not ids.has(data.cells[cell]): return
+	for point in data.points:
+		for other in point[2]:
+			if not ids.has(other) or other == point[0]: return
+	for point in data.points: graph.add_point(point[0], point[1])
+	# Each list preserves the original neighbour order, including both directions.
+	for point in data.points:
+		for other in point[2]: graph.connect_points(point[0], other, false)
+	cells = data.cells; cursor = width * depth; navigation_ready = true
 
 func water_clear(point: Vector3) -> bool:
 	var uv: Vector2 = map.uv(point)
