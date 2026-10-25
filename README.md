@@ -49,13 +49,9 @@ OpenSC offers a few enhancements over the original:
 ### Mod Support
 Mod support for visual and gameplay enhancements. A handful are available at the moment:
 
-- Five detailed texture packs: map, buildings, plants, submarines/equipment and wildlife. These are just quick upscaled images, but they give a glimpse of what modding could do with a real artist.
-- 3D HUD instruments with live displays. AI generated (yuck, I know) but again just to demonstrate modding possibilities. If any Blender wizard out there wants to remake them, please do!
 - Replacement 3D sea-mine model. Open source model, credits below.
 - Clownfish reskin/addition. Made by me in MSPaint in about five minutes to test adding more wildlife.
-
-
-
+- 3D HUD instruments with live displays. AI generated (yuck, I know) but just to demonstrate modding possibilities. If any Blender wizard out there wants to remake them, please do!
 
 ## Credits
 - Screenshot shutter sound: [“camera” by irinairinafomicheva](https://pixabay.com/sound-effects/technology-camera-13695/), from Pixabay. Used under the Pixabay Content License.
