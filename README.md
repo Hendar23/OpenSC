@@ -3,7 +3,7 @@
 # OpenSC
 OpenSC is an open-source game remake for playing Criterion Games' [Sub Culture](https://en.wikipedia.org/wiki/Sub_Culture). Built with [Godot](https://godotengine.org/)
 
-[Watch some gameplay footage here.](https://www.youtube.com/watch?v=AqHBXfEzc-o)
+[Watch some gameplay footage here.](https://www.youtube.com/watch?v=PmRX3hcQxC8)
 
 The aim is to bring this forgotten little gem of a game to modern systems, preserve the original experience, and expand on it with improved gameplay, new features and modding support. 
 
