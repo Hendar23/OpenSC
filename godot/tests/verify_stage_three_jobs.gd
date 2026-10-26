@@ -56,7 +56,7 @@ func run() -> void:
 	runtime = game.mission_runtime; jobs = runtime.side_jobs
 	var progress := Progress.restore({"campaign_stage":3})
 	check(Rules.next_offer(progress,2) == "disperse" and Rules.next_offer(progress,3) == "rovrtn","Original first stage-three city queues")
-	check(Rules.next_offer(progress,4).is_empty(),"No invented Tryton offer")
+	check(Rules.next_offer(progress,4) == "fumehole2","Original Tryton volcano offer")
 	check(runtime.testing_mission_city("disperse") == 2 and runtime.testing_mission_city("rovrtn") == 3,"Dev unlock uses source cities")
 	var mission: RefCounted = await fresh("disperse")
 	check(mission.fish.size() == 10,"Ten original BADJELLY attackers")

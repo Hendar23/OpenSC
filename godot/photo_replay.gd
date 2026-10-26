@@ -24,6 +24,9 @@ var frozen: Array[Dictionary] = []
 var hidden_sources := {}
 var playback: Node3D
 var last_capture_usec := 0
+var last_visual_usec := 0
+var last_wake_usec := 0
+var last_audio_usec := 0
 var capture_total_usec := 0
 var capture_count := 0
 var shader_times := PackedFloat64Array()
@@ -55,9 +58,10 @@ func _process(delta: float) -> void:
 		audio.set_recording(false); return
 	audio.set_recording(true)
 	if not started:
-		started = true; _scan(game)
+		started = true; _scan(game,true)
 	clock += delta
-	if clock < INTERVAL: return
+	if clock < INTERVAL:
+		_register_pending(); return
 	# Never manufacture multiple identical frames after a hitch.
 	var elapsed := clock; clock = 0
 	capture(elapsed)
@@ -65,10 +69,21 @@ func _process(delta: float) -> void:
 func _added(node: Node) -> void:
 	if started and enabled and playback == null and (node is VisualInstance3D or node is Light3D): pending[node.get_instance_id()] = weakref(node)
 
-func _scan(node: Node) -> void:
+func _scan(node: Node, defer_registration: bool = false) -> void:
 	if node == self or node is CanvasLayer or node is SubViewport or node is Camera3D: return
-	if node is VisualInstance3D or node is Light3D: _register(node)
-	for child in node.get_children(): _scan(child)
+	if node is VisualInstance3D or node is Light3D:
+		if defer_registration: pending[node.get_instance_id()] = weakref(node)
+		else: _register(node)
+	for child in node.get_children(): _scan(child,defer_registration)
+
+func _register_pending() -> void:
+	var began := Time.get_ticks_usec()
+	for id in pending.keys():
+		var node: Node = pending[id].get_ref(); pending.erase(id)
+		if node != null: _register(node)
+		# Initial undocking and newly streamed shoals must not allocate every
+		# 30-second history buffer together in one frame.
+		if Time.get_ticks_usec()-began >= 1000: break
 
 func _dynamic(node: Node) -> bool:
 	var ancestor: Node = node
@@ -99,18 +114,21 @@ func capture(delta: float) -> void:
 	sample_times[tick%Visual.CAPACITY] = timeline
 	oldest = maxf(0,timeline-DURATION)
 	if audio != null: audio.capture(timeline,oldest)
-	for entry in pending.values():
-		var node: Node = entry.get_ref()
-		if node != null: _register(node)
-	pending.clear()
+	last_audio_usec = Time.get_ticks_usec()-began
+	_register_pending()
+	var appearances := {}
+	var visual_began := Time.get_ticks_usec()
 	for id in tracks.keys():
 		var track: RefCounted = tracks[id]
 		if track.last_seen < oldest and track.source.get_ref() == null:
 			bytes -= track.data.size()*4; track.dispose(); tracks.erase(id); continue
-		track.record(tick,timeline)
+		track.record(tick,timeline,appearances)
+	last_visual_usec = Time.get_ticks_usec()-visual_began
+	var wake_began := Time.get_ticks_usec()
 	for id in wakes.keys():
 		var wake: RefCounted = wakes[id]; wake.record(timeline,oldest)
 		if wake.last_seen < oldest and wake.source.get_ref() == null: wake.dispose(); wakes.erase(id)
+	last_wake_usec = Time.get_ticks_usec()-wake_began
 	last_capture_usec = Time.get_ticks_usec()-began; capture_total_usec += last_capture_usec; capture_count += 1
 
 func begin() -> bool:
@@ -207,6 +225,7 @@ func clear() -> void:
 	timeline = 0; tick = -1; clock = 0; oldest = 0; bytes = 0; started = false
 	sample_times.fill(0); shader_times.fill(0)
 	capture_total_usec = 0; capture_count = 0; last_capture_usec = 0
+	last_visual_usec = 0; last_wake_usec = 0; last_audio_usec = 0
 
 func _exit_tree() -> void:
 	clear()

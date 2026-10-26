@@ -5,6 +5,7 @@ const SIGNAL_FADE_DISTANCE := 25.0
 const SIGNAL_LOSS_DISTANCE := 30.0
 const ORIGINAL_TICKS_PER_SECOND := 25.0
 const Radio = preload("res://docking_radio.gd")
+const Mine = preload("res://floating_mine.gd")
 var tools: Node3D
 var deployed := false
 var launched := false
@@ -24,13 +25,12 @@ var dead := false
 
 func setup(owner_tools: Node3D) -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
-	tools = owner_tools; collision_layer = 8; collision_mask = 1 | 8
+	tools = owner_tools; collision_layer = 0; collision_mask = 0
 	var collider := CollisionShape3D.new(); collider.shape = SphereShape3D.new(); collider.shape.radius = 0.12; add_child(collider)
 	visual = preload("res://map_document.gd").load_model("ROVER",tools.folder)
 	if visual != null:
 		visual.rotation.y = PI; add_child(visual)
 		for mesh in visual.find_children("*","GeometryInstance3D",true,false): mesh.layers = RENDER_LAYER
-	add_collision_exception_with(tools.equipment.pilot)
 	set_meta("damage_sustain",0.75) # 004209d0 overrides the generic CSV value.
 	var lamp := SpotLight3D.new(); lamp.position = Vector3(0,0.04,-0.15); lamp.spot_range = 5; lamp.spot_angle = 45; lamp.light_energy = 1.5; add_child(lamp)
 	var fill := OmniLight3D.new(); fill.omni_range = 4; fill.light_energy = 0.3; add_child(fill)
@@ -46,10 +46,11 @@ func set_deployed(on: bool) -> void:
 		if not launched:
 			launched = true
 			var mount := socket()
-			global_transform = mount.global_transform if mount != null else tools.equipment.pilot.global_transform
+			global_transform = _launch_pose(mount)
 			if mount != null and mount.get_child_count() > 0: mount.get_child(0).hide()
 			yaw = global_rotation.y; pitch = global_rotation.x; velocity = tools.equipment.pilot.linear_velocity
 			reset_physics_interpolation()
+		collision_layer = 8; collision_mask = 1 | 2 | 8; _hull_collision(true)
 		show(); set_physics_process(true)
 		var runtime: Node = tools.runtime()
 		if runtime != null: runtime.game.natural_light.attach(visual); runtime.game.water_visuals.attach(visual)
@@ -57,7 +58,7 @@ func set_deployed(on: bool) -> void:
 	else:
 		deployed = false; recording = 0; docking_prompt = false
 		if launched and global_position.distance_squared_to(docking_approach()) < 1.0:
-			returning = true; _radio("rover2")
+			returning = true; _hull_collision(false); _radio("rover2")
 		else: _radio("rover4")
 		var runtime: Node = tools.runtime()
 		if runtime != null: runtime.game._update_follow_camera(0,true)
@@ -91,6 +92,27 @@ func docking_approach() -> Vector3:
 	if preload("res://submarine_mounts.gd").is_original(pilot.visual): return pilot.visual.get_node("Hull").to_global(Vector3(0,-0.8,-0.5))
 	return pilot.to_global(Vector3(0,-0.8,0.5))
 
+func _launch_pose(mount: Node3D) -> Transform3D:
+	var pilot: Node3D = tools.equipment.pilot
+	var local := pilot.to_local(mount.global_position if mount != null else pilot.global_position)
+	var stern: float = pilot.COLLIDER_RADIUS
+	for child in pilot.get_children():
+		if not child is CollisionShape3D or child.disabled or child.shape == null: continue
+		var bounds: AABB = child.shape.get_debug_mesh().get_aabb()
+		for corner in range(8): stern = maxf(stern,(child.transform*bounds.get_endpoint(corner)).z)
+	# Enable solid contact only after clearing the real hull, including mod hulls.
+	local.z = maxf(local.z,stern+0.12+0.05)
+	return Transform3D(Basis.looking_at(pilot.global_basis.z.normalized(),pilot.global_basis.y.normalized()),pilot.to_global(local))
+
+func _hull_collision(on: bool) -> void:
+	var pilot: PhysicsBody3D = tools.equipment.pilot
+	if on:
+		collision_mask |= 2
+		remove_collision_exception_with(pilot); pilot.remove_collision_exception_with(self)
+	else:
+		collision_mask &= ~2
+		add_collision_exception_with(pilot); pilot.add_collision_exception_with(self)
+
 func check_docking_prompt() -> void:
 	if not launched or returning or dead: return
 	if global_position.distance_squared_to(docking_approach()) >= 1.0:
@@ -102,7 +124,7 @@ func answer_docking(accepted: bool) -> void:
 	if not docking_prompt: return
 	docking_prompt = false; declined_nearby = not accepted
 	if not accepted: return
-	deployed = false; returning = true; recording = 0
+	deployed = false; returning = true; recording = 0; _hull_collision(false)
 	tools.equipment.pilot.remote_controlled = false
 	for item in tools.equipment.available:
 		if item.id == "rover": item.enabled = false
@@ -133,6 +155,7 @@ func _physics_process(delta: float) -> void:
 		set_deployed(false)
 	check_docking_prompt()
 	if returning:
+		if collision_mask & 2: _hull_collision(false)
 		var mount := socket()
 		var offset: Vector3 = (mount.global_position if mount != null else tools.equipment.pilot.global_position)-global_position
 		velocity = offset.normalized()*3.0; _move_remote()
@@ -156,7 +179,9 @@ func _move_remote() -> void:
 	for index in get_slide_collision_count():
 		var contact := get_slide_collision(index)
 		var body := contact.get_collider()
-		if body != null and body.has_method("receive_rov_push"):
+		if body is Mine and bool(body.stats.get("trigger_on_contact",true)):
+			body.detonate.call_deferred()
+		elif body != null and body.has_method("receive_rov_push"):
 			body.receive_rov_push(-contact.get_normal()*maxf(0,-motion.dot(contact.get_normal())))
 
 static func signal_response(distance: float) -> float:
@@ -198,6 +223,10 @@ func advance_recording(delta: float) -> void:
 func camera_pose() -> Transform3D:
 	return get_global_transform_interpolated()*Transform3D(Basis.IDENTITY,Vector3(0,0.04,-0.15))
 
+func take_damage(strength: float, point: Vector3 = Vector3.ZERO) -> void:
+	# World mine blasts discover receivers through this common damage method.
+	take_weapon_damage(strength,point)
+
 func take_weapon_damage(strength: float, _point: Vector3 = Vector3.ZERO) -> void:
 	if not launched or dead: return
 	health -= maxf(0,strength)*0.75
@@ -218,6 +247,7 @@ func take_weapon_damage_from(strength: float, point: Vector3, _owner: Node3D) ->
 
 func reset(repair: bool = true) -> void:
 	if is_instance_valid(tools.equipment.pilot): tools.equipment.pilot.remote_controlled = false
+	_hull_collision(true); collision_layer = 0; collision_mask = 0
 	deployed = false; launched = false; returning = false; docking_prompt = false; declined_nearby = false; recording = 0; velocity = Vector3.ZERO
 	if repair: dead = false; health = 2
 	hide(); set_physics_process(false)

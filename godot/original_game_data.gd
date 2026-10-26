@@ -33,7 +33,17 @@ static func load_catalogue(folder: String, with_mods: bool = true) -> Dictionary
 			var errors := apply_patch(result,patch)
 			if errors.is_empty(): result.provenance.mods.append(entry.pack)
 			for error in errors: Mods.note("%s gameplay data: %s" % [entry.name,error])
+	_display_terminology(result)
 	return result
+
+static func _display_terminology(catalogue: Dictionary) -> void:
+	# Run after cached imports and mod patches, on the detached catalogue copy.
+	# Never rewrite source archives, raw source_texts, IDs or bitmap/model paths.
+	var fields := {"mission_text":["text"],"radio_messages":["text"],"mail_messages":["subject","body"],"equipment_text":["name","Description"],"commodity_text":["name","Description"],"city_descriptions":["text"],"database.missions":["MissionText"]}
+	for table in fields:
+		for record in catalogue.get("tables",{}).get(table,{}).get("records",{}).values():
+			for field in fields[table]:
+				if record.get(field) is String: record[field] = preload("res://display_text.gd").weapons(record[field])
 
 static func _import(folder: String, fingerprints: Dictionary) -> Dictionary:
 	var result := {"schema_version":1,"provenance":{"importer_version":1,"files":fingerprints},"tables":{},"warnings":[]}

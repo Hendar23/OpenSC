@@ -1,6 +1,11 @@
 extends "res://tests/test_scene_tree.gd"
 class Population extends "res://wildlife_population.gd":
+	var visibility_probes := 0
+	var reject_after := -1
 	func _random_home(_species: Dictionary, _random: RandomNumberGenerator) -> Vector3: return Vector3(0,0,80)
+	func _visible_spawn(_point: Vector3, _observer: Vector3, _radius: float = 0.0) -> bool:
+		visibility_probes += 1
+		return reject_after >= 0 and visibility_probes > reject_after
 var checks := 0
 var failures := 0
 func check(ok: bool, message: String) -> void:
@@ -43,6 +48,15 @@ func run() -> void:
 	var invalid := state("surface",20); invalid.group.position = [0,25.5,12]
 	pop.random_groups.append(invalid); pop._stream_update()
 	check(invalid.members.is_empty() and not invalid.attempted and not pop.spawned_groups.has("surface"),"Unplaceable groups are not marked complete")
+	# Nineteen valid placements must not build then discard nineteen actors.
+	var additions := [0]
+	pop.child_entered_tree.connect(func(_child: Node) -> void: additions[0] += 1)
+	pop.reject_after = 19; pop.visibility_probes = 0
+	var random := RandomNumberGenerator.new(); random.seed = 42
+	pop.spawn_budget = 30
+	var incomplete := pop._spawn_group(state("partial",20).group,random,true,true)
+	check(incomplete.is_empty() and additions[0] == 0 and pop.spawn_budget == 30,"Under-minimum shoals allocate no actors or replay tracks and leave the spawn budget intact")
+	pop.reject_after = -1
 	# Independent test of authored group abundance and species scheduling.
 	var species: Dictionary = pop.definitions.silver
 	species.merge({"random_spawn":true,"groups_min":20,"groups_max":20,"count_min":20,"count_max":20,"spawn_chance":60.0,"roam_radius":2.0})

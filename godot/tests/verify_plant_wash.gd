@@ -16,6 +16,11 @@ func _run() -> void:
 	var flexible := current._flexible_mesh(leaf)
 	check(flexible.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() == 48 and leaf.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() == 3,"Sparse leaves gain intermediate bending vertices without modifying original assets")
 	check(current._flexible_mesh(leaf) == flexible,"Plant instances share the subdivided mesh")
+	var modern := Node3D.new(); modern.set_meta("asset_source","res://plants/REED.glb"); modern.set_meta("modern_model",true); root.add_child(modern)
+	var model := MeshInstance3D.new(); model.mesh = leaf; modern.add_child(model)
+	current.attach(modern)
+	check(model.mesh == leaf and leaf.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() == 3,"Modern plants keep their authored mesh and distance-detail buffers instead of being subdivided again")
+	modern.free()
 	var sources: Array[Dictionary] = [{"position":Vector3.ZERO,"direction":Vector3.BACK,"power":1.0}]
 	var near := current.wash_at(Vector3(0,0,0.5),sources)
 	check(near.z > 0.1 and near.x == 0,"Nearby plants bend with the outgoing propeller stream")

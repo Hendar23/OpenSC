@@ -12,6 +12,7 @@ var enhanced := false
 var lobes: Array[Dictionary] = []
 var clouds: Array[Dictionary] = []
 var size := 1.0
+var spill_over := false
 const FRAME_RATE := 24.0
 static func load_frames(folder: String, cache: Dictionary = {}) -> Array[Texture2D]:
 	smoke_frames.clear()
@@ -72,7 +73,13 @@ func _build_layers() -> void:
 		for index in range(8):
 			var angle := float(index) * TAU / 8.0
 			var direction := Vector3(cos(angle),0.25 + float(index % 3) * 0.2,sin(angle))
-			lobes.append({"node":_quad(frames[0],true),"direction":direction,"delay":float(index % 4) * 0.055,"scale":size * (0.45 + float(index % 3) * 0.12)})
+			var upward := spill_over and index < 2
+			if spill_over:
+				angle = float(index-2)*TAU/6.0
+				direction = Vector3.UP if upward else Vector3(cos(angle),0,sin(angle))
+			var node := _quad(frames[0],true)
+			if upward: node.material_override.render_priority = 1
+			lobes.append({"node":node,"direction":direction,"upward":upward,"delay":float(index % 4) * 0.055,"scale":size * (0.7 if upward else 0.45 + float(index % 3) * 0.12)})
 	for index in range(12):
 		var texture: Texture2D = smoke_frames[index % smoke_frames.size()] if not smoke_frames.is_empty() else null
 		if texture == null: continue
@@ -88,7 +95,11 @@ func _animate_layers() -> void:
 		node.visible = time >= 0 and index < frames.size()
 		if not node.visible: continue
 		node.position = lobe.direction * size * (0.12 + time * 0.7)
+		if spill_over:
+			var reach := size*(0.3+time*1.4)
+			node.position = Vector3.UP*size*(0.15+time*2.8) if lobe.upward else Vector3(lobe.direction.x*reach,size*(0.12+time*0.9-time*time*1.9),lobe.direction.z*reach)
 		node.scale = Vector3.ONE * lobe.scale * (0.7 + time * 1.5)
+		if spill_over and lobe.upward: node.scale.y *= 1.8
 		node.material_override.set_shader_parameter("albedo_texture",frames[index])
 		node.material_override.set_shader_parameter("emission_texture",frames[index])
 	for cloud in clouds:

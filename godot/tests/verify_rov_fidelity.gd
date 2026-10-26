@@ -45,8 +45,24 @@ func run() -> void:
 		var expected: String = game.gameplay_catalogue.tables.radio_messages.records[code].text
 		check(not expected.is_empty() and rov.transmission(code).text == expected,"ROV uses the exact original message: "+code)
 	check(rov.find_children("*","Label",true,false).is_empty() and rov.find_children("*","CanvasLayer",true,false).is_empty(),"No invented instruction bar or recording countdown")
+	check(rov.collision_layer == 0 and rov.collision_mask == 0,"Stowed ROV has no hidden physics obstruction")
 	game.equipment.toggle_selected(); rov.set_physics_process(false)
 	check(rov.deployed and rov.launched and game.pilot.remote_controlled,"Equipment activation launches and transfers control")
+	check((-rov.global_basis.z).dot(game.pilot.global_basis.z.normalized()) > 0.99,"ROV launches facing backwards away from the submarine")
+	check(rov.collision_mask & 2 and not rov.get_collision_exceptions().has(game.pilot) and not game.pilot.get_collision_exceptions().has(rov),"Launched ROV has solid contact with the player hull")
+	await physics_frame; await physics_frame
+	var overlap := PhysicsShapeQueryParameters3D.new(); overlap.shape = rov.get_child(0).shape
+	overlap.transform = rov.global_transform; overlap.collision_mask = 2
+	check(game.get_world_3d().direct_space_state.intersect_shape(overlap,8).is_empty(),"Launch point clears the submarine's actual collision hull")
+	var hit_hull := false
+	for frame in range(60):
+		rov.velocity = -game.pilot.global_basis.z.normalized()*2; rov._move_remote()
+		for index in rov.get_slide_collision_count():
+			if rov.get_slide_collision(index).get_collider() == game.pilot: hit_hull = true
+		if hit_hull: break
+		await physics_frame
+	check(hit_hull,"Driving a launched ROV back towards the stern physically hits the submarine")
+	rov.velocity = Vector3.ZERO
 	var hud: CanvasLayer = game.cockpit_hud
 	hud.show(); hud.set_enabled(2,true,false); game._set_camera_mode(false)
 	var main_pose: Transform3D = game.camera.global_transform
@@ -97,6 +113,11 @@ func run() -> void:
 	check(rov.health == 1.25,"Relaunching the same ROV preserves damage")
 	rov.global_position = rov.docking_approach(); rov.check_docking_prompt(); key(KEY_Y)
 	check(rov.returning and not rov.deployed,"Keyboard Y accepts docking")
+	check(rov.get_collision_exceptions().has(game.pilot) and not (rov.collision_mask & 2),"Only automatic docking temporarily ignores the hull")
+	for frame in range(120):
+		if not rov.launched: break
+		rov._physics_process(1.0/60.0); await physics_frame
+	check(not rov.launched and rov.collision_layer == 0,"Automatic recovery reaches the mount and removes its collision body")
 	rov.reset(); game.equipment.toggle_selected(); rov.set_physics_process(false)
 	rov.global_position = rov.docking_approach(); rov.check_docking_prompt()
 	var decline := InputEventJoypadButton.new(); decline.button_index = JOY_BUTTON_B; decline.pressed = true; game._input(decline)
@@ -120,6 +141,28 @@ func run() -> void:
 	check(Shop.swap(game.player_progress,game.equipment,game.weapons,7,"rover").is_empty() and not rov.dead,"A replacement ROV can be purchased and mounted")
 	game.equipment.toggle_selected(); rov.set_physics_process(false)
 	check(rov.deployed and rov.health == 2,"Replacement ROV launches normally")
+	var mine := preload("res://floating_mine.gd").new()
+	mine.setup(preload("res://object_definitions.gd").FLOATING_MINE,Node3D.new(),null,false)
+	game.world_root.add_child(mine); mine.set_physics_process(false)
+	mine.global_position = game.pilot.global_position + Vector3(5,0,0)
+	mine.exploded.connect(game.object_population._exploded.bind(0.0))
+	var detonations := [0]
+	mine.exploded.connect(func(_point: Vector3,_damage: float,_radius: float) -> void: detonations[0] += 1)
+	var simulating: bool = game.object_population.simulating; game.object_population.simulating = true
+	for settings in [[false,true],[true,false],[true,true]]:
+		mine.armed = settings[0]; mine.stats.trigger_on_contact = settings[1]
+		rov.global_position = mine.global_position + Vector3.LEFT
+		rov.reset_physics_interpolation()
+		await physics_frame; await physics_frame
+		for frame in range(45):
+			rov.velocity = Vector3.RIGHT*2.0; rov._move_remote()
+			await physics_frame
+			if mine.dead: break
+		check(mine.dead == (settings[0] and settings[1]),"Actual ROV contact respects mine arming and contact-trigger settings: "+str(settings))
+	await physics_frame; await physics_frame
+	check(detonations[0] == 1,"ROV contact emits exactly one normal mine explosion")
+	check(rov.health > 0 and rov.health < 2,"The contact blast reaches the ROV through ordinary mine damage and its existing sustain")
+	game.object_population.simulating = simulating; mine.free(); rov.health = 2; rov.velocity = Vector3.ZERO
 	check(is_equal_approx(rov.signal_response(25),1.0) and is_equal_approx(rov.signal_response(27.5),0.5) and is_equal_approx(rov.signal_response(30),0.2),"Original signal response fades only across the final five units, with a .2 floor")
 	rov.pitch = 0.8; rov.yaw = 0.7; rov.velocity = Vector3(2,1,-1)
 	for frame in range(60): rov.advance_controls(Vector4.ZERO,1.0/60.0)

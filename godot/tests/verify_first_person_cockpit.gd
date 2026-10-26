@@ -12,7 +12,9 @@ func _initialize() -> void:
 	var storage = preload("res://player_storage.gd")
 	storage.root_override = "res://tests/cache-canopy-fixtures"; storage.ensure_parent(storage.preferences_path())
 	var ignore := FileAccess.open(storage.root_override.path_join(".gdignore"),FileAccess.WRITE); ignore.store_string("")
-	var config := ConfigFile.new(); config.set_value("game","folder",ProjectSettings.globalize_path("res://../Original Sub Culture")); config.save(storage.preferences_path())
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
+	var config := ConfigFile.new(); config.set_value("game","folder",folder); config.save(storage.preferences_path())
 	Mods.initialize(false); call_deferred("run")
 func snapshot(view: SubViewport) -> Image:
 	for frame in range(14):
@@ -93,7 +95,7 @@ func run() -> void:
 		var study_materials: Array[ShaderMaterial] = [preview_glass.material_override]
 		study_capture.setup(view.find_world_3d(),study_materials,camera); study_camera = camera
 		study_capture.update_capture(1.0/120.0,true,camera)
-		check(study_capture.views.all(func(face: SubViewport) -> bool: return face.render_target_update_mode == SubViewport.UPDATE_ALWAYS),"All reflection directions refresh every rendered frame")
+		check(study_capture.views.filter(func(face: SubViewport) -> bool: return face.render_target_update_mode == SubViewport.UPDATE_ONCE).size() == 1,"Reflection faces share a one-capture-per-frame budget")
 		check(study_capture.views.size() == 6 and study_capture.views.all(func(face: SubViewport) -> bool: return face.size == Vector2i(256,256)),"Scene capture uses six bounded low-resolution faces")
 		check(study_capture.cameras.all(func(face: Camera3D) -> bool: return not (face.cull_mask & (2 | Cockpit.RENDER_LAYER))),"Reflections exclude the player hull and canopy itself")
 		var environment := WorldEnvironment.new(); environment.environment = Environment.new(); environment.environment.background_mode = Environment.BG_COLOR; environment.environment.background_color = Color(0.12,0.25,0.3); view.add_child(environment)

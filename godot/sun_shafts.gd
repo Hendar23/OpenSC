@@ -16,6 +16,7 @@ func setup(owner_game: Node3D) -> void:
 	for index in PATCH_LIMIT:
 		var mesh := MeshInstance3D.new()
 		mesh.mesh = BoxMesh.new(); mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mesh.mesh.size = Vector3.ONE
 		var material := ShaderMaterial.new(); material.shader = preload("res://sun_shafts.gdshader")
 		mesh.material_override = material; add_child(mesh); mesh.hide()
 		patches.append({"node":mesh,"material":material,"age":0.0,"lifetime":0.0,"source":Vector3.ZERO,"width":3.0,"blocked":false})
@@ -73,7 +74,10 @@ func _physics_process(delta: float) -> void:
 	patch.blocked = reach < 0.2
 	reach = maxf(0.05,reach)
 	patch.node.transform = Transform3D(pose,patch.source + direction * reach * 0.5)
-	patch.node.mesh.size = Vector3(patch.width,patch.width,reach)
+	# Dimensions are applied by the vertex shader; changing PrimitiveMesh.size
+	# rebuilt/uploaded geometry during play every time a patch was refreshed.
+	var dimensions := Vector3(patch.width,patch.width,reach)
+	patch.node.custom_aabb = AABB(-dimensions*0.5,dimensions)
 	patch.material.set_shader_parameter("beam_length",reach)
 	patch.material.set_shader_parameter("beam_width",patch.width)
 	patch.material.set_shader_parameter("surface_height",surface)

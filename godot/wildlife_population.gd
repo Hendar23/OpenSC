@@ -140,10 +140,17 @@ func _retire(fish: Node3D) -> void:
 	pool[species].append(fish); pooled_count += 1
 	cells_frame = -1
 
+func smooth_range() -> float:
+	# Keep the transition beyond visible water, including the following camera.
+	return maxf(48.0,visibility_range + 8.0)
+
 func detailed(fish: Node3D) -> bool:
 	if not fish.mission_owner.is_empty(): return true
+	if is_instance_valid(activity) and activity.nearby(fish.global_position,fish.radius,8.0): return true
+	var distance: float = smooth_range() + fish.radius
+	if is_instance_valid(view_camera) and view_camera.global_position.distance_squared_to(fish.global_position) <= distance*distance: return true
 	var origin: Vector3 = player.global_position if is_instance_valid(player) else view_camera.global_position if is_instance_valid(view_camera) else fish.global_position
-	return origin.distance_squared_to(fish.global_position) <= pow(24.0 + fish.radius,2)
+	return origin.distance_squared_to(fish.global_position) <= distance*distance
 func reroll(advance: bool = true) -> void:
 	if advance: generation += 1
 	for child in get_children():
@@ -318,15 +325,16 @@ func _update_activity(fish: Node3D, viewer: Vector3, planes: Array) -> void:
 	var awake: bool = not fish.dead and bool(fish.get_meta("wildlife_awake",true))
 	var distance_squared := viewer.distance_squared_to(fish.global_position)
 	var in_range := distance_squared <= pow(visibility_range + fish.radius,2)
-	# Close poses follow every rendered frame; distant poses retain their clock
-	# but upload at 30/15 Hz. Physics, aiming and collisions keep their rate.
-	fish.animation_interval = 0.0 if distance_squared <= 100.0 else (1.0 / 30.0 if distance_squared <= 400.0 else 1.0 / 15.0)
 	var on_screen := in_range
 	for plane in planes:
 		if plane.distance_to(fish.global_position) > fish.radius: on_screen = false; break
 	if is_instance_valid(activity):
 		in_range = activity.nearby(fish.global_position,fish.radius)
 		on_screen = activity.in_sight(fish.global_position,fish.radius)
+	# Visibility already culls pose uploads. Fish visible in any gameplay feed
+	# must not additionally step their swimming animation at 15/30 Hz.
+	var smooth := smooth_range()
+	fish.animation_interval = 0.0 if on_screen or distance_squared <= smooth*smooth else (1.0 / 30.0 if distance_squared <= pow(smooth*1.5,2) else 1.0 / 15.0)
 	fish.visual_animation_enabled = awake and on_screen
 	# Keep nearby AI operating behind the player; creatures in the preparation
 	# band beyond the absolute view distance need neither AI nor pose uploads.
@@ -346,10 +354,12 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 	var count := random.randi_range(int(group.count_min),int(group.count_max))
 	# Capacity may postpone a shoal, but must never silently shrink its roll.
 	if streaming and limit_to_visible_range and max_active > 0 and count > maxi(0,max_active - active_count()): return members
+	var placements: Array[Dictionary] = []
+	var available: Array = pool.get(str(species.id),[])
+	var pool_index := available.size()-1 if streaming else -1
 	for member in range(count):
 		var size := random.randf_range(float(species.scale_min), float(species.scale_max)) / 100.0
-		var available: Array = pool.get(str(species.id),[])
-		if streaming and not available.is_empty(): size = float(available.back().get_meta("spawn_size",size))
+		if pool_index >= 0: size = float(available[pool_index].get_meta("spawn_size",size))
 		var radius := maxf(0.08, box.size.length() * 0.5 * size)
 		var point := Vector3(INF, INF, INF)
 		for attempt in range(24):
@@ -364,24 +374,33 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 			if avoid_visible and candidate.is_finite() and _visible_spawn(candidate,player_position,radius): continue
 			if candidate.is_finite() and candidate.y + radius < float(world.get_meta("surface_height")) and Creatures._clear(world, candidate, radius): point = candidate; break
 		if not point.is_finite(): continue
+		placements.append({"member":member,"point":point,"size":size,"radius":radius,"seed":random.randi(),"speed":random.randf_range(0.9,1.1)})
+		pool_index -= 1
+	# Reject an incomplete shoal before creating actors or consuming the pool.
+	# Otherwise a marginal/visible spawn creates and frees the same fish every
+	# streaming tick, including their combat state and replay history buffers.
+	if placements.size() < int(group.count_min): return members
+	for placement in placements:
+		var point: Vector3 = placement.point
+		var size: float = placement.size
 		var fish: Node3D
 		if streaming and not available.is_empty():
 			fish = available.pop_back(); pooled_count -= 1
-			fish.revive_ambient(point,random.randi())
+			fish.revive_ambient(point,placement.seed)
 		else:
 			var visual := template.duplicate() as Node3D
 			visual.scale *= size
 			visual.position -= box.get_center() * size
 			fish = Fish.new()
-			fish.setup(visual, point, world.get_meta("bounds"), world.get_meta("surface_height"), radius, random.randi())
+			fish.setup(visual, point, world.get_meta("bounds"), world.get_meta("surface_height"), placement.radius, placement.seed)
 		fish.set_meta("spawn_size",size)
-		fish.name = "Creature_%s_%d" % [group.id, member]
+		fish.name = "Creature_%s_%d" % [group.id, placement.member]
 		fish.set_meta("species", species.id)
 		fish.set_meta("spawn_group", group.id)
 		fish.set_meta("spawn_position", point)
 		fish.home = home
 		fish.roam_radius = float(group.radius)
-		fish.swim_speed = float(species.speed) * random.randf_range(0.9, 1.1)
+		fish.swim_speed = float(species.speed) * float(placement.speed)
 		fish.turn_speed = float(species.get("turn_speed", 60.0))
 		fish.animation_speed = float(species.get("animation_speed",1.0))
 		fish.pitch_limit = float(species.get("pitch_limit", 25.0))
@@ -410,11 +429,6 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 		fish.set_physics_process(simulating)
 		fish.set_process(simulating)
 		members.append(fish)
-	# Terrain, fog boundaries or visible-water avoidance can reject positions.
-	# Do not mark a truncated under-minimum group as successfully populated.
-	if members.size() < int(group.count_min):
-		for fish in members: fish.free()
-		members.clear()
 	if not members.is_empty(): spawned_groups.append(group.id)
 	return members
 func floor_point(point: Vector3, radius: float) -> Vector3:

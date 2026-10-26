@@ -10,6 +10,8 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 func target_body() -> CollisionObject3D:
+	if jobs.defection != null: return jobs.defection.target_body()
+	if is_instance_valid(jobs.volcano): return jobs.volcano.target_body()
 	if jobs.stage_three != null: return jobs.stage_three.target_body()
 	if jobs.terrorists != null: return jobs.terrorists.target_body()
 	if jobs.genocide != null: return jobs.genocide.target_body()

@@ -30,7 +30,7 @@ func _collect(node: Node) -> void:
 	var model := str(node.get_meta("editor_model","" )).to_upper().trim_prefix("MODEL.")
 	var source := str(node.get_meta("asset_source","")).get_file().get_basename().to_upper()
 	if model in ["REED","BUSH1","BUSH2","BUSH3","BUSH4"] or source in ["REED","BUSH1","BUSH2","BUSH3","BUSH4"]:
-		_prepare(node); plant_count += 1
+		_prepare(node,not node.get_meta("modern_model",false)); plant_count += 1
 		return
 	for child in node.get_children(): _collect(child)
 
@@ -62,9 +62,12 @@ func _prepare_batch(node: MultiMeshInstance3D) -> void:
 	# Ambient sway uses each instance's model matrix. Keep these shared batches
 	# out of point-based propeller wash so one nearby plant cannot bend a colony.
 
-func _prepare(node: Node) -> void:
+func _prepare(node: Node, subdivide_sparse: bool = true) -> void:
 	if node is MeshInstance3D:
-		node.mesh = _flexible_mesh(node.mesh)
+		# Modern plants already have authored bending vertices and cached LODs.
+		# Legacy-only subdivision multiplied some biome meshes by four and
+		# rebuilding their surfaces also discarded the distance index buffers.
+		if subdivide_sparse: node.mesh = _flexible_mesh(node.mesh)
 		var bounds: AABB = node.mesh.get_aabb()
 		var patch_materials: Array[ShaderMaterial] = []
 		for surface in range(node.mesh.get_surface_count()):
@@ -90,7 +93,7 @@ func _prepare(node: Node) -> void:
 		# Sample around the leafy upper body, rather than only at the root.
 		var sample := bounds.get_center(); sample.y = bounds.position.y + bounds.size.y * 0.65
 		patches.append({"point":node.global_transform * sample,"materials":patch_materials,"bend":Vector3.ZERO})
-	for child in node.get_children(): _prepare(child)
+	for child in node.get_children(): _prepare(child,subdivide_sparse)
 
 func _flexible_mesh(source: Mesh) -> Mesh:
 	# Share a bounded, once-built subdivision between all instances. Old plant

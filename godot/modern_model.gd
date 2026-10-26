@@ -27,6 +27,13 @@ static func load_model(path: String, descriptor: Dictionary = {}) -> Node3D:
 	var state := GLTFState.new()
 	if document.append_from_file(path, state) != OK: return null
 	_apply_material_textures(state, descriptor)
+	if descriptor.get("scenery_lods",false) or str(descriptor.get("id","")) in ["model.reed","model.bush1","model.bush2","model.bush3","model.bush4"]:
+		# Runtime GLTF loading does not run the editor's automatic LOD import.
+		# Keep the full-detail surface and add distance-only index buffers once,
+		# before caching the scene; never simplify geometry during play.
+		for item in state.get_meshes():
+			var mesh: ImporterMesh = item.mesh
+			if mesh != null: mesh.generate_lods(60.0,25.0,[])
 	var imported := document.generate_scene(state) as Node3D
 	if imported == null: return null
 	var root := Node3D.new()

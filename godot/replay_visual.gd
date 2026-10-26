@@ -28,7 +28,7 @@ func setup(node: Node3D, time: float) -> void:
 	mutable_mesh = node.get_meta("replay_mutable_mesh",false)
 	data.resize(CAPACITY*stride); stamps.resize(CAPACITY); stamps.fill(-1)
 
-func record(tick: int, time: float) -> void:
+func record(tick: int, time: float, appearances: Dictionary = {}) -> void:
 	var node: Node3D = source.get_ref()
 	var slot := tick%CAPACITY; var offset := slot*stride
 	stamps[slot] = tick
@@ -40,11 +40,14 @@ func record(tick: int, time: float) -> void:
 	mutable_mesh = mutable_mesh or node.get_meta("replay_mutable_mesh",false)
 	last_seen = time
 	var pose := node.global_transform
-	for axis in range(3):
-		for component in range(3): data[offset+axis*3+component] = pose.basis[axis][component]
-	for component in range(3): data[offset+9+component] = pose.origin[component]
+	# Avoid nested Variant indexing/loops for every recorded visual at20Hz.
+	var x := pose.basis.x; var y := pose.basis.y; var z := pose.basis.z; var p := pose.origin
+	data[offset] = x.x; data[offset+1] = x.y; data[offset+2] = x.z
+	data[offset+3] = y.x; data[offset+4] = y.y; data[offset+5] = y.z
+	data[offset+6] = z.x; data[offset+7] = z.y; data[offset+8] = z.z
+	data[offset+9] = p.x; data[offset+10] = p.y; data[offset+11] = p.z
 	data[offset+12] = 1
-	var values := _values(node)
+	var values := _values(node,appearances)
 	if versions.is_empty() or values != previous or mutable_mesh:
 		previous = values
 		versions.append({"tick":tick,"state":_state(node)})
@@ -54,19 +57,19 @@ func record(tick: int, time: float) -> void:
 	# Keep one preceding appearance for interpolation across the buffer edge.
 	while versions.size() > 1 and versions[1].tick <= tick-CAPACITY+1: versions.pop_front()
 
-func _values(node: Node3D) -> Array:
+func _values(node: Node3D, appearances: Dictionary) -> Array:
 	var result: Array = []
 	if node is MeshInstance3D:
 		result = [node.mesh,node.material_override,node.layers,node.transparency]
 		if node.mesh != null:
 			for surface in node.mesh.get_surface_count():
 				var surface_material: Material = node.get_surface_override_material(surface)
-				result.append(surface_material); result.append(_material_values(surface_material))
+				result.append(surface_material); result.append(_material_values(surface_material,appearances))
 	elif node is Sprite3D: result = [node.texture,node.modulate,node.pixel_size,node.material_override]
 	elif node is MultiMeshInstance3D: result = [node.multimesh,node.multimesh.instance_count,node.multimesh.mesh,node.material_override]
 	elif node is Light3D: return [node.light_color,node.light_energy,node.omni_range if node is OmniLight3D else node.spot_range]
 	var material: Material = node.material_override if node is GeometryInstance3D else null
-	result.append(_material_values(material))
+	result.append(_material_values(material,appearances))
 	return result
 
 func _fields(material: ShaderMaterial) -> Array:
@@ -81,13 +84,18 @@ func _fields(material: ShaderMaterial) -> Array:
 		if shader_fields[id].is_empty(): shader_fields[id] = MATERIAL_FIELDS.duplicate()
 	return shader_fields[id]
 
-func _material_values(material: Material) -> Array:
+func _material_values(material: Material, appearances: Dictionary) -> Array:
 	var values: Array = []
 	if material == null: return values
+	var id := material.get_instance_id()
+	# Many hull parts/fish share a material. Read its uniforms once per sample,
+	# without carrying the snapshot into the next frame or missing animation.
+	if appearances.has(id):
+		material_values[id] = appearances[id]; return appearances[id]
 	if material is ShaderMaterial:
 		for field in _fields(material): values.append(material.get_shader_parameter(field))
 	elif material is StandardMaterial3D: values = [material.albedo_color,material.albedo_texture,material.emission_texture]
-	material_values[material.get_instance_id()] = values
+	appearances[id] = values; material_values[id] = values
 	return values
 
 func _state(node: Node3D) -> Dictionary:
@@ -96,6 +104,7 @@ func _state(node: Node3D) -> Dictionary:
 		state = {"layers":node.layers,"shadow":node.cast_shadow,"transparency":node.transparency,"material":_material(node.material_override)}
 	if node is MeshInstance3D:
 		state["mesh"] = _mesh_copy(node.mesh) if mutable_mesh and node.mesh != null else node.mesh
+		state["bounds"] = node.custom_aabb
 		state["surfaces"] = []
 		if node.mesh != null:
 			for index in node.mesh.get_surface_count(): state.surfaces.append(_material(node.get_surface_override_material(index)))
@@ -189,6 +198,7 @@ func _apply(state: Dictionary) -> void:
 		proxy.material_override = _apply_material(state.material,proxy.material_override)
 	if proxy is MeshInstance3D:
 		proxy.mesh = state.mesh
+		proxy.custom_aabb = state.get("bounds",AABB())
 		for index in state.surfaces.size(): proxy.set_surface_override_material(index,_apply_material(state.surfaces[index],proxy.get_surface_override_material(index)))
 	elif proxy is Sprite3D:
 		proxy.texture = state.texture; proxy.modulate = state.modulate; proxy.pixel_size = state.pixel_size

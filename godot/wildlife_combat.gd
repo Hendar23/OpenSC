@@ -35,7 +35,7 @@ func perceive(delta: float) -> void:
 		elif settings.food_role == "prey" and other.combat.settings.food_role == "predator":
 			threat = other; nearest = distance
 
-static func alive(body: Node3D) -> bool:
+static func alive(body: Variant) -> bool:
 	if not is_instance_valid(body) or body.is_queued_for_deletion() or bool(body.get("dead")): return false
 	if body.is_in_group("npc_submarines"): return bool(body.get("active"))
 	if not body.get_meta("wildlife_awake",true): return false

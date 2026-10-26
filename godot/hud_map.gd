@@ -28,15 +28,18 @@ var passage_clearance := 1.1
 var blocked_samples := PackedByteArray()
 const PASSAGE_MARGIN := 0.30
 const REVEAL_RADIUS := 10.0
+var _exploration_work := {}
 var reveal_radius := REVEAL_RADIUS:
 	set(value):
 		reveal_radius = clampf(value,2.0,30.0)
+		_exploration_work.clear()
 		last_explored = Vector2(INF,INF)
 var explored: Image
 var exploration_texture: ImageTexture
 var last_explored := Vector2(INF,INF)
 var last_explored_height := INF
 func initialize_exploration() -> void:
+	_exploration_work.clear()
 	discovered_cities.clear()
 	landmarks.reset()
 	# Exploration belongs to this game, independently of saved preferences.
@@ -46,10 +49,12 @@ func initialize_exploration() -> void:
 	last_explored = Vector2(INF,INF)
 	last_explored_height = INF
 
-func explore(point: Vector3) -> void:
+func explore(point: Vector3, budget_usec: int = 0) -> void:
 	discover_cities(point)
 	landmarks.discover(point,CITY_DISCOVERY_RANGE)
 	if explored == null: return
+	if not _exploration_work.is_empty():
+		_advance_exploration(budget_usec); return
 	var position := Vector2(point.x,point.z)
 	if position.distance_squared_to(last_explored) < 0.25 and absf(point.y - last_explored_height) < 0.25: return
 	last_explored = position
@@ -58,22 +63,43 @@ func explore(point: Vector3) -> void:
 	var radius := Vector2(reveal_radius / bounds.size.x,reveal_radius / bounds.size.z) * (RESOLUTION - 1)
 	var low := (centre - radius).floor().clamp(Vector2.ZERO,Vector2.ONE * (RESOLUTION - 1))
 	var high := (centre + radius).ceil().clamp(Vector2.ZERO,Vector2.ONE * (RESOLUTION - 1))
-	var changed := false
-	for y in range(int(low.y),int(high.y) + 1):
-		for x in range(int(low.x),int(high.x) + 1):
-			var distance := ((Vector2(x,y) - centre) / radius).length()
-			var reveal := 1.0 - smoothstep(0.88,1.0,distance)
-			if reveal > explored.get_pixel(x,y).r and _visible_from(point,x,y):
-				explored.set_pixel(x,y,Color(reveal,reveal,reveal))
-				changed = true
-	if changed:
-		exploration_texture.update(explored)
+	# Read the mask once; fully revealed cells cannot change. Avoid creating a
+	# Color and recalculating feathering/sightlines for them on every movement.
+	_exploration_work = {"point":point,"centre":centre,"radius":radius,"low":Vector2i(low),"high":Vector2i(high),"cursor":Vector2i(low),"pixels":explored.get_data(),"changed":false}
+	_advance_exploration(budget_usec)
 
-func _visible_from(observer: Vector3, x: int, y: int) -> bool:
+func finish_exploration() -> void:
+	if not _exploration_work.is_empty(): _advance_exploration(0)
+
+func _advance_exploration(budget_usec: int) -> void:
+	var began := Time.get_ticks_usec()
+	var work := _exploration_work
+	var cursor: Vector2i = work.cursor
+	var low: Vector2i = work.low; var high: Vector2i = work.high
+	var centre: Vector2 = work.centre; var radius: Vector2 = work.radius
+	var point: Vector3 = work.point; var pixels: PackedByteArray = work.pixels
+	var changed: bool = work.changed
+	var cells := 0
+	while cursor.y <= high.y:
+		var x := cursor.x; var y := cursor.y
+		if pixels[y*RESOLUTION+x] != 255:
+			var distance := ((Vector2(x,y)-centre)/radius).length()
+			var reveal := 1.0-smoothstep(0.88,1.0,distance)
+			if reveal > float(pixels[y*RESOLUTION+x])/255.0 and _visible_from(point,x,y,centre):
+				explored.set_pixel(x,y,Color(reveal,reveal,reveal)); changed = true
+		cursor.x += 1; cells += 1
+		if cursor.x > high.x: cursor = Vector2i(low.x,cursor.y+1)
+		if budget_usec > 0 and cells%16 == 0 and Time.get_ticks_usec()-began >= budget_usec: break
+	work.cursor = cursor; work.changed = changed
+	if cursor.y > high.y:
+		if changed: exploration_texture.update(explored)
+		_exploration_work.clear()
+
+func _visible_from(observer: Vector3, x: int, y: int, start: Vector2 = Vector2(INF,INF)) -> bool:
 	if height_samples.size() != RESOLUTION * RESOLUTION: return true
 	var destination_height := height_samples[y * RESOLUTION + x]
 	if not is_finite(destination_height): return false
-	var start := uv(observer) * (RESOLUTION - 1)
+	if not start.is_finite(): start = uv(observer) * (RESOLUTION - 1)
 	var end := Vector2(x,y)
 	var distance := end - start
 	var steps := maxi(1,int(ceil(maxf(absf(distance.x),absf(distance.y)) * 2.0)))
@@ -89,6 +115,7 @@ func _visible_from(observer: Vector3, x: int, y: int) -> bool:
 	return true
 
 func reset_exploration() -> void:
+	_exploration_work.clear()
 	discovered_cities.clear()
 	landmarks.reset()
 	if explored == null: return
@@ -98,6 +125,7 @@ func reset_exploration() -> void:
 	last_explored_height = INF
 
 func reveal_all() -> void:
+	_exploration_work.clear()
 	landmarks.reveal_all()
 	for marker in markers: discovered_cities[str(marker.get("id",marker.name))] = true
 	if explored == null: return

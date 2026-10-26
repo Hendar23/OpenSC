@@ -20,7 +20,41 @@ func check(ok: bool, message: String) -> void:
 	if not ok: failures += 1; push_error(message)
 func _initialize() -> void: call_deferred("run")
 func run() -> void:
+	var map := preload("res://hud_map.gd").new()
+	map.bounds = AABB(Vector3(-50,-5,-50),Vector3(100,10,100)); map.initialize_exploration()
+	map.height_samples.resize(map.RESOLUTION*map.RESOLUTION); map.height_samples.fill(0)
+	# A ridge tests that batching preserves occlusion as well as feathering.
+	for y in range(map.RESOLUTION): map.height_samples[y*map.RESOLUTION+260] = 8
+	var observer_point := Vector3(-1,2,0)
+	map.explore(observer_point)
+	var expected: PackedByteArray = map.explored.get_data()
+	map.reset_exploration(); map.explore(observer_point,1)
+	check(not map._exploration_work.is_empty(),"Exploration yields instead of processing a full sightline batch in one frame")
+	var batches := 0
+	while not map._exploration_work.is_empty() and batches < 1000:
+		map.explore(observer_point,1); batches += 1
+	check(map._exploration_work.is_empty() and map.explored.get_data() == expected,"Budgeted map reveals preserve the synchronous mask including ridge occlusion")
+	map.reset_exploration(); map.explore(observer_point,1); map.finish_exploration()
+	check(map._exploration_work.is_empty() and map.explored.get_data() == expected,"Saving can flush pending exploration without losing discovered pixels")
+	map.reset_exploration(); map.explore(observer_point,1); map.reset_exploration()
+	check(map._exploration_work.is_empty() and map.explored.get_data().count(0) == map.RESOLUTION*map.RESOLUTION,"New-game exploration reset discards queued work")
+	var expired := Node3D.new(); expired.free()
+	check(not preload("res://wildlife_combat.gd").alive(expired),"Expired prey/threat references are harmless before the next perception scan")
 	var world := Node3D.new(); root.add_child(world)
+	var camera := Camera3D.new(); world.add_child(camera)
+	var reflection := preload("res://canopy_reflections.gd").new(); world.add_child(reflection)
+	var glass: Array[ShaderMaterial] = []; reflection.setup(world.get_world_3d(),glass,camera)
+	var captured := {}
+	for frame in range(6):
+		reflection.update_capture(1.0/60,true,camera)
+		var active := 0
+		for index in range(6):
+			if reflection.views[index].render_target_update_mode == SubViewport.UPDATE_ONCE: captured[index] = true; active += 1
+		check(active == 1,"Cockpit reflections render one extra view per frame")
+	check(captured.size() == 6 and reflection.warmed,"Six consecutive frames refresh every reflection direction")
+	reflection.update_capture(0.1,false,camera)
+	check(not reflection.warmed and reflection.views.all(func(view: SubViewport) -> bool: return view.render_target_update_mode == SubViewport.UPDATE_DISABLED),"Hidden cockpit disables reflection rendering")
+	reflection.free(); camera.free()
 	var pop := FlatPopulation.new(); world.add_child(pop)
 	pop.world = world; pop.streaming = true; pop.set_physics_process(false)
 	var observer := Observer.new(); world.add_child(observer); pop.player = observer

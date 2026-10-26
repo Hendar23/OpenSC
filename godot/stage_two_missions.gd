@@ -40,8 +40,12 @@ var genocide: RefCounted
 var remaining: RefCounted
 var terrorists: RefCounted
 var stage_three: RefCounted
+var volcano: StaticBody3D
+var defection: RefCounted
 
 func _exit_tree() -> void:
+	if defection != null: defection.clear(); defection = null
+	if is_instance_valid(volcano): volcano.clear(); volcano = null
 	if stage_three != null: stage_three.clear(); stage_three = null
 	if terrorists != null: terrorists.clear(); terrorists = null
 	if genocide != null: genocide.clear(); genocide = null
@@ -53,7 +57,11 @@ func start(mission_id: String) -> void:
 	passengers = false; tapped = false; warned = false; convinced = false; dialogue = 0; interception_instruction = false; interception_cancelled = false
 	base_guidance = false; base_instruction_clock = -1.0; reinforcements = false; armour_clock = 0
 	reinforcement_radio_clock = -1.0
-	if id in ["disperse","rovrtn"]:
+	if id in ["defect","defect2"]:
+		defection = preload("res://covert_defection.gd").new(); defection.jobs = self; defection.start()
+	elif id in ["fumehole","fumehole2"]:
+		volcano = preload("res://volcanic_disaster.gd").new(); game.world_root.add_child(volcano); actors.append(volcano); volcano.setup(self)
+	elif id in ["disperse","rovrtn"]:
 		stage_three = preload("res://stage_three_missions.gd").new(); stage_three.jobs = self; stage_three.start()
 	elif id == "minefield":
 		terrorists = preload("res://thwart_terrorists.gd").new(); terrorists.jobs = self; terrorists.start()
@@ -68,6 +76,8 @@ func start(mission_id: String) -> void:
 	else: _start_covert()
 
 func clear(reset_rover: bool = false) -> void:
+	if defection != null: defection.clear(); defection = null
+	if is_instance_valid(volcano): volcano.clear(); volcano = null
 	if stage_three != null: stage_three.clear(); stage_three = null
 	if terrorists != null: terrorists.clear(); terrorists = null
 	if genocide != null: genocide.clear(); genocide = null
@@ -250,7 +260,9 @@ func _start_covert() -> void:
 func _physics_process(delta: float) -> void:
 	if id.is_empty() or phase == "finished" or runtime.active().is_empty() or not game.pilot.active: return
 	age += delta; clock -= delta; armour_clock = maxf(0,armour_clock - delta)
-	if stage_three != null: stage_three.step(delta)
+	if defection != null: defection.step(delta)
+	elif is_instance_valid(volcano): volcano.step(delta)
+	elif stage_three != null: stage_three.step(delta)
 	elif terrorists != null: terrorists.step(delta)
 	elif genocide != null: genocide.step(delta)
 	elif id == "stranded": _step_stranded()
@@ -396,6 +408,7 @@ func attach_listening_device(body: Node3D) -> bool:
 	return true
 
 func can_attach_pod(body: Node3D) -> bool:
+	if defection != null: return defection.can_attach_pod(body)
 	if stage_three != null: return stage_three.can_attach_pod(body)
 	if terrorists != null: return terrorists.can_attach_pod(body)
 	if remaining != null: return remaining.can_attach_pod(body)

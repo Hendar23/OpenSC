@@ -5,7 +5,7 @@ const Equipment = preload("res://submarine_equipment.gd")
 const Weapons = preload("res://submarine_weapons.gd")
 const Mounts = preload("res://submarine_mounts.gd")
 const IDS := ["deep_sea_lights","zapper","suckomat","magnet","grapple","bigears","escape","depthl","attract","rover","bubble","repel","strobe","flarel","sflarel","woosh","missile","ripper","electro"]
-const CAPTIONS := ["Deep-Sea Lights","Zapper","Suck-O-Matic","Magnet","Grappling Hook","Big Ears","Escape Pod","Depth Charge Launcher","Attractatron","ROV","Bubble Gun","Repellertron","Strobe","FLR-1000","FLR-1500","Woosh Drive","Missile Launcher","Ripper","Electro Bolt"]
+const CAPTIONS := ["Deep-Sea Lights","Zapper","Suck-O-Matic","Magnet","Grappling Hook","Big Ears","Escape Pod","Depth Charge Launcher","Attractatron","ROV","Bubble Gun","Repellertron","Strobe","FLR-1000","FLR-1500","Woosh Drive","Torpedo Launcher","Ripper","Electro Bolt"]
 var viewport: SubViewport
 var camera: Camera3D
 var stage: Node3D

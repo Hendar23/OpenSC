@@ -150,7 +150,7 @@ func _clear_session_effects(node: Node) -> void:
 func _map_signature() -> String:
 	# Editable placements and type stats are not map identity. The underlying
 	# terrain remains the same when objects, wildlife or spawn points change.
-	return "terrain-v1:" + FileAccess.get_sha256(game.game_folder.path_join("DATA/SCEN1.BSP"))
+	return "terrain-v1:" + preload("res://asset_cache.gd").fingerprint(game.game_folder.path_join("DATA/SCEN1.BSP"))
 
 func _exploration_matches_map(signature: String) -> bool:
 	# This only controls restoration of map exploration, never save validity.
@@ -162,6 +162,7 @@ func _save_snapshot(name: String) -> Dictionary:
 	for item in game.equipment.mounted: items.append({"id":item.id,"enabled":item.enabled})
 	var arms: Array = []
 	for item in game.weapons.mounted: arms.append(item.id)
+	game.cockpit_hud.map_data.finish_exploration()
 	var explored = game.cockpit_hud.map_data.explored.duplicate() as Image
 	explored.convert(Image.FORMAT_L8)
 	var result := {"version":game.save_games.VERSION,"name":name.left(64),"saved_at":Time.get_datetime_string_from_system(),"dock":{"id":int(game.docking.current.node.get_meta("city_id")),"name":game.docking.current.name},"pose":MapDocument.encode(game.pilot.global_transform),"hour":game.day_night.hour,"equipment":items,"weapons":arms,"equipment_selected":game.equipment.current().get("id",""),"weapon_selected":game.weapons.current().get("id",""),"explored":Marshalls.raw_to_base64(explored.get_data()),"discovered_cities":game.cockpit_hud.map_data.discovered_cities.keys(),"map_signature":game._map_signature(),"mods":Mods.active_ids(),"progress":game.player_progress.duplicate(true),"objects":game.object_population.snapshot(),"mines":game.object_population.mines.snapshot()}

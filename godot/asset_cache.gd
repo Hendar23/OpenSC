@@ -9,9 +9,15 @@ static var _files := {}
 static var _directories := {}
 static var _code := {}
 static var _unwritable := {}
+static var resident_enabled := false
+static var resident_hits := 0
+static var generation := 0
+static var _resident := {}
+const RESIDENT_LIMIT := 1536
 
 static func reset_session() -> void:
 	_files.clear(); _directories.clear(); _code.clear()
+	_resident.clear(); resident_hits = 0; generation += 1
 	hits = 0; misses = 0; writes = 0
 
 static func fingerprint(path: String) -> String:
@@ -82,10 +88,20 @@ static func _valid(path: String) -> bool:
 
 static func load_resource(key_value: String) -> Resource:
 	var path := path_for(key_value, "res")
+	if resident_enabled and _resident.has(path):
+		resident_hits += 1; return _resident[path]
 	if _valid(path):
 		var resource := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
-		if resource != null: hits += 1; return resource
+		if resource != null:
+			_remember(path,resource); hits += 1; return resource
 	misses += 1; return null
+
+static func _remember(path: String, resource: Resource) -> void:
+	# Mutable decoded Images must not be shared: texture conversion edits alpha.
+	# Packed scenes create independent nodes while sharing immutable GPU assets.
+	if not resident_enabled or not (resource is PackedScene or resource is Texture2D): return
+	if not _resident.has(path) and _resident.size() >= RESIDENT_LIMIT: _resident.erase(_resident.keys()[0])
+	_resident[path] = resource
 
 static func _finish(temp: String, path: String) -> void:
 	if DirAccess.rename_absolute(temp, path) != OK: return
@@ -101,6 +117,7 @@ static func _prepare_write(path: String) -> bool:
 	return true
 
 static func save_resource(key_value: String, resource: Resource) -> void:
+	_remember(path_for(key_value,"res"),resource)
 	if not enabled: return
 	var path := path_for(key_value, "res")
 	if not _prepare_write(path): return
@@ -131,7 +148,7 @@ static func load_scene(key_value: String) -> Node3D:
 	return packed.instantiate() as Node3D if packed != null else null
 
 static func save_scene(key_value: String, root: Node3D) -> void:
-	if not enabled: return
+	if not enabled and not resident_enabled: return
 	# Pack every converted node, while leaving the caller's ownership unchanged.
 	var owners := {}
 	for child in root.find_children("*", "", true, false):

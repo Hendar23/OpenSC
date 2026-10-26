@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Charge = preload("res://depth_charge.gd")
 const Shop = preload("res://equipment_shop.gd")
 const Progress = preload("res://player_progress.gd")
@@ -27,7 +27,9 @@ func receiver(world: Node3D, point: Vector3) -> Receiver:
 	body.gravity_scale = 0.0; body.collision_layer = 8; body.collision_mask = 0; sphere(body)
 	return body
 func run() -> void:
-	var catalogue := preload("res://original_game_data.gd").load_catalogue(ProjectSettings.globalize_path("res://../Original Sub Culture"),false)
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
+	var catalogue := preload("res://original_game_data.gd").load_catalogue(folder,false)
 	var ammo := Shop.offer(catalogue,"1",1,"depth")
 	var launcher := Shop.offer(catalogue,"1",1,"depthl")
 	check(ammo.available and ammo.quantity == 4 and ammo.maximum == 80 and ammo.price == 1000 and ammo.sell_price == 500,"Touka sells original four-charge packs for 1000 with an 80-charge capacity")
@@ -98,7 +100,7 @@ func run() -> void:
 	check(vent.dead,"A charge inside the shaft damages the original internal target using its sustain")
 	var physical_vent := preload("res://mission_vent.gd").new(); world.add_child(physical_vent)
 	physical_vent.position = Vector3(100,0,0); sphere(physical_vent,0.65); physical_vent.open = true; physical_vent.open_amount = 1
-	physical_vent.door = preload("res://map_document.gd").load_model("TESTDOOR",ProjectSettings.globalize_path("res://../Original Sub Culture"),true)
+	physical_vent.door = preload("res://map_document.gd").load_model("TESTDOOR",folder,true)
 	physical_vent.add_child(physical_vent.door)
 	physical_vent._process(0.0)
 	var door_mesh: MeshInstance3D = physical_vent.door_meshes[0]

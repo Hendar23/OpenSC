@@ -26,6 +26,19 @@ func run() -> void:
 	game.docking.current = game.submarine_traffic.port_by_id(1)
 	replay.set_process(false); replay.clear(); replay.started = true
 	check(replay.enabled and game.front_end.gameplay_menu.replay_enabled,"Replay defaults enabled")
+	replay.started = false
+	var arriving := Actor.new(); game.world_root.add_child(arriving)
+	var shared_mesh := BoxMesh.new()
+	for index in range(64):
+		var visual := MeshInstance3D.new(); visual.mesh = shared_mesh; arriving.add_child(visual)
+	replay._scan(arriving,true)
+	check(replay.tracks.is_empty() and replay.pending.size() == 64,"Initial discovery queues visuals without allocating their recording buffers")
+	arriving.get_child(0).free()
+	for frame in range(64):
+		if replay.pending.is_empty(): break
+		replay._register_pending()
+	check(replay.pending.is_empty() and replay.tracks.size() == 63,"Budgeted registration drains surviving visuals and ignores removed actors")
+	arriving.free(); replay.clear(); replay.started = true
 	var actor := Actor.new(); game.world_root.add_child(actor)
 	var mesh := MeshInstance3D.new(); mesh.mesh = BoxMesh.new(); actor.add_child(mesh)
 	var material := StandardMaterial3D.new(); material.albedo_color = Color.RED; mesh.material_override = material
@@ -142,13 +155,22 @@ func run() -> void:
 	check(is_equal_approx(swim_track.proxy.get_blend_shape_value(0),0.5) and swimmer.get_blend_shape_value(0) == 1,"Fish morph animation interpolates without changing live blend weights")
 	swim_track.dispose(); swim_view.free(); swimmer.free()
 	var flash := MeshInstance3D.new(); actor.add_child(flash); flash.mesh = QuadMesh.new()
+	flash.transform = Transform3D(Basis.from_euler(Vector3(0.4,0.7,-0.2))*Basis.from_scale(Vector3(2,0.8,3)),Vector3(12,15,-7))
+	flash.custom_aabb = AABB(Vector3(-2,-2,-10),Vector3(4,4,20))
 	flash.material_override = preload("res://natural_light.gd").billboard_material(game.submarine_explosion_frames[0])
 	flash.material_override.set_shader_parameter("opacity",0.9)
-	var flash_track := Visual.new(); flash_track.setup(flash,0); flash_track.record(0,0)
+	var appearance := {}
+	var flash_track := Visual.new(); flash_track.setup(flash,0); flash_track.record(0,0,appearance)
+	var peer := flash.duplicate() as MeshInstance3D; actor.add_child(peer)
+	var peer_track := Visual.new(); peer_track.setup(peer,0); peer_track.record(0,0,appearance)
+	check(appearance.size() == 1 and peer_track.material_values == flash_track.material_values,"Shared materials use one uniform snapshot per recording sample")
+	peer_track.dispose(); peer.free()
 	flash.material_override.set_shader_parameter("opacity",0.2); flash.material_override.set_shader_parameter("albedo_texture",game.submarine_explosion_frames[1]); flash_track.record(1,0.05)
 	var flash_view := Node3D.new(); actor.add_child(flash_view); flash_track.show_at(flash_view,0,0,0)
+	check(flash_track.proxy.global_transform.is_equal_approx(flash.global_transform),"Recorded poses preserve rotation and nonuniform scale as well as translation")
 	check(is_equal_approx(flash_track.proxy.material_override.get_shader_parameter("opacity"),0.9) and flash_track.proxy.material_override.get_shader_parameter("albedo_texture") == game.submarine_explosion_frames[0],"Material templates retain earlier fade and texture values")
 	flash_track.show_at(flash_view,1,0,0.05)
+	check(flash_track.proxy.custom_aabb == flash.custom_aabb,"Replay preserves shader-expanded geometry bounds instead of culling a unit-sized source mesh")
 	check(is_equal_approx(flash_track.proxy.material_override.get_shader_parameter("opacity"),0.2) and flash_track.proxy.material_override.get_shader_parameter("albedo_texture") == game.submarine_explosion_frames[1],"Playback changes uniforms without cloning a material every sample")
 	flash_track.dispose(); flash_view.free(); flash.free()
 	var menu: CanvasLayer = game.front_end.gameplay_menu

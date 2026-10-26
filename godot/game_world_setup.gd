@@ -27,6 +27,11 @@ const OriginalGameData = preload("res://original_game_data.gd")
 const SUB_RENDER_LAYER := 2
 
 func _start_game(folder: String) -> void:
+	var cache := preload("res://asset_cache.gd")
+	# Ordinary isolated headless checks disable conversion caching. Keep that
+	# contract for retained PackedScenes too; Dummy cannot inspect all shader
+	# instance parameters while packing shared, unrendered model resources.
+	cache.resident_enabled = cache.enabled or DisplayServer.get_name() != "headless"
 	if game.photo_mode != null and game.photo_mode.active: game.photo_mode.leave()
 	if game.photo_mode != null: game.photo_mode.replay.clear()
 	if game.menu_backdrop != null:
@@ -311,6 +316,7 @@ func _finish_start(folder: String) -> void:
 		game.world_root.add_child(game.sun_shafts); game.sun_shafts.setup(game)
 	game.sun_shafts.brightness = game.sun_shafts_brightness_slider.value / 100.0
 	game.sun_shafts.set_enabled(game.front_end.gameplay_menu.sun_shafts_enabled)
+	await preload("res://mission_assets.gd").prepare(game)
 	game.front_end.progress_bar.value = 95.0
 	if game.show_start_menu and DisplayServer.get_name() != "headless":
 		for frame in range(600):

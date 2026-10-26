@@ -545,7 +545,7 @@ func shared_type_fields(entry: Dictionary) -> void:
 	elif entry.family == "patrol": choice("model","Submarine model",Document.Patrol.PATROL_MODELS,entry.model)
 	elif entry.family == "pirate": choice("model","Submarine model",Document.Pirate.PIRATE_MODELS,entry.model)
 	elif entry.family == "turret": label("Model: TURRET")
-	var captions := {"turret_health":"Health (raw shield units)","turret_sustain":"Damage received multiplier","turret_range":"Activation range","turret_turn_speed":"Gun rotation (degrees/s)","npc_speed":"Driving speed (units/s)","npc_wait_min":"Minimum stop (seconds)","npc_wait_max":"Maximum stop (seconds)","npc_health":"Health (raw shield units)","npc_sustain":"Damage received multiplier","npc_respawn_delay":"Respawn delay (seconds)","emission_rate":"Puffs per second","lifetime":"Puff lifetime (seconds)","start_size":"Starting size","end_size":"Final size","rise_speed":"Rise speed (units/s)","spread":"Random sideways drift (units/s)","drift_x":"Wind X (units/s)","drift_z":"Wind Z (units/s)","opacity":"Opacity","npc_detection":"Detection range","npc_attack_range":"Missile range","npc_fire_interval":"Shot interval (seconds)"}
+	var captions := {"turret_health":"Health (raw shield units)","turret_sustain":"Damage received multiplier","turret_range":"Activation range","turret_turn_speed":"Gun rotation (degrees/s)","npc_speed":"Driving speed (units/s)","npc_wait_min":"Minimum stop (seconds)","npc_wait_max":"Maximum stop (seconds)","npc_health":"Health (raw shield units)","npc_sustain":"Damage received multiplier","npc_respawn_delay":"Respawn delay (seconds)","emission_rate":"Puffs per second","lifetime":"Puff lifetime (seconds)","start_size":"Starting size","end_size":"Final size","rise_speed":"Rise speed (units/s)","spread":"Random sideways drift (units/s)","drift_x":"Wind X (units/s)","drift_z":"Wind Z (units/s)","opacity":"Opacity","npc_detection":"Detection range","npc_attack_range":"Torpedo range","npc_fire_interval":"Shot interval (seconds)"}
 	if entry.family == "bubbles":
 		captions.emission_rate = "Bubbles per second"
 		captions.lifetime = "Bubble lifetime (seconds)"
@@ -553,7 +553,7 @@ func shared_type_fields(entry: Dictionary) -> void:
 		# All submarine replacements now wait for player docking, without a timer.
 		if entry.family in ["trader","pirate","patrol"] and key in ["npc_respawn","npc_respawn_delay"]: continue
 		if key in ["turret_homing","npc_respawn","npc_armed"]:
-			toggle_field(key,"Homing missiles" if key == "turret_homing" else "Armed faction patrol" if key == "npc_armed" else "Respawn when destroyed (out of sight)",entry.get(key,false)); continue
+			toggle_field(key,"Homing torpedoes" if key == "turret_homing" else "Armed faction patrol" if key == "npc_armed" else "Respawn when destroyed (out of sight)",entry.get(key,false)); continue
 		var limits: Array = [0.01 if key == "turret_health" else 0,100000]
 		if entry.family == "vehicle": limits = Document.GroundVehicle.LIMITS[key]
 		elif entry.family == "trader": limits = Document.Trader.LIMITS[key]

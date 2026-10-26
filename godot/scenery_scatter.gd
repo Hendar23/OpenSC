@@ -27,7 +27,7 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, session_see
 	var total := 0
 	for pack in packs:
 		if total >= MAX_TOTAL: break
-		var template := Modern.load_model(pack.scenery.path, {"forward_axis": "+Z", "name": pack.name})
+		var template := Modern.load_model(pack.scenery.path, {"forward_axis": "+Z", "name": pack.name, "scenery_lods":true})
 		if template == null:
 			Mods.note("%s: could not load scenery GLB." % pack.name); continue
 		var models: Array[Dictionary] = []

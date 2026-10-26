@@ -109,4 +109,24 @@ func run() -> void:
 	Mods.apply(["unrelated-fixture"], Mods.order, false)
 	check(base_key == Assets.conversion_key("clump", folder.path_join("CLUMPS/SUB.DFF")),"Unrelated mod IDs do not invalidate converted assets")
 	check(not Cache.path_for("test", "res").begins_with("res://game_assets"),"Conversions are separate from distributed game assets")
+	Cache.resident_enabled = true
+	var resident_key := Cache.key("resident-fixture",[])
+	var prototype := Node3D.new(); var visible := MeshInstance3D.new(); visible.mesh = BoxMesh.new(); prototype.add_child(visible)
+	Cache.save_scene(resident_key,prototype); prototype.free()
+	var resident_before := Cache.resident_hits
+	first = Cache.load_scene(resident_key); second = Cache.load_scene(resident_key)
+	check(Cache.resident_hits == resident_before+2,"Resident scene instances bypass repeated disk checks and decoding")
+	first.position.x = 7
+	check(second.position.x == 0 and first.get_child(0).mesh == second.get_child(0).mesh,"Independent nodes share immutable resident mesh data")
+	first.free(); second.free()
+	var audio_path := folder.path_join("WAVES/EXPL.RAW")
+	var audio := preload("res://legacy_audio.gd").load_file(audio_path) as AudioStreamWAV
+	check(audio != null,"Resident audio decodes original sample")
+	if audio != null:
+		audio.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		var next := preload("res://legacy_audio.gd").load_file(audio_path) as AudioStreamWAV
+		check(next.loop_mode == AudioStreamWAV.LOOP_DISABLED and next.data == audio.data,"Looping a caller's stream cannot contaminate cached one-shot audio")
+	Cache.reset_session()
+	check(Cache._resident.is_empty(),"Refreshing mods/session releases resident resources")
+	Cache.resident_enabled = false
 	print("Asset cache: %d checks, %d failures" % [checks, failures]); quit(1 if failures else 0)

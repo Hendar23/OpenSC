@@ -238,7 +238,8 @@ func _draw_city_markers() -> void:
 
 	# Retail landmarks are centred, multiline names rather than city dots.
 	var font := ThemeDB.fallback_font
-	var font_size := maxi(6,int(6*marker_scale))
+	var font_size := maxi(6,int((4.5 if full_world else 6.0)*marker_scale))
+	var landmark_colour := Color(0.12,0.55,0.16) if full_world else Color(0.15,0.85,0.2)
 	for marker in map_data.landmarks.markers:
 		if not map_data.landmarks.known(marker): continue
 		var offset := Vector2(marker.position.x-point.x,marker.position.z-point.z)/span*rect.size
@@ -251,7 +252,7 @@ func _draw_city_markers() -> void:
 			var width := font.get_string_size(line,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
 			var x := maxf(rect.position.x+2,position.x-width*0.5)
 			if y-font.get_ascent(font_size) >= rect.position.y and y+font.get_descent(font_size) <= rect.end.y:
-				city_markers.draw_string(font,Vector2(x,y),line,HORIZONTAL_ALIGNMENT_LEFT,rect.end.x-x-2,font_size,Color(0.15,0.85,0.2))
+				city_markers.draw_string(font,Vector2(x,y),line,HORIZONTAL_ALIGNMENT_LEFT,rect.end.x-x-2,font_size,landmark_colour)
 			y += height
 
 	for actor in map_data.actor_markers:

@@ -115,8 +115,8 @@ func run() -> void:
 	game.player_progress.missions.completed["stranded"] = {"success":true}
 	game.player_progress.missions["unavailable"] = ["breakout","breakout2"]
 	unlock.button_pressed = true
-	check(runtime.testing_all_missions and runtime.testing_missions().size() == 26,"Dev button unlocks all missions globally")
-	var origins := {"tradetrad":1,"tradetrad2":3,"tradetech":2,"tradetech2":4,"stranded":1,"spytrad":1,"spytrad2":3,"breakout":2,"breakout2":4,"fishing":2,"bigherd":3,"spytech":2,"spytech2":4,"escort":1,"escort2":3,"tagtech":4,"eel":3,"recontech":2,"recontech2":4,"walktrad":3,"walktrad2":1,"walktech":2,"walktech2":4,"minefield":1,"disperse":2,"rovrtn":3}
+	check(runtime.testing_all_missions and runtime.testing_missions().size() == 30,"Dev button unlocks all missions globally")
+	var origins := {"tradetrad":1,"tradetrad2":3,"tradetech":2,"tradetech2":4,"stranded":1,"spytrad":1,"spytrad2":3,"breakout":2,"breakout2":4,"fishing":2,"bigherd":3,"spytech":2,"spytech2":4,"escort":1,"escort2":3,"tagtech":4,"eel":3,"recontech":2,"recontech2":4,"walktrad":3,"walktrad2":1,"walktech":2,"walktech2":4,"minefield":1,"disperse":2,"rovrtn":3,"fumehole":2,"fumehole2":4,"defect":1,"defect2":3}
 	for city in [1,2,3,4,5,6]:
 		var expected: Array = origins.keys().filter(func(id: String) -> bool: return origins[id] == city)
 		var offered: Array = runtime.board(city).offers.map(func(entry: Dictionary) -> String: return entry.id)

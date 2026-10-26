@@ -17,7 +17,10 @@ float noise(vec2 p) {
 	vec2 cell = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(hash(cell),hash(cell+vec2(1,0)),f.x),mix(hash(cell+vec2(0,1)),hash(cell+vec2(1,1)),f.x),f.y);
 }
-void vertex() { local_position = VERTEX; }
+void vertex() {
+    VERTEX *= vec3(beam_width,beam_width,beam_length);
+    local_position = VERTEX;
+}
 void fragment() {
 	vec3 camera = (inverse(MODEL_MATRIX) * INV_VIEW_MATRIX[3]).xyz;
 	vec3 ray = normalize(local_position-camera);

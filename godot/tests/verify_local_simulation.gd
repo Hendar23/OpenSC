@@ -96,19 +96,22 @@ func run() -> void:
 	pop.spawn_budget = 1; var second: Node3D = pop._spawn_group(group,rng)[0]
 	check(first == second and pop.pooled_count == 0 and second.visible and second.health == 10,"Local spawning reuses a clean pooled representation")
 	second.set_physics_process(false); second.position = Vector3(0,0,-16)
-	check(pop.detailed(second),"Mid-distance wildlife retains detailed movement out to 24 units")
-	second.position = Vector3(0,0,-32); second.direction = Vector3.RIGHT; second.goal = Vector3(0,0,-100); second.turn_timer = 100
+	check(pop.detailed(second),"Nearby wildlife retains detailed movement")
+	second.position = Vector3(0,0,-pop.smooth_range()+1)
+	check(pop.detailed(second),"Wildlife keeps smooth movement through the expanded detailed range")
+	var far_z := -pop.smooth_range()-8.0
+	second.position = Vector3(0,0,far_z); second.direction = Vector3.RIGHT; second.goal = Vector3(0,0,-100); second.turn_timer = 100
 	check(not pop.detailed(second),"Far wildlife still uses simplified movement")
 	second.combat.scan_timer = 7; second._physics_process(1.0 / 60.0)
-	check(second.combat.scan_timer == 7 and second.animation_time > 0,"Distant visible wildlife uses movement and animation without perception or combat")
+	check(second.combat.scan_timer == 7 and second.animation_time > 0,"Distant wildlife uses movement and animation without perception or combat")
 	check(second.basis.z.normalized().dot(second.velocity.normalized()) > 0.999,"Simplified fish face their travel direction after steering")
 	second.direction = Vector3.FORWARD
-	var wall := StaticBody3D.new(); world.add_child(wall); wall.position = Vector3(0,0,-39)
+	var wall := StaticBody3D.new(); world.add_child(wall); wall.position = Vector3(0,0,far_z-7)
 	var wall_shape := CollisionShape3D.new(); wall_shape.shape = BoxShape3D.new(); wall_shape.shape.size = Vector3(20,10,0.2); wall.add_child(wall_shape)
 	second.swim_speed = 6; second.ambient_clock = 0
 	await physics_frame
 	for tick in range(180): second._physics_process(1.0 / 60.0)
-	check(second.position.z > -39,"Cosmetic swimming stops and turns before a wall without continuous body motion tests")
+	check(second.position.z > wall.position.z,"Cosmetic swimming stops and turns before a wall without continuous body motion tests")
 	second.mission_owner = "objective"; second.position.x = 100; pop._stream_update()
 	check(second.get_parent() == pop and second.mission_owner == "objective","Mission-owned wildlife is retained explicitly")
 	pop.document = {"groups":[],"species":[]}; pop.reroll()

@@ -2,9 +2,9 @@ extends RefCounted
 ## Retail stage-two offers and REQUIRE.TXT affordability, SC.EXE 0043d230.
 const CORE := {1:"walktrad2",3:"walktrad",2:"walktech",4:"walktech2"}
 const QUEUES := {1:["stranded","spytrad","escort"],3:["spytrad2","bigherd","escort2","eel"],2:["breakout","fishing","spytech","recontech"],4:["breakout2","spytech2","tagtech","recontech2"]}
-const STAGE_THREE := {1:["minefield"],2:["disperse"],3:["rovrtn"]}
-const IMPLEMENTED := ["stranded","spytrad","spytrad2","bigherd","fishing","breakout","breakout2","spytech","spytech2","escort","escort2","tagtech","eel","recontech","recontech2","walktrad","walktrad2","walktech","walktech2","minefield","disperse","rovrtn"]
-const PAIRED := {"breakout":"breakout2","breakout2":"breakout","spytrad":"spytrad2","spytrad2":"spytrad","spytech":"spytech2","spytech2":"spytech","escort":"escort2","escort2":"escort","recontech":"recontech2","recontech2":"recontech"}
+const STAGE_THREE := {1:["minefield","defect"],2:["disperse","fumehole"],3:["rovrtn","defect2"],4:["fumehole2"]}
+const IMPLEMENTED := ["stranded","spytrad","spytrad2","bigherd","fishing","breakout","breakout2","spytech","spytech2","escort","escort2","tagtech","eel","recontech","recontech2","walktrad","walktrad2","walktech","walktech2","minefield","disperse","rovrtn","fumehole","fumehole2","defect","defect2"]
+const PAIRED := {"breakout":"breakout2","breakout2":"breakout","spytrad":"spytrad2","spytrad2":"spytrad","spytech":"spytech2","spytech2":"spytech","escort":"escort2","escort2":"escort","recontech":"recontech2","recontech2":"recontech","fumehole":"fumehole2","fumehole2":"fumehole","defect":"defect2","defect2":"defect"}
 
 static func offering_city(id: String) -> int:
 	for city in CORE:

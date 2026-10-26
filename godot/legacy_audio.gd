@@ -1,6 +1,12 @@
 extends RefCounted
+static var streams := {}
+static var cache_generation := -1
 
 static func load_file(path: String) -> AudioStream:
+	var cache = preload("res://asset_cache.gd")
+	if cache_generation != cache.generation:
+		streams.clear(); cache_generation = cache.generation
+	if cache.resident_enabled and streams.has(path): return streams[path].duplicate()
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null or file.get_length() > 16777216: return null
 	var data := file.get_buffer(file.get_length())
@@ -16,7 +22,10 @@ static func load_file(path: String) -> AudioStream:
 			stream = mp3
 	if stream == null or stream.get_length() <= 0.0: return null
 	stream.set_meta("asset_source", path)
-	return stream
+	if cache.resident_enabled:
+		if streams.size() >= 1024: streams.erase(streams.keys()[0])
+		streams[path] = stream
+	return stream.duplicate() if cache.resident_enabled else stream
 
 static func raw_stream(data: PackedByteArray, rate: int, format: int, stereo: bool) -> AudioStreamWAV:
 	var stream := AudioStreamWAV.new()

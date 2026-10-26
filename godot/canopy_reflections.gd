@@ -1,10 +1,12 @@
 extends Node
-## Scene captures shared by all canopy glass meshes; updated with every frame.
+## Scene captures shared by all canopy glass meshes, one face per frame.
 const DIRECTIONS := [Vector3.RIGHT,Vector3.LEFT,Vector3.UP,Vector3.DOWN,Vector3.BACK,Vector3.FORWARD]
 var views: Array[SubViewport] = []
 var cameras: Array[Camera3D] = []
 var materials: Array[ShaderMaterial] = []
 var warmed := false
+var face := 0
+var capture_origin := Vector3.ZERO
 
 func setup(world: World3D, glass: Array[ShaderMaterial], source: Camera3D) -> void:
 	materials = glass
@@ -28,12 +30,15 @@ func update_capture(_delta: float, active: bool, source: Camera3D) -> void:
 	if not active:
 		for view in views: view.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		warmed = false
+		face = 0
 		for material in materials: material.set_shader_parameter("scene_reflections_ready",false)
 		return
-	for index in range(6):
-		var direction: Vector3 = DIRECTIONS[index]
-		var up := Vector3.BACK if absf(direction.y) > 0.5 else Vector3.UP
-		cameras[index].global_transform = Transform3D(Basis.looking_at(direction,up),source.global_position)
-		views[index].render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	for view in views: view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	if face == 0: capture_origin = source.global_position
+	var direction: Vector3 = DIRECTIONS[face]
+	var up := Vector3.BACK if absf(direction.y) > 0.5 else Vector3.UP
+	cameras[face].global_transform = Transform3D(Basis.looking_at(direction,up),capture_origin)
+	views[face].render_target_update_mode = SubViewport.UPDATE_ONCE
+	face = (face+1)%6
 	for material in materials: material.set_shader_parameter("scene_reflections_ready",warmed)
-	warmed = true
+	if face == 0: warmed = true

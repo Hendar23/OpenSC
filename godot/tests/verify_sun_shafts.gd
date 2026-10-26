@@ -30,7 +30,7 @@ func run():
  for p in shafts.patches:
   check(is_equal_approx(p.source.y,surface),"Patch starts at surface")
   check(p.node.global_basis.z.dot(-game.menu_backdrop.daylight.sun_direction()) > 0.999,"Shaft follows sun direction")
-  check(p.node.mesh.size.z <= 45.0,"Shaft reach stays bounded")
+  check(p.node.mesh.size == Vector3.ONE and p.node.custom_aabb.size.z <= 45.0,"Shaft geometry stays immutable while its render bounds follow the bounded reach")
  game.front_end.menu_layer.hide()
  for actor in game.menu_backdrop.actors: actor.node.set_physics_process(false)
  game.menu_backdrop.set_process(false)

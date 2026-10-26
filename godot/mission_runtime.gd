@@ -62,6 +62,7 @@ func text(id: String, response: int = 0) -> String:
 	return _flow_text(raw,response == 0)
 
 static func _flow_text(raw: String, has_title: bool = false) -> String:
+	raw = preload("res://display_text.gd").weapons(raw)
 	raw = raw.replace("\r\n","\n").replace("\r","\n").strip_edges()
 	if raw.is_empty(): return ""
 	var title := ""

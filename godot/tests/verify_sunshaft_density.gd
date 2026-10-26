@@ -27,7 +27,7 @@ func run() -> void:
 	root.mode = Window.MODE_WINDOWED; root.size = Vector2i(256,256)
 	var environment := WorldEnvironment.new(); environment.environment = Environment.new(); environment.environment.background_mode = Environment.BG_COLOR; environment.environment.background_color = Color.BLACK; root.add_child(environment)
 	var camera := Camera3D.new(); root.add_child(camera); camera.position = Vector3(0,0,8); camera.current = true
-	var volume := MeshInstance3D.new(); volume.mesh = BoxMesh.new(); volume.mesh.size = Vector3(4,4,20); volume.position.z = -5; root.add_child(volume)
+	var volume := MeshInstance3D.new(); volume.mesh = BoxMesh.new(); volume.mesh.size = Vector3.ONE; volume.custom_aabb = AABB(Vector3(-2,-2,-10),Vector3(4,4,20)); volume.position.z = -5; root.add_child(volume)
 	var shader := Shader.new(); shader.code = preload("res://sun_shafts.gdshader").code
 	var material := ShaderMaterial.new(); material.shader = shader; volume.material_override = material
 	var settings := {"beam_length":20.0,"beam_width":4.0,"surface_height":20.0,"depth_start":25.0,"depth_end":45.0,"view_range":60.0,"seed":3.0}

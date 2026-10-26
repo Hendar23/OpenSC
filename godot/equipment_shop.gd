@@ -52,7 +52,7 @@ static func offer(catalogue: Dictionary, city_id: String, stage: int, id: String
 					if str(key).ends_with(" buy") and int(record[key]) > 0: fallback = int(record[key]) if fallback == 0 else mini(fallback,int(record[key]))
 			prices[city + " buy"] = maxi(1,fallback)
 	var description := str(text.get("Description","Restores shields to full strength."))
-	if TORPEDO_NAMES.has(id): description = description.replace("missiles","torpedoes").replace("Missiles","Torpedoes").replace("torpedos","torpedoes")
+	description = preload("res://display_text.gd").weapons(description)
 	return {"id":id,"name":TORPEDO_NAMES.get(id,text.get("name",id.capitalize())),"description":description,"available":(testing or not city.is_empty()) and prices.has(city + " buy") and int(prices[city + " buy"]) > 0,"price":maxi(0,int(prices.get(city + " buy",0))),"sell_price":maxi(0,int(prices.get(city + " sell",0))),"quantity":maxi(1,int(definition.get("Default",AMMO.get(id,1)))) if AMMO.has(id) else 1,"maximum":maxi(1,int(definition.get("Maximum",1))),"slot":SLOTS.get(id,0),"square_bitmap":"INTROTEX/" + str(definition.get("Sq Pic","sqshld")).to_upper() + ".BMP","info_bitmap":"INTROTEX/" + str(definition.get("Info Pic","wshields")).to_upper() + ".BMP"}
 
 static func buy(progress: Dictionary, offer: Dictionary) -> String:

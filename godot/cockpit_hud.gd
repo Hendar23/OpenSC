@@ -262,7 +262,7 @@ func _process(delta: float) -> void:
 	if rear_camera_enabled: _update_rear_camera()
 	_update_instrument_lighting(delta)
 	if pilot != null:
-		map_data.explore(pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.05)
+		map_data.explore(pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.05,750)
 
 func _exit_tree() -> void:
 	for tween in slide_tweens:
