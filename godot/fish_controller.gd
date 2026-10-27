@@ -170,6 +170,12 @@ func _advance_ambient(delta: float) -> void:
 	playback_rate = animation_speed * (walking_animation_rate if mobility == "crawling" else ANIMATION_SPEED)
 	animation_time += delta * playback_rate
 
+func submarine_contact_damage(sub_velocity: Vector3, _normal: Vector3) -> float:
+	if dead or combat == null or not combat.settings.get("original_contact",false) or population == null or not is_instance_valid(population.player): return 0.0
+	var toward: Vector3 = (global_position - population.player.global_position).normalized()
+	var closing := maxf(0,(sub_velocity - velocity).dot(toward))
+	return preload("res://original_damage.gd").object_contact(closing,float(combat.settings.contact_inflict))
+
 func receive_sub_push(sub_velocity: Vector3, sub_radius: float) -> void:
 	if dead or not get_meta("wildlife_awake",true): return
 	if last_push_frame == Engine.get_physics_frames(): return
@@ -200,13 +206,16 @@ func take_damage(amount: float, _source: Vector3 = Vector3.ZERO) -> void:
 	visible = false; died.emit()
 
 func _ready() -> void:
-	add_to_group("marine_life")
-	var species := str(get_meta("species","")).to_lower()
-	if species in ["silver","silverback","mutantsilverback"]: add_to_group("attractable_fish")
+	if not get_meta("wildlife_preparing",false): register_wildlife_groups()
 	# Bind playback to the live instance after its visual enters the scene.
 	animation = CreatureAnimation.new(get_child(1))
 	meshes = animation.meshes
 	animation.apply(animation_time)
+
+func register_wildlife_groups() -> void:
+	add_to_group("marine_life")
+	var species := str(get_meta("species","")).to_lower()
+	if species in ["silver","silverback","mutantsilverback"]: add_to_group("attractable_fish")
 
 func _process(delta: float) -> void:
 	if animation == null or not is_physics_processing() or not visual_animation_enabled: return

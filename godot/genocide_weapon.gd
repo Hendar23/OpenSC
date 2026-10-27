@@ -243,6 +243,7 @@ func _catastrophe() -> void:
 	# player is. This is not a normal local cargo explosion that can be outrun.
 	jobs.game.pilot.take_damage(100000.0)
 	jobs._resolve(false,0.0,0)
+	jobs.game.events.fmv_requested.emit("walker_catastrophe",0)
 
 func release_survivors() -> void:
 	_disconnect()

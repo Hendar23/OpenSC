@@ -104,13 +104,13 @@ func run() -> void:
 	predator.combat.settings.bite_range = 2; predator.combat.settings.bite_damage = 1; predator.combat.target = trader.body
 	await physics_frame
 	predator.combat.attack(1.0 / 60.0)
-	check(is_equal_approx(trader.health.remaining,9.9) and alerts == 0,"Wildlife bites retain damage but never blame the player")
+	check(is_equal_approx(trader.health.remaining,9.7) and alerts == 0,"Custom wildlife bites apply raw damage with the receiver's sustain once and never blame the player")
 	trader.mission_owner = "escort"; var saved: Dictionary = traffic.snapshot()
 	var id := Identity.of(trader)
 	check(saved.has(id) and Identity.of(trader.body) == id,"Actor controller and collider share persistent save identity")
 	model.name = "Renamed"; var container := Node3D.new(); world.add_child(container); model.reparent(container)
 	trader.health.remaining = 1; trader.mission_owner = ""; traffic.restore(saved)
-	check(is_equal_approx(trader.health.remaining,9.9) and trader.mission_owner == "escort","Save restoration survives runtime renaming/reparenting")
+	check(is_equal_approx(trader.health.remaining,9.7) and trader.mission_owner == "escort","Save restoration survives runtime renaming/reparenting")
 	Identity.assign_id(observer,"player"); traffic.player = observer
 	trader.take_weapon_damage_from(1000,Vector3.ZERO,observer)
 	check(deaths == [[id,"player"]],"Destruction reports stable target and attacker identities once")

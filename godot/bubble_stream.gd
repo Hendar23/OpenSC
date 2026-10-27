@@ -6,6 +6,7 @@ var tuning := DEFAULTS.duplicate()
 var enabled := true
 var renderer: Node3D
 func configure(folder: String, values: Dictionary) -> void:
+	add_to_group("ambient_bubbles")
 	enabled = bool(values.get("enabled",true))
 	for key in DEFAULTS: tuning[key] = clampf(float(values.get(key,DEFAULTS[key])),LIMITS[key][0],LIMITS[key][1])
 	if renderer != null: renderer.free()

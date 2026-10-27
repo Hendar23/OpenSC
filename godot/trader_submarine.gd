@@ -85,6 +85,10 @@ static func install(model: Node3D, values: Dictionary, controller: Script = null
 	agent.twin_exhaust = source.contains("TECHSHUT")
 	agent.home = model.global_transform
 	agent.motion.turn_rate = deg_to_rad(clampf(95.0-agent.bounds.size.length()*9.0,42.0,78.0))
+	var hull := model_id(model)
+	if hull in ["TRAD-SUB","TRAD2","TECHNEW","TECH2SUB","PIRATE","PIRATE2","PIRATE3"]:
+		agent.motion.turn_rate = preload("res://npc_sub_motion.gd").COMBAT_TURN_RATE
+		agent.motion.turn_response = preload("res://npc_sub_motion.gd").COMBAT_TURN_RESPONSE
 	agent.motion.thrust_scale = clampf(3.0/maxf(1.0,agent.bounds.size.length()),0.65,1.1)
 	preload("res://entity_identity.gd").actor(model,agent,agent.body)
 	agent.random.seed = hash(str(model.get_path()))
@@ -107,9 +111,11 @@ static func rotor_nodes(model: Node3D, model_id: String = "") -> Array[Node3D]:
 			if rotor != null and not result.has(rotor): result.append(rotor)
 	return result
 
-static func model_health_multiplier(model: Node3D) -> float:
-	var model_id := str(model.get_meta("editor_model",str(model.get_meta("asset_source","")).get_file().get_basename())).to_upper()
-	return 2.0 if model_id in ["TRAD-SUB","TRAD2","TECHNEW","TECH2SUB","PIRATE","PIRATE2","PIRATE3"] else 1.0
+static func model_id(model: Node3D) -> String:
+	return str(model.get_meta("editor_model",model.get_meta("asset_id",str(model.get_meta("asset_source","")).get_file().get_basename()))).to_upper().trim_prefix("MODEL.")
+
+static func model_health_multiplier(_model: Node3D) -> float:
+	return 1.0
 
 func health_multiplier() -> float:
 	return model_health_multiplier(get_parent())

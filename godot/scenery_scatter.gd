@@ -89,6 +89,9 @@ static func reroll(world: Node3D, tree: SceneTree, session_seed: int, progress: 
 
 static func _placements(world: Node3D, settings: Dictionary, models: Array[Dictionary], weight: float, exclusions: Array[AABB], tree: SceneTree, remaining: int, progress: Callable = Callable()) -> Array[Dictionary]:
 	var poses: Array[Dictionary] = []
+	# Mod-file multiplier; absent preserves existing packs and saved layouts.
+	var count := mini(roundi(float(settings.count) * float(settings.get("density",1.0))),remaining)
+	if count <= 0: return poses
 	var rng := RandomNumberGenerator.new(); rng.seed = int(settings.seed)
 	var bounds: AABB = world.get_meta("bounds")
 	var surface := float(world.get_meta("surface_height"))
@@ -102,14 +105,14 @@ static func _placements(world: Node3D, settings: Dictionary, models: Array[Dicti
 	var exclusion_grid := _index_exclusions(exclusions)
 	var patch := Vector2.ZERO
 	var index := 0
-	var attempts := mini(int(settings.count), remaining) * 12
+	var attempts := count * 12
 	var slice_start := Time.get_ticks_usec()
 	for attempt in range(attempts):
 		if attempt % 64 == 0 and Time.get_ticks_usec() - slice_start >= WORK_SLICE_USEC:
-			if progress.is_valid(): progress.call(float(poses.size()) / maxf(1.0, minf(float(settings.count), remaining)))
+			if progress.is_valid(): progress.call(float(poses.size()) / float(count))
 			await tree.process_frame
 			slice_start = Time.get_ticks_usec()
-		if poses.size() >= mini(int(settings.count), remaining): break
+		if poses.size() >= count: break
 		if attempt % 96 == 0:
 			patch = Vector2(rng.randf_range(bounds.position.x, bounds.end.x), rng.randf_range(bounds.position.z, bounds.end.z))
 			# Same-species colonies look natural and share a render batch.

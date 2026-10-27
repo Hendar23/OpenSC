@@ -12,6 +12,15 @@ class BlockedEndpoint extends Traffic:
 	var anchors := 0
 	func segment_clear(a: Vector3,b: Vector3) -> bool: return a != Vector3.ONE and b != Vector3.ONE
 	func anchor(_point: Vector3) -> int: anchors += 1; return 0
+class SlowShortcuts extends Traffic:
+	var probes := 0
+	func anchor(point: Vector3) -> int: return 0 if point == Vector3.ZERO else 63
+	func segment_clear(a: Vector3,b: Vector3) -> bool:
+		probes += 1
+		if a == b: return true
+		if a == Vector3.ZERO and b == Vector3(64,0,0): return false
+		OS.delay_usec(1100)
+		return true
 var checks := 0
 var failures := 0
 func check(ok: bool,message: String) -> void:
@@ -37,4 +46,11 @@ func run() -> void:
 	check(nav.route(Vector3.ONE,Vector3.ZERO).is_empty() and nav.anchors == 0,"Blocked starting position avoids an exhaustive anchor search")
 	check(nav.route(Vector3.ZERO,Vector3.ONE).is_empty() and nav.anchors == 0,"Blocked destination avoids an exhaustive anchor search")
 	check(nav.route(Vector3.ZERO,Vector3.RIGHT*5) == PackedVector3Array([Vector3.RIGHT*5]),"Clear direct routes retain their original destination")
+	var slow := SlowShortcuts.new(); world.add_child(slow); slow.navigation_ready = true
+	for index in range(64):
+		slow.graph.add_point(index,Vector3(index,0,0))
+		if index > 0: slow.graph.connect_points(index-1,index)
+	var path := slow.route(Vector3.ZERO,Vector3(64,0,0))
+	check(slow.probes <= 5,"Expensive shortcut searches stop within a bounded number of probes")
+	check(not path.is_empty() and path[-1] == Vector3(64,0,0) and path.size() > 3,"Stopping smoothing retains the remaining checked graph edges and exact destination")
 	world.free(); print("NPC route budget: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

@@ -1,5 +1,6 @@
 extends Node
 signal docked
+signal docking_started
 
 const Access = preload("res://dock_access.gd")
 const Morph = preload("res://morph_animation.gd")
@@ -117,6 +118,11 @@ func update_approach() -> void:
 	if stage != Stage.IDLE: return
 	_update_greeting()
 	nearby = {}
+	# Retail 0044c610 only offers docking with no attached cargo
+	# (DAT_0089a41c, shared by MAGNET and TOW).
+	if towing_cargo():
+		message = greeting_text if greeting_remaining > 0.0 else ""
+		return
 	var nearest := approach_radius
 	for port in ports:
 		if Access.disabled(port): continue
@@ -179,6 +185,14 @@ func decline_docking() -> void:
 	nearby = {}
 	message = ""
 
+func towing_cargo() -> bool:
+	if not is_instance_valid(pilot): return false
+	var equipment := pilot.get_node_or_null("MountedEquipment")
+	if equipment == null: return false
+	for tool: Node3D in [equipment.magnet,equipment.grapple]:
+		if is_instance_valid(tool) and is_instance_valid(tool.target) and not tool.target.is_queued_for_deletion(): return true
+	return false
+
 func request_docking() -> bool:
 	if stage == Stage.DOCKED:
 		if not Access.acquire(current,self):
@@ -220,6 +234,7 @@ func request_docking() -> bool:
 		pilot.collision_mask = saved_collision_mask
 		_transition(Stage.SETTLE)
 	else: _transition(Stage.ALIGN)
+	docking_started.emit()
 	return true
 
 func _prepare_transit_settings() -> void:

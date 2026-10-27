@@ -11,6 +11,10 @@ const Trader = preload("res://trader_submarine.gd")
 const Access = preload("res://dock_access.gd")
 const STEP := 2.0
 const CLEARANCE := 1.05
+const FOOTPRINT := [Vector2.ZERO,Vector2(-CLEARANCE,0),Vector2(CLEARANCE,0),Vector2(0,-CLEARANCE),Vector2(0,CLEARANCE),Vector2(-CLEARANCE,-CLEARANCE),Vector2(CLEARANCE,-CLEARANCE),Vector2(-CLEARANCE,CLEARANCE),Vector2(CLEARANCE,CLEARANCE)]
+const SMOOTHING_BUDGET_USEC := 2000
+var route_water := {}
+var routing := false
 var traders: Array[Node3D] = []
 var ports: Array[Dictionary] = []
 var player: Node3D
@@ -139,15 +143,23 @@ func _prepare_navigation_cache(world: Node3D) -> void:
 	cells = data.cells; cursor = width * depth; navigation_ready = true
 
 func water_clear(point: Vector3) -> bool:
+	if routing and route_water.has(point): return route_water[point]
+	var clear := _water_clear(point)
+	if routing: route_water[point] = clear
+	return clear
+
+func _water_clear(point: Vector3) -> bool:
 	var uv: Vector2 = map.uv(point)
 	if uv.x < 0 or uv.y < 0 or uv.x > 1 or uv.y > 1 or point.y > map.surface_height - CLEARANCE: return false
+	var resolution: int = map.RESOLUTION
+	var heights: PackedFloat32Array = map.height_samples
 	# Probe the footprint, not only its centre, to avoid cutting ridge corners.
-	for offset in [Vector2.ZERO,Vector2(-CLEARANCE,0),Vector2(CLEARANCE,0),Vector2(0,-CLEARANCE),Vector2(0,CLEARANCE),Vector2(-CLEARANCE,-CLEARANCE),Vector2(CLEARANCE,-CLEARANCE),Vector2(-CLEARANCE,CLEARANCE),Vector2(CLEARANCE,CLEARANCE)]:
-		var sample: Vector2 = map.uv(point + Vector3(offset.x,0,offset.y)) * (map.RESOLUTION - 1)
-		var x := clampi(int(sample.x),0,map.RESOLUTION - 1); var y := clampi(int(sample.y),0,map.RESOLUTION - 1)
-		for row in range(y,mini(y + 2,map.RESOLUTION)):
-			for column in range(x,mini(x + 2,map.RESOLUTION)):
-				var terrain: float = map.height_samples[row * map.RESOLUTION + column]
+	for offset: Vector2 in FOOTPRINT:
+		var sample: Vector2 = map.uv(point + Vector3(offset.x,0,offset.y)) * (resolution - 1)
+		var x := clampi(int(sample.x),0,resolution - 1); var y := clampi(int(sample.y),0,resolution - 1)
+		for row in range(y,mini(y + 2,resolution)):
+			for column in range(x,mini(x + 2,resolution)):
+				var terrain: float = heights[row * resolution + column]
 				if not is_finite(terrain) or terrain + 0.6 > point.y: return false
 	for box in obstacles:
 		if box.has_point(point): return false
@@ -205,6 +217,14 @@ func can_activate(agent: Node3D) -> bool:
 	return true
 
 func route(start: Vector3, finish: Vector3) -> PackedVector3Array:
+	# Endpoint and shortcut probes revisit many identical samples. Their
+	# validity is shared within this request only, never across world changes.
+	routing = true; route_water.clear()
+	var result := _route(start,finish)
+	routing = false; route_water.clear()
+	return result
+
+func _route(start: Vector3, finish: Vector3) -> PackedVector3Array:
 	if not navigation_ready: return PackedVector3Array()
 	# Every possible anchor connection includes its endpoint. If the hull
 	# already overlaps scenery, trying scores of anchors cannot succeed.
@@ -220,9 +240,14 @@ func route(start: Vector3, finish: Vector3) -> PackedVector3Array:
 	var smooth := PackedVector3Array()
 	var previous := start
 	var index := 0
+	var deadline := Time.get_ticks_usec()+SMOOTHING_BUDGET_USEC
 	while index < result.size():
 		var next := index
 		for candidate in range(mini(index + 23,result.size() - 1),index,-1):
+			if Time.get_ticks_usec() >= deadline:
+				# Remaining graph edges were already clearance-checked. Keep
+				# their safe route instead of blocking a frame on more shortcuts.
+				smooth.append_array(result.slice(index)); return smooth
 			if segment_clear(previous,result[candidate]):
 				next = candidate; break
 		smooth.append(result[next]); previous = result[next]; index = next + 1

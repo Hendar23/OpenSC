@@ -101,7 +101,7 @@ static func _import(folder: String, fingerprints: Dictionary) -> Dictionary:
 	for record in result.tables.get("objects",{}).get("records",{}).values():
 		var model := str(record.get("dff","none")).to_lower()
 		if model != "none" and not stats.has(model) and float(record.get("shield",0)) > 0:
-			stats[model] = {"health":float(record.shield),"sustain":float(record.get("sustain",1)),"source_object":record.id}
+			stats[model] = {"health":float(record.shield),"sustain":float(record.get("sustain",1)),"source_object":record.id,"inflict":float(record.get("inflict",0)),"rotdamp":float(record.get("rotdamp",0.8))}
 	result.tables["creature_stats"] = {"source":"Original raw shield values and damage-sustaining factors","records":stats}
 	return result
 

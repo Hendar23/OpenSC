@@ -87,11 +87,13 @@ func _register_pending() -> void:
 
 func _dynamic(node: Node) -> bool:
 	var ancestor: Node = node
+	var dynamic := false
 	while ancestor != null and ancestor != game:
+		if ancestor.get_meta("wildlife_preparing",false): return false
 		if ancestor is CanvasLayer or ancestor is SubViewport or ancestor == self or ancestor == game.photo_mode: return false
-		if ancestor != game.world_root and (ancestor.get_script() != null or ancestor.has_meta("city_id") or ancestor.get_node_or_null("Trader") != null or ancestor.get_node_or_null("GunTurret") != null): return true
+		if ancestor != game.world_root and (ancestor.get_script() != null or ancestor.has_meta("city_id") or ancestor.get_node_or_null("Trader") != null or ancestor.get_node_or_null("GunTurret") != null): dynamic = true
 		ancestor = ancestor.get_parent()
-	return false
+	return dynamic
 
 func _register(node: Node3D) -> void:
 	if not node.is_inside_tree() or not _dynamic(node): return

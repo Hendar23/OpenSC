@@ -40,6 +40,7 @@ func setup(context: Node) -> void:
 	speech = AudioStreamPlayer.new(); speech.name = "MissionSpeech"; add_child(speech)
 	speech.volume_db = preload("res://docking_radio.gd").SPEECH_VOLUME_DB
 	game.events.city_docked.connect(docked)
+	game.events.city_docking_started.connect(docking_started)
 	game.events.session_started.connect(_session_started)
 	outcome = preload("res://mission_outcome.gd").new(); game.add_child(outcome)
 	side_jobs = preload("res://stage_two_missions.gd").new(); add_child(side_jobs); side_jobs.runtime = self; side_jobs.game = game
@@ -142,6 +143,15 @@ func accept(city: int, selected_id: String = "") -> String:
 	_publish_offers()
 	return ""
 
+func docking_started(city: int) -> void:
+	if active().is_empty() or active().get("outcome_shown",false): return
+	var complete: bool = side_jobs.completes_on_docking(city) if Rules.IMPLEMENTED.has(str(active().id)) else bool(active().get("refinery",false)) and IDS.has(city)
+	if not complete: return
+	# Retail announces success at the start of transit. Deliver passengers and
+	# settle the mission only at berth, preserving the existing rescue contract.
+	active()["outcome_shown"] = true
+	outcome.play(game.game_folder,true)
+
 func docked(city: int) -> void:
 	if active().is_empty(): return
 	if Rules.IMPLEMENTED.has(str(active().id)): side_jobs.docked(city); return
@@ -167,6 +177,9 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	if score < 0: score = 1.0 if success else 0.0
 	if response > 0: last_response = text(id,response)
 	var rewards: Dictionary = game.gameplay_catalogue.tables.get("mission_rewards",{}).get("records",{}).get(id,{})
+	# Retail omits miners2's reward row. Owner-approved matching credit payout;
+	# keep absent reputation values at zero and honour an explicit modded row.
+	if id == "miners2" and rewards.is_empty(): rewards = {"credits":4500,"success":0.0,"fail":0.0,"enemy":0.0}
 	game.player_progress.missions.active = {}
 	game.player_progress.mission = "None"
 	if success or side_job or core:
@@ -202,6 +215,7 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	var enemy := "2" if faction == "1" else "1"
 	if success: reputation[enemy] = float(reputation.get(enemy,0)) + delta * float(rewards.get("enemy",-0.5))
 	game.player_progress.missions["reputation"] = reputation
+	if side_jobs.stage_three_remaining != null: side_jobs.stage_three_remaining.release_survivors()
 	if side_jobs.stage_three != null: side_jobs.stage_three.release_survivors()
 	if side_jobs.genocide != null: side_jobs.genocide.release_survivors()
 	if side_jobs.terrorists != null: side_jobs.terrorists.release_survivor()
@@ -211,6 +225,7 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	_publish_offers()
 	if not outcome_shown or not success: outcome.play(game.game_folder,success)
 	if game.dock_interface_active: game.dock_interface.rebuild()
+	if success and core: game.events.fmv_requested.emit("peace",sponsor_city)
 
 func _session_started(_restored: bool) -> void:
 	if speech != null: speech.stop()

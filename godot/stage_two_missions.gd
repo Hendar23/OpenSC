@@ -39,6 +39,7 @@ var fishing: RefCounted
 var genocide: RefCounted
 var remaining: RefCounted
 var terrorists: RefCounted
+var stage_three_remaining: RefCounted
 var stage_three: RefCounted
 var volcano: StaticBody3D
 var defection: RefCounted
@@ -46,6 +47,7 @@ var defection: RefCounted
 func _exit_tree() -> void:
 	if defection != null: defection.clear(); defection = null
 	if is_instance_valid(volcano): volcano.clear(); volcano = null
+	if stage_three_remaining != null: stage_three_remaining.clear(); stage_three_remaining = null
 	if stage_three != null: stage_three.clear(); stage_three = null
 	if terrorists != null: terrorists.clear(); terrorists = null
 	if genocide != null: genocide.clear(); genocide = null
@@ -57,7 +59,9 @@ func start(mission_id: String) -> void:
 	passengers = false; tapped = false; warned = false; convinced = false; dialogue = 0; interception_instruction = false; interception_cancelled = false
 	base_guidance = false; base_instruction_clock = -1.0; reinforcements = false; armour_clock = 0
 	reinforcement_radio_clock = -1.0
-	if id in ["defect","defect2"]:
+	if id in ["miners","miners2","bomb","aliens","aliens2"]:
+		stage_three_remaining = preload("res://stage_three_remaining.gd").new(); stage_three_remaining.jobs = self; stage_three_remaining.start()
+	elif id in ["defect","defect2"]:
 		defection = preload("res://covert_defection.gd").new(); defection.jobs = self; defection.start()
 	elif id in ["fumehole","fumehole2"]:
 		volcano = preload("res://volcanic_disaster.gd").new(); game.world_root.add_child(volcano); actors.append(volcano); volcano.setup(self)
@@ -78,6 +82,7 @@ func start(mission_id: String) -> void:
 func clear(reset_rover: bool = false) -> void:
 	if defection != null: defection.clear(); defection = null
 	if is_instance_valid(volcano): volcano.clear(); volcano = null
+	if stage_three_remaining != null: stage_three_remaining.clear(); stage_three_remaining = null
 	if stage_three != null: stage_three.clear(); stage_three = null
 	if terrorists != null: terrorists.clear(); terrorists = null
 	if genocide != null: genocide.clear(); genocide = null
@@ -262,6 +267,7 @@ func _physics_process(delta: float) -> void:
 	age += delta; clock -= delta; armour_clock = maxf(0,armour_clock - delta)
 	if defection != null: defection.step(delta)
 	elif is_instance_valid(volcano): volcano.step(delta)
+	elif stage_three_remaining != null: stage_three_remaining.step(delta)
 	elif stage_three != null: stage_three.step(delta)
 	elif terrorists != null: terrorists.step(delta)
 	elif genocide != null: genocide.step(delta)
@@ -415,6 +421,7 @@ func can_attach_pod(body: Node3D) -> bool:
 	return id in ["breakout","breakout2"] and not passengers and is_instance_valid(target) and not target.dead and body == target.body
 
 func delivery(body: Node3D, city: int) -> bool:
+	if stage_three_remaining != null: return stage_three_remaining.delivery(body,city)
 	if genocide != null: return genocide.delivery(body,city)
 	if remaining != null: return remaining.delivery(body,city)
 	if id != "stranded" or body != target or city not in [1,2,3,4] or delivered_city != 0: return false
@@ -429,6 +436,13 @@ func delivery(body: Node3D, city: int) -> bool:
 	else:
 		radio("x12"); _resolve(true,0.9 if convinced else 0.8,3 if convinced else 4)
 	return true
+
+func completes_on_docking(city: int) -> bool:
+	if stage_three != null: return id == "rovrtn" and stage_three.rescued and not stage_three.failed and city in [1,2,3,4]
+	if terrorists != null: return terrorists.won and not terrorists.lost
+	if remaining != null:
+		return (remaining.family == "eel" and remaining.flags.get("miners_aboard",false)) or (remaining.family == "recon" and remaining.flags.get("recorded",false))
+	return id in ["breakout","breakout2"] and passengers and city in [1,2,3,4]
 
 func docked(city: int) -> void:
 	if stage_three != null: stage_three.docked(city); return

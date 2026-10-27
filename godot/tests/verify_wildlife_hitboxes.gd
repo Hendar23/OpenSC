@@ -11,7 +11,8 @@ func check(ok: bool, message: String) -> void:
 func ray(fish: Node3D, from: Vector3, to: Vector3) -> Dictionary:
 	return fish.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(fish.global_transform * from,fish.global_transform * to,8))
 func run() -> void:
-	var folder := ProjectSettings.globalize_path("res://../Original Sub Culture")
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
 	for model in ["TURTLE","STINGRAY","JACKFISH"]:
 		var template := Assets.load_clump(folder.path_join("CLUMPS/%s.DFF" % model),PackedStringArray(),true)
 		check(template != null,"Original %s model loads" % model)

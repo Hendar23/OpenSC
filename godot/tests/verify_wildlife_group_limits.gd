@@ -14,6 +14,12 @@ func check(ok: bool, message: String) -> void:
 func _initialize() -> void: call_deferred("run")
 func state(id: String, count: int) -> Dictionary:
 	return {"group":{"id":id,"species":"silver","position":[0,0,12],"count_min":count,"count_max":count,"radius":2.0},"seed":42,"members":[],"attempted":false}
+func finish_spawn(pop: Node3D) -> void:
+	for tick in range(100):
+		if pop.pending_spawn.is_empty(): return
+		pop._advance_spawn()
+		await process_frame
+	check(false,"Pending shoal preparation finishes within a bounded number of frames")
 func run() -> void:
 	var world := Node3D.new(); root.add_child(world)
 	world.set_meta("bounds",AABB(Vector3(-100,-10,-100),Vector3(200,40,200)))
@@ -27,7 +33,14 @@ func run() -> void:
 	pop.templates.silver = Node3D.new(); pop.model_bounds.silver = AABB(Vector3.ONE * -0.1,Vector3.ONE * 0.2)
 	var shoal := state("twenty",20); pop.random_groups.append(shoal)
 	pop._stream_update()
-	check(shoal.members.size() == 20 and shoal.attempted,"Ordinary streaming creates all twenty fish despite the four-fish work budget")
+	check(not pop.pending_spawn.is_empty() and pop.active_count() == 0,"Streaming queues a whole shoal without creating all its actors in one frame")
+	pop._advance_spawn()
+	check(pop.pending_spawn.members.size() == 1 and pop.active_count() == 0 and not shoal.attempted,"One prepared fish remains hidden and cannot activate an incomplete shoal")
+	check(pop.spawn_staging.get_child(0).collision_layer == 0 and not pop.spawn_staging.get_child(0).is_physics_processing(),"Preparing wildlife has no live collision or simulation")
+	check(not pop.spawn_staging.get_child(0).is_in_group("marine_life") and not pop.spawn_staging.get_child(0).is_in_group("attractable_fish"),"Fishing equipment and mission boats cannot select an unfinished shoal")
+	await finish_spawn(pop)
+	check(shoal.members.size() == 20 and shoal.attempted,"Streaming activates all twenty fish together without shrinking the editor count")
+	check(shoal.members.all(func(fish: Node3D) -> bool: return fish.is_in_group("marine_life") and fish.is_in_group("attractable_fish")),"Activated fish become available to fishing equipment together")
 	pop._stream_update()
 	check(shoal.members.size() == 20 and pop.active_count() == 20,"A completed shoal is not duplicated on the following update")
 	pop.set_active_limit(15)
@@ -35,12 +48,14 @@ func run() -> void:
 	pop._stream_update()
 	check(shoal.members.is_empty() and not shoal.attempted,"Insufficient capacity postpones the group rather than spawning an undersized shoal")
 	pop.set_active_limit(30)
+	await finish_spawn(pop)
 	check(shoal.members.size() == 20,"Increasing capacity admits the complete group")
 	for fish in pop.get_children(): fish.free()
 	pop.random_groups.clear(); pop.max_active = 10; pop.stream_cursor = 0
 	var blocked := state("blocked",20); pop.random_groups.append(blocked)
 	for index in range(6): pop.random_groups.append(state("single_%d" % index,1))
-	for tick in range(8): pop._stream_update()
+	for tick in range(8):
+		pop._stream_update(); await finish_spawn(pop)
 	check(blocked.members.is_empty() and pop.active_count() == 6,"A blocked large group cannot starve later groups of spawning turns")
 	for fish in pop.get_children(): fish.free()
 	pop.random_groups.clear(); pop.stream_cursor = 0; pop.max_active = 80
@@ -48,6 +63,14 @@ func run() -> void:
 	var invalid := state("surface",20); invalid.group.position = [0,25.5,12]
 	pop.random_groups.append(invalid); pop._stream_update()
 	check(invalid.members.is_empty() and not invalid.attempted and not pop.spawned_groups.has("surface"),"Unplaceable groups are not marked complete")
+	pop.random_groups.clear()
+	var cancelled := state("cancelled",20); pop.random_groups.append(cancelled)
+	pop._stream_update(); await process_frame; pop._advance_spawn()
+	check(not pop.pending_spawn.is_empty(),"A new off-screen group starts preparing")
+	pop.reject_after = 0; pop.visibility_probes = 0
+	await process_frame; pop._advance_spawn()
+	check(pop.pending_spawn.is_empty() and cancelled.members.is_empty() and pop.active_count() == 0,"Turning toward a preparing group cancels it without visible pop-in or leftover actors")
+	pop.reject_after = -1
 	# Nineteen valid placements must not build then discard nineteen actors.
 	var additions := [0]
 	pop.child_entered_tree.connect(func(_child: Node) -> void: additions[0] += 1)

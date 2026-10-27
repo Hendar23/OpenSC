@@ -14,7 +14,7 @@ func setup(world: Node3D, folder: String, player: Node3D, faction_hostile: Calla
 	bubbles.configure(texture)
 	var frames := preload("res://mine_explosion.gd").load_frames(folder)
 	var sound := preload("res://submarine_weapons.gd")._sound(folder,"audio.object.mine.explosion","EXPLODE1")
-	for model in ["TMISSILE","HMISSILE"]: templates.append(Assets.load_clump(folder.path_join("CLUMPS/" + model + ".DFF")))
+	for model in ["MISSILE","HMISSILE"]: templates.append(Assets.load_clump(folder.path_join("CLUMPS/" + model + ".DFF")))
 	for node in world.find_children("GunTurret","Node3D",true,false):
 		if not node is Turret: continue
 		node.player = player; node.hostile = faction_hostile

@@ -186,7 +186,7 @@ func run() -> void:
 	check(mission.transfer < 0 and radio_sent("av3"),"Detachment interrupts transfer with source dialogue")
 	tools.pod_target = mission.ship; mission.step(0.01); mission.step(10.01)
 	check(mission.rescued and tools.passengers and not runtime.active().is_empty(),"Crew stays loaded until docking")
-	check(mission.enemies.size() == 2 and mission.enemies.all(func(agent: Node3D) -> bool: return agent.engage_player and agent.health.capacity == 60),"Two aggressive pirates with shared doubled attack-sub health")
+	check(mission.enemies.size() == 2 and mission.enemies.all(func(agent: Node3D) -> bool: return agent.engage_player and agent.health.capacity == 30),"Two aggressive pirates with original pirate health")
 	credits = game.player_progress.status.credits
 	var hull: RigidBody3D = mission.ship
 	jobs.docked(3)
@@ -196,7 +196,7 @@ func run() -> void:
 	var traffic: Dictionary = game.submarine_traffic.snapshot()
 	check(game.submarine_traffic.valid_snapshot(traffic),"Surviving pirates validate in beta save format")
 	game.submarine_traffic.restore(traffic)
-	check(game.submarine_traffic.traders.filter(func(agent: Node3D) -> bool: return agent.has_meta("fishing_survivor") and agent.engage_player and agent.health.capacity == 60 and agent.get_parent().get_meta("editor_model","") == "PIRATE").size() == 2,"Pirate hostility and doubled health survive loading")
+	check(game.submarine_traffic.traders.filter(func(agent: Node3D) -> bool: return agent.has_meta("fishing_survivor") and agent.engage_player and agent.health.capacity == 30 and agent.get_parent().get_meta("editor_model","") == "PIRATE").size() == 2,"Pirate hostility and original health survive loading")
 	var objects: Array = game.object_population.snapshot()
 	check(game.object_population.valid_snapshot(objects) and objects.any(func(entry: Dictionary) -> bool: return entry.stats.id == "rescued_minelayer"),"Empty minelayer saved in existing object snapshot format")
 	game.object_population.restore_snapshot(objects)

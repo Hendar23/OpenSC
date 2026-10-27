@@ -94,7 +94,7 @@ func run() -> void:
 				shot.advance(0.04)
 			check(agent.health.remaining < before,"Actual pirate loses hull to each direct torpedo hit; moving="+str(moving))
 			hits += 1; await physics_frame
-		check(agent.dead and hits <= 9,"Direct torpedoes destroy a doubled 60-hull pirate; moving="+str(moving)+" hits="+str(hits))
+		check(agent.dead and hits <= 9,"Direct torpedoes destroy an original 30-hull pirate; moving="+str(moving)+" hits="+str(hits))
 		check(not agent.get_parent().visible and agent.body.collision_layer == 0,"Destroyed pirate leaves its ordinary wreck")
 		arsenal.reset()
 	var shot := preload("res://player_projectile.gd").new(); game.world_root.add_child(shot)

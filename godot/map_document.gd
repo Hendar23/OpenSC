@@ -34,9 +34,7 @@ static func empty() -> Dictionary:
 	return {"schema_version": 1, "seed": 8675309, "entities": {}, "species": [], "groups": [], "object_types": [ObjectDefinitions.FLOATING_MINE.duplicate(true), ObjectDefinitions.THORIUM.duplicate(true), ObjectDefinitions.inert_thorium()] + ObjectDefinitions.metal_types() + [ObjectDefinitions.CIGARETTE.duplicate(true),ObjectDefinitions.CLAM.duplicate(true),ObjectDefinitions.PEARL.duplicate(true)] + ObjectDefinitions.rock_types(), "object_groups": [], "entity_types": [], "npc_types": []}
 static func creature_health(species: Dictionary, catalogue: Dictionary) -> float:
 	var stats: Dictionary = catalogue.get("tables",{}).get("creature_stats",{}).get("records",{}).get(str(species.get("model","")).to_lower(),{})
-	# Three-times original durability for the stronger zapper. Authored health
-	# is already the final value shown in the editor and must not be scaled again.
-	return maxf(0.1,float(species.get("health",float(stats.get("health",10.0)) * 3.0)))
+	return maxf(0.1,float(species.get("health",float(stats.get("health",10.0)))))
 static func vector(values: Array) -> Vector3:
 	return Vector3(float(values[0]), float(values[1]), float(values[2]))
 static func array(point: Vector3) -> Array:

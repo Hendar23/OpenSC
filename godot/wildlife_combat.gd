@@ -15,6 +15,13 @@ var blood_timer := 0.0
 
 func configure(owner_fish: CharacterBody3D, species: Dictionary) -> void:
 	fish = owner_fish; settings = Document.creature_combat(species)
+	var model := str(species.get("model","")).to_lower()
+	fish.set_meta("sound_model",model)
+	if fish.population != null:
+		var stats: Dictionary = fish.population.gameplay_catalogue.get("tables",{}).get("creature_stats",{}).get("records",{}).get(model,{})
+		settings["original_contact"] = stats.has("inflict") and (not species.has("bite_damage") or is_equal_approx(float(species.bite_damage),float(stats.inflict)))
+		settings["contact_inflict"] = float(stats.get("inflict",0))
+		if stats.has("inflict") and not species.has("bite_damage"): settings.bite_damage = float(stats.inflict)
 	scan_timer = fish.rng.randf_range(0,0.2)
 
 func perceive(delta: float) -> void:
@@ -58,23 +65,29 @@ func attack(delta: float) -> void:
 	# heading towards the prey. Trace along the nose instead of bending the beam
 	# to the selected target anywhere inside the old broad attack cone.
 	var forward: Vector3 = fish.direction.normalized()
+	# Retail MOMJELLY (0041f950) aims its arc at the chosen victim; other
+	# wildlife retains its forward-facing strike (0047ee30).
+	var aimed: bool = settings.get("zapper_aim_target",false)
+	if aimed: forward = offset.normalized()
 	var start: Vector3 = fish.global_position + forward * fish.radius * 0.7
 	if settings.has_zapper and float(settings.zapper_range) > 0.0:
 		# Original Mutant arc runs from local +Z 0.5 to +Z 1.5. Its
 		# dimensions remain world distances, independent of wildlife size.
-		start = fish.global_position + forward * 0.5
+		start = fish.global_position + forward * float(settings.get("zapper_start",0.5))
 		var zap_query := PhysicsRayQueryParameters3D.create(start,start + forward * float(settings.zapper_range),15,[fish.get_rid()])
 		zap_query.hit_back_faces = true
+		zap_query.hit_from_inside = aimed
 		var zap_hit := fish.get_world_3d().direct_space_state.intersect_ray(zap_query)
-		if zap_hit.get("collider") == target:
+		var struck: Node3D = zap_hit.get("collider")
+		if struck == target or (aimed and is_instance_valid(struck) and struck.has_method("take_weapon_damage")):
 			zap_clock += maxf(0.0,delta) * preload("res://original_damage.gd").TICKS_PER_SECOND
 			while zap_clock >= 1.0 - 0.000001:
 				zap_clock = maxf(0.0,zap_clock - 1.0)
 				# One chance in sixteen per original update; the arc lives
 				# for its initial update and two subsequent updates.
-				if zap_ticks_left == 0 and fish.rng.randi_range(0,255) < 16: zap_ticks_left = 3
+				if zap_ticks_left == 0 and fish.rng.randi_range(0,255) < int(settings.get("zapper_chance",16)): zap_ticks_left = 3
 				if zap_ticks_left > 0:
-					preload("res://original_damage.gd").weapon(target,float(settings.zapper_damage_per_tick),fish.global_position)
+					preload("res://original_damage.gd").weapon(struck,float(settings.zapper_damage_per_tick),fish.global_position)
 					_hit_feedback(zap_hit)
 					zap_ticks_left -= 1
 			if zap_ticks_left > 0:
@@ -84,6 +97,9 @@ func attack(delta: float) -> void:
 			return
 		zap_ticks_left = 0; zap_clock = 0.0
 	_stop_weapon()
+	# Retail fish damage the player on physical contact (00465fa0), not
+	# through a separate timed bite. Explicit custom bite settings remain editable.
+	if settings.get("original_contact",false): return
 	# Bites retain their close-range reach and facing check.
 	var target_radius := float(target.get("radius")) if target.get("radius") != null else (float(target.collision_height()) * 0.5 if target.has_method("collision_height") else 0.0)
 	if offset.length() > fish.radius + target_radius + float(settings.bite_range) or bite_timer > 0 or forward.dot(offset.normalized()) < 0.65: return
@@ -93,10 +109,7 @@ func attack(delta: float) -> void:
 	if hit.get("collider") != target:
 		_stop_weapon(); return
 	bite_timer = float(settings.attack_interval)
-	if target.has_method("take_damage_from"):
-		target.take_damage_from(float(settings.bite_damage),fish.global_position,fish)
-	else:
-		target.take_damage(float(settings.bite_damage),fish.global_position)
+	preload("res://original_damage.gd").weapon(target,float(settings.bite_damage),fish.global_position,fish)
 	_hit_feedback(hit)
 
 func _hit_feedback(hit: Dictionary) -> void:

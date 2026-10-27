@@ -9,6 +9,8 @@ signal sun_shafts_changed(enabled: bool)
 signal replay_changed(enabled: bool)
 var replay_button: Button
 var replay_enabled := true
+var fmvs_enabled := true
+var fmv_button: Button
 var sun_shafts_enabled := true
 var sun_shafts_button: Button
 const WILDLIFE_LIMITS := [40,60,80,100,150,200,0]
@@ -32,6 +34,7 @@ func _ready() -> void:
 		var saved_limit := int(config.get_value("gameplay","wildlife_limit",80))
 		if saved_limit in WILDLIFE_LIMITS: wildlife_limit = saved_limit
 		replay_enabled = bool(config.get_value("gameplay","photo_replay",true))
+		fmvs_enabled = bool(config.get_value("gameplay","play_fmvs",true))
 	# Older installations may have selected Classic; enhanced effects now stay on.
 	preload("res://mine_explosion.gd").enhanced_enabled = true
 	var shade := ColorRect.new(); shade.color = Color.TRANSPARENT
@@ -41,8 +44,9 @@ func _ready() -> void:
 	wildlife_button = _button(Vector2(196,188),Vector2(248,28)); wildlife_button.pressed.connect(_cycle_wildlife_limit)
 	sun_shafts_button = _button(Vector2(196,226),Vector2(248,28)); sun_shafts_button.pressed.connect(_toggle_sun_shafts)
 	replay_button = _button(Vector2(196,264),Vector2(248,28)); replay_button.pressed.connect(_toggle_replay)
-	back = _button(Vector2(216,312),Vector2(208,28)); back.text = "Back"; back.pressed.connect(close_menu)
-	status = Label.new(); status.position = Vector2(160,358); status.size = Vector2(320,60)
+	fmv_button = _button(Vector2(196,302),Vector2(248,28)); fmv_button.pressed.connect(_toggle_fmvs)
+	back = _button(Vector2(216,350),Vector2(208,28)); back.text = "Back"; back.pressed.connect(close_menu)
+	status = Label.new(); status.position = Vector2(160,396); status.size = Vector2(320,60)
 	status.add_theme_font_size_override("font_size",14); status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; layout.add_child(status)
 	get_viewport().size_changed.connect(_layout); _layout(); _refresh(); hide()
 
@@ -57,6 +61,7 @@ func _button(point: Vector2,dimensions: Vector2) -> Button:
 	layout.add_child(button); return button
 
 func _refresh() -> void:
+	fmv_button.text = "Play FMVs: %s" % ("On" if fmvs_enabled else "Off")
 	replay_button.text = "Photo mode replay: %s" % ("On" if replay_enabled else "Off")
 	toggle.text = "Zapper auto aim: %s" % ("On" if zapper_auto_aim else "Off")
 	wildlife_button.text = "Active wildlife: %s" % ("Unlimited" if wildlife_limit == 0 else str(wildlife_limit))
@@ -65,6 +70,10 @@ func _refresh() -> void:
 func _toggle_replay() -> void:
 	replay_enabled = not replay_enabled
 	_refresh(); replay_changed.emit(replay_enabled); _save()
+
+func _toggle_fmvs() -> void:
+	fmvs_enabled = not fmvs_enabled
+	_refresh(); _save()
 
 func _toggle_sun_shafts() -> void:
 	sun_shafts_enabled = not sun_shafts_enabled
@@ -88,6 +97,7 @@ func _save() -> void:
 		config.set_value("gameplay","wildlife_limit",wildlife_limit)
 		config.set_value("gameplay","sun_shafts",sun_shafts_enabled)
 		config.set_value("gameplay","photo_replay",replay_enabled)
+		config.set_value("gameplay","play_fmvs",fmvs_enabled)
 		if config.has_section_key("gameplay","enhanced_explosions"): config.erase_section_key("gameplay","enhanced_explosions")
 		result = Storage.ensure_parent(settings_path)
 		if result == OK: result = config.save(settings_path)
@@ -110,7 +120,7 @@ func _input(event: InputEvent) -> void:
 	if not visible: return
 	if Bindings.pressed(event,"menu_cancel"): close_menu()
 	elif Bindings.pressed(event,"menu_up") or Bindings.pressed(event,"menu_down"):
-		var buttons := [toggle,wildlife_button,sun_shafts_button,replay_button,back]
+		var buttons := [toggle,wildlife_button,sun_shafts_button,replay_button,fmv_button,back]
 		var selected := buttons.find(get_viewport().gui_get_focus_owner())
 		buttons[posmod(selected + (-1 if Bindings.pressed(event,"menu_up") else 1),buttons.size())].grab_focus()
 	elif toggle.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle()
@@ -118,11 +128,13 @@ func _input(event: InputEvent) -> void:
 		_cycle_wildlife_limit(-1 if Bindings.pressed(event,"menu_left") else 1)
 	elif sun_shafts_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_sun_shafts()
 	elif replay_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_replay()
+	elif fmv_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_fmvs()
 	elif Bindings.pressed(event,"menu_accept"):
 		if toggle.has_focus(): _toggle()
 		elif wildlife_button.has_focus(): _cycle_wildlife_limit()
 		elif sun_shafts_button.has_focus(): _toggle_sun_shafts()
 		elif replay_button.has_focus(): _toggle_replay()
+		elif fmv_button.has_focus(): _toggle_fmvs()
 		elif back.has_focus(): close_menu()
 	else: return
 	get_viewport().set_input_as_handled()

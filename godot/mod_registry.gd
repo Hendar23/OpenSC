@@ -167,6 +167,8 @@ static func _read_scenery(value: Variant, folder: String) -> Dictionary:
 		var number: Variant = value.get(entry[0])
 		if not (number is int or number is float) or not is_finite(float(number)) or float(number) < entry[1] or float(number) > entry[2]: return {}
 	if float(value.count) != floorf(float(value.count)) or float(value.seed) != floorf(float(value.seed)): return {}
+	var density: Variant = value.get("density",1.0)
+	if not (density is int or density is float) or not is_finite(float(density)) or float(density) < 0.0 or float(density) > 1.0: return {}
 	var models: Variant = value.get("models")
 	if not models is Array or models.is_empty() or models.size() > 128: return {}
 	var names := {}

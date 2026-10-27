@@ -286,12 +286,15 @@ func _setup_actors(folder: String) -> void:
 	game._update_docking_radius()
 	if game.wildlife != null: game.wildlife.player = game.pilot
 	game.object_population.player = game.pilot
+	game.docking.docking_started.connect(func() -> void: game.events.city_docking_started.emit(int(game.docking.current.node.get_meta("city_id"))))
 	game.docking.docked.connect(game._reset_docked_wildlife)
 	game.docking.docked.connect(func() -> void: game.events.city_docked.emit(int(game.docking.current.node.get_meta("city_id"))))
 	game.equipment.activated.connect(func(id: String, active: bool) -> void: game.events.equipment_activated.emit(id,active))
 
 func _finish_start(folder: String) -> void:
 	if game.radio_feed == null: game._build_radio_feed()
+	var ambient := preload("res://ambient_sounds.gd").new(); ambient.name = "AmbientSounds"
+	game.world_root.add_child(ambient); ambient.setup(game,folder)
 	game.radio_message_audio.setup(folder,game.radio_feed,game.pilot.submarine_audio.tuning,game.game_radio._radio_audio_allowed)
 	game.dock_interface.setup(folder,game._dock_ui_model)
 	game.pilot_mode = true
@@ -317,6 +320,9 @@ func _finish_start(folder: String) -> void:
 	game.sun_shafts.brightness = game.sun_shafts_brightness_slider.value / 100.0
 	game.sun_shafts.set_enabled(game.front_end.gameplay_menu.sun_shafts_enabled)
 	await preload("res://mission_assets.gd").prepare(game)
+	game.world_loading = true
+	await game.fmv.prepare(folder,game._progress)
+	game.world_loading = false
 	game.front_end.progress_bar.value = 95.0
 	if game.show_start_menu and DisplayServer.get_name() != "headless":
 		for frame in range(600):

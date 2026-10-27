@@ -4,6 +4,7 @@ const Document = preload("res://map_document.gd")
 var checks := 0
 var failures := 0
 class OpenWater extends "res://submarine_traffic.gd":
+	func water_clear(_point: Vector3) -> bool: return true
 	func segment_clear(_a: Vector3,_b: Vector3) -> bool: return true
 	func route(a: Vector3,b: Vector3) -> PackedVector3Array: return PackedVector3Array([b]) if a.distance_to(b) > 0.1 else PackedVector3Array()
 	func choose_city(_agent: Node3D) -> int:
@@ -38,7 +39,7 @@ func run() -> void:
 	check(pirate.destination == 0 and pirate.port.is_empty(),"Combat never occupies a city dock")
 	check(get_nodes_in_group("turret_missiles").size() == 1,"Aimed pirate fires a missile")
 	var missile = get_nodes_in_group("turret_missiles")[0]
-	check(missile.inflict == 8 and not missile.homing,"Pirate uses original ordinary missile strength")
+	check(missile.inflict == 2.5 and not missile.homing,"Pirate uses original TMISSILE strength")
 	pirate._physics_process(0.1)
 	check(get_nodes_in_group("turret_missiles").size() == 1,"Shot cooldown prevents repeated immediate fire")
 	for node in get_nodes_in_group("turret_missiles"): node.free()

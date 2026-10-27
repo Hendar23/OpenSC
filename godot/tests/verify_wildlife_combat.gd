@@ -27,7 +27,8 @@ func _initialize() -> void: call_deferred("run")
 func run() -> void:
 	world = Node3D.new(); root.add_child(world)
 	population = Population.new(); population.world = world; world.add_child(population)
-	var folder := ProjectSettings.globalize_path("res://../Original Sub Culture")
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
 	for index in range(1,4):
 		population.zapper_frames.append(preload("res://clump_loader.gd")._load_texture(folder,"ZAPPER%d" % index,"ZAPPER%dM" % index,{}))
 	var camera := Camera3D.new(); world.add_child(camera); camera.position = Vector3(2,1,2); camera.look_at(Vector3(0,0,-1)); camera.current = true

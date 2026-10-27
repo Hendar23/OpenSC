@@ -161,6 +161,7 @@ func _physics_process(delta: float) -> void:
 	if not get_world_3d().direct_space_state.intersect_ray(query).is_empty(): return
 	var missile := preload("res://turret_missile.gd").new()
 	get_parent().get_parent().add_child(missile)
+	missile.inflict = 8.0 # 004051f0 launches MISSILE (0x99), or HMISSILE (0x9a).
 	missile.setup(self,missile_template,muzzle,forward,player,bool(tuning.turret_homing))
 	# Counter resets to 40/30 and fires on the next zero: 41/31 ticks.
 	cooldown = (31.0 if retaliation > 0 else 41.0) / Damage.TICKS_PER_SECOND

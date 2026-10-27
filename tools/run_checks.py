@@ -11,7 +11,7 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ['script_compilation', 'cache_dependencies', 'loading_cache',
         'npc_navigation_budget', 'local_simulation', 'performance_foundation']
-INTEGRATION = ['asset_cache', 'continue_game', 'stage_two_missions', 'stage_three_jobs', 'volcanic_disaster', 'covert_defection']
+INTEGRATION = ['asset_cache', 'continue_game', 'stage_two_missions', 'stage_three_jobs', 'volcanic_disaster', 'covert_defection', 'stage_three_remaining', 'original_fidelity']
 LOCAL_MOD = ['scenery_scatter', 'scenery_sessions']
 
 

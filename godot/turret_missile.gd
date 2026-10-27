@@ -50,6 +50,7 @@ func _physics_process(delta: float) -> void:
 			var body: Node3D = hit.collider
 			var relative_velocity := velocity
 			if body is RigidBody3D: relative_velocity -= body.linear_velocity
+			elif body is CharacterBody3D: relative_velocity -= body.velocity
 			var closing := maxf(0,relative_velocity.dot(direction))
 			var strength := (2.0 if homing else inflict) * 10.0 * closing / Damage.TICKS_PER_SECOND
 			if body.has_method("receive_projectile_hit"):

@@ -39,6 +39,14 @@ func run() -> void:
 		replay._register_pending()
 	check(replay.pending.is_empty() and replay.tracks.size() == 63,"Budgeted registration drains surviving visuals and ignores removed actors")
 	arriving.free(); replay.clear(); replay.started = true
+	var preparing := Node3D.new(); preparing.set_meta("wildlife_preparing",true); game.world_root.add_child(preparing)
+	var waiting := Actor.new(); preparing.add_child(waiting)
+	var waiting_mesh := MeshInstance3D.new(); waiting_mesh.mesh = shared_mesh; waiting.add_child(waiting_mesh)
+	replay._scan(preparing); replay._register_pending()
+	check(replay.tracks.is_empty(),"Hidden shoals allocate no replay history while being prepared")
+	preparing.remove_child(waiting); game.world_root.add_child(waiting); replay._register_pending()
+	check(replay.tracks.has(waiting_mesh.get_instance_id()),"A completed shoal joins replay recording when activated")
+	waiting.free(); preparing.free(); replay.clear()
 	var actor := Actor.new(); game.world_root.add_child(actor)
 	var mesh := MeshInstance3D.new(); mesh.mesh = BoxMesh.new(); actor.add_child(mesh)
 	var material := StandardMaterial3D.new(); material.albedo_color = Color.RED; mesh.material_override = material

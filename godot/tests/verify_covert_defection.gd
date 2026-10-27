@@ -77,7 +77,7 @@ func run() -> void:
 	progress.missions.completed["rovrtn"] = {"success":true,"city":3}
 	check(Rules.next_offer(progress,1) == "defect" and Rules.next_offer(progress,3) == "defect2","Both original Defection offers follow local predecessors")
 	progress.missions.completed["defect2"] = {"success":true,"city":3}
-	check(Rules.next_offer(Progress.restore(JSON.parse_string(JSON.stringify(progress))),1).is_empty(),"Published save history excludes paired duplicate")
+	check(Rules.next_offer(Progress.restore(JSON.parse_string(JSON.stringify(progress))),1) == "bomb","Published save history excludes paired duplicate and advances to Bomb Disposal")
 	check(runtime.testing_mission_city("defect") == 1 and runtime.testing_mission_city("defect2") == 3,"Dev tools expose original mission cities")
 	game.player_progress = Progress.restore({"campaign_stage":3}); game.equipment.set_installed([])
 	check(Rules.requirement_cost(game,"defect",1) == 4800 and Rules.requirement_cost(game,"defect2",3) == 4860,"Original Escape Pod affordability gates")
@@ -138,8 +138,8 @@ func run() -> void:
 	mission.ship.get_parent().global_position = start; mission.ship.motion.velocity = Vector3.ZERO
 	mission._wave()
 	check(mission.enemies.size() in [1,2] and is_instance_valid(mission.boarder),"Original one-or-two guards plus a dedicated boarding ship")
-	check(mission.enemies.all(func(agent: Node3D) -> bool: return agent.engage_player and agent.pursue_offscreen and agent.health.capacity == 30),"Attack guards pursue the player using approved doubled attack-sub health")
-	check(mission.boarder.health.capacity == 30 and mission.boarder.health.sustain == 0.6 and mission.boarder.boarding and is_instance_valid(mission.pod),"Boarder has source vulnerability, aggressive boarding orders and visible pod")
+	check(mission.enemies.all(func(agent: Node3D) -> bool: return agent.engage_player and agent.pursue_offscreen and agent.health.capacity == 15),"Attack guards pursue the player using original attack-sub health")
+	check(mission.boarder.health.capacity == 15 and mission.boarder.health.sustain == 0.6 and mission.boarder.boarding and is_instance_valid(mission.pod),"Boarder has source vulnerability, aggressive boarding orders and visible pod")
 	check(jobs.vessels.all(func(agent: Node3D) -> bool: return game.submarine_traffic.can_activate(agent)),"No interception ship begins embedded in scenery")
 	for agent in jobs.vessels: agent.set_physics_process(false)
 	mission.boarder.get_parent().global_position = mission.boarder.boarding_goal()

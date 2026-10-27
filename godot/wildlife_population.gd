@@ -25,6 +25,9 @@ var activity: Node
 var pool := {}
 var pooled_count := 0
 var spawn_budget := 0
+var pending_spawn := {}
+var spawn_staging: Node3D
+var spawn_frame := -1
 var stream_cursor := 0
 var gameplay_catalogue := {}
 var death_texture: Texture2D
@@ -108,6 +111,7 @@ func setup(parent_world: Node3D, game_folder: String, data: Dictionary, stream_n
 		var template := Document.load_model(species.model, folder, true)
 		if template != null:
 			templates[species.id] = template
+			preload("res://model_hitbox.gd").prewarm(template)
 			var boxes: Array[AABB] = []
 			Creatures._collect_bounds(template,template.transform,boxes)
 			var box := AABB(Vector3(-0.25,-0.25,-0.25),Vector3.ONE * 0.5)
@@ -118,6 +122,8 @@ func setup(parent_world: Node3D, game_folder: String, data: Dictionary, stream_n
 		else: push_warning("Wildlife model unavailable: " + str(species.model))
 	reroll(false)
 func _exit_tree() -> void:
+	_cancel_spawn()
+	if is_instance_valid(spawn_staging): spawn_staging.queue_free()
 	for template in templates.values(): template.free()
 	for available in pool.values():
 		for fish in available: fish.free()
@@ -152,6 +158,7 @@ func detailed(fish: Node3D) -> bool:
 	var origin: Vector3 = player.global_position if is_instance_valid(player) else view_camera.global_position if is_instance_valid(view_camera) else fish.global_position
 	return origin.distance_squared_to(fish.global_position) <= distance*distance
 func reroll(advance: bool = true) -> void:
+	_cancel_spawn()
 	if advance: generation += 1
 	for child in get_children():
 		if child.mission_owner.is_empty(): child.free()
@@ -206,6 +213,7 @@ func set_density(value: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	if not streaming or not simulating: return
+	_advance_spawn()
 	stream_timer -= delta
 	if stream_timer <= 0.0:
 		stream_timer = 0.1
@@ -280,6 +288,8 @@ func _stream_update(initial: bool = false) -> void:
 			var retained: bool = activity.nearby(fish.global_position,fish.radius,2.0) if is_instance_valid(activity) else viewer.distance_squared_to(fish.global_position) <= pow(visibility_range + fish.radius + 2.0,2)
 			if fish.dead or not retained: _retire(fish)
 		_limit_activity(center,viewer,planes,activation,retirement,initial)
+	if not pending_spawn.is_empty():
+		world.set_meta("ambient_fish_count",active_count()); return
 	var awake_count := active_count()
 	var start := stream_cursor
 	for offset in range(random_groups.size()):
@@ -294,7 +304,8 @@ func _stream_update(initial: bool = false) -> void:
 		if streaming and (home.distance_to(center) > activation or (not initial and _visible_spawn(home,center))): continue
 		stream_cursor = (start + offset + 1) % random_groups.size()
 		var random := RandomNumberGenerator.new(); random.seed = int(state.seed)
-		state.members = _spawn_group(group,random,streaming and not initial,streaming)
+		state.members = _spawn_group(group,random,streaming and not initial,streaming,state if streaming and not initial else {})
+		if not pending_spawn.is_empty(): break
 		awake_count += state.members.size()
 		state.attempted = not state.members.is_empty(); budget -= 1
 	world.set_meta("ambient_fish_count",active_count())
@@ -341,7 +352,7 @@ func _update_activity(fish: Node3D, viewer: Vector3, planes: Array) -> void:
 	fish.set_physics_process(simulating and awake and in_range)
 	fish.set_process(simulating and awake and on_screen)
 
-func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visible: bool = false, limit_to_visible_range: bool = false) -> Array[Node3D]:
+func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visible: bool = false, limit_to_visible_range: bool = false, deferred_state: Dictionary = {}) -> Array[Node3D]:
 	var members: Array[Node3D] = []
 	var shoal := preload("res://wildlife_shoal.gd").new()
 	if not templates.has(group.species): return members
@@ -380,57 +391,123 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 	# Otherwise a marginal/visible spawn creates and frees the same fish every
 	# streaming tick, including their combat state and replay history buffers.
 	if placements.size() < int(group.count_min): return members
-	for placement in placements:
-		var point: Vector3 = placement.point
-		var size: float = placement.size
-		var fish: Node3D
-		if streaming and not available.is_empty():
-			fish = available.pop_back(); pooled_count -= 1
-			fish.revive_ambient(point,placement.seed)
-		else:
-			var visual := template.duplicate() as Node3D
-			visual.scale *= size
-			visual.position -= box.get_center() * size
-			fish = Fish.new()
-			fish.setup(visual, point, world.get_meta("bounds"), world.get_meta("surface_height"), placement.radius, placement.seed)
-		fish.set_meta("spawn_size",size)
-		fish.name = "Creature_%s_%d" % [group.id, placement.member]
-		fish.set_meta("species", species.id)
-		fish.set_meta("spawn_group", group.id)
-		fish.set_meta("spawn_position", point)
-		fish.home = home
-		fish.roam_radius = float(group.radius)
-		fish.swim_speed = float(species.speed) * float(placement.speed)
-		fish.turn_speed = float(species.get("turn_speed", 60.0))
-		fish.animation_speed = float(species.get("animation_speed",1.0))
-		fish.pitch_limit = float(species.get("pitch_limit", 25.0))
-		fish.startle_duration = float(species.get("startle_duration", 0.3))
-		fish.startle_speed_multiplier = float(species.get("startle_speed_multiplier", 2.8))
-		fish.startle_turn_speed = float(species.get("startle_turn_speed", 720.0))
-		fish.group_behaviour = species.group_behaviour
-		fish.response = species.response
-		fish.configure_ranges(species)
-		fish.mobility = species.mobility
-		fish.configure_health(Document.creature_health(species,gameplay_catalogue))
-		fish.damage_sustain = float(gameplay_catalogue.get("tables",{}).get("creature_stats",{}).get("records",{}).get(str(species.model).to_lower(),{}).get("sustain",1.0))
-		if fish.combat == null: fish.configure_combat(species)
-		else: fish.combat.configure(fish,species)
-		fish.death_texture = death_texture; fish.death_sound = death_sound; fish.death_frames = death_frames
-		fish.death_flesh_texture = death_flesh_texture
-		if fish.mobility == "crawling": fish.configure_crawler(box.size * size)
-		fish.population = self
-		fish.group_members = members
-		fish.shoal = shoal
-		fish._choose_goal()
-		add_child(fish)
-		_set_awake(fish,true)
-		if streaming: spawn_budget -= 1
-		if fish.mobility == "crawling": fish._ground_on_terrain(1.0)
-		fish.set_physics_process(simulating)
-		fish.set_process(simulating)
-		members.append(fish)
+	var reserved: Array[Node3D] = []
+	if streaming:
+		for index in mini(placements.size(),available.size()):
+			reserved.append(available.pop_back()); pooled_count -= 1
+	if not deferred_state.is_empty():
+		if not is_instance_valid(spawn_staging):
+			spawn_staging = Node3D.new(); spawn_staging.name = "PreparingWildlife"
+			spawn_staging.set_meta("wildlife_preparing",true)
+			spawn_staging.process_mode = Node.PROCESS_MODE_DISABLED; spawn_staging.hide()
+			world.add_child(spawn_staging)
+		spawn_staging.global_transform = global_transform
+		pending_spawn = {"group":group,"state":deferred_state,"species":species,"template":template,"box":box,"home":home,"placements":placements,"members":members,"shoal":shoal,"reserved":reserved,"cursor":0}
+		return members
+	for placement in placements: _create_member(group,species,template,box,home,placement,members,shoal,reserved,false)
 	if not members.is_empty(): spawned_groups.append(group.id)
 	return members
+
+func _create_member(group: Dictionary, species: Dictionary, template: Node3D, box: AABB, home: Vector3, placement: Dictionary, members: Array[Node3D], shoal: RefCounted, available: Array[Node3D], preparing: bool) -> void:
+	var point: Vector3 = placement.point
+	var size: float = placement.size
+	var fish: Node3D
+	if streaming and not available.is_empty():
+		fish = available.pop_front()
+		fish.revive_ambient(point,placement.seed)
+	else:
+		var visual := template.duplicate() as Node3D
+		visual.scale *= size
+		visual.position -= box.get_center() * size
+		fish = Fish.new()
+		fish.setup(visual, point, world.get_meta("bounds"), world.get_meta("surface_height"), placement.radius, placement.seed)
+	fish.set_meta("spawn_size",size)
+	fish.name = "Creature_%s_%d" % [group.id, placement.member]
+	fish.set_meta("species", species.id)
+	fish.set_meta("spawn_group", group.id)
+	fish.set_meta("spawn_position", point)
+	fish.home = home
+	fish.roam_radius = float(group.radius)
+	fish.swim_speed = float(species.speed) * float(placement.speed)
+	fish.turn_speed = float(species.get("turn_speed", 60.0))
+	fish.animation_speed = float(species.get("animation_speed",1.0))
+	fish.pitch_limit = float(species.get("pitch_limit", 25.0))
+	fish.startle_duration = float(species.get("startle_duration", 0.3))
+	fish.startle_speed_multiplier = float(species.get("startle_speed_multiplier", 2.8))
+	fish.startle_turn_speed = float(species.get("startle_turn_speed", 720.0))
+	fish.group_behaviour = species.group_behaviour
+	fish.response = species.response
+	fish.configure_ranges(species)
+	fish.mobility = species.mobility
+	fish.configure_health(Document.creature_health(species,gameplay_catalogue))
+	fish.damage_sustain = float(gameplay_catalogue.get("tables",{}).get("creature_stats",{}).get("records",{}).get(str(species.model).to_lower(),{}).get("sustain",1.0))
+	fish.population = self
+	if fish.combat == null: fish.configure_combat(species)
+	else: fish.combat.configure(fish,species)
+	fish.death_texture = death_texture; fish.death_sound = death_sound; fish.death_frames = death_frames
+	fish.death_flesh_texture = death_flesh_texture
+	if fish.mobility == "crawling": fish.configure_crawler(box.size * size)
+	fish.population = self
+	fish.group_members = members
+	fish.shoal = shoal
+	fish._choose_goal()
+	if preparing:
+		fish.set_meta("wildlife_preparing",true)
+		fish.remove_from_group("marine_life"); fish.remove_from_group("attractable_fish")
+		fish.set_meta("wildlife_awake",false); fish.hide(); fish.process_mode = Node.PROCESS_MODE_DISABLED
+		fish.collision_layer = 0; fish.collision_mask = 0
+		(fish.get_child(0) as CollisionShape3D).disabled = true
+		spawn_staging.add_child(fish)
+	else:
+		add_child(fish); _set_awake(fish,true)
+	if streaming: spawn_budget -= 1
+	if not preparing and fish.mobility == "crawling": fish._ground_on_terrain(1.0)
+	fish.set_physics_process(simulating and not preparing)
+	fish.set_process(simulating and not preparing)
+	members.append(fish)
+
+func _cancel_spawn() -> void:
+	if pending_spawn.is_empty(): return
+	for fish in pending_spawn.members + pending_spawn.reserved:
+		if is_instance_valid(fish): fish.free()
+	pending_spawn.members.clear()
+	pending_spawn.state.members = []
+	pending_spawn.clear()
+
+func _advance_spawn() -> void:
+	if pending_spawn.is_empty() or spawn_frame == Engine.get_process_frames(): return
+	spawn_frame = Engine.get_process_frames()
+	var job: Dictionary = pending_spawn
+	var count: int = job.placements.size()
+	if max_active > 0 and active_count()+count > max_active:
+		_cancel_spawn(); return
+	var viewer: Vector3 = view_camera.global_position if is_instance_valid(view_camera) else player.global_position
+	# The player may turn or move during preparation. Never reveal a partial
+	# shoal or materialise a finished one in front of an active camera.
+	for placement in job.placements:
+		var point: Vector3 = placement.point
+		var retained: bool = activity.nearby(point,placement.radius,2.0) if is_instance_valid(activity) else viewer.distance_to(point) <= visibility_range+placement.radius+2.0
+		if not retained or _visible_spawn(point,player.global_position,placement.radius):
+			_cancel_spawn(); return
+	if int(job.cursor) < count:
+		_create_member(job.group,job.species,job.template,job.box,job.home,job.placements[job.cursor],job.members,job.shoal,job.reserved,true)
+		job.cursor += 1
+		if int(job.cursor) < count: return
+	for placement in job.placements:
+		if not Creatures._clear(world,placement.point,placement.radius):
+			_cancel_spawn(); return
+	# All expensive construction/physics hull work happened one fish per
+	# rendered frame. Activating the complete off-screen group is inexpensive.
+	for fish in job.members:
+		spawn_staging.remove_child(fish); add_child(fish)
+		fish.remove_meta("wildlife_preparing"); fish.register_wildlife_groups()
+		fish.collision_layer = 8; _set_awake(fish,true)
+		if fish.mobility == "crawling": fish._ground_on_terrain(1.0)
+		fish.set_physics_process(simulating); fish.set_process(simulating)
+	job.state.attempted = true
+	spawned_groups.append(job.group.id)
+	pending_spawn = {}
+
 func floor_point(point: Vector3, radius: float) -> Vector3:
 	var hit := floor_contact(point)
 	return Vector3(hit.position) + Vector3.UP * (radius + 0.15) if not hit.is_empty() else Vector3(INF, INF, INF)

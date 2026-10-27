@@ -237,7 +237,9 @@ func _parallel_inertia(body_mass: float, offset: Vector3) -> Basis:
  return Basis(Vector3(diagonal - offset.x * offset.x,-offset.y * offset.x,-offset.z * offset.x),Vector3(-offset.x * offset.y,diagonal - offset.y * offset.y,-offset.z * offset.y),Vector3(-offset.x * offset.z,-offset.y * offset.z,diagonal - offset.z * offset.z)).scaled(Vector3.ONE * body_mass)
 func _attach(body: Node) -> void:
  if not enabled or not is_instance_valid(head) or is_instance_valid(target) or not is_instance_valid(body) or not body is RigidBody3D: return
- if not body.get_meta("grapple_tow_target" if tool_id == "grapple" else "metal_tow_target",false) or body.has_meta("delivery_city") or bool(body.get("dead")) or body.freeze: return
+ if not body.get_meta("grapple_tow_target" if tool_id == "grapple" else "metal_tow_target",false) or body.has_meta("delivery_city") or bool(body.get("dead")): return
+ if body.has_method("prepare_towing") and not body.prepare_towing(): return
+ if body.freeze: return
  target = body
  if target.has_method("set_towing_attached"): target.set_towing_attached(true)
  _seat_head(target)

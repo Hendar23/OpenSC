@@ -64,6 +64,8 @@ var plant_current := PlantCurrent.new()
 var plant_controls := {}
 @export var show_start_menu := false
 var front_end: Node
+var fmv: CanvasLayer
+var intro_shown := false
 var has_started_game := false
 var menu_backdrop: Node3D
 var sun_shafts: Node3D
@@ -212,6 +214,7 @@ func _ready() -> void:
 	add_child(particles)
 	_build_interface()
 	photo_mode = preload("res://photo_mode.gd").new(); add_child(photo_mode); photo_mode.setup(self)
+	fmv = preload("res://fmv_player.gd").new(); add_child(fmv); fmv.setup(self)
 	_load_preferences()
 	_update_water_environment()
 	call_deferred("_bootstrap")
@@ -254,7 +257,15 @@ func _bootstrap() -> void:
 	else:
 		await _start_game(folder)
 		startup_complete = true
-		if show_start_menu and is_instance_valid(world_root): _show_main_menu()
+		if show_start_menu and is_instance_valid(world_root): await _opening_movie()
+
+func _opening_movie() -> void:
+	# Retail 00478360 plays this once before the main menu, never on New Game,
+	# loading a save, returning to the menu or refreshing the active mods.
+	if not intro_shown:
+		intro_shown = true
+		if fmv.request("intro"): await fmv.idle
+	_show_main_menu()
 
 func _prompt_game_folder(message: String) -> void:
 	front_end.show_loading()
@@ -284,7 +295,7 @@ func _choose_game_folder(folder: String) -> void:
 		return
 	await _start_game(folder)
 	startup_complete = true
-	if show_start_menu and not has_started_game and is_instance_valid(world_root): _show_main_menu()
+	if show_start_menu and not has_started_game and is_instance_valid(world_root): await _opening_movie()
 
 func _continue_game() -> void:
 	if world_loading or loading_save: return
@@ -353,6 +364,7 @@ func _fail_startup(message: String) -> void:
 	if not developer_enabled: _prompt_game_folder(message)
 
 func _input(event: InputEvent) -> void:
+	if fmv != null and fmv.active: return
 	game_input._input(event)
 
 func _unhandled_input(event: InputEvent) -> void:

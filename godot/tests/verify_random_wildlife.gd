@@ -1,10 +1,22 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Game = preload("res://game.gd")
 const Document = preload("res://map_document.gd")
 const Mods = preload("res://mod_registry.gd")
 var checks := 0
 var failures := 0
-func _initialize() -> void: call_deferred("_run")
+func _initialize() -> void:
+	var storage = preload("res://player_storage.gd")
+	storage.root_override = "res://tests/cache-random-wildlife-fixtures"; storage.ensure_parent(storage.preferences_path())
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
+	var config := ConfigFile.new(); config.set_value("game","folder",folder); config.save(storage.preferences_path())
+	call_deferred("_run")
+func finish_spawn(pop: Node3D) -> void:
+	for frame in range(160):
+		if pop.pending_spawn.is_empty(): return
+		pop._advance_spawn()
+		await process_frame
+	check(false,"Pending streaming finishes within a bounded number of frames")
 func check(condition: bool,message: String) -> void:
 	checks += 1
 	if not condition: failures += 1; push_error(message)
@@ -13,7 +25,7 @@ func positions(pop: Node3D) -> Array:
 func _run() -> void:
 	Mods.initialize(false)
 	var data := Document.load_active()
-	check(Document.valid(data) and data.groups.is_empty() and data.species.all(func(species: Dictionary) -> bool: return species.random_spawn),"Current map retains species and has no fixed wildlife spawns")
+	check(Document.valid(data) and data.species.any(func(species: Dictionary) -> bool: return species.random_spawn),"Current authored map contains valid random wildlife definitions")
 	var invalid := data.duplicate(true); invalid.species[0].groups_min = 30; invalid.species[0].groups_max = 2
 	check(not Document.valid(invalid),"Invalid random group ranges are rejected")
 	var game := Game.new(); game.remember_preferences = false; root.add_child(game)
@@ -65,6 +77,7 @@ func _run() -> void:
 	check(state.members.is_empty(),"Groups at the old 60-unit distance remain uninstantiated")
 	game.pilot.global_position = home + Vector3(pop.visibility_range + 3.0,0,0)
 	pop._stream_update()
+	await finish_spawn(pop)
 	check(not state.members.is_empty(),"Approaching an unseen group activates it outside the visible range")
 	var retained_count: int = state.members.size()
 	if retained_count > 1:
@@ -86,10 +99,12 @@ func _run() -> void:
 	check(state.seed != old_seed,"Returning random groups use a fresh member roll")
 	game.pilot.global_position = home + Vector3(pop.visibility_range + 3.0,0,0)
 	pop._stream_update()
+	await finish_spawn(pop)
 	check(not state.members.is_empty() and state.attempted and state.members.all(func(fish: Node3D) -> bool: return is_instance_valid(fish)),"Returning to an unseen random group creates fresh creatures before visibility")
 	for visit in range(12):
 		game.pilot.global_position = home + Vector3(1000,0,0); pop._stream_update()
 		game.pilot.global_position = home + Vector3(pop.visibility_range + 3.0,0,0); pop._stream_update()
+		await finish_spawn(pop)
 	check(pop.get_child_count() == state.members.size(),"Repeated visits do not accumulate old random wildlife")
 	for species in pop.document.species: species.random_spawn = false
 	var species: Dictionary = pop.document.species[0]

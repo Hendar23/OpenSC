@@ -10,6 +10,7 @@ const Docking = preload("res://docking_controller.gd")
 const SessionExplosion = preload("res://mine_explosion.gd")
 
 func _process(delta: float) -> void:
+	if game.fmv != null and game.fmv.active: return
 	var in_dock_menu: bool = game.docking != null and game.docking.stage == Docking.Stage.DOCKED and game.dock_interface_active and game.dock_interface.visible and game.dock_interface.page != "load"
 	if in_dock_menu and is_instance_valid(game.submarine_traffic):
 		game.submarine_traffic.replenish_docked(delta)

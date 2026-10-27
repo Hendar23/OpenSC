@@ -4,6 +4,8 @@ var radius := 0.5
 var city_id := 0
 func configure(detection_radius: float, destination: int) -> void:
 	radius = detection_radius; city_id = destination
+	if city_id == 6: add_to_group("ambient_factories")
+	else: remove_from_group("ambient_factories")
 	collision_layer = 0; collision_mask = 0
 	monitoring = false; monitorable = false
 	set_meta("editor_dropoff", true)

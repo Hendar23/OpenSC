@@ -2,8 +2,8 @@ extends RefCounted
 ## Prepare reusable mission assets while the existing startup screen is visible.
 const Assets = preload("res://clump_loader.gd")
 const Audio = preload("res://legacy_audio.gd")
-const MODELS := ["CARAVAN","MINING","MINE","HARDMINE","PRISON","TECHNEW","TECH2SUB","TRAD2","TRAD-SUB","TRADSHUT","TECHSHUT","TRADHERD","TECHHERD","FREIGHT","PIRATE","OUTPOST","TECHPOST","CANISTER","WALKER","WALKHEAD","ESCAPE","TURRET","LITEBEEM","MISSILE","HMISSILE","TMISSILE","DEPTHD","SMALROCK","ROCK"]
-const ANIMATED := ["SILVER","BADJELLY","LIONFISH","MUTANT","MSILVER","BABY","MEEL","BIGEEL","TESTDOOR"]
+const MODELS := ["CARAVAN","MINING","MINE","HARDMINE","PRISON","TECHNEW","TECH2SUB","TRAD2","TRAD-SUB","TRADSHUT","TECHSHUT","TRADHERD","TECHHERD","FREIGHT","PIRATE","OUTPOST","TECHPOST","CANISTER","WALKER","WALKHEAD","ESCAPE","TURRET","LITEBEEM","MISSILE","HMISSILE","TMISSILE","DEPTHD","SMALROCK","ROCK","BIGROCK","PIXIE","CHAIN","JELLYEGG","EGGBROKE"]
+const ANIMATED := ["SILVER","BADJELLY","LIONFISH","MUTANT","MSILVER","BABY","MEEL","BIGEEL","TESTDOOR","MOMJELLY","KIDJELLY"]
 
 static func prepare(game: Node) -> void:
 	var loading: bool = game.world_loading; game.world_loading = true

@@ -34,6 +34,8 @@ func _run() -> void:
 	press(menu,"menu_down"); check(menu.replay_button.has_focus() and menu.replay_enabled,"Down selects photo replay, enabled by default")
 	press(menu,"menu_accept"); check(not menu.replay_enabled,"Controller can disable replay recording while paused")
 	check(preload("res://mine_explosion.gd").enhanced_enabled and not menu.find_children("*","Button",true,false).any(func(button: Button) -> bool: return button.text.begins_with("Explosions:")),"Enhanced explosions remain enabled without a menu toggle")
+	press(menu,"menu_down"); check(menu.fmv_button.has_focus() and menu.fmvs_enabled,"FMVs default On and are reachable by controller")
+	press(menu,"menu_accept"); check(not menu.fmvs_enabled,"Controller confirm disables FMVs")
 	press(menu,"menu_down"); check(menu.back.has_focus(),"Down selects Back")
 	press(menu,"menu_accept"); check(not menu.visible and front.buttons.gameplay.has_focus(),"Back restores Gameplay option focus")
 	paused = false
@@ -51,6 +53,7 @@ func _run() -> void:
 	check(restored.wildlife_limit == 100,"Wildlife cap loads on next launch")
 	check(not restored.sun_shafts_enabled,"Sun shafts choice saves and loads")
 	check(not restored.replay_enabled,"Replay choice saves and loads")
+	check(not restored.fmvs_enabled,"FMV choice saves and loads without affecting existing preferences")
 	check(preload("res://mine_explosion.gd").enhanced_enabled,"An old Classic preference cannot disable enhanced explosions")
 	menu._toggle_replay(); config.clear(); config.load(path)
 	check(config.get_value("gameplay","photo_replay",false),"Replay can be enabled again and saved")

@@ -13,7 +13,8 @@ func receive_sub_push(sub_velocity: Vector3, sub_radius: float) -> void:
 	if not giant_eel: super.receive_sub_push(sub_velocity,sub_radius)
 
 func submarine_contact_damage(sub_velocity: Vector3, normal: Vector3) -> float:
-	if not giant_eel or dead or giant_impact_cooldown > 0: return 0.0
+	if not giant_eel: return super.submarine_contact_damage(sub_velocity,normal)
+	if dead or giant_impact_cooldown > 0: return 0.0
 	var closing_speed := maxf(0,-(sub_velocity-velocity).dot(normal))
 	if closing_speed < 0.35: return 0.0
 	giant_impact_cooldown = 0.75

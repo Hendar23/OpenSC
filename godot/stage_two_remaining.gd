@@ -125,7 +125,7 @@ func _fish(model: String, point: Vector3, health: float, sustain: float, map_mar
 	body.mission_owner = jobs.id; body.set_meta("mission_owner",jobs.id)
 	body.configure_health(health); body.damage_sustain = sustain
 	body.population = jobs.game.wildlife; body.response = "attack"; body.attack_range = 4
-	body.configure_combat({"model":model.to_lower(),"food_role":"predator","has_zapper":model in ["MUTANT","MJACK"],"bite_damage":1,"attack_range":4})
+	body.configure_combat({"model":model.to_lower(),"food_role":"predator","has_zapper":model in ["MUTANT","MJACK"],"attack_range":4})
 	body.death_texture = jobs.game.wildlife.death_texture; body.death_sound = jobs.game.wildlife.death_sound; body.death_frames = jobs.game.wildlife.death_frames
 	body.death_flesh_texture = jobs.game.wildlife.death_flesh_texture
 	if model == "BIGEEL": body.death_particle_scale = clampf(bounds.size.length()/2.0,1.0,4.0)

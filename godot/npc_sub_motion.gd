@@ -4,6 +4,10 @@ var velocity := Vector3.ZERO
 var bank := 0.0
 var turn_rate := deg_to_rad(75.0)
 var thrust_scale := 1.0
+var turn_response := 3.5
+# 00480130: .025 radians/tick steering, .8 angular retention, 25 Hz.
+const COMBAT_TURN_RATE := 0.025 / (1.0 - 0.8) * 25.0
+const COMBAT_TURN_RESPONSE := -log(0.8) * 25.0
 func step(delta: float, direction: Vector3, desired_speed: float, cruise_speed: float, facing: Basis, aim: Vector3 = Vector3.ZERO, precise: bool = false) -> Basis:
 	var forward := facing.z.normalized()
 	var look := aim.normalized() if not aim.is_zero_approx() else direction.normalized()
@@ -11,7 +15,7 @@ func step(delta: float, direction: Vector3, desired_speed: float, cruise_speed: 
 	var level := Basis.looking_at(-forward,Vector3.UP) if absf(forward.y) < 0.98 else facing.orthonormalized()
 	var target := Basis.looking_at(-look,Vector3.UP) if absf(look.y) < 0.98 else level
 	var angle := level.get_rotation_quaternion().angle_to(target.get_rotation_quaternion())
-	var fraction := minf(1.0-exp(-3.5*delta),turn_rate*delta/maxf(0.00001,angle))
+	var fraction := minf(1.0-exp(-turn_response*delta),turn_rate*delta/maxf(0.00001,angle))
 	var turn := level.slerp(target,fraction)
 	# Thrust follows the bow; inertia carries the old heading through a turn.
 	# Close docking/boarding alignment retains fine lateral control.

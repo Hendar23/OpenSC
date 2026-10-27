@@ -5,7 +5,7 @@ const Damage = preload("res://original_damage.gd")
 # Player launcher 0045a5d0 multiplies HMISSILE's CSV inflict by twelve.
 # NPC homing missiles do not pass through that launcher.
 const HOMING_INFLICT := 2.0*12.0
-const TORPEDO_DAMAGE_MULTIPLIER := 2.0
+const TORPEDO_DAMAGE_MULTIPLIER := 1.0
 const STANDARD_LIFETIME := 40.0 / Damage.TICKS_PER_SECOND
 const HOMING_LIFETIME := 133.333333 / Damage.TICKS_PER_SECOND
 const STANDARD_THRUST := 0.0075

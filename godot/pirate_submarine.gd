@@ -27,8 +27,7 @@ static func install_pirate(model: Node3D, values: Dictionary) -> Node3D:
 	return agent
 
 func health_multiplier() -> float:
-	# Includes custom/mod pirate hulls, authored pirates and the opening mission.
-	return 2.0
+	return 1.0
 
 func reset() -> void:
 	super.reset()
@@ -42,7 +41,7 @@ func set_local_simulation(on: bool) -> void:
 
 func configure_resources(folder: String) -> void:
 	if is_instance_valid(missile_template): missile_template.free()
-	missile_template = preload("res://clump_loader.gd").load_clump(folder.path_join("CLUMPS/MISSILE.DFF"))
+	missile_template = preload("res://clump_loader.gd").load_clump(folder.path_join("CLUMPS/TMISSILE.DFF"))
 	if missile_template != null:
 		add_child(missile_template); missile_template.hide()
 	bubble_trail = system.bubbles
@@ -83,7 +82,7 @@ func _advance_motion(delta: float) -> void:
 		player_attack_announced = true; player_attack_started.emit()
 	var missile := preload("res://turret_missile.gd").new()
 	system.get_parent().add_child(missile)
-	missile.inflict = 8.0
+	missile.inflict = 2.5 # 00438c50 launches object 0x0b, TMISSILE.
 	missile.setup(self,missile_template,muzzle,shot_direction,victim,false)
 	missile.get_child(0).show()
 	cooldown = float(tuning.npc_fire_interval) * random.randf_range(0.8,1.2)

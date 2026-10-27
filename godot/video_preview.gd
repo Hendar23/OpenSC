@@ -51,12 +51,7 @@ func set_decoder(path: String) -> void:
 	if not selected_path.is_empty(): show_video(selected_path)
 
 static func smacker_info(path: String) -> Dictionary:
-	var file := FileAccess.open(path,FileAccess.READ)
-	if file == null or file.get_length() < 104: return {}
-	var signature := file.get_buffer(4).get_string_from_ascii()
-	if signature not in ["SMK2","SMK4"]: return {}
-	var width := file.get_32(); var height := file.get_32(); var frames := file.get_32()
-	return {"width":width,"height":height,"frames":frames}
+	return preload("res://fmv_library.gd").smacker_info(path)
 
 func clear() -> void:
 	selected_path = ""
@@ -74,6 +69,9 @@ func show_video(path: String) -> void:
 	if metadata.frames == 1: info.text += " · Single-frame cutscene placeholder"
 	if worker != null: info.text += "\nWaiting for the previous preview to finish…"; return
 	var single_frame: bool = metadata.frames == 1
+	if not single_frame:
+		var prepared := preload("res://fmv_library.gd").cache_path(path)
+		if preload("res://asset_cache.gd")._valid(prepared): _load_preview(prepared,false); return
 	var cache := cache_directory
 	var source := FileAccess.open(path,FileAccess.READ)
 	var key := (path + str(FileAccess.get_modified_time(path)) + str(source.get_length()) + "preview1").sha256_text()
