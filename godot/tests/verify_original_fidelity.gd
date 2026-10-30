@@ -71,14 +71,37 @@ func run() -> void:
 	check(audio.voices.get(bubbles.get_instance_id()) == voice,"Ambient updates reuse the current audio voice")
 	bubbles.global_position += Vector3.RIGHT*8; audio.refresh()
 	check(not audio.voices.has(bubbles.get_instance_id()),"Bubble sound ends outside the recovered 7.5-unit hearing range")
+	var npc_model: Node3D = Document.load_model("CARAVAN",game.game_folder); game.world_root.add_child(npc_model); npc_model.global_position = point
+	var npc: Node3D = preload("res://trader_submarine.gd").install(npc_model,{"npc_faction":2})
+	npc.system = game.submarine_traffic; npc.reset(); npc.running = true; npc.set_physics_process(false); game.submarine_traffic.traders.append(npc)
+	audio.refresh()
+	var engine: AudioStreamPlayer3D = audio.voices[npc.get_instance_id()]
+	check(engine.stream == audio.streams.TECHENG and is_equal_approx(db_to_linear(engine.volume_db),0.1875),"Prototype retains its quieter engine gain beneath the halved ambient level")
+	game.camera.global_position = point+Vector3.LEFT*20; audio.refresh()
+	check(audio.voices.get(npc.get_instance_id()) == engine and is_equal_approx(db_to_linear(engine.volume_db),0.1875),"Third-person camera offset cannot silence an engine beside the player's hull")
+	npc_model.global_position = point+Vector3.RIGHT*3.75; audio.clock = 0.1; audio._physics_process(1.0/60.0)
+	check(is_equal_approx(db_to_linear(engine.volume_db),0.09375) and audio.clock > 0,"NPC engine position and smooth distance gain update between source scans")
+	npc_model.global_position = point+Vector3.RIGHT*7.49; audio.refresh()
+	check(audio.voices[npc.get_instance_id()] == engine and engine.volume_db < -70,"NPC engine fades to inaudible before its hearing boundary without restarting the loop")
+	npc_model.global_position = point+Vector3.RIGHT*8; audio.refresh()
+	check(not audio.voices.has(npc.get_instance_id()),"Inaudible engines release their voice outside the hearing range")
+	npc_model.global_position = point+Vector3.RIGHT*7.49; audio.refresh()
+	check(audio.voices[npc.get_instance_id()].volume_db < -70,"Approaching NPC engines begin quietly at the distance boundary")
+	game.camera.global_position = npc_model.global_position; game.pilot.global_position = point+Vector3.LEFT*20; audio.refresh()
+	check(not audio.voices.has(npc.get_instance_id()),"A camera near the prototype cannot keep its engine audible when the player's hull is distant")
+	game.camera.global_position = point; game.pilot.global_position = point
+	game.submarine_traffic.traders.erase(npc); npc_model.free(); audio.refresh()
 	var factory := preload("res://drop_off_point.gd").new(); game.world_root.add_child(factory); factory.configure(0.5,6); factory.global_position = point+Vector3.RIGHT*20
 	audio.refresh()
 	check(audio.voices.has(factory.get_instance_id()),"Refinery hum plays at its original longer range")
 	var hum: AudioStreamPlayer3D = audio.voices[factory.get_instance_id()]
 	var middle_volume := hum.volume_db
-	factory.global_position = point+Vector3.RIGHT*10; audio.refresh()
-	check(is_equal_approx(db_to_linear(hum.volume_db),0.75*db_to_linear(-0.01)),"Nearby factory retains the approved seventy-five-percent volume")
+	factory.global_position = point; audio.refresh()
+	check(is_equal_approx(db_to_linear(hum.volume_db),0.375*db_to_linear(-0.01)),"Factory ambience is half its previous seventy-five-percent level")
 	check(middle_volume < hum.volume_db,"Factory hum fades with distance instead of remaining at full volume until cutoff")
+	factory.global_position = point+Vector3.RIGHT*5; audio.refresh(); var close_volume := hum.volume_db
+	factory.global_position = point+Vector3.RIGHT*10; audio.refresh()
+	check(close_volume < -8.529 and hum.volume_db < close_volume,"Refinery hum has no constant-volume inner plateau near the Defection rendezvous")
 	game.pilot.global_position = point-Vector3.RIGHT*19
 	audio.clock = 0.1; audio._physics_process(1.0/60.0)
 	check(hum.volume_db < middle_volume and audio.clock > 0,"Factory fade follows the moving player between source-selection scans")

@@ -65,7 +65,6 @@ var plant_controls := {}
 @export var show_start_menu := false
 var front_end: Node
 var fmv: CanvasLayer
-var intro_shown := false
 var has_started_game := false
 var menu_backdrop: Node3D
 var sun_shafts: Node3D
@@ -229,7 +228,7 @@ func _build_interface() -> void:
 		if wildlife != null: wildlife.set_active_limit(limit))
 	front_end.gameplay_menu.sun_shafts_changed.connect(func(enabled: bool) -> void:
 		if is_instance_valid(sun_shafts): sun_shafts.set_enabled(enabled))
-	front_end.back_shortcut_busy = func(event: InputEvent) -> bool: return Bindings.pressed(event,"menu_cancel") and (map_open or developer_ui_visible or (dock_interface != null and dock_interface.visible))
+	front_end.back_shortcut_busy = func(event: InputEvent) -> bool: return Bindings.pressed(event,"menu_cancel") and (map_open or developer_ui_visible or (dock_interface != null and dock_interface.back_shortcut_busy()))
 	loading_canvas = front_end.loading_layer
 	loading_label = front_end.loading_status
 	front_end.new_game_requested.connect(_begin_new_game)
@@ -257,15 +256,7 @@ func _bootstrap() -> void:
 	else:
 		await _start_game(folder)
 		startup_complete = true
-		if show_start_menu and is_instance_valid(world_root): await _opening_movie()
-
-func _opening_movie() -> void:
-	# Retail 00478360 plays this once before the main menu, never on New Game,
-	# loading a save, returning to the menu or refreshing the active mods.
-	if not intro_shown:
-		intro_shown = true
-		if fmv.request("intro"): await fmv.idle
-	_show_main_menu()
+		if show_start_menu and is_instance_valid(world_root): _show_main_menu()
 
 func _prompt_game_folder(message: String) -> void:
 	front_end.show_loading()
@@ -295,7 +286,7 @@ func _choose_game_folder(folder: String) -> void:
 		return
 	await _start_game(folder)
 	startup_complete = true
-	if show_start_menu and not has_started_game and is_instance_valid(world_root): await _opening_movie()
+	if show_start_menu and not has_started_game and is_instance_valid(world_root): _show_main_menu()
 
 func _continue_game() -> void:
 	if world_loading or loading_save: return
@@ -330,8 +321,10 @@ func _apply_mods() -> void:
 	if is_instance_valid(world_root): _show_main_menu()
 
 func _begin_new_game() -> void:
+	if world_loading or loading_save or (fmv != null and fmv.active): return
 	if photo_mode != null and photo_mode.active: photo_mode.leave()
 	await session._begin_new_game()
+	if pilot_mode and has_started_game and fmv != null and fmv.request("intro"): await fmv.idle
 
 func _world_asset_key() -> String:
 	return session._world_asset_key()
@@ -494,6 +487,8 @@ func _delivery_prompt_active() -> bool:
 	if equipment == null or equipment.towing_tool() == null: return false
 	var magnet: Node3D = equipment.towing_tool()
 	if not is_instance_valid(magnet.delivery_point) or not is_instance_valid(magnet.target): return false
+	if magnet.target.get_meta("mission_delivery",false) and str(magnet.target.get_meta("mission_owner","")) == str(mission_runtime.active().get("id","")):
+		return true
 	var terms := _delivery_terms(magnet.target)
 	return not terms.commodity.is_empty() and terms.quantity > 0
 

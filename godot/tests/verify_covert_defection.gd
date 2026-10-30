@@ -24,7 +24,7 @@ func heard(code: String) -> bool:
 	return game.bounty_radio_queue.any(func(entry: Dictionary) -> bool: return entry.text == text)
 
 func fresh(id: String) -> RefCounted:
-	runtime._cleanup(); await physics_frame; await physics_frame
+	runtime._cleanup(); preload("res://mission_survivors.gd").clear(game.submarine_traffic); await physics_frame; await physics_frame
 	game.radio_feed.clear(); game.bounty_radio_queue.clear(); runtime.outcome.dismiss()
 	game.player_progress = Progress.restore({"campaign_stage":3}); game.player_progress.status.credits = 10000
 	game.player_progress.missions.completed["minefield" if id == "defect" else "rovrtn"] = {"success":true,"city":1 if id == "defect" else 3}
@@ -153,8 +153,42 @@ func run() -> void:
 	check(not mission.captured and not runtime.active().is_empty(),"Recapture requires forty seconds, not proximity alone")
 	mission.step(0.01)
 	check(mission.captured and heard("bb4") and not runtime.active().is_empty(),"Full boarding retakes prototype before delayed failure message")
+	var captured_ship: Node3D = mission.ship; var captor: Node3D = mission.boarder; var captor_pod: Node3D = mission.pod
+	var guards: Array[Node3D] = mission.enemies.duplicate()
 	mission.step(8)
 	check(runtime.active().is_empty() and heard("bb24") and runtime.last_response == runtime.text("defect",3) and game.player_progress.status.credits == 10000,"Recapture fails with original response3 and no reward")
+
+	var returning: Array[Node3D] = [captured_ship,captor]; returning.append_array(guards)
+	check(returning.all(func(agent: Node3D) -> bool: return is_instance_valid(agent) and agent.retiring and not agent.combat_enabled and agent.dock_destination in [2,4] and agent.mission_owner.is_empty() and game.submarine_traffic.traders.has(agent)),"Recaptured prototype, boarding sub and surviving guards remain to return to a Procha dock")
+	check(is_instance_valid(captor_pod) and captor_pod.get_parent() == captor.get_parent() and captor.boarding_pod == captor_pod,"Returning boarding sub keeps its recovered pod")
+	check(not captured_ship.held_by_boarders and not captured_ship.tracking and not captor.boarding and not captor.body.get_collision_exceptions().has(captured_ship.body),"Failure releases tracking, boarding and temporary hull collision exceptions")
+	var snapshot: Dictionary = game.submarine_traffic.snapshot()
+	var ship_id: String = preload("res://entity_identity.gd").of(captured_ship)
+	var captor_id: String = preload("res://entity_identity.gd").of(captor)
+	check(game.submarine_traffic.valid_snapshot(snapshot),"Returning Defection ships produce a valid published save snapshot")
+	game.submarine_traffic.restore(snapshot)
+	returning = game.submarine_traffic.traders.filter(func(agent: Node3D) -> bool: return agent.has_meta("fishing_survivor"))
+	var restored_ship: Node3D
+	var restored_captor: Node3D
+	for agent in returning:
+		agent.set_physics_process(false)
+		if preload("res://entity_identity.gd").of(agent) == ship_id: restored_ship = agent
+		if preload("res://entity_identity.gd").of(agent) == captor_id: restored_captor = agent
+	check(is_instance_valid(restored_ship) and restored_ship.retiring and is_equal_approx(restored_ship.health.sustain,0.1) and restored_ship.dock_destination == snapshot[ship_id].destination,"Reload preserves the prototype model, armour and return destination")
+	check(is_instance_valid(restored_captor) and is_instance_valid(restored_captor.boarding_pod) and is_equal_approx(restored_captor.health.sustain,0.6) and restored_captor.tuning.npc_speed == 3.5,"Reload preserves the boarding ship's pod, vulnerability and speed")
+	# Exercise the real hatch sequence for both unique hulls, after restoring.
+	for agent in [restored_ship,restored_captor]:
+		var home_port: Dictionary = game.submarine_traffic.port_by_id(agent.dock_destination)
+		agent.get_parent().global_position = home_port.entry+Vector3.UP*0.8
+		agent.body.transform = Transform3D.IDENTITY; agent.motion.velocity = Vector3.ZERO; agent.path.clear(); agent.wait = 0
+		var docked := false
+		for tick in range(1800):
+			agent.advance(1.0/60.0)
+			if agent.stage == "berth": docked = true; break
+			if tick%30 == 0: await physics_frame
+		check(docked,"Returned hull completes the real Procha hatch sequence: "+str(agent.get_parent().get_meta("editor_model")))
+		await process_frame
+	check(not is_instance_valid(restored_ship) and not is_instance_valid(restored_captor),"Returning mission ships retire only after docking")
 
 	mission = await fresh("defect2"); ready(mission)
 	var port: Dictionary = game.submarine_traffic.port_by_id(3)

@@ -1,5 +1,5 @@
 extends Area3D
-const VERTICAL_STRETCH := 4.0
+const VERTICAL_STRETCH := 8.0
 var radius := 0.5
 var city_id := 0
 func configure(detection_radius: float, destination: int) -> void:

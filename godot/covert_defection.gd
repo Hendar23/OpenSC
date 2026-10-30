@@ -225,3 +225,21 @@ func clear() -> void:
 	if is_instance_valid(ship): _end_boarding()
 	pending.clear(); enemies.clear(); mines.clear()
 	ship = null; boarder = null; pod = null; cable = null
+
+func release_survivors(success: bool) -> void:
+	if success: return
+	if is_instance_valid(ship):
+		_end_boarding()
+		ship.tracking = false; ship.held_by_boarders = false
+		if ship.destroyed.is_connected(_destroyed): ship.destroyed.disconnect(_destroyed)
+	if is_instance_valid(boarder):
+		boarder.boarding = false
+		if boarder.destroyed.is_connected(_boarder_destroyed): boarder.destroyed.disconnect(_boarder_destroyed)
+		if is_instance_valid(ship):
+			boarder.body.remove_collision_exception_with(ship.body); ship.body.remove_collision_exception_with(boarder.body)
+	var survivors: Array[Node3D] = enemies.duplicate()
+	if is_instance_valid(ship): survivors.append(ship)
+	if is_instance_valid(boarder): survivors.append(boarder)
+	for agent in survivors: preload("res://mission_survivors.gd").depart(jobs,agent)
+	if is_instance_valid(boarder) and boarder.retiring and is_instance_valid(pod):
+		boarder.boarding_pod = pod; jobs.actors.erase(pod)

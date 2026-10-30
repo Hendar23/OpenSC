@@ -170,12 +170,16 @@ static func _read_scenery(value: Variant, folder: String) -> Dictionary:
 	var density: Variant = value.get("density",1.0)
 	if not (density is int or density is float) or not is_finite(float(density)) or float(density) < 0.0 or float(density) > 1.0: return {}
 	var models: Variant = value.get("models")
-	if not models is Array or models.is_empty() or models.size() > 128: return {}
+	if not models is Array or models.is_empty() or models.size() > 256: return {}
 	var names := {}
 	for model in models:
 		if not model is Dictionary or not model.get("node") is String or str(model.node).is_empty() or names.has(model.node): return {}
 		if model.has("sway") and not model.sway is bool: return {}
 		if model.has("upright") and not model.upright is bool: return {}
+		if model.has("ground_anchor"):
+			if not model.ground_anchor is Array or model.ground_anchor.size() != 3: return {}
+			for coordinate in model.ground_anchor:
+				if not (coordinate is int or coordinate is float) or not is_finite(float(coordinate)) or absf(float(coordinate)) > 10000.0: return {}
 		var clearance: Variant = model.get("ground_clearance", 0.0)
 		if not (clearance is int or clearance is float) or not is_finite(float(clearance)) or float(clearance) < 0.0 or float(clearance) > 1.0: return {}
 		names[model.node] = true

@@ -88,6 +88,20 @@ func run() -> void:
 	ribbon.surface_end(); replay.capture(0.05)
 	var beam_track: RefCounted = replay.tracks[beam.get_instance_id()]
 	ribbon.clear_surfaces(); replay.capture(0.05)
+	# Live Zapper geometry is already available on the CPU. Retain that exact
+	# frame without asking the renderer to read mutable vertex buffers back.
+	game.weapons.set_upgraded(true)
+	for arc in [game.weapons,game.weapons.secondary_arc]:
+		arc.material.albedo_texture = arc.frames[0]
+		arc.beam_start = Vector3.ZERO
+		arc._build_ribbon(Vector3(0,0,-3),Vector3.RIGHT,1)
+		var cpu_arrays: Array = arc.beam.get_meta("replay_mesh_arrays",[])
+		check(cpu_arrays.size() == Mesh.ARRAY_MAX,"Both upgraded Zapper arcs publish CPU geometry for replay")
+		var captured: Mesh = Visual.new()._mesh_copy(arc.beam.mesh,cpu_arrays)
+		var saved_vertices: PackedVector3Array = captured.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		check(saved_vertices == cpu_arrays[Mesh.ARRAY_VERTEX] and captured.surface_get_arrays(0)[Mesh.ARRAY_INDEX] == cpu_arrays[Mesh.ARRAY_INDEX],"Replay copy preserves exact beam vertices and triangle indices")
+		arc._build_ribbon(Vector3(2,0,-4),Vector3.RIGHT,2)
+		check(captured.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] == saved_vertices and saved_vertices != arc.beam.get_meta("replay_mesh_arrays")[Mesh.ARRAY_VERTEX],"Later Zapper updates cannot change recorded geometry")
 	# Use an actual torpedo model, then remove its live projectile entirely.
 	var missile := preload("res://turret_missile.gd").new(); actor.add_child(missile)
 	var owner := Node3D.new(); actor.add_child(owner)

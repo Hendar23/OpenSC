@@ -25,7 +25,7 @@ func start() -> void:
 				if ship == null: continue
 				place_clear(ship)
 				ship.freeze = true; ship.release_on_tow = true
-				ship.set_meta("metal_tow_target",true); jobs.target = ship
+				ship.set_meta("metal_tow_target",true); ship.set_meta("mission_delivery",true); jobs.target = ship
 				ship.destroyed.connect(_lost)
 				var smoke := preload("res://submarine_damage_smoke.gd").new(); ship.add_child(smoke)
 				smoke.setup(ship.get_child(0),jobs.game.game_folder); smoke.damaged = true; smoke.enabled = true

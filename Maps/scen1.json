@@ -11513,6 +11513,57 @@
   "object_groups": [
     {
       "count": 1.0,
+      "id": "original_tin_coin_1",
+      "name": "Tin can coin 1",
+      "position": [
+        255.0056,
+        150.7245,
+        274.1668
+      ],
+      "radius": 0.0,
+      "rotation": [
+        0.0,
+        0.0,
+        -47.5
+      ],
+      "type": "coin"
+    },
+    {
+      "count": 1.0,
+      "id": "original_tin_coin_2",
+      "name": "Tin can coin 2",
+      "position": [
+        255.8162,
+        149.8399,
+        274.1668
+      ],
+      "radius": 0.0,
+      "rotation": [
+        0.0,
+        0.0,
+        -47.5
+      ],
+      "type": "coin"
+    },
+    {
+      "count": 1.0,
+      "id": "original_tin_coin_3",
+      "name": "Tin can coin 3",
+      "position": [
+        255.4109,
+        150.2822,
+        273.1168
+      ],
+      "radius": 0.0,
+      "rotation": [
+        0.0,
+        0.0,
+        -47.5
+      ],
+      "type": "coin"
+    },
+    {
+      "count": 1.0,
       "id": "original_clam_0",
       "initial_delay": 0.0,
       "name": "Clam 1",

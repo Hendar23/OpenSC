@@ -6,7 +6,8 @@ const Loop = preload("res://audio_loop.gd")
 const RANGE := 7.5 # 00409d60, camera-to-source distance.
 const FACTORY_RANGE := sqrt(1000.0) # 00451790, refinery drop point.
 const MAX_VOICES := 12
-const VOLUME_SCALE := 0.75
+const VOLUME_SCALE := 0.375
+const ENGINE_VOLUME_SCALE := 0.5
 const SAMPLES := ["FACTAMB1","BUBBLES","SCREEN1","TRADENG","TECHENG","PIRATENG","INSUB2"]
 const SWIMMERS := ["jackfish","lionfish","dogfish","angler","baracuda","piranha","seahorse","stingray","smalleel","meel","bigeel","blowfish","elver","badnasty","baby","mutant","mjack","badjelly","kidjelly","momjelly"]
 var game: Node3D
@@ -25,10 +26,9 @@ func allowed() -> bool:
 func _physics_process(delta: float) -> void:
 	if not allowed():
 		silence(); return
-	# Keep the long factory fade smooth between the ten-Hz source scans.
+	# Follow moving engines and fade between the ten-Hz source scans.
 	for voice: AudioStreamPlayer3D in voices.values():
-		if voice.stream == streams.get("FACTAMB1"):
-			voice.volume_db = factory_level(voice.global_position.distance_to(game.pilot.global_position)) + linear_to_db(VOLUME_SCALE)
+		_update_voice(voice)
 	clock -= delta
 	if clock > 0: return
 	clock = 0.1
@@ -43,10 +43,24 @@ static func level(distance: float) -> float:
 	return minf(-0.01,50.0-distance*10.0)
 
 static func factory_level(distance: float) -> float:
-	# Preserve the nearby hum, fading to silence over the outer half of its
-	# hearing range so creating/removing its voice is inaudible at the boundary.
-	var gain := 1.0-smoothstep(FACTORY_RANGE*0.5,FACTORY_RANGE,distance)
+	# Fade throughout the range: the refinery beside the defector otherwise
+	# masks the ship's engine with a steady hum across its broad inner plateau.
+	var gain := 1.0-smoothstep(0.0,FACTORY_RANGE,distance)
 	return level(0.0)+linear_to_db(maxf(0.0001,gain))
+
+static func engine_level(distance: float) -> float:
+	var gain := ENGINE_VOLUME_SCALE*(1.0-smoothstep(0.0,RANGE,distance))
+	return linear_to_db(maxf(0.0001,gain))
+
+func _update_voice(voice: AudioStreamPlayer3D) -> void:
+	var source: Node3D = voice.get_meta("source").get_ref()
+	if not is_instance_valid(source): return
+	voice.global_position = source.global_position
+	var factory: bool = voice.stream == streams.get("FACTAMB1")
+	var listener: Vector3 = game.pilot.global_position if factory or voice.get_meta("npc_engine",false) else game.camera.global_position
+	var distance := listener.distance_to(voice.global_position)
+	var volume := factory_level(distance) if factory else engine_level(distance) if voice.get_meta("npc_engine",false) else level(distance)
+	voice.volume_db = volume+linear_to_db(VOLUME_SCALE)
 
 func refresh() -> void:
 	var camera: Camera3D = game.camera
@@ -60,10 +74,10 @@ func refresh() -> void:
 	for agent: Node3D in game.submarine_traffic.traders:
 		if not is_instance_valid(agent) or agent.dead or not agent.running or not agent.get_parent().is_visible_in_tree() or agent.stage == "berth": continue
 		var model := preload("res://trader_submarine.gd").model_id(agent.get_parent())
-		_candidate(candidates,agent,vessel_sample(model,int(agent.tuning.npc_faction)),camera.global_position,1)
+		_candidate(candidates,agent,vessel_sample(model,int(agent.tuning.npc_faction)),game.pilot.global_position,1,true)
 	for vehicle: Node3D in game.ground_traffic.vehicles:
 		if is_instance_valid(vehicle) and not vehicle.dead and vehicle.running:
-			_candidate(candidates,vehicle,"TECHENG" if int(vehicle.tuning.npc_faction) == 2 else "TRADENG",camera.global_position,1)
+			_candidate(candidates,vehicle,"TECHENG" if int(vehicle.tuning.npc_faction) == 2 else "TRADENG",game.pilot.global_position,1,true)
 	for group in ["player_projectiles","turret_missiles"]:
 		for shot: Node3D in get_tree().get_nodes_in_group(group):
 			if group == "player_projectiles" and (shot.kind == "electro" or shot.out_of_fuel or shot.spent): continue
@@ -91,8 +105,8 @@ func refresh() -> void:
 			voice.stream = streams[entry.sample]; voice.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
 			voice.max_distance = 0; voice.doppler_tracking = AudioStreamPlayer3D.DOPPLER_TRACKING_DISABLED
 			add_child(voice); voices[key] = voice
-		voice.global_position = entry.node.global_position
-		voice.volume_db = (factory_level(float(entry.distance)) if entry.sample == "FACTAMB1" else level(float(entry.distance))) + linear_to_db(VOLUME_SCALE)
+		voice.set_meta("source",weakref(entry.node)); voice.set_meta("npc_engine",entry.get("npc_engine",false))
+		_update_voice(voice)
 		if not voice.playing: voice.play()
 	for key in voices.keys():
 		if not retained.has(key): voices[key].free(); voices.erase(key)
@@ -103,6 +117,6 @@ static func vessel_sample(model: String, faction: int) -> String:
 	if model == "FREIGHT": return "TRADENG"
 	return "PIRATENG" if faction == 3 else "TECHENG" if faction == 2 else "TRADENG"
 
-func _candidate(list: Array[Dictionary], source: Node3D, sample: String, listener: Vector3, priority: int) -> void:
+func _candidate(list: Array[Dictionary], source: Node3D, sample: String, listener: Vector3, priority: int, npc_engine: bool = false) -> void:
 	var distance := listener.distance_to(source.global_position)
-	if distance < RANGE: list.append({"node":source,"sample":sample,"distance":distance,"priority":priority})
+	if distance < RANGE: list.append({"node":source,"sample":sample,"distance":distance,"priority":priority,"npc_engine":npc_engine})

@@ -39,11 +39,14 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, session_see
 			var box := mesh.mesh.get_aabb()
 			var width := maxf(box.size.x, box.size.z)
 			if width <= 0.00001 or not box.position.is_finite() or not box.size.is_finite(): continue
+			var anchor := Vector3(box.get_center().x, box.position.y, box.get_center().z)
+			# Cutout fans can have transparent mesh below an off-centre visible stem.
+			if entry.has("ground_anchor"): anchor = Vector3(entry.ground_anchor[0], entry.ground_anchor[1], entry.ground_anchor[2])
 			weight += float(entry.weight)
 			models.append({"mesh": mesh.mesh, "name": str(entry.node), "sway": bool(entry.get("sway", false)), "height": box.size.y, "size": float(entry.size), "weight": weight, "width": width,
 				"upright": bool(entry.get("upright", entry.get("sway", false))),
 				"ground_clearance": float(entry.get("ground_clearance", 0.0)),
-				"base": Vector3(box.get_center().x, box.position.y, box.get_center().z)})
+				"base": anchor})
 		var poses: Array[Dictionary] = []
 		var settings: Dictionary = pack.scenery.duplicate()
 		# Zero preserves the original fixed layout for saves without a campaign seed.

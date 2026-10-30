@@ -103,7 +103,7 @@ func _state(node: Node3D) -> Dictionary:
 	if node is GeometryInstance3D:
 		state = {"layers":node.layers,"shadow":node.cast_shadow,"transparency":node.transparency,"material":_material(node.material_override)}
 	if node is MeshInstance3D:
-		state["mesh"] = _mesh_copy(node.mesh) if mutable_mesh and node.mesh != null else node.mesh
+		state["mesh"] = _mesh_copy(node.mesh,node.get_meta("replay_mesh_arrays",[])) if mutable_mesh and node.mesh != null else node.mesh
 		state["bounds"] = node.custom_aabb
 		state["surfaces"] = []
 		if node.mesh != null:
@@ -146,12 +146,13 @@ func _apply_material(state: Dictionary, current: Material) -> Material:
 		else: current.set(state.fields[index],state.values[index])
 	return current
 
-func _mesh_copy(mesh: Mesh) -> Mesh:
+func _mesh_copy(mesh: Mesh, cpu_arrays: Array = []) -> Mesh:
 	var result := ArrayMesh.new()
 	for surface in mesh.get_surface_count():
 		# Mutable ribbons/tracers in this game are triangle lists, including
 		# ImmediateMesh, which does not expose surface_get_primitive_type.
-		result.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,mesh.surface_get_arrays(surface))
+		var arrays: Array = cpu_arrays if surface == 0 and cpu_arrays.size() == Mesh.ARRAY_MAX else mesh.surface_get_arrays(surface)
+		result.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
 		result.surface_set_material(surface,mesh.surface_get_material(surface))
 	return result
 

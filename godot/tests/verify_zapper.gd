@@ -12,7 +12,9 @@ func _initialize() -> void:
 	storage.root_override = "res://tests/cache-zapper-fixtures"
 	storage.ensure_parent(storage.preferences_path())
 	var ignore := FileAccess.open(storage.root_override.path_join(".gdignore"),FileAccess.WRITE); ignore.store_string("")
-	var config := ConfigFile.new(); config.set_value("game","folder",ProjectSettings.globalize_path("res://../Original Sub Culture")); config.save(storage.preferences_path())
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
+	var config := ConfigFile.new(); config.set_value("game","folder",folder); config.save(storage.preferences_path())
 	call_deferred("_run")
 func check(ok: bool, message: String) -> void:
 	checks += 1

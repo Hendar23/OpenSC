@@ -21,7 +21,7 @@ func _advance_motion(delta: float) -> void:
 	_flow_move(delta,offset.normalized(),desired)
 
 func _precise_motion() -> bool:
-	return super._precise_motion() if secured else false
+	return super._precise_motion() if secured or retiring else false
 
 func _flow_move(delta: float, direction: Vector3, desired_speed: float, aim: Vector3 = Vector3.ZERO) -> KinematicCollision3D:
 	var before: float = motion.velocity.length()

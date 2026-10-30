@@ -62,6 +62,46 @@ func inspect_cave() -> void:
 	root.get_texture().get_image().save_png("res://tests/campaign-cave.png")
 	game.camera.global_transform = previous
 
+func tin_coins() -> Array[Node]:
+	return game.object_population.get_children().filter(func(body: Node) -> bool: return str(body.get_meta("object_group","")).begins_with("original_tin_coin_"))
+
+func verify_starting_resources() -> void:
+	var document := preload("res://map_document.gd").load_path("res://../Maps/scen1.json")
+	check(tin_coins().size() == 3,"New game contains three authored tin-can coins")
+	var offset: Vector3 = game.world_root.get_meta("database_offset")
+	for row in game.gameplay_catalogue.tables["database.objects"].records.values():
+		if int(row.get("MissionID",0)) != 2 or int(row.get("AutoCreate",0)) != 1 or int(row.get("ObjectType",0)) not in [63,84]: continue
+		var position: Vector3 = preload("res://scenery_loader.gd").placement(row,offset).origin
+		var type := "thorium" if int(row.ObjectType) == 63 else "pearl"
+		check(document.object_groups.any(func(g: Dictionary) -> bool: return g.type == type and preload("res://map_document.gd").vector(g.position).distance_to(position) < 0.001),"Fixed starting resource matches original row "+str(row.index))
+	check(document.object_groups.filter(func(g: Dictionary) -> bool: return g.type == "clam").size() == 6,"All six starting clams remain authored")
+	for body in tin_coins():
+		var query := PhysicsShapeQueryParameters3D.new(); query.shape = body.get_child(1).shape; query.transform = body.global_transform*body.get_child(1).transform; query.collision_mask = 1; query.margin = 0.01
+		check(game.get_world_3d().direct_space_state.intersect_shape(query,1).is_empty(),"Coin hull is clear of the can and terrain")
+		body.freeze = false
+	for frame in range(360): await physics_frame
+	check(tin_coins().all(func(body: Node3D) -> bool: return body.global_position.distance_to(Vector3(255.5,150.4,273.8)) < 2),"Coins remain inside the real can after six seconds of physics")
+	stabilize(); port()
+	var legacy: Dictionary = game._save_snapshot("Legacy without tin coins")
+	legacy.objects = legacy.objects.filter(func(entry: Dictionary) -> bool: return not str(entry.get("object_group","")).begins_with("original_tin_coin_"))
+	legacy.progress.missions.world_events.erase("tin_can_coins")
+	var credits: int = game.player_progress.status.credits
+	check(game.save_games.write(4,legacy) == OK and await game._load_saved_game(4),"Published beta save without the stash loads")
+	stabilize(); port()
+	check(tin_coins().size() == 3 and game.player_progress.status.credits == credits,"Old save receives missing coins once without changing credits")
+	tin_coins()[0].free()
+	var partial: Dictionary = game._save_snapshot("Two coins remain")
+	check(game.save_games.write(4,partial) == OK and await game._load_saved_game(4),"Partly collected stash reloads")
+	stabilize(); port(); check(tin_coins().size() == 2,"Loading does not refill a partly collected stash")
+	for body in tin_coins(): body.free()
+	check(game.save_games.write(4,game._save_snapshot("Empty can")) == OK and await game._load_saved_game(4),"Fully collected stash reloads")
+	stabilize(); port(); check(tin_coins().is_empty(),"Loading an empty can does not respawn its coins")
+	partial.progress.missions.world_events.erase("tin_can_coins")
+	check(game.save_games.write(4,partial) == OK and await game._load_saved_game(4),"Unmarked save with surviving authored coins loads")
+	stabilize(); port(); check(tin_coins().size() == 2,"Existing unmarked coins are recognised without replenishment")
+	await game._begin_new_game(); stabilize(); port()
+	check(tin_coins().size() == 3,"A genuinely new game resets the three-coin stash")
+
 func run() -> void:
 	game = preload("res://game.gd").new(); game.remember_preferences = false; root.add_child(game)
 	for frame in range(2400):
@@ -69,12 +109,13 @@ func run() -> void:
 		await process_frame
 	check(game.startup_complete,"Campaign fixture loads the original assets")
 	if not game.startup_complete: quit(1); return
-	game._begin_new_game(); stabilize(); port()
+	await game._begin_new_game(); stabilize(); port()
+	await verify_starting_resources()
 	var runtime: Node = game.mission_runtime
 	check(bonus().is_empty(),"New game does not seed the opening bonus before acceptance")
 	check(runtime.accept(1).is_empty(),"First opening acceptance succeeds")
 	check(bonus().size() == 7 and runtime.spawned.size() == 6,"Four cave crystals and three caps are independent of the six mission-owned actors")
-	check(not game.save_games.read(-1).progress.missions.has("world_events"),"Pre-mission autosave precedes the one-time resource event")
+	check(not game.save_games.read(-1).progress.missions.get("world_events",{}).get("opening_bonus",false),"Pre-mission autosave precedes the one-time resource event")
 	var crystals := 0; var caps := 0
 	var offset: Vector3 = game.world_root.get_meta("database_offset")
 	for row in game.gameplay_catalogue.tables["database.objects"].records.values():
@@ -131,7 +172,7 @@ func run() -> void:
 	Resources.restore_for_progress(game)
 	check(bonus().size() == 4 and game.player_progress.missions.world_events.opening_bonus,"Surviving legacy event objects are recognized without replenishing a partially depleted deposit")
 	game._begin_new_game(); stabilize(); port()
-	check(bonus().is_empty() and not game.player_progress.missions.has("world_events"),"Starting another game resets both population and event marker")
+	check(bonus().is_empty() and not game.player_progress.missions.get("world_events",{}).get("opening_bonus",false),"Starting another game resets both population and event marker")
 	Resources.restore_for_progress(game)
 	check(bonus().is_empty(),"An old pre-opening save remains untouched until the opening mission is accepted")
 	game.queue_free(); await process_frame

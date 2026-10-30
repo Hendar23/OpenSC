@@ -215,6 +215,7 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	var enemy := "2" if faction == "1" else "1"
 	if success: reputation[enemy] = float(reputation.get(enemy,0)) + delta * float(rewards.get("enemy",-0.5))
 	game.player_progress.missions["reputation"] = reputation
+	if side_jobs.defection != null: side_jobs.defection.release_survivors(success)
 	if side_jobs.stage_three_remaining != null: side_jobs.stage_three_remaining.release_survivors()
 	if side_jobs.stage_three != null: side_jobs.stage_three.release_survivors()
 	if side_jobs.genocide != null: side_jobs.genocide.release_survivors()

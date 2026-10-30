@@ -10,7 +10,9 @@ func check(ok: bool,message: String) -> void:
 func _initialize() -> void:
  var storage = preload("res://player_storage.gd")
  storage.root_override = "res://tests/cache-traffic-fixtures"; storage.ensure_parent(storage.preferences_path())
- var config := ConfigFile.new(); config.set_value("game","folder",ProjectSettings.globalize_path("res://../Original Sub Culture")); config.save(storage.preferences_path())
+ var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+ if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
+ var config := ConfigFile.new(); config.set_value("game","folder",folder); config.save(storage.preferences_path())
  call_deferred("run")
 func run() -> void:
  var types := {"object_types":Definitions.metal_types(),"object_groups":[]}; Definitions.ensure(types)
@@ -47,8 +49,8 @@ func run() -> void:
  coin.global_position = magnet.head.global_position + Vector3.DOWN * 0.1; magnet._attach(coin)
  var city := int(game.docking.ports[0].node.get_meta("city_id"))
  var pad := preload("res://drop_off_point.gd").new(); game.world_root.add_child(pad); pad.configure(2.0,city); pad.global_position = coin.global_position
- check(pad.contains_point(pad.global_position + Vector3.UP * 7.9) and pad.contains_point(pad.global_position + Vector3.DOWN * 7.9),"Drop-off vertical reach is doubled again above and below the point")
- check(not pad.contains_point(pad.global_position + Vector3.UP * 8.1) and not pad.contains_point(pad.global_position + Vector3.RIGHT * 2.1),"Vertical expansion preserves the horizontal acceptance range")
+ check(pad.contains_point(pad.global_position + Vector3.UP * 15.9) and pad.contains_point(pad.global_position + Vector3.DOWN * 15.9),"Drop-off vertical reach doubles above and below the point")
+ check(not pad.contains_point(pad.global_position + Vector3.UP * 16.1) and not pad.contains_point(pad.global_position + Vector3.RIGHT * 2.1),"Vertical expansion preserves the horizontal acceptance range")
  magnet.drop_points.assign([pad]); magnet._physics_process(0.016)
  check(game._delivery_prompt_active(),"Carrying salvage into a city's zone opens its confirmation request")
  game._process(0)
@@ -78,13 +80,13 @@ func run() -> void:
  var second := preload("res://salvage_body.gd").new(); game.object_population.add_child(second)
  second.setup(definition,preload("res://object_population.gd").appearance(definition,game.game_folder),0,0.0,true)
  second.set_meta("grapple_tow_target",true)
- second.global_position = pad.global_position + Vector3.UP * 3
+ second.global_position = pad.global_position + Vector3.UP * 12
  var grapple: Node3D = game.equipment.grapple; grapple.set_physics_process(false); grapple.set_enabled(true)
  grapple.drop_points.assign([pad]); grapple._attach(second)
- check(game.equipment.towing_tool() == grapple and game._delivery_prompt_active(),"A second object prompts immediately at the same drop-off using the other mounted tool")
+ check(game.equipment.towing_tool() == grapple and game._delivery_prompt_active(),"A grapple-towed object prompts inside the expanded vertical drop-off range")
  game._answer_delivery(false)
  check(not game._delivery_prompt_active() and grapple.target == second,"Declining keeps the second item attached")
- grapple.release(); grapple._attach(second)
+ grapple.release(false); grapple._attach(second)
  check(game._delivery_prompt_active(),"A fresh attachment resets the previous delivery refusal")
  game._answer_delivery(true)
  check(accepted.size() == 2 and game.player_progress.pending_deliveries[str(city)].copper == 4 and second.has_meta("delivery_city"),"Successive objects accumulate their goods at the same city")

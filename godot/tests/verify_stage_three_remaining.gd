@@ -72,6 +72,23 @@ func run() -> void:
 	for frame in range(2000):
 		if game.submarine_traffic.navigation_ready: break
 		game.submarine_traffic.build_graph(128); await process_frame
+	game.docking.current = game.submarine_traffic.port_by_id(2); game.docking.stage = game.Docking.Stage.DOCKED
+	game.dock_interface.open("home"); paused = true
+	var escape := InputEventKey.new(); escape.keycode = KEY_ESCAPE; escape.pressed = true
+	Input.parse_input_event(escape); await process_frame
+	check(game.front_end.menu_layer.visible and paused,"Actual Esc opens main menu from the dock home screen")
+	game._resume_game()
+	check(game.dock_interface.visible and game.dock_interface.page == "home" and paused,"Continue restores docked city UI")
+	game.dock_interface.open("missions")
+	Input.parse_input_event(escape); await process_frame
+	check(not game.front_end.menu_layer.visible and game.dock_interface.page == "home","Esc from a dock subpage keeps its Back behaviour")
+	Input.parse_input_event(escape); await process_frame
+	check(game.front_end.menu_layer.visible,"A second Esc reaches the main menu from dock home")
+	game._resume_game()
+	var start := InputEventJoypadButton.new(); start.button_index = JOY_BUTTON_START; start.pressed = true
+	Input.parse_input_event(start); await process_frame
+	check(game.front_end.menu_layer.visible,"Controller Start still opens main menu while docked")
+	game._resume_game(); game.dock_interface.dismiss(); game.docking.stage = game.Docking.Stage.IDLE; paused = false
 	var mission: RefCounted
 	for id in ["miners","miners2"]:
 		mission = await fresh(id)
@@ -94,7 +111,16 @@ func run() -> void:
 		mission.ship.take_weapon_damage(11); mission.step(2)
 		check(heard("m7") and not mission.ship.dead,"Low hull warning")
 		var rescued_ship: RigidBody3D = mission.ship
-		check(mission.delivery(rescued_ship,4) and runtime.active().is_empty(),"Procha city accepts the rescued students")
+		tow(rescued_ship)
+		var point := preload("res://drop_off_point.gd").new(); game.world_root.add_child(point); point.configure(2.0,4); point.global_position = rescued_ship.global_position
+		game.equipment.magnet.drop_points.assign([point]); game.equipment.magnet._update_delivery_point()
+		check(game._delivery_terms(rescued_ship).quantity == 0 and game._delivery_prompt_active(),"Non-saleable student sub still opens the real city handover prompt")
+		game._process(0)
+		check(not game.radio_feed.prompt.is_empty(),"Student handover appears on the HUD")
+		var confirm := InputEventKey.new(); confirm.keycode = KEY_Y; confirm.pressed = true; game._input(confirm)
+		check(runtime.active().is_empty() and game.equipment.magnet.target == null,"Real confirmation delivers the students and releases the magnet")
+		check(game.player_progress.pending_deliveries.is_empty(),"Student handover never creates saleable cargo")
+		point.queue_free()
 		check(game.player_progress.status.credits == 14500 and game.player_progress.campaign_stage == 3,"Both student variants pay 4500 without premature stage advance")
 		check(game.player_progress.missions.get("stage3_successes",0) == 1,"Stage three accounting")
 		var other := "miners2" if id == "miners" else "miners"

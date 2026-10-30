@@ -30,6 +30,17 @@ REPLACEMENTS = {
     "bush3": ("SM_ocean_eelGrass_02", 3.0, 0.0004, None),
     "bush4": ("SM_ocean_coralFan_04", 4.5, 0.0006, None)}
 
+# Visible stem feet measured against the embedded alpha-cutout texture, in
+# normalized mesh coordinates. Bounding-box bottoms include transparent cards.
+FAN_ANCHORS = {
+    "SM_ocean_coralFan_01": [-0.01117925, 0.00726041, 0.00704644],
+    "SM_ocean_coralFan_02": [0.04864965, 0.00310046, 0.00465726],
+    "SM_ocean_coralFan_03": [0.11516809, 0.00537871, 0.00590710],
+    "SM_ocean_coralFan_04": [0.07388929, 0.02242095, 0.00607412],
+    "SM_ocean_coralFan_05": [-0.04682736, 0.02243672, -0.07338847],
+    "SM_ocean_coralFan_06": [0.06459410, 0.04130854, 0.06174954],
+    "SM_ocean_coralFan_07": [-0.05735211, 0.03174572, 0.11019383]}
+
 
 def read_obj(data):
     positions, normals, uvs, vertices, texcoords, vertex_normals = [], [], [], [], [], []
@@ -139,17 +150,19 @@ def read_textures(outer, archive, folder, families):
     return result
 
 
-def build(source: Path, destination: Path, plants: Path | None = None):
+def build(source: Path, destination: Path, plants: Path | None = None, corals: Path | None = None, density: float = 1.0):
     destination.mkdir(parents=True, exist_ok=True)
     builder = GlbBuilder()
     entries, assets = [], {}
     with zipfile.ZipFile(source) as outer:
         for material, png in read_textures(outer, "marineBiome_blender.zip", "marineBiome_blender/Textures", BIOME_MATERIALS).items():
+            if material == "MAT_Sea_Barnacle": continue  # Used only by the removed barnacle rocks.
             builder.material(material, png)
         with zipfile.ZipFile(io.BytesIO(outer.read("obj.zip"))) as models:
             for name in sorted(models.namelist()):
                 if not name.endswith(".obj"): continue
                 stem = Path(name).stem
+                if "Rock" in stem: continue
                 if "Group" in stem or ("Montipora" in stem and not stem.endswith("01")) or ("Feather" in stem and not stem.endswith("01")): continue
                 geometry = read_obj(models.read(name)); builder.model(stem, geometry)
                 large = "Coral" in stem or "Feather" in stem or "Rock" in stem
@@ -172,13 +185,17 @@ def build(source: Path, destination: Path, plants: Path | None = None):
                     sway = any(part in stem for part in ("Kelp", "eelGrass", "seaPlant", "scatterPlant"))
                     size = 1.2 if "Kelp" in stem else 1.5 if "Grass" in stem or "seaPlant" in stem else 0.7 if "scatterPlant" in stem or "treeWorm" in stem else 2.0
                     upright = sway or any(part in stem for part in ("coralFan", "coralFinger", "coralSticks", "staghornCoral", "treeWorm"))
-                    entries.append({"node": stem, "size": size, "weight": 1.0, "sway": sway, "upright": upright})
+                    entry = {"node": stem, "size": size, "weight": 1.0, "sway": sway, "upright": upright}
+                    if stem in FAN_ANCHORS: entry['ground_anchor'] = FAN_ANCHORS[stem]
+                    entries.append(entry)
                     if stem in {item[0] for item in REPLACEMENTS.values()}: selected[stem] = geometry
                 for original, (name, height, base, width_limit) in REPLACEMENTS.items():
                     vertices, normals, uvs, material = selected[name]
                     y_scale = height / max(v[1] for v in vertices)
                     xz_scale = min(y_scale, width_limit) if width_limit else y_scale
-                    fitted = [(v[0] * xz_scale, v[1] * y_scale + base, v[2] * xz_scale) for v in vertices]
+                    anchor = FAN_ANCHORS.get(name, [0.0, 0.0, 0.0])
+                    fitted = [((v[0] - anchor[0]) * xz_scale, (v[1] - anchor[1]) * y_scale + base,
+                               (v[2] - anchor[2]) * xz_scale) for v in vertices]
                     fitted_normals = []
                     for normal in normals:
                         n = (normal[0] / xz_scale, normal[1] / y_scale, normal[2] / xz_scale)
@@ -190,16 +207,31 @@ def build(source: Path, destination: Path, plants: Path | None = None):
                     (destination / 'plants').mkdir(exist_ok=True)
                     replacement.save(destination / relative)
                     assets[f"model.{original}"] = {"file": relative, "forward_axis": "+Z"}
+    if corals:
+        from coral_pack import append_corals
+        entries.extend(append_corals(builder, corals))
     size = builder.save(destination / 'marine-biome.glb')
     manifest = {"schema_version": 1, "id": "marine-biome", "name": "Marine Biome", "version": "0.3.1" if plants else "0.1.3",
         "description": "Scattered marine scenery and ocean plants by lugiagames. Replaces the five original plant models with matching ocean plants." if plants else "Scattered coral, shells, barnacles, starfish and urchins. Decorative scenery only.",
         "assets": assets, "scenery": {"file": "marine-biome.glb", "seed": 481516, "count": 10800 if plants else 3600, "patch_radius": 9.0, "models": entries}}
+    manifest['scenery']['density'] = density
+    if corals:
+        manifest['version'] = '0.4.2'
+        manifest['description'] += ' Includes additional corals, coral groups and seaweeds from the supplied Corals pack.'
     (destination / 'mod.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     provenance = ["Local conversion of Nature Assets - Marine Biome" + (" and Nature Assets - Ocean Plants." if plants else "."),
         "Original archives in Other resources are preserved.", "Converted from supplied Y-up OBJ geometry and Blender base-colour textures.",
         "No licence/author attribution found in inspected entries; redistribution permission unverified. Keep local."]
     if plants:
         provenance += [f"{original.upper()} -> {item[0]} (original height {item[1]}, base {item[2]})." for original, item in REPLACEMENTS.items()]
+        provenance += ['Sea fan scatter anchors and BUSH4 replacement aligned to visible stem feet rather than transparent mesh bounds.',
+                       'Decorative rocks omitted at owner request.']
+    if corals:
+        provenance += ['Additional local source: ' + corals.name + ' / Corals_OBJ.zip.',
+            'Includes individually separated Corals, CoralGroups and Seaweeds; rocks and Ex demonstration scenes omitted.',
+            'Source names retained with CoralsPack prefixes; shared base-colour atlases resized to 1024 pixels.',
+            'Tall blue finger corals and yellow tube sponges (nine standalone/group variants) reduced to half size at owner request.',
+            'No author or redistribution licence supplied in the inspected OBJ archive; keep local.']
     (destination / 'SOURCE.txt').write_text('\n'.join(provenance) + '\n', encoding='utf-8')
     print(f"Built {len(entries)} scenery variants, {len(assets)} original plant replacements, {size:,} GLB bytes in {destination}")
 
@@ -209,5 +241,8 @@ if __name__ == '__main__':
     parser.add_argument('archive', type=Path)
     parser.add_argument('destination', type=Path)
     parser.add_argument('--plants', type=Path, help='Optional Nature Assets - Ocean Plants archive')
+    parser.add_argument('--corals', type=Path, help='Optional Corals archive')
+    parser.add_argument('--density', type=float, default=1.0, help='Scenery density multiplier, 0 to 1')
     args = parser.parse_args()
-    build(args.archive, args.destination, args.plants)
+    if not 0 <= args.density <= 1: parser.error('Density must be between 0 and 1')
+    build(args.archive, args.destination, args.plants, args.corals, args.density)

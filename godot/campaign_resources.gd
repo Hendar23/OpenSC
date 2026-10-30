@@ -5,6 +5,7 @@ const GROUP := "campaign/opening_bonus"
 const GENOCIDE_GROUP := "campaign/genocide_bonus"
 
 static func restore_for_progress(game: Node) -> void:
+	_restore_starting_coins(game)
 	# Published betas removed these objects on completion. Seed missing world
 	# resources once for an existing post-opening save, independent of mail.
 	var missions: Dictionary = game.player_progress.missions
@@ -16,6 +17,29 @@ static func restore_for_progress(game: Node) -> void:
 	for id in ["walktrad","walktrad2","walktech","walktech2"]:
 		walker_started = walker_started or missions.completed.has(id) or str(missions.active.get("id","")) == id
 	if walker_started: spawn_genocide_bonus(game)
+
+# The FAQ confirms three coins in the tin can. Their editable placements live
+# in the map; this only seeds the omitted objects once in published beta saves.
+static func _restore_starting_coins(game: Node) -> void:
+	var missions: Dictionary = game.player_progress.missions
+	var events: Dictionary = missions.get("world_events",{})
+	if events.get("tin_can_coins",false): return
+	var population: Node = game.object_population
+	var entries: Array = population.initial_thorium.filter(func(entry: Dictionary) -> bool: return str(entry.get("object_group","")).begins_with("original_tin_coin_"))
+	if entries.is_empty(): return # Respect maps which omit this stash.
+	var existing := population.get_children().any(func(body: Node) -> bool: return str(body.get_meta("object_group","")).begins_with("original_tin_coin_"))
+	if not existing:
+		var created: Array[Node] = []
+		for entry in entries:
+			var body: Node = population._create_thorium(entry.stats,0,preload("res://map_document.gd").decode(entry.pose))
+			if body == null:
+				for node in created: node.free()
+				return
+			body.set_meta("object_group",entry.object_group)
+			preload("res://entity_identity.gd").assign_id(body,entry.entity_id)
+			created.append(body)
+	events["tin_can_coins"] = true
+	missions["world_events"] = events
 
 static func spawn_opening_bonus(game: Node) -> void:
 	_spawn_bonus(game,33,OPENING_BONUS,GROUP)

@@ -1,6 +1,6 @@
 extends RefCounted
 ## Surviving encounter ships can outlast their mission without retaining callbacks.
-const MODELS := {"TRAD2":1,"TRAD-SUB":1,"TECHNEW":2,"TECH2SUB":2,"TRADSHUT":1,"FREIGHT":1,"PIRATE":3}
+const MODELS := {"TRAD2":1,"TRAD-SUB":1,"TECHNEW":2,"TECH2SUB":2,"TRADSHUT":1,"FREIGHT":1,"PIRATE":3,"CARAVAN":2}
 const TAG := "fishing_survivor"
 
 static func depart(jobs: Node, agent: Node3D) -> void:
@@ -28,7 +28,7 @@ static func depart(jobs: Node, agent: Node3D) -> void:
 	preload("res://entity_identity.gd").assign_id(model)
 	preload("res://entity_identity.gd").actor(model,agent,agent.body)
 	agent.body.remove_meta("mission_marker")
-	agent.follow = null; agent.combat_target = null; agent.victim = null
+	agent.follow = null; agent.combat_target = null; agent.victim = null; agent.boarding = false; agent.dormant = false
 	agent.combat_enabled = false; agent.engage_player = false; agent.retiring = true
 	agent.loop_route = false; agent.waypoints.clear(); agent.path.clear()
 	agent.destination = city; agent.dock_destination = city; agent.port = traffic.port_by_id(city)
@@ -76,9 +76,13 @@ static func restore(traffic: Node, entries: Dictionary) -> void:
 		model.global_transform = preload("res://map_document.gd").decode(entry.pose)
 		model.set_meta("editor_model",model_id)
 		preload("res://entity_identity.gd").assign_id(model,identity)
-		var agent: Node3D = preload("res://mission_vessel.gd").install_mission(model,{"npc_faction":MODELS[model_id],"npc_health":3.0 if model_id == "FREIGHT" else 30.0 if model_id == "PIRATE" else 10.0 if MODELS[model_id] == 1 else 15.0,"npc_speed":1.5 if model_id in ["TRADSHUT","FREIGHT"] else 2.5 if model_id == "PIRATE" else 2.0,"npc_sustain":0.1 if model_id == "FREIGHT" else 0.3,"npc_detection":1000.0})
+		var agent: Node3D = preload("res://mission_vessel.gd").install_mission(model,{"npc_faction":MODELS[model_id],"npc_health":3.0 if model_id == "FREIGHT" else 30.0 if model_id == "PIRATE" else 10.0 if MODELS[model_id] == 1 else 15.0,"npc_speed":entry.get("survivor_speed",1.5 if model_id in ["TRADSHUT","FREIGHT","CARAVAN"] else 2.5 if model_id == "PIRATE" else 2.0),"npc_sustain":entry.get("survivor_sustain",0.1 if model_id in ["FREIGHT","CARAVAN"] else 0.3),"npc_detection":1000.0})
 		agent.set_meta(TAG,model_id); agent.engage_player = entry.get("survivor_hostile",true); agent.pursue_offscreen = true
 		agent.retiring = entry.get("survivor_retiring",false); agent.combat_enabled = not agent.retiring
 		if agent.retiring: agent.dock_destination = int(entry.get("destination",0))
 		agent.report_player_attack = false
 		traffic.register_vessel(agent,traffic.get_parent(),traffic.asset_folder)
+		if entry.get("survivor_pod",false):
+			var pod := preload("res://map_document.gd").load_model("ESCAPE",traffic.asset_folder)
+			if pod != null:
+				model.add_child(pod); pod.position = Vector3(0,-0.3,0); pod.set_meta("exclude_from_debris",true); agent.boarding_pod = pod

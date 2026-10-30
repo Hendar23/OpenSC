@@ -324,6 +324,9 @@ func snapshot() -> Dictionary:
 		if agent.has_meta(Survivors.TAG):
 			result[Identity.of(agent)][Survivors.TAG] = agent.get_meta(Survivors.TAG)
 			result[Identity.of(agent)]["survivor_hostile"] = agent.engage_player
+			result[Identity.of(agent)]["survivor_speed"] = float(agent.tuning.npc_speed)
+			result[Identity.of(agent)]["survivor_sustain"] = float(agent.health.sustain)
+			result[Identity.of(agent)]["survivor_pod"] = is_instance_valid(agent.boarding_pod)
 			if agent.retiring:
 				result[Identity.of(agent)]["survivor_retiring"] = true
 				result[Identity.of(agent)].destination = agent.dock_destination
@@ -342,6 +345,11 @@ static func valid_snapshot(value: Variant) -> bool:
 		if entry.has(Survivors.TAG) and entry[Survivors.TAG] not in Survivors.MODELS: return false
 		if entry.has("survivor_hostile") and not entry.survivor_hostile is bool: return false
 		if entry.has("survivor_retiring") and not entry.survivor_retiring is bool: return false
+		if entry.has("survivor_pod") and not entry.survivor_pod is bool: return false
+		for field in ["survivor_speed","survivor_sustain"]:
+			if not entry.has(field): continue
+			var number: Variant = entry[field]
+			if not (number is float or number is int) or not is_finite(number) or number < 0 or number > (8.0 if field == "survivor_speed" else 100.0): return false
 		var route_points: Variant = entry.get("route",[])
 		if not route_points is Array or route_points.size() > 8192: return false
 		for point in route_points:

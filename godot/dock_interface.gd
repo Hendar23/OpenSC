@@ -777,6 +777,9 @@ func _confirm_name() -> void:
 	else: action_requested.emit("save_slot",{"slot":pending_slot,"name":pending_name})
 func report(message: String) -> void:
 	status = message; rebuild()
+func back_shortcut_busy() -> bool:
+	return visible and (page != "home" or mail_view != "welcome" or name_dialog.visible or overwrite_dialog.visible or info_dialog.visible)
+
 func _input(event: InputEvent) -> void:
 	if is_instance_valid(controller_button) and event.is_action_released("menu_accept"):
 		var held_button := controller_button
@@ -848,6 +851,7 @@ func _input(event: InputEvent) -> void:
 	if Bindings.pressed(event,"menu_cancel"):
 		if page == "load": action_requested.emit("close",{})
 		elif page != "home": open("home")
+		elif Bindings.pressed(event,"main_menu"): return
 		get_viewport().set_input_as_handled()
 	elif Bindings.pressed(event,"menu_accept"):
 		var focused := get_viewport().gui_get_focus_owner() as Button

@@ -38,7 +38,8 @@ func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
 	preload("res://mod_registry.gd").initialize(false)
-	var folder := ProjectSettings.globalize_path("res://../Original Sub Culture")
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
 	var fixture := Node3D.new(); root.add_child(fixture)
 	var model := Document.load_model("TURRET",folder); model.set_meta("editor_model","TURRET"); fixture.add_child(model)
 	Scenery._add_prop_collision(model)
@@ -152,6 +153,9 @@ func run() -> void:
 	if not game.startup_complete: quit(1); return
 	await game._begin_new_game()
 	check(game.turret_system.turrets.size() == 22,"Five generic and seventeen dedicated startup turrets are present")
+	for index in [83,90]:
+		var pipe_gun: Node3D = game.world_root.get_node("Scenery/TURRET_%d/GunTurret" % index)
+		check(pipe_gun.tuning.turret_homing and pipe_gun.armed() and pipe_gun.mission_owner.is_empty(),"Original southern-pipe pirate homing defence is active at startup: "+str(index))
 	check(not game.world_root.has_node("Scenery/TURRET_71") and game.world_root.has_node("Scenery/TURRET_30"),"Tryton retains its dedicated defence without the overlapping generic turret")
 	var velcova := game.world_root.get_node("Scenery/TURRET_91") as Node3D
 	check(velcova.global_basis.y.normalized().is_equal_approx(Vector3.UP),"Velcova turret base loads upright instead of tilted 42.5 degrees")
