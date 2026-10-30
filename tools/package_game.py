@@ -147,14 +147,22 @@ def stamp_windows_version(executable: Path, version: str) -> None:
     if not api.EndUpdateResourceW(handle, False): raise ctypes.WinError(ctypes.get_last_error())
 
 
-def standalone(destination: Path, engine: Path, template: Path, excluded_mods: set[str] | None = None) -> dict:
+def standalone(destination: Path, engine: Path, template: Path, excluded_mods: set[str] | None = None, ffmpeg: Path | None = None) -> dict:
     if destination.exists():
         raise SystemExit(f"Refusing to overwrite an existing folder: {destination}")
+    # Movie conversion must also work on a clean machine without PATH tools.
+    if ffmpeg is None or not ffmpeg.is_file():
+        raise SystemExit("Standalone builds require --ffmpeg for original-game FMV conversion")
+    notices = [ffmpeg.parent / name for name in ("FFMPEG_LICENSE.txt", "FFMPEG_SOURCE.txt")]
+    if any(not path.is_file() for path in notices):
+        raise SystemExit("The converter requires adjacent FFMPEG_LICENSE.txt and FFMPEG_SOURCE.txt")
     stage = destination.with_name(destination.name + "-build")
     report = build(stage, archive_output=False, excluded_mods=excluded_mods)
     destination.mkdir()
     for name in ("Maps", "Mods"):
         shutil.copytree(stage / name, destination / name)
+    shutil.copy2(ffmpeg, destination / "ffmpeg.exe")
+    for notice in notices: shutil.copy2(notice, destination / notice.name)
     for name in ("GODOT_LICENSE.txt", "GODOT_COPYRIGHT.txt"):
         shutil.copy2(template.parent / name, destination / name)
     shutil.copy2(ROOT / "Launch Game Compatibility.cmd", destination / "Launch Game Compatibility.cmd")
@@ -203,10 +211,11 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, default=ROOT / "dist" / ("OpenSC-clean-test-" + datetime.now().strftime("%Y%m%d-%H%M%S")))
     parser.add_argument("--engine", type=Path, help="Export a standalone Windows game using this Godot executable")
     parser.add_argument("--windows-template", type=Path, help="Matching windows_release_x86_64.exe export template")
+    parser.add_argument("--ffmpeg", type=Path, help="Portable converter, with adjacent FFMPEG_LICENSE.txt and FFMPEG_SOURCE.txt")
     parser.add_argument("--exclude-mod", action="append", default=[], help="Leave this mod folder out of the package; may be repeated")
     args = parser.parse_args()
     if args.engine and not args.windows_template:
         parser.error("--engine requires --windows-template")
     excluded = set(args.exclude_mod)
-    result = standalone(args.output.resolve(), args.engine.resolve(), args.windows_template.resolve(), excluded_mods=excluded) if args.engine else build(args.output.resolve(), excluded_mods=excluded)
+    result = standalone(args.output.resolve(), args.engine.resolve(), args.windows_template.resolve(), excluded_mods=excluded, ffmpeg=args.ffmpeg.resolve() if args.ffmpeg else None) if args.engine else build(args.output.resolve(), excluded_mods=excluded)
     print(json.dumps(result, indent=2))
