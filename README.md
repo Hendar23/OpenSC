@@ -18,7 +18,7 @@ Latest release is available [here](https://github.com/Hendar23/OpenSC/releases/t
 
 [Join the Discord](https://discord.gg/56ESd7m8w)
 
-<img width="1920" height="1080" alt="OpenSC 2026-10-21 20-41-01" src="https://github.com/user-attachments/assets/6a8ad695-e54d-495b-a421-dcb2ff95878a" />
+<img width="1920" height="1080" alt="OpenSC 2026-10-27 21-57-30" src="https://github.com/user-attachments/assets/fb41cc38-aa36-4b3c-9b8c-f06a5a1fdee2" />
 
 ## Enhancements
 OpenSC offers a few enhancements over the original:
