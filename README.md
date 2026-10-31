@@ -40,7 +40,7 @@ OpenSC offers a few enhancements over the original:
 ### Interface & Quality of Life
 - **New main menu**
   - Replaced static main menu with a live in game view.
-- **Photo and Action Replay Modes **
+- **Photo and Action Replay Modes**
   - Pauses the game and gives full camera control for taking screenshots.
   - Replay the last 30 seconds of action from any angle.
 - **UI**
