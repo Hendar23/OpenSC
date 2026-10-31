@@ -16,6 +16,8 @@ Latest release is available [here](https://github.com/Hendar23/OpenSC/releases/t
 - When you first run the game, it will ask you to point it to the original Sub Culture folder.
 - A controller is recommended for controlling the sub.
 
+[Join the Discord](https://discord.gg/56ESd7m8w)
+
 <img width="1920" height="1080" alt="OpenSC 2026-10-21 20-41-01" src="https://github.com/user-attachments/assets/6a8ad695-e54d-495b-a421-dcb2ff95878a" />
 
 ## Enhancements
