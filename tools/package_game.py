@@ -67,7 +67,6 @@ def build(destination: Path, archive_output: bool = True, excluded_mods: set[str
             shutil.copy2(uid, target.with_name(target.name + ".uid"))
     (destination / "Maps").mkdir()
     shutil.copy2(ROOT / "Maps" / "scen1.json", destination / "Maps" / "scen1.json")
-    (destination / "Mods").mkdir()
     bundled_mods = []
     for pack in sorted((ROOT / "Mods").iterdir()) if (ROOT / "Mods").is_dir() else []:
         if pack.name not in release_mods or pack.name in (excluded_mods or set()):
@@ -160,7 +159,8 @@ def standalone(destination: Path, engine: Path, template: Path, excluded_mods: s
     report = build(stage, archive_output=False, excluded_mods=excluded_mods)
     destination.mkdir()
     for name in ("Maps", "Mods"):
-        shutil.copytree(stage / name, destination / name)
+        if (stage / name).is_dir():
+            shutil.copytree(stage / name, destination / name)
     shutil.copy2(ffmpeg, destination / "ffmpeg.exe")
     for notice in notices: shutil.copy2(notice, destination / notice.name)
     for name in ("GODOT_LICENSE.txt", "GODOT_COPYRIGHT.txt"):
