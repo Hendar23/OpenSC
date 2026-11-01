@@ -55,7 +55,7 @@ func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, bloo
 		for surface in range(node.mesh.get_surface_count()):
 			var source: Array = node.mesh.surface_get_arrays(surface)
 			var vertices: PackedVector3Array = source[Mesh.ARRAY_VERTEX]
-			var indices: PackedInt32Array = source[Mesh.ARRAY_INDEX]
+			var indices: PackedInt32Array = source[Mesh.ARRAY_INDEX] if source[Mesh.ARRAY_INDEX] is PackedInt32Array else PackedInt32Array()
 			if indices.is_empty():
 				for index in range(vertices.size()): indices.append(index)
 			var groups := {}

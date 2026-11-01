@@ -1,7 +1,13 @@
 extends Window
 
 signal applied
+signal download_started
+signal download_finished(success: bool)
+signal download_progress(message: String, fraction: float)
 const Mods = preload("res://mod_registry.gd")
+const Official = preload("res://official_mods.gd")
+var official: Node
+var applying := false
 var persist_preferences := true
 var rows: VBoxContainer
 var info: Label
@@ -10,7 +16,6 @@ var pending_order: Array[String] = []
 var pending_enabled: Array[String] = []
 var embedded := false
 var content: MarginContainer
-var apply_confirmation: ConfirmationDialog
 var scroll: ScrollContainer
 var refresh_button: Button
 var apply_button: Button
@@ -21,11 +26,15 @@ var selected_id := ""
 func _ready() -> void:
 	# Main-menu gameplay is paused; this window must still receive GUI input.
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if official == null: official = Official.new()
+	add_child(official)
+	official.progress.connect(func(message: String, fraction: float) -> void: download_progress.emit(message,fraction))
+	if persist_preferences: official.load_cached()
 	title = "Mods"
 	size = Vector2i(850, 600)
 	min_size = Vector2i(650, 450)
 	exclusive = true
-	close_requested.connect(hide)
+	close_requested.connect(func() -> void: if not applying: hide())
 	var margin := MarginContainer.new()
 	content = margin
 	# Keep these styles on the content so the editor's embedded Mods tab and
@@ -42,12 +51,12 @@ func _ready() -> void:
 	heading.add_theme_font_size_override("font_size", 20)
 	column.add_child(heading)
 	var hint := Label.new()
-	hint.text = "Put a mod folder containing mod.json into Mods."
+	hint.text = "Put a mod folder containing mod.json into %s." % preload("res://player_storage.gd").mods_path()
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(hint)
 	var refresh := Button.new()
 	refresh_button = refresh
-	refresh.text = "Refresh installed mods"
+	refresh.text = "Refresh mods"
 	refresh.pressed.connect(func() -> void: Mods.refresh(); open())
 	column.add_child(refresh)
 	scroll = ScrollContainer.new(); scroll.follow_focus = true
@@ -79,13 +88,6 @@ func _ready() -> void:
 	cancel.text = "Cancel"
 	cancel.pressed.connect(func() -> void: open() if embedded else hide())
 	buttons.add_child(cancel)
-	apply_confirmation = ConfirmationDialog.new()
-	apply_confirmation.title = "Apply mods?"
-	apply_confirmation.dialog_text = "Applying these changes will end the current game.\nAny unsaved progress will be lost."
-	apply_confirmation.ok_button_text = "OK"
-	apply_confirmation.cancel_button_text = "Cancel"
-	apply_confirmation.confirmed.connect(_commit_apply,CONNECT_DEFERRED)
-	add_child(apply_confirmation)
 	visible = false
 
 func _control_theme() -> Theme:
@@ -133,16 +135,44 @@ func embed(parent: Control) -> void:
 	open()
 
 func open() -> void:
+	if applying: return
 	Mods.ensure(persist_preferences)
 	pending_order = Mods.order.duplicate()
 	pending_enabled = Mods.enabled.duplicate()
+	_add_catalogue_order()
 	_build_rows()
 	if not embedded:
 		popup_centered()
 		if not choices.is_empty(): choices.values()[0].grab_focus()
+	if persist_preferences: _refresh_catalogue()
+
+func _listed_packs() -> Array[Dictionary]:
+	var listed: Array[Dictionary] = []
+	for pack in Mods.packs:
+		var item: Dictionary = pack.duplicate()
+		var update: Dictionary = official.update_for(pack)
+		if not update.is_empty(): item["update"] = update
+		listed.append(item)
+	for entry in official.entries:
+		if listed.any(func(pack: Dictionary) -> bool: return pack.id == entry.id): continue
+		listed.append({"id":entry.id,"name":entry.name,"version":entry.version,"description":entry.description,"valid":Official.compatible(entry.min_game_version),"errors":[] if Official.compatible(entry.min_game_version) else ["Requires OpenSC " + entry.min_game_version + "."],"installed":false,"size":entry.size})
+	return listed
+
+func _add_catalogue_order() -> void:
+	for pack in _listed_packs():
+		if str(pack.id) not in pending_order: pending_order.append(str(pack.id))
+
+func _refresh_catalogue() -> void:
+	if official.fetching or applying: return
+	refresh_button.disabled = true
+	await official.refresh_catalogue()
+	refresh_button.disabled = false
+	if applying: return
+	_add_catalogue_order()
+	_build_rows()
 
 func _input(event: InputEvent) -> void:
-	if embedded or not visible or apply_confirmation.visible: return
+	if embedded or not visible or applying: return
 	var bindings = preload("res://input_bindings.gd")
 	if bindings.pressed(event,"menu_cancel"):
 		hide(); get_viewport().set_input_as_handled(); return
@@ -163,7 +193,7 @@ func _build_rows() -> void:
 	choices.clear()
 	for id in pending_order:
 		var pack := {}
-		for candidate in Mods.packs:
+		for candidate in _listed_packs():
 			if str(candidate.id) == id: pack = candidate; break
 		if pack.is_empty(): continue
 		var item := VBoxContainer.new()
@@ -172,6 +202,11 @@ func _build_rows() -> void:
 		item.add_child(line)
 		var enabled := CheckBox.new()
 		enabled.text = "%s · %s" % [pack.name, pack.version]
+		if pack.get("installed",true): enabled.text += " · Installed"
+		else: enabled.text += " · Not installed · " + String.humanize_size(int(pack.size))
+		if pack.has("update"):
+			if Official.compatible(pack.update.min_game_version): enabled.text += "\nUpdate available: " + str(pack.update.version) + " · " + String.humanize_size(int(pack.update.size))
+			else: enabled.text += "\nUpdate requires OpenSC " + str(pack.update.min_game_version)
 		enabled.disabled = not pack.valid
 		enabled.button_pressed = id in pending_enabled and pack.valid
 		enabled.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -211,10 +246,11 @@ func _build_rows() -> void:
 func _show_description(id: String) -> void:
 	selected_id = id
 	description.text = ""
-	for pack in Mods.packs:
+	for pack in _listed_packs():
 		if str(pack.id) != id: continue
 		description.text = str(pack.description)
 		if not pack.errors.is_empty(): description.text += "\n" + "\n".join(pack.errors)
+		if pack.has("update") and not Official.compatible(pack.update.min_game_version): description.text += "\nRequires OpenSC " + str(pack.update.min_game_version) + "."
 		break
 	if description.get_parent() is ScrollContainer: description.get_parent().scroll_vertical = 0
 
@@ -239,7 +275,8 @@ func _wire_focus(lines: Array[Array]) -> void:
 			control.focus_neighbor_right = control.get_path_to(line[mini(2,column + 1)])
 
 func _update_info() -> void:
-	info.text = "No mods installed." if Mods.packs.is_empty() else ""
+	info.text = "No mods installed." if _listed_packs().is_empty() else ""
+	if not official.last_error.is_empty(): info.text += "\n" + official.last_error
 	var notes: Array[String] = Mods.runtime_warnings.duplicate()
 	if not notes.is_empty(): info.text += "\n" + "\n".join(notes.slice(0, 5))
 	if notes.size() > 5: info.text += "\n%d more notes (hover to read)." % (notes.size() - 5)
@@ -247,15 +284,32 @@ func _update_info() -> void:
 	info.visible = not info.text.strip_edges().is_empty()
 
 func _apply() -> void:
-	if embedded:
-		_commit_apply()
-	else:
-		apply_confirmation.popup_centered(Vector2i(480,160))
-		apply_confirmation.get_cancel_button().grab_focus()
+	_commit_apply()
 
 func _commit_apply() -> void:
+	if applying: return
+	var updates: Array[String] = []
+	for pack in Mods.packs:
+		if str(pack.id) not in pending_enabled: continue
+		var update: Dictionary = official.update_for(pack)
+		if not update.is_empty() and Official.compatible(update.min_game_version): updates.append(str(pack.id))
+	var downloading: bool = not official.missing(pending_enabled).is_empty() or not updates.is_empty()
+	if downloading:
+		applying = true
+		hide()
+		download_started.emit()
+		await get_tree().process_frame
+		if not await official.install(pending_enabled,updates):
+			applying = false
+			download_finished.emit(false)
+			if not embedded: popup_centered()
+			info.text = official.last_error; info.show()
+			return
 	var result := Mods.apply(pending_enabled, pending_order, persist_preferences)
+	applying = false
+	if downloading: download_finished.emit(result == OK)
 	if result != OK:
+		if not embedded: popup_centered()
 		info.text = "Could not save mod selection: " + error_string(result)
 		info.show()
 		return

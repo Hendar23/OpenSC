@@ -86,8 +86,11 @@ func run() -> void:
 	guided.setup(turret,system.templates[1],Vector3.ZERO,Vector3.BACK,victim,true); guided.set_physics_process(false)
 	guided._physics_process(0.04)
 	check(guided.direction.x > 0 and is_equal_approx(guided.direction.angle_to(Vector3.BACK),0.1),"Homing missiles steer toward their target with a bounded turn")
-	guided._physics_process(Missile.LIFETIME)
-	check(guided.is_queued_for_deletion(),"Missiles expire at the recovered lifetime")
+	guided.global_position = Vector3(0,100,0)
+	guided.age = Missile.LIFETIME-0.02
+	guided._physics_process(0.04)
+	check(guided.out_of_fuel and not guided.is_queued_for_deletion() and guided.target == null,"NPC torpedoes stop homing and sink at the existing fuel limit")
+	guided.free()
 	check(Missile.heading_basis(Vector3.UP).is_finite(),"Vertical missile aiming produces a valid transform")
 	await process_frame
 	victim.global_position = turret.head.global_position + Vector3(0,0,3)

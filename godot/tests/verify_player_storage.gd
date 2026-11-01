@@ -56,6 +56,7 @@ func run() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(preferences))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(settings_path))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(settings_path.get_base_dir()))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(Storage.mods_path()))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(Storage.root_path()))
 	print("Player storage: %d checks, %d failures" % [checks,failures])
 	quit(1 if failures else 0)

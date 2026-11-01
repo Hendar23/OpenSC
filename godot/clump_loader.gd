@@ -103,6 +103,7 @@ static func _load_legacy(path: String, names: PackedStringArray = PackedStringAr
 			frames[parent].add_child(frame)
 		frame.transform = Transform3D(basis, origin)
 		frame.set_meta("rest_basis", basis)
+		frame.set_meta("legacy_frame_tag",int(data.decode_s32(p + 68)))
 		frames.append(frame)
 	var geometries: Array[int] = []
 	# Chunk IDs are aligned to four bytes. Validate headers before accepting them.

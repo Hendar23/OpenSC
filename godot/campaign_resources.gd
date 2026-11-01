@@ -21,6 +21,7 @@ static func restore_for_progress(game: Node) -> void:
 # The FAQ confirms three coins in the tin can. Their editable placements live
 # in the map; this only seeds the omitted objects once in published beta saves.
 static func _restore_starting_coins(game: Node) -> void:
+	_recover_escaped_tin_coins(game)
 	var missions: Dictionary = game.player_progress.missions
 	var events: Dictionary = missions.get("world_events",{})
 	if events.get("tin_can_coins",false): return
@@ -40,6 +41,25 @@ static func _restore_starting_coins(game: Node) -> void:
 			created.append(body)
 	events["tin_can_coins"] = true
 	missions["world_events"] = events
+
+static func _recover_escaped_tin_coins(game: Node) -> void:
+	var support: Node = game.world_root.get_node_or_null("TinCanBaseCollision")
+	if support == null: return
+	var placements := {}
+	for entry in game.object_population.initial_thorium:
+		if str(entry.get("object_group","")).begins_with("original_tin_coin_"): placements[str(entry.object_group)] = entry
+	for body in game.object_population.get_children():
+		var group := str(body.get_meta("object_group",""))
+		if not placements.has(group) or not body is RigidBody3D: continue
+		var pose: Transform3D = preload("res://map_document.gd").decode(placements[group].pose)
+		for surface in support.get_meta("surfaces",[]):
+			var plane: Plane = surface.plane; var bounds: AABB = surface.bounds
+			if absf(plane.distance_to(pose.origin)) > 1.0 or plane.distance_to(body.global_position) > -0.2: continue
+			var point: Vector3 = body.global_position
+			if point.x < bounds.position.x or point.x > bounds.end.x or point.z < bounds.position.z or point.z > bounds.end.z: continue
+			body.transform = pose; body.linear_velocity = Vector3.ZERO; body.angular_velocity = Vector3.ZERO
+			body.reset_physics_interpolation()
+			break
 
 static func spawn_opening_bonus(game: Node) -> void:
 	_spawn_bonus(game,33,OPENING_BONUS,GROUP)

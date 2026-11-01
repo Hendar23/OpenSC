@@ -131,9 +131,9 @@ func accept(city: int, selected_id: String = "") -> String:
 			var unavailable: Array = game.player_progress.missions.get("unavailable",[])
 			if not unavailable.has(Rules.PAIRED[id]): unavailable.append(Rules.PAIRED[id])
 			game.player_progress.missions["unavailable"] = unavailable
-		if id in Rules.CORE.values():
+		if id in Rules.CORE.values() or id in Rules.CORE_THREE.values():
 			var unavailable: Array = game.player_progress.missions.get("unavailable",[])
-			for sibling in Rules.CORE.values():
+			for sibling in (Rules.CORE_THREE if id in Rules.CORE_THREE.values() else Rules.CORE).values():
 				if sibling != id and sibling not in unavailable: unavailable.append(sibling)
 			game.player_progress.missions["unavailable"] = unavailable
 		side_jobs.start(id)
@@ -171,7 +171,8 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	var sponsor_city := int(active().city)
 	var city := int(active().get("resolved_city",active().city))
 	last_response_city = city
-	var core := id in Rules.CORE.values()
+	var diplomats := id in Rules.CORE_THREE.values()
+	var core := id in Rules.CORE.values() or diplomats
 	var side_job := Rules.IMPLEMENTED.has(id) and not core
 	var outcome_shown := bool(active().get("outcome_shown",false))
 	if score < 0: score = 1.0 if success else 0.0
@@ -189,15 +190,15 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 		game.player_progress.missions[prefix+"resolved"] = int(game.player_progress.missions.get(prefix+"resolved",0)) + 1
 		if success: game.player_progress.missions[prefix+"successes"] = int(game.player_progress.missions.get(prefix+"successes",0)) + 1
 	if success:
-		if not side_job: game.player_progress.campaign_stage = 3 if core else 2
+		if not side_job: game.player_progress.campaign_stage = 4 if diplomats else 3 if core else 2
 		game.player_progress.campaign_jobs += 1
 		if core:
 			game.player_progress.campaign_jobs = 0
-			game.player_progress.missions["stage2_successes"] = 0
-			game.player_progress.missions["stage2_resolved"] = 0
+			game.player_progress.missions["stage3_successes" if diplomats else "stage2_successes"] = 0
+			game.player_progress.missions["stage3_resolved" if diplomats else "stage2_resolved"] = 0
 			# Retail post bulletins depend on the faction-family IDs, whereas
 			# each station has its own accepted mission record.
-			var bulletin_id := "walktrad" if sponsor_city in [1,3] else "walktech"
+			var bulletin_id := ("diptrad2" if sponsor_city in [1,3] else "diptech2") if diplomats else ("walktrad" if sponsor_city in [1,3] else "walktech")
 			preload("res://mailbox.gd").mission_completed(game.player_progress,bulletin_id,score)
 		# 0041ec40 pays the fixed REWARD1 amount; score selects bulletins,
 		# rather than scaling the credit reward.
@@ -215,6 +216,10 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	var enemy := "2" if faction == "1" else "1"
 	if success: reputation[enemy] = float(reputation.get(enemy,0)) + delta * float(rewards.get("enemy",-0.5))
 	game.player_progress.missions["reputation"] = reputation
+	if side_jobs.diplomats != null:
+		var survivors: Array[Node3D] = []
+		if is_instance_valid(side_jobs.diplomats.pirate): survivors.append(side_jobs.diplomats.pirate)
+		preload("res://mission_survivors.gd").release(side_jobs,survivors)
 	if side_jobs.defection != null: side_jobs.defection.release_survivors(success)
 	if side_jobs.stage_three_remaining != null: side_jobs.stage_three_remaining.release_survivors()
 	if side_jobs.stage_three != null: side_jobs.stage_three.release_survivors()

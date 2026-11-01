@@ -244,6 +244,7 @@ static func add_collision(root: Node3D, tree: SceneTree, progress: Callable) -> 
 			progress.call("Building environment collision: %d chunks" % count)
 			await tree.process_frame
 	body.set_meta("plantable_faces", plantable_shapes)
+	_add_can_base_collision(root)
 	root.set_meta("collision_ready", true)
 	var ceiling := StaticBody3D.new()
 	ceiling.name = "WaterSurfaceCollision"
@@ -258,3 +259,45 @@ static func add_collision(root: Node3D, tree: SceneTree, progress: Callable) -> 
 	root.add_child(ceiling)
 	if root.has_meta("asset_cache_key"):
 		preload("res://asset_cache.gd").save_scene(str(root.get_meta("asset_cache_key")), root)
+
+static func _add_can_base_collision(root: Node3D) -> void:
+	# The thin CANTOP base admits small dynamic hulls through its triangle mesh.
+	# Group its coplanar triangles into a shallow solid, leaving the mouth open.
+	var panels: Array[Dictionary] = []
+	for mesh in root.get_children():
+		if not mesh is MeshInstance3D or str(mesh.get_meta("terrain_texture","")).to_upper() != "CANTOP": continue
+		for surface in range(mesh.mesh.get_surface_count()):
+			var arrays: Array = mesh.mesh.surface_get_arrays(surface)
+			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var indices := PackedInt32Array()
+			if arrays[Mesh.ARRAY_INDEX] != null: indices = arrays[Mesh.ARRAY_INDEX]
+			if indices.is_empty():
+				for index in vertices.size(): indices.append(index)
+			for index in range(0,indices.size(),3):
+				var triangle := [mesh.transform*vertices[indices[index]],mesh.transform*vertices[indices[index+1]],mesh.transform*vertices[indices[index+2]]]
+				var normal: Vector3 = (triangle[1]-triangle[0]).cross(triangle[2]-triangle[0]).normalized()
+				if normal.is_zero_approx(): continue
+				if normal.x < -0.00001 or (absf(normal.x) < 0.00001 and normal.y < 0): normal = -normal
+				if absf(normal.y) < 0.5: continue # The peeled-back lid needs no extra support.
+				var panel := {}
+				for candidate in panels:
+					if normal.dot(candidate.normal) > 0.9999 and triangle.all(func(vertex: Vector3) -> bool: return absf(candidate.normal.dot(vertex)-candidate.distance) < 0.005): panel = candidate; break
+				if panel.is_empty():
+					panel = {"normal":normal,"distance":normal.dot(triangle[0]),"points":PackedVector3Array()}; panels.append(panel)
+				for vertex in triangle:
+					panel.points.append(vertex+normal*0.02); panel.points.append(vertex-normal*0.02)
+	if panels.is_empty(): return
+	var support := StaticBody3D.new(); support.name = "TinCanBaseCollision"
+	support.collision_layer = 1; support.collision_mask = 2
+	var surfaces: Array[Dictionary] = []
+	for panel in panels:
+		var points: PackedVector3Array = panel.points
+		var bounds := AABB(points[0],Vector3.ZERO)
+		for point in points: bounds = bounds.expand(point)
+		var local_points := PackedVector3Array()
+		for point in points: local_points.append(point-bounds.get_center())
+		var hull := ConvexPolygonShape3D.new(); hull.points = local_points; hull.margin = 0.005
+		var shape := CollisionShape3D.new(); shape.shape = hull; shape.position = bounds.get_center(); support.add_child(shape)
+		surfaces.append({"plane":Plane(panel.normal,panel.distance),"bounds":bounds})
+	support.set_meta("surfaces",surfaces)
+	root.add_child(support)

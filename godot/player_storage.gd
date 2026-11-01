@@ -16,9 +16,14 @@ static func saves_path() -> String:
 static func screenshots_path() -> String:
 	return root_path().path_join("Screenshots")
 
+static func mods_path() -> String:
+	return root_path().path_join("Mods")
+
 static func open_player_folder(opener: Callable = Callable()) -> Error:
 	var folder := ProjectSettings.globalize_path(root_path()).simplify_path()
 	var result := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(screenshots_path()))
+	if result != OK: return result
+	result = DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(mods_path()))
 	if result != OK: return result
 	return opener.call(folder) if opener.is_valid() else OS.shell_open(folder)
 

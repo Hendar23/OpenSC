@@ -2,6 +2,7 @@ extends Node3D
 ## Player missiles and Electro Bolt use swept collision at the original 25 Hz.
 ## Modern physics supplies the collision surface; damage retains raw shield units.
 const Damage = preload("res://original_damage.gd")
+const Drift = preload("res://torpedo_drift.gd")
 # Player launcher 0045a5d0 multiplies HMISSILE's CSV inflict by twelve.
 # NPC homing missiles do not pass through that launcher.
 const HOMING_INFLICT := 2.0*12.0
@@ -11,8 +12,8 @@ const HOMING_LIFETIME := 133.333333 / Damage.TICKS_PER_SECOND
 const STANDARD_THRUST := 0.0075
 const HOMING_THRUST := 0.0025
 const TORPEDO_DAMPING := 0.857142857
-const SINK_ACCELERATION := 0.65
-const SINK_SPEED := 1.2
+const SINK_ACCELERATION := Drift.ACCELERATION
+const SINK_SPEED := Drift.SPEED
 const ELECTRO_RADIUS := 0.5 # ELECTROBOLT's one-unit collision sphere.
 var arsenal: Node3D
 var kind := "missile"
@@ -132,16 +133,14 @@ func _sink_tick() -> void:
 	var step := 1.0/Damage.TICKS_PER_SECOND
 	# Water quickly damps forward momentum; negative buoyancy remains after
 	# the motor stops. Rotate independently of travel for a slow end-over-end fall.
-	velocity.x *= 0.94; velocity.z *= 0.94
-	if velocity.y > 0: velocity.y *= 0.94
-	velocity.y = maxf(-SINK_SPEED,velocity.y-SINK_ACCELERATION*step)
+	velocity = Drift.velocity_after_tick(velocity,step)
 	var next := global_position+velocity*step
 	var hit := _impact(next,arsenal.weapons.pilot)
 	if not hit.is_empty():
 		global_position = hit.position
 		finish(true); return
 	global_position = next
-	global_basis = (global_basis*Basis(tumble_axis,0.7*step)).orthonormalized()
+	global_basis = Drift.tumble(global_basis,tumble_axis,step)
 
 func _impact(next: Vector3, pilot: Node3D) -> Dictionary:
 	var space := get_world_3d().direct_space_state

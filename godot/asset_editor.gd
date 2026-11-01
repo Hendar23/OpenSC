@@ -53,6 +53,7 @@ var frame_button: Button
 var animation_bar: HBoxContainer
 var asset_dialog: FileDialog
 var mod_panel: Window
+var mod_loading: Node
 var mods_button: Button
 var asset_interface: MarginContainer
 var map_editor: HBoxContainer
@@ -273,6 +274,18 @@ func _build_interface() -> void:
 	add_child(asset_dialog)
 	mod_panel = ModPanel.new()
 	mod_panel.persist_preferences = remember_preferences
+	mod_panel.download_started.connect(func() -> void:
+		mod_loading = preload("res://front_end.gd").new()
+		mod_loading.remember_preferences = false
+		add_child(mod_loading)
+		mod_loading.loading_layer.layer = 100
+		mod_loading.show_loading())
+	mod_panel.download_progress.connect(func(message: String, fraction: float) -> void:
+		if is_instance_valid(mod_loading):
+			mod_loading.loading_status.text = message
+			mod_loading.progress_bar.value = fraction * 100.0)
+	mod_panel.download_finished.connect(func(_success: bool) -> void:
+		if is_instance_valid(mod_loading): mod_loading.queue_free())
 	mod_panel.applied.connect(func() -> void: if not game_folder.is_empty(): _load_folder(game_folder))
 	add_child(mod_panel)
 	map_editor = MapEditor.new()
@@ -514,6 +527,8 @@ func _preview_input(event: InputEvent) -> void:
 	_update_camera()
 
 func _input(event: InputEvent) -> void:
+	if mod_panel != null and mod_panel.applying:
+		get_viewport().set_input_as_handled(); return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed: dragging = false
 
 func _process(delta: float) -> void:

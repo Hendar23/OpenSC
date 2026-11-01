@@ -11,7 +11,8 @@ func check(ok: bool, message: String) -> void:
 
 func _initialize() -> void:
 	var paths = preload("res://asset_paths.gd")
-	var folder := ProjectSettings.globalize_path("res://../Original Sub Culture")
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
 	if not paths.valid_game_folder(folder): folder = paths.find_game_folder()
 	var storage = preload("res://player_storage.gd")
 	storage.root_override = "res://tests/cache-campaign-resources-fixtures"
@@ -79,8 +80,23 @@ func verify_starting_resources() -> void:
 		var query := PhysicsShapeQueryParameters3D.new(); query.shape = body.get_child(1).shape; query.transform = body.global_transform*body.get_child(1).transform; query.collision_mask = 1; query.margin = 0.01
 		check(game.get_world_3d().direct_space_state.intersect_shape(query,1).is_empty(),"Coin hull is clear of the can and terrain")
 		body.freeze = false
-	for frame in range(360): await physics_frame
-	check(tin_coins().all(func(body: Node3D) -> bool: return body.global_position.distance_to(Vector3(255.5,150.4,273.8)) < 2),"Coins remain inside the real can after six seconds of physics")
+	for frame in range(3600): await physics_frame
+	check(tin_coins().all(func(body: Node3D) -> bool: return body.global_position.distance_to(Vector3(255.5,150.4,273.8)) < 2),"All three coins remain in the real can after a minute of physics")
+	var mouth := Vector3(257.95,153.10,273.82)
+	var interior := Vector3(255.2635,150.1471,273.8194)+Vector3(0.6744,0.73837,0)*0.5
+	var entry_query := PhysicsRayQueryParameters3D.create(mouth,interior,1)
+	check(game.get_world_3d().direct_space_state.intersect_ray(entry_query).is_empty(),"Can-base support leaves the mouth open")
+	var escaped: RigidBody3D = tin_coins()[0]
+	escaped.global_position.y -= 20
+	Resources._restore_starting_coins(game)
+	check(escaped.global_position.distance_to(Vector3(255.5,150.4,273.8)) < 2 and tin_coins().size() == 3,"Existing escaped coin is recovered without adding a fourth")
+	var moved: RigidBody3D = tin_coins()[1]
+	var moved_position := moved.global_position+Vector3(20,-20,0)
+	moved.global_position = moved_position
+	Resources._restore_starting_coins(game)
+	check(moved.global_position == moved_position,"Coin moved away from the can is not relocated")
+	var original: Dictionary = game.object_population.initial_thorium.filter(func(entry: Dictionary) -> bool: return str(entry.get("object_group","")) == str(moved.get_meta("object_group")))[0]
+	moved.transform = preload("res://map_document.gd").decode(original.pose)
 	stabilize(); port()
 	var legacy: Dictionary = game._save_snapshot("Legacy without tin coins")
 	legacy.objects = legacy.objects.filter(func(entry: Dictionary) -> bool: return not str(entry.get("object_group","")).begins_with("original_tin_coin_"))

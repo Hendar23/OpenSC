@@ -1,6 +1,5 @@
 extends RefCounted
 
-const DEFAULT_ROOT := "res://../Mods"
 const MAX_SCENERY := 12000
 const MOVEMENT_KEYS := ["main_forward", "main_reverse", "side_thrust", "forward_speed", "reverse_speed", "vertical_speed", "forward_drag", "lateral_drag", "vertical_drag", "turn_acceleration", "turn_speed", "turn_drag", "tilt_speed", "camera_distance", "mass", "water_resistance", "pitch_acceleration", "pitch_speed", "upright_strength", "upright_damping", "propeller_spin_down", "bubble_rate", "impact_damage_threshold", "impact_damage_scale"]
 static var initialized := false
@@ -17,8 +16,13 @@ static var runtime_warnings: Array[String] = []
 static func ensure(read_preferences: bool = true) -> void:
 	if not initialized: initialize(read_preferences)
 
-static func initialize(read_preferences: bool = true, folder: String = DEFAULT_ROOT, preferences: String = "") -> void:
-	root = preload("res://runtime_paths.gd").external(folder).replace("\\", "/").simplify_path().trim_suffix("/")
+static func initialize(read_preferences: bool = true, folder: String = "", preferences: String = "") -> void:
+	var storage = preload("res://player_storage.gd")
+	var paths = preload("res://runtime_paths.gd")
+	root = paths.external(storage.mods_path() if folder.is_empty() else folder).replace("\\", "/").simplify_path().trim_suffix("/")
+	if folder.is_empty():
+		var result := DirAccess.make_dir_recursive_absolute(root)
+		if result != OK: push_warning("Could not create player Mods folder: " + error_string(result))
 	preference_path = preload("res://player_storage.gd").preferences_path() if preferences.is_empty() else preferences
 	enabled.clear()
 	order.clear()
@@ -32,19 +36,7 @@ static func initialize(read_preferences: bool = true, folder: String = DEFAULT_R
 
 static func refresh() -> void:
 	packs.clear()
-	if not DirAccess.dir_exists_absolute(root): _rebuild(); return
-	var ids := {}
-	for folder in DirAccess.get_directories_at(root):
-		if folder.begins_with("."): continue
-		var pack := _read_pack(root.path_join(folder))
-		if pack.is_empty(): continue
-		if ids.has(pack.id):
-			pack.valid = false
-			pack.errors.append("Duplicate mod ID: " + str(pack.id))
-			ids[pack.id].valid = false
-			ids[pack.id].errors.append("Duplicate mod ID: " + str(pack.id))
-		ids[pack.id] = pack
-		packs.append(pack)
+	packs = _discover(root)
 	packs.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var first := order.find(str(a.id))
 		var second := order.find(str(b.id))
@@ -55,6 +47,23 @@ static func refresh() -> void:
 	order.clear()
 	for pack in packs: order.append(str(pack.id))
 	_rebuild()
+
+static func _discover(location: String) -> Array[Dictionary]:
+	var found: Array[Dictionary] = []
+	if not DirAccess.dir_exists_absolute(location): return found
+	var ids := {}
+	for folder in DirAccess.get_directories_at(location):
+		if folder.begins_with("."): continue
+		var pack := _read_pack(location.path_join(folder))
+		if pack.is_empty(): continue
+		if ids.has(pack.id):
+			pack.valid = false
+			pack.errors.append("Duplicate mod ID: " + str(pack.id))
+			ids[pack.id].valid = false
+			ids[pack.id].errors.append("Duplicate mod ID: " + str(pack.id))
+		ids[pack.id] = pack
+		found.append(pack)
+	return found
 
 static func _read_pack(folder: String) -> Dictionary:
 	var path := folder.path_join("mod.json")

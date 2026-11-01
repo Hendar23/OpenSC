@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Mods = preload("res://mod_registry.gd")
 const Assets = preload("res://clump_loader.gd")
 const Movement = preload("res://movement_model.gd")
@@ -10,7 +10,15 @@ var failures := 0
 var temporary_files: Array[String] = []
 var fixture_root := "res://tests/mod-fixtures"
 
-func _initialize() -> void: call_deferred("_run")
+func _initialize() -> void:
+	preload("res://player_storage.gd").root_override = "res://tests/mod-player-fixture-" + str(OS.get_process_id())
+	var preferences := preload("res://player_storage.gd").preferences_path()
+	preload("res://player_storage.gd").ensure_parent(preferences)
+	var config := ConfigFile.new()
+	config.set_value("game","folder",OS.get_environment("OPENSC_TEST_GAME_FOLDER"))
+	config.save(preferences)
+	temporary_files.append(preferences)
+	call_deferred("_run")
 func check(condition: bool, message: String) -> void:
 	checks += 1
 	if not condition: failures += 1; push_error("FAIL: " + message)
@@ -168,5 +176,10 @@ func _run() -> void:
 	for path in temporary_files: DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	for child in ["first", "second", "broken-model", "invalid", "unreadable"]: DirAccess.remove_absolute(ProjectSettings.globalize_path(fixture_root.path_join(child)))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(fixture_root))
+	var storage = preload("res://player_storage.gd")
+	for filename in ["submarine_audio.cfg","submarine_tuning.cfg","view_defaults.cfg"]:
+		DirAccess.remove_absolute(storage.root_path().path_join("settings").path_join(filename))
+	for directory in [storage.root_path().path_join("settings"),storage.mods_path(),storage.root_path()]:
+		DirAccess.remove_absolute(directory)
 	print("Mod verification: %d checks, %d failures" % [checks, failures])
 	quit(1 if failures else 0)

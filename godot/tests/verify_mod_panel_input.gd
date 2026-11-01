@@ -26,7 +26,7 @@ func button(panel: Window, label: String) -> Button:
 	return null
 func _run() -> void:
 	root.gui_embed_subwindows = true; root.size = Vector2i(1280,720)
-	Mods.initialize(false)
+	Mods.initialize(false,"res://tests/absent-mod-input-fixture","res://tests/unused-mod-input-preferences.cfg")
 	var capture := FixtureCapture.new(); root.add_child(capture)
 	var panel := preload("res://mod_panel.gd").new(); panel.persist_preferences = false
 	root.add_child(panel); panel.applied.connect(func() -> void: applied = true)
@@ -93,22 +93,9 @@ func _run() -> void:
 	scroll.scroll_vertical = 0; await process_frame
 	await click(panel,panel.choices["input-test-0"])
 	await click(panel,button(panel,"Apply"))
-	check(panel.apply_confirmation.visible and not applied and Mods.enabled.is_empty(),"Apply warns before changing mods or ending the game")
-	if DisplayServer.get_name() != "headless":
-		var screenshot := InputEventKey.new(); screenshot.keycode = KEY_F12; screenshot.physical_keycode = KEY_F12; screenshot.pressed = true
-		Input.parse_input_event(screenshot)
-		for frame in range(120):
-			await process_frame
-			if not capture.last_screenshot.is_empty(): break
-		check(not capture.last_screenshot.is_empty(),"Screenshot shortcut also works in the nested Apply confirmation")
-		if not capture.last_screenshot.is_empty(): DirAccess.remove_absolute(capture.last_screenshot)
-	await click(panel.apply_confirmation,panel.apply_confirmation.get_cancel_button())
-	check(not panel.apply_confirmation.visible and panel.visible and not applied and Mods.enabled.is_empty(),"Confirmation Cancel keeps the mod menu and unapplied choices")
-	await click(panel,button(panel,"Apply"))
-	await click(panel.apply_confirmation,panel.apply_confirmation.get_ok_button())
 	check(applied and not panel.visible and "input-test-0" in Mods.enabled,"Apply commits selection and requests reload while paused")
 	panel.open(); for frame in range(3): await process_frame
-	await click(panel,button(panel,"Refresh installed mods"))
+	await click(panel,button(panel,"Refresh mods"))
 	check(not panel.pending_order.has("input-test-0") and panel.pending_order == Mods.order,"Refresh rescans installed mods while paused")
 	if DisplayServer.get_name() != "headless":
 		await RenderingServer.frame_post_draw

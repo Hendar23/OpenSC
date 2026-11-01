@@ -119,6 +119,7 @@ var game_folder := ""
 var world_loading := false
 var pilot_mode := false
 var startup_complete := false
+var startup_updates: CanvasLayer
 var developer_ui_visible := false
 var developer_enabled := false
 var camera_follow := FollowCamera.new()
@@ -231,6 +232,17 @@ func _build_interface() -> void:
 	front_end.back_shortcut_busy = func(event: InputEvent) -> bool: return Bindings.pressed(event,"menu_cancel") and (map_open or developer_ui_visible or (dock_interface != null and dock_interface.back_shortcut_busy()))
 	loading_canvas = front_end.loading_layer
 	loading_label = front_end.loading_status
+	mod_panel.download_started.connect(func() -> void:
+		world_loading = true
+		front_end.show_loading())
+	mod_panel.download_progress.connect(func(message: String, fraction: float) -> void:
+		front_end.loading_status.text = message
+		front_end.progress_bar.value = fraction * 100.0)
+	mod_panel.download_finished.connect(func(success: bool) -> void:
+		world_loading = false
+		if not success:
+			front_end.loading_layer.hide()
+			front_end.menu_layer.show())
 	front_end.new_game_requested.connect(_begin_new_game)
 	front_end.resume_requested.connect(_continue_game)
 	front_end.load_requested.connect(func() -> void: front_end.menu_layer.hide(); dock_interface.open("load"))
@@ -246,10 +258,22 @@ func _build_interface() -> void:
 	front_end.exit_requested.connect(func() -> void: get_tree().quit())
 
 func _bootstrap() -> void:
+	world_loading = true
 	front_end.show_loading()
 	canvas.hide()
+	front_end.loading_status.text = "Checking for updates..."
 	# Present the loading screen before importing or searching original data.
 	await get_tree().process_frame
+	# Isolated engine fixtures disable persisted preferences and external services.
+	if remember_preferences:
+		startup_updates = preload("res://game_updates.gd").new()
+		add_child(startup_updates)
+		var release: Dictionary = await startup_updates.check_latest()
+		if not release.is_empty() and await startup_updates.offer(release): return
+		startup_updates.queue_free()
+		startup_updates = null
+	world_loading = false
+	front_end.loading_status.text = "Loading"
 	var folder := Paths.find_game_folder()
 	if folder.is_empty():
 		_prompt_game_folder("OpenSubCulture needs your original Sub Culture files. Choose the game folder containing CLUMPS and DATA.")
@@ -357,6 +381,10 @@ func _fail_startup(message: String) -> void:
 	if not developer_enabled: _prompt_game_folder(message)
 
 func _input(event: InputEvent) -> void:
+	# Let the update overlay receive GUI mouse events before loading resumes.
+	if startup_updates != null: return
+	if mod_panel != null and mod_panel.applying:
+		get_viewport().set_input_as_handled(); return
 	if fmv != null and fmv.active: return
 	game_input._input(event)
 

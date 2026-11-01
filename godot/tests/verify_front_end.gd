@@ -4,6 +4,9 @@ const Game = preload("res://game.gd")
 const Mods = preload("res://mod_registry.gd")
 var checks := 0
 var failures := 0
+var update_continued := false
+func update_offer(updates: CanvasLayer) -> void:
+	update_continued = not await updates.offer({"version":"0.8.3","url":"https://github.com/Hendar23/OpenSC/releases/tag/v0.8.3"})
 func key_event(code: int) -> InputEventKey:
 	var event := InputEventKey.new(); event.keycode = code; event.pressed = true; return event
 func _initialize() -> void:
@@ -223,14 +226,11 @@ func _run() -> void:
 	game._show_main_menu()
 	game.front_end.buttons.mods.pressed.emit()
 	game.mod_panel._apply()
-	check(game.mod_panel.apply_confirmation.visible and game.has_started_game and paused,"Applying mods requests confirmation without ending the current game")
-	game.mod_panel.apply_confirmation.hide()
-	game.mod_panel.apply_confirmation.confirmed.emit()
 	await process_frame
 	for frame in range(1800):
 		if not game.world_loading and game.front_end.menu_layer.visible: break
 		await process_frame
-	check(not game.world_loading and paused and game.front_end.menu_layer.visible and game.pilot != null and game.pilot_mode,"Confirmed mods reload finishes at the main menu without freezing")
+	check(not game.world_loading and paused and game.front_end.menu_layer.visible and game.pilot != null and game.pilot_mode,"Apply reloads mods directly and finishes at the main menu without freezing")
 	check(not is_instance_valid(original_world),"Applying mods still rebuilds the world rather than retaining old assets")
 	check(not game.has_started_game and not game.front_end.can_resume ,"Applying mods ends the previous live game")
 	game.front_end.buttons.new_game.pressed.emit()
@@ -238,6 +238,22 @@ func _run() -> void:
 		if game.has_started_game: break
 		await process_frame
 	check(game.has_started_game and not paused and not game.front_end.menu_layer.visible,"New Game is playable after applying mods")
+	# Actual game input must allow GUI mouse clicks through the loading guard.
+	game.world_loading = true; game.front_end.show_loading()
+	game.startup_updates = preload("res://game_updates.gd").new()
+	game.add_child(game.startup_updates)
+	update_offer(game.startup_updates)
+	for frame in range(3): await process_frame
+	var point: Vector2 = game.startup_updates.continue_button.get_global_rect().get_center()
+	for mouse_down in [true,false]:
+		var click := InputEventMouseButton.new()
+		click.position = point; click.global_position = point
+		click.button_index = MOUSE_BUTTON_LEFT; click.pressed = mouse_down
+		root.push_input(click,true)
+		await process_frame
+	check(update_continued,"Mouse Continue dismisses update prompt through actual loading input guard")
+	game.startup_updates.queue_free(); game.startup_updates = null
+	game.world_loading = false; game.front_end.loading_layer.hide()
 	print("Front end: %d checks, %d failures" % [checks,failures])
 	if failures:
 		paused = false; game.queue_free(); await process_frame; quit(1)

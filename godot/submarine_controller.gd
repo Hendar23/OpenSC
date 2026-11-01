@@ -238,10 +238,11 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		previous_velocity = Vector3.ZERO
 	var impact := _contact_impact(state)
 	var impact_speed: float = impact.speed
-	var controls := Controls.read() if controls_enabled and not remote_controlled else Vector4.ZERO
+	var controls := Controls.read() if controls_enabled and not remote_controlled and not get_meta("diplomat_system_failure",false) else Vector4.ZERO
 	movement.velocity = state.linear_velocity
 	movement.angular_velocity = state.angular_velocity
 	movement.step(state.step, state.transform.basis, controls.x, controls.y, controls.z, controls.w)
+	if get_meta("diplomat_system_failure",false): movement.velocity.y -= 0.5*state.step
 	state.linear_velocity = movement.velocity
 	state.angular_velocity = movement.angular_velocity
 	var pose := state.transform
