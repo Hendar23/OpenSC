@@ -23,6 +23,10 @@ Latest release is available [here](https://github.com/Hendar23/OpenSC/releases/t
 ## Enhancements
 OpenSC offers a few enhancements over the original:
 
+### Mod Support
+- **Built in mod manager**
+  - Download all the official mods directly from the game.
+
 ### Gameplay & Physics
 - **Player Sub**
   - Reworked and enhanced player sub physics.
@@ -48,13 +52,6 @@ OpenSC offers a few enhancements over the original:
 - **UI**
   - Compact multi-message radio stack
   - Credits and hold inventory displayed next to full screen map
-
-### Mod Support
-Mod support for visual and gameplay enhancements. A handful are available at the moment:
-
-- Replacement 3D sea-mine model. Open source model, credits below.
-- Clownfish reskin/addition. Made by me in MSPaint in about five minutes to test adding more wildlife.
-- 3D HUD instruments with live displays. AI generated (yuck, I know) but just to demonstrate modding possibilities. If any Blender wizard out there wants to remake them, please do!
 
 ## Credits
 - Screenshot shutter sound: [“camera” by irinairinafomicheva](https://pixabay.com/sound-effects/technology-camera-13695/), from Pixabay. Used under the Pixabay Content License.
