@@ -69,7 +69,7 @@ def build(destination: Path, archive_output: bool = True, excluded_mods: set[str
     shutil.copy2(ROOT / "Maps" / "scen1.json", destination / "Maps" / "scen1.json")
     (destination / "Mods").mkdir()
     bundled_mods = []
-    for pack in sorted((ROOT / "Mods").iterdir()):
+    for pack in sorted((ROOT / "Mods").iterdir()) if (ROOT / "Mods").is_dir() else []:
         if pack.name not in release_mods or pack.name in (excluded_mods or set()):
             continue
         if not pack.is_dir() or not (pack / "mod.json").is_file():
