@@ -8,7 +8,7 @@ OpenSC is an open-source game remake for playing Criterion Games' [Sub Culture](
 The aim is to bring this forgotten little gem of a game to modern systems, preserve the original experience, and expand on it with improved gameplay, new features and modding support. 
 
 ## Current Progress
-OpenSC is now a fully playable beta. All the core systems are in place. The remaining missions and equipment are being added and playtested.
+OpenSC is now a fully playable beta. All the core systems are in place. The remaining missions are being added and playtested.
 
 ## Installation
 Latest release is available [here](https://github.com/Hendar23/OpenSC/releases/tag/v0.8.2)
