@@ -5,6 +5,8 @@ OpenSC is an open-source game remake for playing Criterion Games' [Sub Culture](
 
 [Watch some gameplay footage here.](https://www.youtube.com/watch?v=PmRX3hcQxC8)
 
+[Join the Discord](https://discord.gg/56ESd7m8w)
+
 The aim is to bring this forgotten little gem of a game to modern systems, preserve the original experience, and expand on it with improved gameplay, new features and modding support. 
 
 ## Current Progress
@@ -15,8 +17,6 @@ Latest release is available [here](https://github.com/Hendar23/OpenSC/releases/t
 - OpenSC does not include the original Sub Culture game assets. You'll need your own copy of the original game files.
 - When you first run the game, it will ask you to point it to the original Sub Culture folder.
 - A controller is recommended for controlling the sub.
-
-[Join the Discord](https://discord.gg/56ESd7m8w)
 
 <img width="1920" height="1080" alt="OpenSC 2026-10-27 21-57-30" src="https://github.com/user-attachments/assets/fb41cc38-aa36-4b3c-9b8c-f06a5a1fdee2" />
 
