@@ -61,8 +61,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif Bindings.pressed(event,"weapon_next") and game.weapons != null: game.weapons.cycle(1)
 		if Bindings.pressed(event,"equipment_previous"): game.equipment.cycle(-1)
 		elif Bindings.pressed(event,"equipment_next"): game.equipment.cycle(1)
-		elif Bindings.pressed(event,"equipment_toggle") and game.docking.stage == Docking.Stage.IDLE:
-			if not Bindings.pressed(event,"dock_decline") or game.docking.nearby.is_empty(): game.equipment.toggle_selected()
+		elif Bindings.pressed(event,"equipment_toggle") and (game.docking.stage == Docking.Stage.IDLE or game.docking.is_undocking()):
+			if game.docking.is_undocking() or not Bindings.pressed(event,"dock_decline") or game.docking.nearby.is_empty(): game.equipment.toggle_selected()
 	if Bindings.pressed(event,"dock_accept"):
 		game._request_docking()
 		game.get_viewport().set_input_as_handled()
@@ -84,7 +84,9 @@ func _physics_process(_delta: float) -> void:
 		over_ui = over_ui or game.tuning_panel.get_global_rect().has_point(pointer)
 	if game.developer_ui_visible and game.sound_panel != null and game.sound_panel.visible:
 		over_ui = over_ui or game.sound_panel.get_global_rect().has_point(pointer)
-	game.pilot.controls_enabled = game.pilot_mode and not game.pilot.dead and not game.pilot.get_meta("diplomat_system_failure",false) and not game.map_open and not game.world_loading and not game.loading_save and not game.developer_ui_visible and not over_ui and not game.folder_dialog.visible and not game.export_all_dialog.visible and not game.mod_panel.visible and not game.tuning_panel.export_dialog.visible and (game.sound_panel == null or not game.sound_panel.export_dialog.visible) and (game.docking == null or game.docking.stage == Docking.Stage.IDLE)
+	var tools_ready: bool = game.pilot_mode and not game.pilot.dead and not game.map_open and not game.world_loading and not game.loading_save and not game.developer_ui_visible and not over_ui and not game.folder_dialog.visible and not game.export_all_dialog.visible and not game.mod_panel.visible and not game.tuning_panel.export_dialog.visible and (game.sound_panel == null or not game.sound_panel.export_dialog.visible)
+	game.pilot.controls_enabled = tools_ready and (game.docking == null or game.docking.stage == Docking.Stage.IDLE)
+	game.pilot.set_meta("launch_tools",tools_ready and game.docking != null and game.docking.is_undocking())
 	game.pilot.remote_controlled = game.equipment != null and game.equipment.support_tools != null and is_instance_valid(game.equipment.support_tools.rover) and game.equipment.support_tools.rover.deployed
 
 func _desired_mouse_mode() -> int:

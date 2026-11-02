@@ -250,7 +250,12 @@ static func _batch(parent: Node3D, models: Array[Dictionary], poses: Array[Dicti
 		var multi := MultiMesh.new(); multi.transform_format = MultiMesh.TRANSFORM_3D
 		multi.mesh = models[batch.model].mesh
 		multi.instance_count = batch.poses.size()
-		var anchor := Vector3(batch.cell.x * CELL_SIZE, 0, batch.cell.y * CELL_SIZE)
+		# Keep the instance origin beside its geometry. Distance visibility also
+		# uses this origin, including the paused main-menu camera.
+		var bounds: AABB = batch.poses[0] * multi.mesh.get_aabb()
+		for pose: Transform3D in batch.poses: bounds = bounds.merge(pose * multi.mesh.get_aabb())
+		var anchor := bounds.get_center()
+		multi.custom_aabb = AABB(bounds.position - anchor, bounds.size)
 		for index in batch.poses.size():
 			var pose: Transform3D = batch.poses[index]; pose.origin -= anchor
 			multi.set_instance_transform(index, pose)

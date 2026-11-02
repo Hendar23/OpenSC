@@ -115,6 +115,18 @@ static func appearance(definition: Dictionary, folder: String, cache: Dictionary
 	if definition.appearance == "model" or not preload("res://mod_registry.gd").candidates("model." + model_id).is_empty():
 		var model := Document.load_model(str(definition.model),folder)
 		if model == null: return null
+		# Retail mine clumps are flat cards; only replacement 3D models rotate
+		# in world space. Preserve the actual selected mod's geometry.
+		var replacement := false
+		for candidate in preload("res://mod_registry.gd").candidates("model."+model_id):
+			if candidate.path == model.get_meta("asset_source",""): replacement = true
+		if model_id in ["mine","hardmine"] and not replacement:
+			for mesh in model.find_children("*","MeshInstance3D",true,false):
+				for index in mesh.mesh.get_surface_count():
+					var material: Material = mesh.get_active_material(index)
+					if material is StandardMaterial3D:
+						material = material.duplicate(); material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+						mesh.set_surface_override_material(index,material)
 		var boxes: Array[AABB] = []; preload("res://creature_loader.gd")._collect_bounds(model,model.transform,boxes)
 		if boxes.is_empty(): model.free(); return null
 		var bounds := boxes[0]

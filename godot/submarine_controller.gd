@@ -11,6 +11,9 @@ const FloatingMine = preload("res://floating_mine.gd")
 var hull_rating := 100.0
 var radiation_rating := 0.0
 
+static func tools_allowed(body: Node3D) -> bool:
+	return not body.dead and not body.get_meta("diplomat_system_failure",false) and ((body.active and body.controls_enabled) or body.get_meta("launch_tools",false))
+
 func restore_health(capacity: float = 100.0, remaining: float = 100.0) -> void:
 	radiation_exposed = false
 	if damage_smoke != null: damage_smoke.clear()
@@ -155,6 +158,15 @@ func _sync_pod_collisions() -> void:
 
 func collision_height() -> float:
 	return surface_clearance(Basis.IDENTITY) + surface_clearance(Basis(Vector3.RIGHT,PI))
+
+var wildlife_radius_frame := -1
+var wildlife_radius := 0.0
+func wildlife_contact_radius() -> float:
+	# Shared by nearby fish; do not refit the hull for every fish every tick.
+	if wildlife_radius_frame != Engine.get_physics_frames():
+		wildlife_radius = collision_height() * 0.5
+		wildlife_radius_frame = Engine.get_physics_frames()
+	return wildlife_radius
 
 func _process(delta: float) -> void:
 	submarine_audio.update(delta)

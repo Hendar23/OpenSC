@@ -14,6 +14,7 @@ var timeline := 0.0
 var tick := -1
 var clock := 0.0
 var started := false
+var death_captured := false
 var bytes := 0
 var enabled := true
 var playing := false
@@ -48,8 +49,15 @@ func set_enabled(value: bool) -> void:
 
 func _process(delta: float) -> void:
 	if playback != null or not enabled: return
-	if game.world_loading or not game.has_started_game or not game.pilot_mode or not is_instance_valid(game.pilot) or game.pilot.dead:
+	if game.world_loading or not game.has_started_game or not game.pilot_mode or not is_instance_valid(game.pilot):
 		if started: clear()
+		return
+	if game.pilot.dead:
+		# Retain the final voyage instead of overwriting it with time spent at
+		# Game Over. Include the destruction visuals once before freezing it.
+		if started and not death_captured:
+			capture(clock); clock = 0; death_captured = true
+		audio.set_recording(false)
 		return
 	if game.docking.stage != game.Docking.Stage.IDLE:
 		if started: clear()
@@ -171,10 +179,12 @@ func end() -> void:
 		if node != null: node.visible = entry.visible
 	frozen.clear(); hidden_sources.clear()
 	for track in tracks.values():
-		if track.proxy != null: track.proxy.free(); track.proxy = null
+		track.proxy = null
 	for wake in wakes.values():
-		if wake.proxy != null: wake.proxy.free(); wake.proxy = null
-	playback.free(); playback = null; playing = false
+		wake.proxy = null
+	# Newly reconstructed wreck meshes may still have pending renderer updates.
+	# Hide immediately, then release the proxy subtree at the normal frame end.
+	playback.hide(); playback.queue_free(); playback = null; playing = false
 	RenderingServer.global_shader_parameter_set("osc_replay_active",false)
 
 func seek(time: float, continuous: bool = false) -> void:
@@ -219,6 +229,7 @@ func toggle_play() -> void:
 	audio.update(cursor,playing and is_equal_approx(speed,1.0))
 
 func clear() -> void:
+	death_captured = false
 	end()
 	if audio != null: audio.clear()
 	for track in tracks.values(): track.dispose()

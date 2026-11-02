@@ -89,7 +89,10 @@ func take_weapon_damage(strength: float, _source: Vector3 = Vector3.ZERO) -> voi
 		get_parent().get_parent().add_child(wreck); wreck.global_position = global_position
 		wreck.setup_machine(get_parent(),get_parent(),bubble_texture)
 		wreck.name = "TurretWreck"; wreck.add_to_group("turret_wrecks")
-		burst(global_position,1.0)
+		burst(destruction_position(),1.0)
+
+func destruction_position() -> Vector3:
+	return global_position
 
 func activate(seconds: float) -> void:
 	if retaliation <= 0: cooldown = 0

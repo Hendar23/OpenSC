@@ -157,9 +157,10 @@ func attach(node: Node) -> void:
 			var material: ShaderMaterial = materials.get(original.get_instance_id())
 			if material == null:
 				material = ShaderMaterial.new(); material.shader = preload("res://exterior_canopy.gdshader") if original.get_meta("exterior_canopy",false) else preload("res://natural_surface.gdshader")
+				material.set_shader_parameter("billboard",original.billboard_mode == BaseMaterial3D.BILLBOARD_ENABLED)
 				if original.get_meta("exterior_canopy",false): material.set_shader_parameter("canopy_original_color",original.get_meta("canopy_original_color",Color(0.28,0.34,0.40)))
 				if original.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA:
-					material.shader = alpha_shader()
+					material.shader = preload("res://exterior_glass.gdshader") if original.get_meta("exterior_canopy",false) else alpha_shader()
 				for entry in [["albedo_color",original.albedo_color],["has_texture",original.albedo_texture != null],["albedo_texture",original.albedo_texture],["use_vertex_color",original.vertex_color_use_as_albedo],["roughness_value",original.roughness],["metallic_value",original.metallic],["specular_value",original.metallic_specular],["uv_scale",original.uv1_scale],["uv_offset",original.uv1_offset]]: material.set_shader_parameter(entry[0],entry[1])
 				if original.get_meta("terrain_mipmaps", false):
 					material.set_shader_parameter("terrain_mipmaps", true)

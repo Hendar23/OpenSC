@@ -185,7 +185,7 @@ func _held() -> bool:
 
 func _physics_process(delta: float) -> void:
 	if pilot == null: return
-	update_fire(pilot.active and pilot.controls_enabled and _held(),delta)
+	update_fire(preload("res://submarine_controller.gd").tools_allowed(pilot) and _held(),delta)
 
 func update_fire(held: bool, delta: float) -> void:
 	if pilot.get("remote_controlled") == true: held = false

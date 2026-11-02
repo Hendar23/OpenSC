@@ -32,6 +32,10 @@ func start() -> void:
 			if body == null: continue
 			builder.place_clear(body)
 			body.freeze = true; body.release_on_tow = true
+			# Frozen until grabbed, then continuously integrate the custom sinking
+			# force. Sleeping in water would suspend that force and leave a charge
+			# hovering after the Magnet lets go.
+			body.can_sleep = false
 			var item := {"body":body,"remaining":150,"active":true,"handled":false,"attached":false,"armed":false,"smoke":null}
 			bombs.append(item); body.destroyed.connect(_explode.bind(item))
 
@@ -152,6 +156,11 @@ func _ship_tow_attempted() -> void:
 
 func target_body() -> CollisionObject3D:
 	return ship if is_instance_valid(ship) and not ship.dead and not rescued else null
+
+func release_survivors() -> void:
+	if not is_instance_valid(ship) or ship.dead: return
+	jobs.actors.erase(ship)
+	jobs.runtime.retain_prop_until_docking(ship)
 
 func clear() -> void:
 	if is_instance_valid(ship) and ship.destroyed.is_connected(_ship_lost): ship.destroyed.disconnect(_ship_lost)

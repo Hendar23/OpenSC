@@ -4,6 +4,7 @@ const PORTS := [Vector3(1.4,-0.1,1.1),Vector3(-1.4,-0.1,1.1)]
 const INTERVAL := 20.0/25.0
 var hitbox: CollisionObject3D
 var bubble_trail: Node3D
+var target_override: Node3D
 var game: Node
 var yaw: Node3D
 var pitch: Node3D
@@ -12,22 +13,22 @@ var cooldown := INTERVAL
 var port := 0
 var shots := 0
 
-func setup(body: RigidBody3D, owner_game: Node) -> void:
+func setup(body: RigidBody3D, owner_game: Node, head: Node3D = null) -> void:
 	hitbox = body; game = owner_game; bubble_trail = game.submarine_traffic.bubbles
 	# Original numbered frames2/4 correspond to the yaw head and gun atomics.
-	pitch = body.appearance.find_child("Frame_2",true,false)
-	yaw = body.appearance.find_child("Frame_1",true,false)
+	pitch = head.find_child("Frame_1",true,false) if head != null else body.appearance.find_child("Frame_2",true,false)
+	yaw = head.find_child("Frame_0",true,false) if head != null else body.appearance.find_child("Frame_1",true,false)
 	missile_template = preload("res://clump_loader.gd").load_clump(game.game_folder.path_join("CLUMPS/MISSILE.DFF"))
 	if missile_template != null: add_child(missile_template); missile_template.hide()
 
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(hitbox) or not hitbox.visible or game.pilot.dead or not game.pilot.active: return
 	if not is_instance_valid(yaw) or not is_instance_valid(pitch) or missile_template == null: return
-	var target: Node3D = game.pilot
+	var target: Node3D = target_override if is_instance_valid(target_override) and not target_override.get("dead") else game.pilot
 	if target.get_meta("bubble_screened",false): return
 	var socket: Vector3 = pitch.to_global(PORTS[port])
 	# Same bounded tracking as the original two-degree-per-25Hz-tick rotation.
-	var predicted: Vector3 = target.global_position+target.linear_velocity*0.15
+	var predicted: Vector3 = target.global_position+(target.linear_velocity if target is RigidBody3D else Vector3.ZERO)*0.15
 	var local: Vector3 = yaw.global_basis.inverse()*(predicted-socket)
 	yaw.rotation.y += clampf(atan2(local.x,local.z),-deg_to_rad(50)*delta,deg_to_rad(50)*delta)
 	socket = pitch.to_global(PORTS[port])

@@ -85,7 +85,7 @@ func activate(id: String) -> void:
 
 func refresh() -> void:
 	var pilot: Node3D = equipment.pilot
-	var live: bool = pilot.active and pilot.controls_enabled and not pilot.dead and not pilot.remote_controlled
+	var live: bool = preload("res://submarine_controller.gd").tools_allowed(pilot) and not pilot.remote_controlled
 	boost_on = live and on("woosh")
 	pilot.movement.boost_multiplier = BOOST if boost_on else 1.0
 	var state := progress()
@@ -102,7 +102,7 @@ func _physics_process(delta: float) -> void:
 func advance(delta: float) -> void:
 	refresh()
 	var pilot: Node3D = equipment.pilot
-	var live: bool = pilot.active and pilot.controls_enabled and not pilot.dead and not pilot.remote_controlled
+	var live: bool = preload("res://submarine_controller.gd").tools_allowed(pilot) and not pilot.remote_controlled
 	flare_cooldown = maxf(0,flare_cooldown-delta)
 	if not live: return
 	var gain: float = -16.0 + (float(pilot.submarine_audio.tuning.settings.master_volume) if pilot.submarine_audio != null else 0)

@@ -56,7 +56,9 @@ func _add_water_surface() -> void:
 	var surface := MeshInstance3D.new()
 	surface.name = "WaterSurface"
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(bounds.size.x + 40.0, bounds.size.z + 40.0)
+	# Cover the full unfogged camera range from every point in the map. A
+	# small map-sized sheet exposed its edge before distance fog had settled.
+	plane.size = Vector2(bounds.size.x + 8000.0, bounds.size.z + 8000.0)
 	plane.subdivide_width = clampi(ceili(plane.size.x / 2.0),32,256)
 	plane.subdivide_depth = clampi(ceili(plane.size.y / 2.0),32,256)
 	surface.mesh = plane

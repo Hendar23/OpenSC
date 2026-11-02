@@ -172,6 +172,13 @@ func run() -> void:
 	var ordinary: float = -movement.velocity.z; movement.reset_motion(); movement.boost_multiplier = tools.BOOST
 	for tick in range(1200): movement.step(1.0/60.0,Basis.IDENTITY,1,0,0)
 	check(-movement.velocity.z > ordinary*1.4,"Turbo increases actual cruising speed")
+	var boosted_speed: float = -movement.velocity.z
+	movement.boost_multiplier = 1.0
+	movement.step(1.0/60.0,Basis.IDENTITY,0,0,0)
+	var expected_coast := boosted_speed * exp(-(float(tuning.forward_drag)+float(tuning.water_resistance)*boosted_speed)*movement.REFERENCE_MASS/float(tuning.mass)/60.0)
+	check(is_equal_approx(-movement.velocity.z,expected_coast) and -movement.velocity.z > ordinary,"Disabling Woosh preserves momentum and slows by normal drag without snapping to cruise speed")
+	for tick in range(1200): movement.step(1.0/60.0,Basis.IDENTITY,1,0,0)
+	check(is_equal_approx(-movement.velocity.z,ordinary),"Ordinary thrust settles back to its normal cruising speed after boost")
 	check(game.pilot.movement.settings == tuning,"Turbo preserves authored/mod movement settings")
 	game.equipment.toggle_selected(); check(game.pilot.movement.boost_multiplier == 1,"Turning off restores ordinary propulsion")
 	game.player_progress.ammunition.woosh = 1.1; game.equipment.toggle_selected(); tools.advance(0.2)
@@ -257,5 +264,19 @@ func run() -> void:
 		root.get_texture().get_image().save_png("res://../.local/electro-preview.png")
 	tools.reset(); arsenal.reset()
 	check(not game.pilot.get_meta("bubble_screened",false) and game.pilot.movement.boost_multiplier == 1 and tools.flares.is_empty() and arsenal.shots.is_empty(),"Session reset clears all effects and propulsion overrides")
+	game.weapons.set_installed(["zapper"]); game.weapons.select_id("zapper")
+	game.equipment.set_installed(["deep_sea_lights","magnet"])
+	game.pilot.active = false
+	for phase in [game.Docking.Stage.EXIT_OPEN,game.Docking.Stage.ASCEND,game.Docking.Stage.EXIT_CLOSE]:
+		game.docking.stage = phase; game.game_input._physics_process(0.04)
+		check(not game.pilot.controls_enabled and preload("res://submarine_controller.gd").tools_allowed(game.pilot),"Undocking permits tools while automatic piloting retains movement control")
+		Input.action_press("weapon_fire"); game.weapons._physics_process(0.04)
+		check(game.weapons.firing,"Zapper fires during undocking")
+		Input.action_release("weapon_fire"); game.weapons._physics_process(0.04)
+		game.equipment.magnet.set_enabled(true)
+		check(game.equipment.magnet.enabled,"Magnet activates during undocking")
+		game.equipment.magnet.set_enabled(false)
+	game.docking.stage = game.Docking.Stage.DOCKED; game.game_input._physics_process(0.04)
+	check(not preload("res://submarine_controller.gd").tools_allowed(game.pilot),"Docked ship cannot fire or activate tools")
 	print("Remaining equipment: %d checks, %d failures" % [checks,failures])
 	game.queue_free(); await process_frame; quit(1 if failures else 0)

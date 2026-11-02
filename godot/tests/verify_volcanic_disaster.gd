@@ -61,7 +61,7 @@ func run() -> void:
 	progress.missions.completed["disperse"] = {"success":true,"city":2}
 	check(Rules.next_offer(progress,2) == "fumehole","Volcano follows Velcova's mutant attack")
 	progress.missions.completed["fumehole2"] = {"success":true,"city":4}
-	check(Rules.next_offer(progress,2).is_empty(),"Paired history excludes duplicate offer in published saves")
+	check(Rules.next_offer(progress,2) == "miners","Paired history skips duplicate volcano offer and advances to student rescue")
 	progress = Progress.restore(JSON.parse_string(JSON.stringify(progress)))
 	check(progress.missions.completed.has("fumehole2"),"New completion survives existing save restoration")
 	game.player_progress = Progress.restore({"campaign_stage":3}); game.weapons.set_installed(["zapper"])

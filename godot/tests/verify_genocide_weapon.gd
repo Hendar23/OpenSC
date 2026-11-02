@@ -209,7 +209,7 @@ func run() -> void:
 		await process_frame; await physics_frame
 		if index == 1:
 			check(mission.phase == "walker" and mission.head == null and mission.torpedo_hits == 2,"Head hits warn and damage the head; they do not release it")
-			check(game.bounty_radio_queue.any(func(message: Dictionary) -> bool: return message.text.contains("Missile impact on walker head")),"Confirmed head collision emits original E18 warning")
+			check(game.bounty_radio_queue.any(func(message: Dictionary) -> bool: return message.text == game.gameplay_catalogue.tables.radio_messages.records.e18.text),"Confirmed head collision emits original E18 warning")
 	check(game.pilot.dead and runtime.active().is_empty() and mission.head == null,"Third confirmed head torpedo causes catastrophe instead of awarding a salvageable head")
 
 	await fresh("walktrad2")

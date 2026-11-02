@@ -42,10 +42,12 @@ var terrorists: RefCounted
 var stage_three_remaining: RefCounted
 var stage_three: RefCounted
 var volcano: StaticBody3D
+var rampaging: RefCounted
 var diplomats: RefCounted
 var defection: RefCounted
 
 func _exit_tree() -> void:
+	if rampaging != null: rampaging.clear(); rampaging = null
 	if diplomats != null: diplomats.clear(); diplomats = null
 	if defection != null: defection.clear(); defection = null
 	if is_instance_valid(volcano): volcano.clear(); volcano = null
@@ -61,7 +63,9 @@ func start(mission_id: String) -> void:
 	passengers = false; tapped = false; warned = false; convinced = false; dialogue = 0; interception_instruction = false; interception_cancelled = false
 	base_guidance = false; base_instruction_clock = -1.0; reinforcements = false; armour_clock = 0
 	reinforcement_radio_clock = -1.0
-	if id in runtime.Rules.CORE_THREE.values():
+	if id in ["pwalker","pwalker2"]:
+		rampaging = preload("res://rampaging_walker.gd").new(); rampaging.jobs = self; rampaging.start()
+	elif id in runtime.Rules.CORE_THREE.values():
 		diplomats = preload("res://escort_diplomats.gd").new(); diplomats.jobs = self; diplomats.start()
 	elif id in ["miners","miners2","bomb","aliens","aliens2"]:
 		stage_three_remaining = preload("res://stage_three_remaining.gd").new(); stage_three_remaining.jobs = self; stage_three_remaining.start()
@@ -84,6 +88,7 @@ func start(mission_id: String) -> void:
 	else: _start_covert()
 
 func clear(reset_rover: bool = false) -> void:
+	if rampaging != null: rampaging.clear(); rampaging = null
 	if diplomats != null: diplomats.clear(); diplomats = null
 	if defection != null: defection.clear(); defection = null
 	if is_instance_valid(volcano): volcano.clear(); volcano = null
@@ -270,7 +275,8 @@ func _start_covert() -> void:
 func _physics_process(delta: float) -> void:
 	if id.is_empty() or phase == "finished" or runtime.active().is_empty() or not game.pilot.active: return
 	age += delta; clock -= delta; armour_clock = maxf(0,armour_clock - delta)
-	if diplomats != null: diplomats.step(delta)
+	if rampaging != null: rampaging.step(delta)
+	elif diplomats != null: diplomats.step(delta)
 	elif defection != null: defection.step(delta)
 	elif is_instance_valid(volcano): volcano.step(delta)
 	elif stage_three_remaining != null: stage_three_remaining.step(delta)

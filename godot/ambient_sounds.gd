@@ -86,7 +86,7 @@ func refresh() -> void:
 		for fish: Node3D in game.wildlife.nearby_creatures(camera.global_position,RANGE):
 			if fish.dead or not fish.get_meta("wildlife_awake",true) or not fish.is_visible_in_tree() or str(fish.get_meta("sound_model","")) not in SWIMMERS: continue
 			_candidate(candidates,fish,"SCREEN1",camera.global_position,2)
-	for actor: Node in game.mission_runtime.side_jobs.actors:
+	for actor in game.mission_runtime.side_jobs.actors:
 		if not is_instance_valid(actor) or not actor.is_in_group("marine_life") or actor.dead or not actor.is_visible_in_tree(): continue
 		if str(actor.get_meta("sound_model","")) in SWIMMERS: _candidate(candidates,actor,"SCREEN1",camera.global_position,2)
 	candidates.sort_custom(func(a: Dictionary,b: Dictionary) -> bool: return a.priority < b.priority or (a.priority == b.priority and a.distance < b.distance))

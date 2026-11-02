@@ -38,6 +38,12 @@ func start() -> void:
 					var ship: RigidBody3D = builder.prop("TRAD-SUB",Transform3D(Basis.IDENTITY,queen.global_position+offsets[index]),10,0.3,25.0,false)
 					if ship == null: continue
 					builder.place_clear(ship)
+					# Connected bodies must not fight their own tether springs in the
+					# contact solver. Keep terrain/player contacts and weapon queries.
+					ship.add_collision_exception_with(queen)
+					for pair in tethers:
+						ship.add_collision_exception_with(pair.ship)
+						pair.ship.add_collision_exception_with(ship)
 					ship.set_meta("faction",1); ship.set_physics_process(true)
 					ship.destroyed.connect(_tether_broken.bind(ship))
 					var link: Node3D = chain_template.duplicate() if chain_template != null else Node3D.new()
@@ -101,6 +107,15 @@ func _eggs(center: Vector3, count: int, radius: float) -> void:
 
 func _egg_broken(egg: Node3D) -> void:
 	if resolved or jobs.id.is_empty(): return
+	# Keep the retail opened shell/hatch chance, with organic hit feedback.
+	# No second copy of the shell is fragmented into long-lived debris.
+	var burst := preload("res://creature_death.gd").new()
+	jobs.game.world_root.add_child(burst); burst.global_position = egg.global_position
+	var empty_visual := Node3D.new()
+	burst.setup(egg,queen.death_texture,queen.death_sound,queen.death_frames,null,empty_visual)
+	empty_visual.free()
+	burst.name = "EggSplat"
+	burst.lifetime = maxf(burst.gore_lifetime,burst.bubbles.lifetime if burst.bubbles != null else 0.0)+0.1
 	var visual: Node3D = jobs.Document.load_model("EGGBROKE",jobs.game.game_folder)
 	if visual != null:
 		jobs.game.world_root.add_child(visual); visual.global_transform = egg.global_transform; jobs.actors.append(visual)
@@ -116,7 +131,7 @@ func _mine(point: Vector3) -> void:
 	definition.merge({"appearance":"model","model":"MINE"},true)
 	var population: Node = jobs.game.object_population
 	var mine := preload("res://floating_mine.gd").new()
-	mine.setup(definition,population.appearance(definition,jobs.game.game_folder),null,true)
+	mine.setup(definition,population.appearance(definition,jobs.game.game_folder),jobs.game.submarine_traffic.explosion_sound,true)
 	jobs.game.world_root.add_child(mine); mine.global_position = point; mine.home = point; mine.player = jobs.game.pilot
 	mine.explosion_frames.assign(population.explosion_frames); mine.exploded.connect(population._exploded.bind(600.0)); jobs.actors.append(mine)
 	mine.set_meta("mission_owner",jobs.id); jobs.game.natural_light.attach(mine); jobs.game.water_visuals.attach(mine)
@@ -162,9 +177,17 @@ func _queen_dead() -> void:
 
 func _tether_broken(ship: RigidBody3D) -> void:
 	if resolved or jobs.id.is_empty(): return
+	var traffic: Node = jobs.game.submarine_traffic
+	var fireball := preload("res://mine_explosion.gd").new()
+	jobs.game.world_root.add_child(fireball); fireball.global_position = ship.global_position
+	fireball.setup(traffic.explosion_frames,2.0,traffic.explosion_sound); fireball.name = "CaptorExplosion"
 	var wreck := preload("res://submarine_death.gd").new(); jobs.game.world_root.add_child(wreck); wreck.global_position = ship.global_position
 	wreck.setup_machine(ship,ship.get_child(0),jobs.game.submarine_traffic.bubble_texture,[],ship.linear_velocity)
 	ship.hide()
+	# The separate wreck owns the surviving visual fragments. Retire the
+	# invisible live hull too, including its mask (layer zero alone is not enough).
+	ship.set_deferred("collision_mask",0)
+	ship.set_deferred("freeze",true)
 
 func target_body() -> CollisionObject3D:
 	return queen if is_instance_valid(queen) and not queen.dead and not resolved else null

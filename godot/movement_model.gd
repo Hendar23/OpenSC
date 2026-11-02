@@ -95,9 +95,14 @@ func step(delta: float, basis: Basis, throttle: float, vertical: float, turn: fl
 	local.x *= exp(-(float(settings.lateral_drag) + resistance * absf(local.x)) * REFERENCE_MASS / body_mass * towing_drag * delta)
 	local.y *= exp(-(float(settings.vertical_drag) + resistance * absf(local.y)) * REFERENCE_MASS / body_mass * delta)
 	local.z *= exp(-(float(settings.forward_drag) + resistance * absf(local.z)) * REFERENCE_MASS / body_mass * towing_drag * delta)
+	# A reduced propulsion limit must not erase existing momentum. Preserve the
+	# speed remaining after drag, while preventing thrust from increasing excess
+	# speed further (for example when switching off the Woosh Drive).
+	var forward_limit := maxf(float(settings.forward_speed) * boost_multiplier, -local.z)
+	var reverse_limit := maxf(float(settings.reverse_speed) * boost_multiplier, local.z)
 	velocity = basis * local + thrust_force / body_mass * delta
 	local = basis.inverse() * velocity
-	local.z = clampf(local.z, -float(settings["forward_speed"])*boost_multiplier, float(settings["reverse_speed"])*boost_multiplier)
+	local.z = clampf(local.z, -forward_limit, reverse_limit)
 	local.y = clampf(local.y, -float(settings["vertical_speed"]), float(settings["vertical_speed"]))
 	velocity = basis * local
 	velocity.y = clampf(velocity.y, -float(settings.vertical_speed), float(settings.vertical_speed))

@@ -24,7 +24,7 @@ func set_enabled(on: bool) -> void:
 		if audio != null: audio.stop()
 
 func _physics_process(delta: float) -> void:
-	if not enabled or not equipment.pilot.active or not equipment.pilot.controls_enabled or equipment.pilot.dead:
+	if not enabled or not preload("res://submarine_controller.gd").tools_allowed(equipment.pilot):
 		if audio != null: audio.stop()
 		return
 	if audio != null and audio.stream != null:

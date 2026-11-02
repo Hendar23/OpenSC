@@ -7,6 +7,7 @@ const LOCKED_TIME := 30.0
 var boss: Node3D
 var shuttle: Node3D
 var body: CollisionObject3D
+var controller: Node3D
 var hatch: Node3D
 var hatch_visible := true
 var initial := Transform3D.IDENTITY
@@ -24,6 +25,11 @@ var mask := 0
 
 func setup(mothership: Node3D, agent: Node3D) -> void:
 	boss = mothership; shuttle = agent.get_parent(); body = agent.body
+	controller = agent
+	if agent.has_method("set_local_simulation"):
+		agent.set_local_simulation(true)
+		agent.presentation_locked = true
+	shuttle.show()
 	initial = shuttle.global_transform
 	layer = body.collision_layer; mask = body.collision_mask
 	# The source turns shuttle collision off during capture; ordinary weapons
@@ -79,6 +85,7 @@ func release(speed: float) -> void:
 	_open(true)
 
 func restore_collision() -> void:
+	if is_instance_valid(controller) and controller.has_method("set_local_simulation"): controller.presentation_locked = false
 	if is_instance_valid(body):
 		body.collision_layer = layer; body.collision_mask = mask
 

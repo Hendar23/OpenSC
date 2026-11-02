@@ -32,7 +32,7 @@ func transfer_to(cargo: Dictionary) -> void:
 	storage.clear()
 
 func _physics_process(delta: float) -> void:
-	var running: bool = enabled and pilot != null and pilot.active and pilot.controls_enabled and not pilot.dead
+	var running: bool = enabled and pilot != null and preload("res://submarine_controller.gd").tools_allowed(pilot)
 	if audio != null:
 		if pilot != null and pilot.submarine_audio != null: audio.volume_db = volume_db + float(pilot.submarine_audio.tuning.settings.master_volume)
 		if running and audio.stream != null and not audio.playing: audio.play()

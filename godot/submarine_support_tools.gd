@@ -170,7 +170,7 @@ func fire_listening() -> void:
 
 func fire_depth(held: bool) -> void:
 	if not held or depth_cooldown > 0: return
-	if equipment.pilot.dead or not equipment.pilot.active or not equipment.pilot.controls_enabled: return
+	if not preload("res://submarine_controller.gd").tools_allowed(equipment.pilot): return
 	depth_cooldown = 1.0
 	var mission := runtime()
 	if mission == null or int(mission.game.player_progress.hold.get("depth",0)) <= 0: return
@@ -206,7 +206,7 @@ func _physics_process(delta: float) -> void:
 	if pod == null: return
 	if pod_enabled and pod_attached and (not is_instance_valid(pod_target) or bool(pod_target.get("dead")) or equipment.pilot.global_position.distance_to(pod_target.to_global(pod_anchor)) > 3.0):
 		_recall_pod()
-	if equipment.pilot.dead or not equipment.pilot.active: pod_enabled = false; _detach_pod(false)
+	if equipment.pilot.dead or (not equipment.pilot.active and not equipment.pilot.get_meta("launch_tools",false)): pod_enabled = false; _detach_pod(false)
 	pod_deployment = move_toward(pod_deployment,0.6 if pod_enabled else 0.0,delta * 0.8)
 	if not pod_enabled and not pod_stowed:
 		# The winch reels relative to the moving hull; water drag must not leave

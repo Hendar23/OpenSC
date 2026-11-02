@@ -10,6 +10,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 func target_body() -> CollisionObject3D:
+	if jobs.rampaging != null: return jobs.rampaging.target_body()
 	if jobs.diplomats != null: return jobs.diplomats.target_body()
 	if jobs.defection != null: return jobs.defection.target_body()
 	if is_instance_valid(jobs.volcano): return jobs.volcano.target_body()

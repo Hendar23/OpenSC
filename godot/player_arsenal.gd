@@ -97,7 +97,7 @@ func count(id: String) -> int:
 func update(held: bool, delta: float) -> void:
 	delta = maxf(0,delta); cooldown = maxf(0,cooldown-delta)
 	var pilot: Node3D = weapons.pilot
-	var live: bool = pilot.active and pilot.controls_enabled and not pilot.dead and not pilot.remote_controlled
+	var live: bool = preload("res://submarine_controller.gd").tools_allowed(pilot) and not pilot.remote_controlled
 	var id: String = weapons.current().get("id","")
 	var state := progress()
 	if state.is_empty(): return

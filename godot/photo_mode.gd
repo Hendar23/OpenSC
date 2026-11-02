@@ -20,7 +20,7 @@ func setup(context: Node) -> void:
 	game.front_end.gameplay_menu.replay_changed.connect(replay.set_enabled)
 
 func can_enter() -> bool:
-	return game != null and game.has_started_game and game.pilot_mode and not game.world_loading and not get_tree().paused and not Bindings.capture_active and is_instance_valid(game.pilot) and not game.pilot.dead and game.pilot.active and not game.map_open and not game.developer_ui_visible and game.docking != null and game.docking.stage == game.Docking.Stage.IDLE and game._desired_mouse_mode() == Input.MOUSE_MODE_HIDDEN
+	return game != null and game.has_started_game and game.pilot_mode and not game.world_loading and not get_tree().paused and not Bindings.capture_active and is_instance_valid(game.pilot) and (game.pilot.dead or game.pilot.active) and not game.map_open and not game.developer_ui_visible and game.docking != null and game.docking.stage == game.Docking.Stage.IDLE and game._desired_mouse_mode() == Input.MOUSE_MODE_HIDDEN
 
 func enter(controller: int = -1) -> bool:
 	if active or not can_enter(): return false

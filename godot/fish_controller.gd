@@ -86,6 +86,9 @@ var death_particle_scale := 1.0
 var combat: Node3D
 var pushed_velocity := Vector3.ZERO
 var last_push_frame := -1
+var yielding_submarine: WeakRef
+var soft_contact_shape: SphereShape3D
+var touching_submarine := false
 func configure_ranges(species: Dictionary) -> void:
 	var ranges := preload("res://map_document.gd").creature_ranges(species)
 	attack_range = float(ranges.attack_range); flee_range = float(ranges.flee_range)
@@ -96,6 +99,7 @@ func configure_combat(species: Dictionary) -> void:
 	combat.configure(self,species); add_child(combat)
 
 func clear_ambient_state() -> void:
+	_clear_yielding_submarine()
 	# Pool resources, never the identity or history of an offscreen creature.
 	position = Vector3.ZERO; home = Vector3.ZERO; goal = Vector3.ZERO
 	ignore_wildlife = false
@@ -184,6 +188,44 @@ func receive_sub_push(sub_velocity: Vector3, sub_radius: float) -> void:
 	var yield_factor := clampf(pow(maxf(0.05,sub_radius),3) / (pow(maxf(0.05,sub_radius),3) + pow(radius,3)),0.05,0.95)
 	pushed_velocity = sub_velocity * yield_factor
 	if is_inside_tree(): move_and_collide(pushed_velocity * get_physics_process_delta_time())
+
+func yields_to_submarine(player: RigidBody3D) -> bool:
+	# Only markedly smaller bodies yield without a solver reaction. Comparable
+	# and larger wildlife retains solid hull contact. Volume estimates mass
+	# relative to the submarine at the same displaced-water density.
+	var sub_radius: float = player.wildlife_contact_radius()
+	return pow(radius,3) < pow(sub_radius,3) * 0.1
+
+func _clear_yielding_submarine() -> void:
+	var previous: RigidBody3D = yielding_submarine.get_ref() if yielding_submarine != null else null
+	if is_instance_valid(previous): remove_collision_exception_with(previous)
+	yielding_submarine = null; touching_submarine = false
+
+func _update_submarine_contact() -> void:
+	var player: RigidBody3D = population.player as RigidBody3D if population != null and is_instance_valid(population.player) else null
+	if player == null or not player.has_method("collision_height") or not yields_to_submarine(player):
+		if yielding_submarine != null: _clear_yielding_submarine()
+		return
+	if yielding_submarine == null or yielding_submarine.get_ref() != player:
+		_clear_yielding_submarine()
+		yielding_submarine = weakref(player); add_collision_exception_with(player)
+	if player.dead or not player.active: touching_submarine = false; return
+	var reach: float = player.COLLIDER_RADIUS + radius
+	if global_position.distance_squared_to(player.global_position) > reach * reach:
+		touching_submarine = false; return
+	if soft_contact_shape == null: soft_contact_shape = SphereShape3D.new()
+	soft_contact_shape.radius = radius
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = soft_contact_shape; query.transform.origin = global_position; query.collision_mask = 2
+	var contact := get_world_3d().direct_space_state.intersect_shape(query,8).any(func(hit: Dictionary) -> bool: return hit.collider == player)
+	if contact:
+		var away := player.global_position.direction_to(global_position)
+		if away.is_zero_approx(): away = player.global_basis.x
+		if not touching_submarine:
+			var damage := submarine_contact_damage(player.linear_velocity,-away)
+			if damage > 0: player.take_damage(damage,global_position,false)
+		receive_sub_push(player.linear_velocity + away * maxf(0.5,player.linear_velocity.length()*0.5),player.collision_height()*0.5)
+	touching_submarine = contact
 
 func configure_health(value: float) -> void:
 	max_health = maxf(0.1,value); health = max_health
@@ -433,6 +475,7 @@ func repel_from(point: Vector3, duration: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	if dead or delta <= 0.0: return
+	_update_submarine_contact()
 	if is_instance_valid(herding_target):
 		velocity = Vector3.ZERO; animation_time += delta*ANIMATION_SPEED; return
 	if population != null and population.streaming and not population.detailed(self):

@@ -19,6 +19,7 @@ static func movie(cue: String, city: int = 0, race: int = 0) -> String:
 		"intro": return "intro"
 		"dock": return {1:"traddock",2:"techdock",4:"refdock"}.get(race,"")
 		"peace": return "btvpeace" if city in [1,3] else "pnnpeace" if city in [2,4] else ""
+		"diplomats_rescued": return "btvflat" if city in [1,3] else "pnnflat" if city in [2,4] else ""
 		"cities_destroyed": return "btvflat" if city in [1,3] else "pnnflat" if city in [2,4] else ""
 		"walker_catastrophe": return "walkfail"
 		"world_destroyed": return "destruct"

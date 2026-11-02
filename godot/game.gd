@@ -259,6 +259,8 @@ func _build_interface() -> void:
 
 func _bootstrap() -> void:
 	world_loading = true
+	var folder := Paths.find_game_folder()
+	front_end.load_loading_art(folder)
 	front_end.show_loading()
 	canvas.hide()
 	front_end.loading_status.text = "Checking for updates..."
@@ -274,7 +276,6 @@ func _bootstrap() -> void:
 		startup_updates = null
 	world_loading = false
 	front_end.loading_status.text = "Loading"
-	var folder := Paths.find_game_folder()
 	if folder.is_empty():
 		_prompt_game_folder("OpenSubCulture needs your original Sub Culture files. Choose the game folder containing CLUMPS and DATA.")
 	else:

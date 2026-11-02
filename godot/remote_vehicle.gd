@@ -134,7 +134,7 @@ func answer_docking(accepted: bool) -> void:
 
 func can_control() -> bool:
 	var runtime: Node = tools.runtime()
-	return deployed and tools.equipment.pilot.controls_enabled and runtime != null and not runtime.game.map_open and not runtime.game.world_loading and not runtime.game.developer_ui_visible and not runtime.game.front_end.menu_layer.visible and not runtime.game.dock_interface_active and not tools.equipment.pilot.dead
+	return deployed and preload("res://submarine_controller.gd").tools_allowed(tools.equipment.pilot) and runtime != null and not runtime.game.map_open and not runtime.game.world_loading and not runtime.game.developer_ui_visible and not runtime.game.front_end.menu_layer.visible and not runtime.game.dock_interface_active and not tools.equipment.pilot.dead
 
 func socket() -> Node3D:
 	for item in tools.equipment.available:

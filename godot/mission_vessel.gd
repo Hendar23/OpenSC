@@ -5,6 +5,7 @@ signal player_attacked
 signal hull_damaged(attacker: Node3D)
 var combat_enabled := true
 var dormant := false
+var presentation_locked := false
 var waypoints := PackedVector3Array()
 var waypoint := 0
 var loop_route := false

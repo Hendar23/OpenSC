@@ -98,7 +98,11 @@ func run() -> void:
 	game.map_open = true; check(not photo.enter(),"Map blocks photo entry"); game.map_open = false
 	game.developer_ui_visible = true; check(not photo.enter(),"Developer panel blocks photo entry"); game.developer_ui_visible = false
 	game.docking.stage = game.Docking.Stage.DOCKED; check(not photo.enter(),"Docked screen blocks photo entry"); game.docking.stage = game.Docking.Stage.IDLE
-	game.pilot.dead = true; check(not photo.enter(),"Death blocks photo entry"); game.pilot.dead = false
+	game.pilot.dead = true; game.pilot.active = false
+	check(photo.enter(),"Death permits free camera entry with the inactive submarine")
+	photo.leave()
+	check(game.pilot.dead and not game.pilot.active and not paused,"Leaving post-death camera does not resurrect or reactivate the submarine")
+	game.pilot.dead = false; game.pilot.active = true
 	Bindings.capture_active = true; check(not photo.enter(),"Binding assignment cannot activate photo mode"); Bindings.capture_active = false
 	check(photo.enter(),"Photo mode can be entered repeatedly")
 	game._show_main_menu()

@@ -245,6 +245,9 @@ func _prepare_transit_settings() -> void:
 	for key in ["forward_drag", "lateral_drag", "vertical_drag", "water_resistance"]:
 		transit_settings[key] *= 100.0 / maxf(1.0, float(transit_settings.mass))
 
+func is_undocking() -> bool:
+	return stage in [Stage.EXIT_OPEN,Stage.ASCEND,Stage.EXIT_CLOSE]
+
 func camera_frozen() -> bool:
 	return stage not in [Stage.IDLE, Stage.EXIT_CLOSE]
 

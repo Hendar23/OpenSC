@@ -16,6 +16,11 @@ HALF_SIZE_MODELS = {
     ('CoralGroups', 'Coral4_G3'), ('CoralGroups', 'Coral4_G2'),
     ('CoralGroups', 'Coral3_G1_1')}
 
+SURFACE_ALIGNED_MODELS = {
+    ('Corals', 'Coral3_1'), ('Corals', 'Coral3_2'),
+    ('CoralGroups', 'Coral4_G3'), ('CoralGroups', 'Coral4_G2'),
+    ('CoralGroups', 'Coral3_G1_1')}
+
 
 def obj_parts(data):
     """Split global-index OBJ objects, preserving authored corner normals/UVs."""
@@ -88,6 +93,10 @@ def append_corals(builder, source):
                     if document == 'Seaweeds':
                         entry.update(size=2.5 * width / (high[1] - low[1]), sway=True)
                     if (document, part['name']) in HALF_SIZE_MODELS: entry['size'] *= 0.5
+                    if (document, part['name']) in SURFACE_ALIGNED_MODELS: entry['upright'] = False
+                    if part['name'].startswith('Coral_15_'):
+                        entry['size'] *= 0.5
+                        entry['upright'] = False
                     if (high[1] - low[1]) / width < 0.18: entry['ground_clearance'] = 0.08
                     entries.append(entry)
     return entries

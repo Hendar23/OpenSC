@@ -4,6 +4,7 @@ const IDS := {1:"tradetrad",3:"tradetrad2",2:"tradetech",4:"tradetech2"}
 const Rules = preload("res://mission_rules.gd")
 var game: Node
 var spawned: Array[Node] = []
+var retained_props: Array[Node3D] = []
 var pirate: Node3D
 var last_response := ""
 var last_response_id := ""
@@ -153,6 +154,7 @@ func docking_started(city: int) -> void:
 	outcome.play(game.game_folder,true)
 
 func docked(city: int) -> void:
+	_clear_retained_props()
 	if active().is_empty(): return
 	if Rules.IMPLEMENTED.has(str(active().id)): side_jobs.docked(city); return
 	if city == 6: active().refinery = true; return
@@ -220,6 +222,7 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 		var survivors: Array[Node3D] = []
 		if is_instance_valid(side_jobs.diplomats.pirate): survivors.append(side_jobs.diplomats.pirate)
 		preload("res://mission_survivors.gd").release(side_jobs,survivors)
+	if side_jobs.rampaging != null: side_jobs.rampaging.release_survivors()
 	if side_jobs.defection != null: side_jobs.defection.release_survivors(success)
 	if side_jobs.stage_three_remaining != null: side_jobs.stage_three_remaining.release_survivors()
 	if side_jobs.stage_three != null: side_jobs.stage_three.release_survivors()
@@ -231,13 +234,36 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	_publish_offers()
 	if not outcome_shown or not success: outcome.play(game.game_folder,success)
 	if game.dock_interface_active: game.dock_interface.rebuild()
-	if success and core: game.events.fmv_requested.emit("peace",sponsor_city)
+	# Original news table: walker success selects entries 1/2 (peace),
+	# diplomat success selects entries 3/4 (flat), despite the filenames.
+	if success and core: game.events.fmv_requested.emit("diplomats_rescued" if diplomats else "peace",sponsor_city)
 
 func _session_started(_restored: bool) -> void:
+	_clear_retained_props()
 	if speech != null: speech.stop()
 	_cleanup(); last_response = ""; last_response_id = ""; outcome.dismiss()
 	preload("res://campaign_resources.gd").restore_for_progress(game)
 	_publish_offers()
+
+func retain_prop_until_docking(body: Node3D) -> void:
+	if not is_instance_valid(body) or body.dead or retained_props.has(body): return
+	retained_props.append(body)
+	body.remove_meta("mission_owner")
+	body.destroyed.connect(_retained_prop_destroyed.bind(body))
+
+func _retained_prop_destroyed(body: Node3D) -> void:
+	if not is_instance_valid(body): return
+	var effect := preload("res://submarine_death.gd").new()
+	game.world_root.add_child(effect); effect.global_position = body.global_position
+	effect.setup_machine(body,body.get_child(0),game.submarine_traffic.bubble_texture,[],body.linear_velocity)
+	body.hide()
+
+func _clear_retained_props() -> void:
+	for body in retained_props:
+		if not is_instance_valid(body): continue
+		if is_instance_valid(game.cockpit_hud): game.cockpit_hud.map_data.actor_markers.erase(body)
+		body.free()
+	retained_props.clear()
 
 func _publish_offers() -> void:
 	for id in Array(IDS.values()) + Rules.IMPLEMENTED:

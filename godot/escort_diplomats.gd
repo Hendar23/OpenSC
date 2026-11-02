@@ -51,7 +51,12 @@ func clear() -> void:
 func _route(first: int, last: int) -> void:
 	ship.dormant = false; ship.path.clear(); ship.waypoints.clear(); ship.waypoint = 0
 	ship.arrival_reported = false
-	for index in range(first,last+1): ship.waypoints.append(points[index].origin)
+	for index in range(first,last+1):
+		# Retail markers can sit above our water ceiling; the last marker is
+		# inside Tryton's dock. Navigate through water, then let docking descend.
+		var point: Vector3 = jobs._city(4) if index == 6 else points[index].origin
+		point.y = minf(point.y,jobs.game.submarine_traffic.map.surface_height-jobs.game.submarine_traffic.CLEARANCE-0.1)
+		ship.waypoints.append(point)
 
 func step(delta: float) -> void:
 	elapsed += delta
@@ -141,6 +146,9 @@ func _capture() -> void:
 		shape.shape = sphere; shape.position = spec.point; body.add_child(shape)
 		var gun := preload("res://diplomat_boss_gun.gd").new(); gun.name = "GunTurret"; model.add_child(gun)
 		gun.head = model.find_child(spec.head,true,false); gun.hitbox = body
+		if spec.head == "Frame_4":
+			# Retail lower gun sockets point down its local -Z axis.
+			gun.barrel_sign = -1.0; gun.muzzles.assign([Vector3(0.35,-0.4,-1),Vector3(-0.35,-0.4,-1)])
 		body.set_script(preload("res://turret_hitbox.gd")); body.set_meta("damage_sustain",0.5)
 		gun.tuning.merge({"turret_health":20.0,"turret_sustain":0.5,"turret_armed":true},true)
 		gun.health = 20; gun.player = jobs.game.pilot
@@ -149,6 +157,7 @@ func _capture() -> void:
 			gun.add_child(gun.missile_template); gun.missile_template.hide()
 			gun.missile_template.set_meta("exclude_from_debris",true)
 		gun.bubble_trail = jobs.game.submarine_traffic.bubbles
+		gun.bubble_texture = jobs.game.submarine_traffic.bubble_texture
 		gun.explosion_frames = jobs.game.submarine_traffic.explosion_frames; gun.explosion_sound = jobs.game.submarine_traffic.explosion_sound
 		guns.append(gun)
 	for item in [{"time":6,"code":"h4"},{"time":12,"code":"h7"},{"time":30,"code":"h8"},{"time":66,"code":"h9"},{"time":114,"code":"h10"},{"time":162,"code":"h11"}]: later(item.time,item.code)

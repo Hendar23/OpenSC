@@ -292,6 +292,14 @@ static func _build_mesh(data: PackedByteArray, geometry: int, end: int, path: St
 			surface_material.cull_mode = BaseMaterial3D.CULL_BACK
 		if int(material_id) < references.size():
 			var reference: Dictionary = references[int(material_id)]
+			# BOSS uses authored solid gun colours and neutral translucent glazing.
+			# The diagnostic palette must not turn either into opaque cyan/gold.
+			var boss_material := path.get_file().to_upper() == "BOSS.DFF"
+			if boss_material and str(reference.texture).is_empty():
+				surface_material.albedo_color = reference.color
+				surface_material.albedo_color.a = float(reference.alpha)
+				if float(reference.alpha) < 1.0:
+					surface_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			# TRAD2 leaves the shared rotor's mask name blank; other original hulls
 			# explicitly pair this same texture with PELLERM.
 			if str(reference.texture).to_upper() == "PELLER" and str(reference.mask).is_empty():
@@ -311,10 +319,10 @@ static func _build_mesh(data: PackedByteArray, geometry: int, end: int, path: St
 			# Original untextured, translucent blue materials identify canopy glazing.
 			# Do not guess from atlas pixels: painted hulls and mod textures stay intact.
 			var tint: Color = reference.color
-			if str(reference.texture).is_empty() and float(reference.alpha) < 1.0 and tint.b > maxf(tint.r,tint.g):
+			if str(reference.texture).is_empty() and float(reference.alpha) < 1.0 and (boss_material or tint.b > maxf(tint.r,tint.g)):
 				surface_material.set_meta("exterior_canopy",true)
 				surface_material.set_meta("canopy_original_color",surface_material.albedo_color)
-				surface_material.albedo_color = Color(0.06,0.24,0.36)
+				surface_material.albedo_color = Color(0.06,0.24,0.36,float(reference.alpha) if boss_material else 1.0)
 				surface_material.roughness = 0.16
 				surface_material.metallic = 0.0
 				surface_material.metallic_specular = 0.8

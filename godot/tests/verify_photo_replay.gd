@@ -229,6 +229,17 @@ func run() -> void:
 	check(cloud.proxy == null or cloud.proxy.global_position.is_equal_approx(photo.view.global_position),"Paused replay's ambient cloud follows the free camera")
 	photo.leave(); check(game.particles.global_transform == particle_pose,"Free camera never moves the live particle cloud")
 	for effect in bursts: effect.free()
+	game.pilot.take_damage(1000000)
+	check(game.pilot.dead and not game.pilot.active,"Actual player destruction disables live controls before post-death replay")
+	replay._process(0.1)
+	var death_timeline: float = replay.timeline
+	var death_tracks: int = replay.tracks.size()
+	replay._process(60.0)
+	check(replay.timeline == death_timeline and replay.tracks.size() == death_tracks and death_tracks > 0,"Game Over preserves the voyage without ageing it out")
+	check(photo.enter() and replay.playback != null,"Camera and action replay remain usable after death")
+	photo.leave()
+	check(game.pilot.dead and not game.pilot.active,"Post-death replay cannot resume live controls")
+	game.pilot.dead = false; game.pilot.active = true
 	game.docking.stage = game.Docking.Stage.DOCKED; replay._process(0.1)
 	check(replay.tick == -1 and replay.tracks.is_empty(),"Docking clears the previous voyage")
 	game.docking.stage = game.Docking.Stage.IDLE; replay._process(0.1)

@@ -50,7 +50,14 @@ func _physics_process(delta: float) -> void:
 				_stop(state)
 				continue
 			state.target = _target(state.node)
-			if eligible(state.target): preload("res://original_damage.gd").weapon(state.target,damage_per_tick,state.node.global_position)
+			if eligible(state.target):
+				var victim: Node3D = state.target
+				var point := victim.global_position
+				preload("res://original_damage.gd").weapon(victim,damage_per_tick,state.node.global_position)
+				if is_instance_valid(victim) and victim.dead:
+					for fish in population.nearby_creatures(point,RANGE*2.0,true):
+						if not is_instance_valid(fish) or fish.dead: continue
+						fish.repel_from(state.node.to_global(SEARCH_CENTER),5.0)
 	for state in ports:
 		if not is_instance_valid(state.node) or not eligible(state.target): _stop(state)
 		else: _show(state)

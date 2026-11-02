@@ -51,6 +51,9 @@ func update_actors(delta: float) -> void:
 			vehicle.set_local_simulation(in_sight(vehicle.global_position,vehicle.bounds.size.length() * 0.5))
 	if is_instance_valid(submarines):
 		for agent in submarines.traders:
+			# Scripted capture owns the shuttle's visibility/collision until it
+			# exits the mothership; its occupied interior cannot pass can_activate.
+			if agent.get("presentation_locked") == true: continue
 			# Keep nearby water continuous when turning the camera. No distant combat.
 			var local := nearby(agent.global_position,agent.bounds.size.length() * 0.5,2.0)
 			if local and not agent.local_simulation: local = submarines.can_activate(agent)

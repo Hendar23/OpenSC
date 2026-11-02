@@ -42,6 +42,7 @@ func configure(values: Dictionary) -> void:
 	for key in ["caustics_strength","caustics_size","caustics_speed","caustics_depth","wave_speed","wave_direction"]:
 		RenderingServer.global_shader_parameter_set("osc_" + key,deg_to_rad(float(settings[key])) if key == "wave_direction" else settings[key])
 	if surface != null:
+		surface.set_shader_parameter("ripple_normals",preload("res://water_ripples.tres"))
 		for key in ["wave_height","wave_size","wave_speed","wave_direction","surface_shine"]:
 			surface.set_shader_parameter(key,deg_to_rad(float(settings[key])) if key == "wave_direction" else settings[key])
 
@@ -78,6 +79,7 @@ func attach(node: Node) -> void:
 			var plant: bool = original is ShaderMaterial and original.shader == PlantShader
 			if not source is StandardMaterial3D and not plant: continue
 			if source is StandardMaterial3D and source.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA: continue
+			if source is StandardMaterial3D and source.billboard_mode != BaseMaterial3D.BILLBOARD_DISABLED: continue
 			var material: Material = original if plant else materials.get(original.get_instance_id())
 			if material == null: material = original.duplicate(); materials[original.get_instance_id()] = material
 			if not material.get_meta("caustics_attached",false):

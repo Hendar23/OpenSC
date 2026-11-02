@@ -1,6 +1,6 @@
 extends RefCounted
 ## Surviving encounter ships can outlast their mission without retaining callbacks.
-const MODELS := {"TRAD2":1,"TRAD-SUB":1,"TECHNEW":2,"TECH2SUB":2,"TRADSHUT":1,"FREIGHT":1,"PIRATE":3,"CARAVAN":2}
+const MODELS := {"TRADHERD":1,"TECH-SUB":2,"TRAD2":1,"TRAD-SUB":1,"TECHNEW":2,"TECH2SUB":2,"TRADSHUT":1,"FREIGHT":1,"PIRATE":3,"CARAVAN":2}
 const TAG := "fishing_survivor"
 
 static func depart(jobs: Node, agent: Node3D) -> void:

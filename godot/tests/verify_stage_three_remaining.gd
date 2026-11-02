@@ -92,6 +92,18 @@ func run() -> void:
 	var mission: RefCounted
 	for id in ["miners","miners2"]:
 		mission = await fresh(id)
+		game.equipment.set_installed([])
+		var missing_cost := Rules.requirement_cost(game,id,Rules.offering_city(id))
+		check(missing_cost == (2200 if id == "miners2" else 2300),"Student rescue Magnet affordability uses the offering city's price: %s costs %d" % [id,missing_cost])
+		game.equipment.set_installed(["deep_sea_lights","magnet","repulse"])
+		check(Rules.requirement_cost(game,id,Rules.offering_city(id)) == 0,"Owned Magnet satisfies student rescue requirement")
+		if id == "miners2":
+			var requirements: Dictionary = game.gameplay_catalogue.tables.mission_requirements.records
+			requirements[id] = {"items":[]}
+			game.equipment.set_installed([])
+			check(Rules.requirement_cost(game,id,4) == 0,"Explicit modded Tryton requirements take precedence over fallback")
+			requirements.erase(id)
+			game.equipment.set_installed(["deep_sea_lights","magnet","repulse"])
 		check(mission.ship != null and mission.rock != null,"Rescue uses MINING and BIGROCK original callbacks")
 		check(mission.target_body() == mission.rock,"Original boulder guidance before excavation")
 		check(mission.pirate_poses.size() == 10 and mission.enemies.is_empty(),"Pirate ambush waits for discovery")
@@ -139,9 +151,21 @@ func run() -> void:
 	check(mission.started and mission.bombs[0].remaining == 149 and heard("an1") and heard("an7"),"Approach starts exact original bomb clock and radio")
 	for index in range(3):
 		var item: Dictionary = mission.bombs[index]
-		tow(item.body); mission.step(0)
+		game.equipment.magnet.set_enabled(true); game.equipment.magnet.set_physics_process(false)
+		game.equipment.magnet._attach(item.body)
+		check(game.equipment.magnet.target == item.body and not item.body.freeze,"Magnet itself unanchors the original PIXIE on first grab")
+		mission.step(0)
 		check(mission.delivery(item.body,1) and not item.body.has_meta("delivery_city"),"Cities refuse armed bomb delivery")
+		if index == 0:
+			var offset: Vector3 = Vector3(500,100,500)-item.body.global_position
+			item.body.global_position += offset
+			game.equipment.magnet.head.global_position += offset
+			item.body.linear_velocity = Vector3.ZERO
 		game.equipment.magnet.release(false); mission.step(0)
+		if index == 0:
+			for frame in 240: await physics_frame
+			check(item.body.global_position.y < 99.7,"Released PIXIE sinks under real physics instead of hovering: y=%f frozen=%s sleeping=%s enabled=%s" % [item.body.global_position.y,item.body.freeze,item.body.sleeping,item.body.enabled])
+			check(item.body.linear_velocity.y < -0.1 and not item.body.sleeping,"Dropped bomb continues sinking after the physics sleep interval")
 		if index < 2: check(item.remaining == 30,"Releasing a bomb shortens its fuse")
 	check(mission.bombs.all(func(i: Dictionary) -> bool: return i.remaining == 5),"Handling third bomb synchronises surviving fuses")
 	game.bounty_radio_queue.clear(); mission.step(1.2)
@@ -151,8 +175,16 @@ func run() -> void:
 	game.pilot.global_position = mission.ship.global_position+Vector3.UP*10
 	mission.step(6)
 	check(mission.rescued and not runtime.active().is_empty() and not mission.ship.dead,"Safe disposal waits original confirmation interval")
+	var rescued_freighter: RigidBody3D = mission.ship
 	mission.step(8)
 	check(runtime.active().is_empty() and game.player_progress.status.credits == 14500 and heard("an14"),"Bomb rescue original reward and radio")
+	await process_frame
+	check(is_instance_valid(rescued_freighter) and rescued_freighter.visible and rescued_freighter.freeze,"Surviving stranded freighter stays in place after mission completion")
+	runtime._cleanup()
+	await process_frame
+	check(is_instance_valid(rescued_freighter),"Ordinary mission cleanup does not remove the retained freighter")
+	game.events.city_docked.emit(1)
+	check(not is_instance_valid(rescued_freighter) and runtime.retained_props.is_empty(),"Next player docking removes the retained freighter even with no active mission")
 	mission = await fresh("bomb")
 	var bomb: Dictionary = mission.bombs[0]; bomb.body.global_position = mission.ship.global_position
 	game.pilot.global_position = mission.ship.global_position+Vector3.UP*20
@@ -160,6 +192,14 @@ func run() -> void:
 	check(not runtime.active().is_empty() and mission.failed,"Freighter loss keeps original four-second outcome delay")
 	mission.step(4)
 	check(runtime.active().is_empty() and heard("an10") and game.player_progress.status.credits == 10000,"Explosion beside freighter fails without payout")
+	check(runtime.retained_props.is_empty(),"Destroyed freighter is never retained as a surviving ship")
+	mission = await fresh("bomb")
+	var later_wreck: RigidBody3D = mission.ship
+	runtime.finish(true)
+	later_wreck.take_weapon_damage(1000000)
+	check(later_wreck.dead and not later_wreck.visible and runtime.active().is_empty(),"Retained freighter can be destroyed without re-triggering mission failure")
+	runtime._session_started(false)
+	check(not is_instance_valid(later_wreck) and runtime.retained_props.is_empty(),"Session reset clears retained freighters")
 	mission = await fresh("bomb"); mission.started = true
 	bomb = mission.bombs[0]; var next_bomb: Dictionary = mission.bombs[1]
 	bomb.body.global_position = Vector3(500,50,500); next_bomb.body.global_position = Vector3(501,50,500)
@@ -174,10 +214,48 @@ func run() -> void:
 		mission = await fresh(id)
 		check(mission.queen != null and mission.fish.size() == 9 and mission.eggs.size() == 23,"Exact queen, five children, three adults and 23 original eggs")
 		check(mission.tethers.size() == 3 and mission.guard != null,"Three chained ships plus Bohine entrance guard")
+		check(mission.tethers.all(func(pair: Dictionary) -> bool: return pair.ship.get_collision_exceptions().has(mission.queen) and not pair.ship.get_collision_exceptions().has(game.pilot)),"Tethered ships exclude queen self-contact while retaining player collisions")
+		check(mission.tethers.all(func(pair: Dictionary) -> bool: return mission.tethers.all(func(other: Dictionary) -> bool: return other.ship == pair.ship or pair.ship.get_collision_exceptions().has(other.ship))),"Tethered ships do not collide with one another")
 		var ceiling := PhysicsRayQueryParameters3D.create(mission.queen.global_position,mission.queen.global_position+Vector3.UP*20,1)
 		ceiling.hit_back_faces = true
 		check(not game.get_world_3d().direct_space_state.intersect_ray(ceiling).is_empty(),"Queen remains beneath the cave roof")
 		check(mission.tethers.all(func(p: Dictionary) -> bool: return clear_terrain(p.ship)),"Chained ships fit actual cave")
+		for mine_model in ["MINE","HARDMINE"]:
+			var definition: Dictionary = preload("res://object_definitions.gd").FLOATING_MINE.duplicate(true)
+			definition.merge({"appearance":"model","model":mine_model},true)
+			var card: Node3D = preload("res://object_population.gd").appearance(definition,game.game_folder)
+			game.world_root.add_child(card); game.natural_light.attach(card); game.water_visuals.attach(card)
+			var card_meshes: Array = card.find_children("*","MeshInstance3D",true,false)
+			check(not card_meshes.is_empty() and card_meshes.all(func(mesh: MeshInstance3D) -> bool: return mesh.get_active_material(0) is ShaderMaterial and mesh.get_active_material(0).get_shader_parameter("billboard") == true),"Unmodded "+mine_model+" remains camera-facing after lighting conversion")
+			card.free()
+		var queen_pose: Transform3D = mission.queen.global_transform
+		var queen_direction: Vector3 = mission.queen.direction
+		var wall := StaticBody3D.new(); wall.collision_layer = 1
+		var wall_shape := CollisionShape3D.new(); var box := BoxShape3D.new(); box.size = Vector3(20,20,0.2); wall_shape.shape = box
+		wall.add_child(wall_shape); game.world_root.add_child(wall); wall.global_position = Vector3(10000,120,10002)
+		await physics_frame
+		mission.queen.global_position = Vector3(10000,120,10000)
+		mission.queen.velocity = Vector3(0,0,4)
+		mission.queen._move_queen(1.0,Vector3.RIGHT)
+		check(mission.queen.global_position.z < 10002.0-mission.queen.radius and mission.queen.global_position.z > 10000.0 and mission.queen.velocity.is_zero_approx(),"Queen volume sweep keeps the entire body short of the wall")
+		check(mission.queen.direction == Vector3.RIGHT,"Queen restores her pre-contact heading instead of rotating into the wall")
+		mission.queen.global_position = Vector3(10010+mission.queen.radius*0.5,120,10000)
+		mission.queen.velocity = Vector3(0,0,4)
+		mission.queen._move_queen(1.0,Vector3.RIGHT)
+		check(mission.queen.global_position.z < 10002.0,"Queen cannot clip a wall with her edge when her centre misses it")
+		wall.free()
+		mission.queen.global_position = Vector3(10000,120,10000)
+		mission.queen.velocity = Vector3(0,0,4)
+		mission.queen._move_queen(0.1,Vector3.RIGHT)
+		check(mission.queen.global_position.is_equal_approx(Vector3(10000,120,10000.4)),"Queen moves at normal speed through clear water")
+		await physics_frame; await process_frame
+		var hull_query := PhysicsRayQueryParameters3D.create(mission.queen.global_position+Vector3.UP*10,mission.queen.global_position,8)
+		check(game.get_world_3d().direct_space_state.intersect_ray(hull_query).get("collider") == mission.queen,"Queen keeps her fitted hull for weapon hits")
+		var hull_probe := PhysicsShapeQueryParameters3D.new(); var probe_shape := SphereShape3D.new(); probe_shape.radius = 0.3
+		hull_probe.shape = probe_shape; hull_probe.collision_mask = 8; hull_probe.transform.origin = mission.queen.global_position+Vector3.UP*3; hull_probe.motion = Vector3.DOWN*3
+		check(game.get_world_3d().direct_space_state.cast_motion(hull_probe)[0] < 1.0,"Moving bodies still collide with the queen's solid hull")
+		mission.queen.global_transform = queen_pose
+		mission.queen.direction = queen_direction
 		mission.step(0)
 		var health: float = mission.queen.health
 		mission.queen.take_weapon_damage(100)
@@ -187,7 +265,11 @@ func run() -> void:
 		check(heard("q1") and mission.guard.engage_player,"Original guard warning and hostility")
 		game.pilot.global_position = mission.queen.global_position+Vector3.UP*4; mission.step(0.2)
 		check(heard("q2") and mission.queen.provoked,"Queen enrages when approached")
+		var explosions_before: int = game.world_root.find_children("CaptorExplosion*","Node3D",true,false).size()
 		for pair in mission.tethers: pair.ship.take_weapon_damage(1000)
+		check(game.world_root.find_children("CaptorExplosion*","Node3D",true,false).size() == explosions_before+3,"Each destroyed captor produces a fireball")
+		await physics_frame; await process_frame
+		check(mission.tethers.all(func(pair: Dictionary) -> bool: return pair.ship.freeze and pair.ship.collision_layer == 0 and pair.ship.collision_mask == 0),"Destroyed captor hulls stop simulating while their separate wrecks remain")
 		mission.step(0.2)
 		check(not mission.queen.queen_held and mission.queen.damage_sustain == 0.05,"Queen becomes vulnerable after chains lose their ships")
 		var passive: Node3D = mission.fish.filter(func(a: Node3D) -> bool: return not a.queen)[0]
@@ -196,9 +278,14 @@ func run() -> void:
 		check(passive.fleeing,"Repellertron also moves passive nursery fish")
 		mission.queen.set_physics_process(true); mission.queen.repel_from(game.pilot.global_position,2)
 		mission.queen._physics_process(0.04)
-		check(mission.queen.fleeing,"Existing Repellertron remains effective")
+		check(not mission.queen.fleeing and mission.queen.repulsion_remaining == 0,"Queen ignores Repellertron while smaller nursery fish remain affected")
+		var cave_mines: Array = jobs.actors.filter(func(actor): return actor.get_script() == preload("res://floating_mine.gd"))
+		check(cave_mines.size() == 8 and cave_mines.all(func(mine): return mine.explosion_sound != null),"All eight cave mines have explosion audio")
 		var egg: Node3D = mission.eggs[0]; egg.take_weapon_damage(100)
 		check(egg.dead and not egg.visible,"Eggs break with original model; hatching remains chance-driven")
+		var splat: Node3D = game.world_root.get_node_or_null("EggSplat")
+		check(splat != null and not splat.gore.is_empty() and splat.explosion_audio != null,"Destroyed egg produces visible organic splat and original splat audio")
+		check(splat != null and splat.pieces.is_empty() and splat.lifetime < 3.0,"Egg splat stays short-lived without duplicating shell debris")
 		mission.queen.take_weapon_damage(10000)
 		check(runtime.active().is_empty() and game.player_progress.status.credits == 17000 and heard("miss1"),"Both queen variants award original 7000 only on queen death")
 		check(jobs.stage_three_remaining == null and jobs.actors.is_empty(),"Completion removes mission callbacks and chains")

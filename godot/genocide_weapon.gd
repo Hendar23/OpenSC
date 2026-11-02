@@ -55,8 +55,8 @@ func start() -> void:
 		_mark(walker)
 		break
 
-func _cargo(model_id: String, pose: Transform3D, detached: bool) -> RigidBody3D:
-	var visual: Node3D = jobs.Document.load_model(model_id,jobs.game.game_folder)
+func _cargo(model_id: String, pose: Transform3D, detached: bool, animated: bool = false) -> RigidBody3D:
+	var visual: Node3D = jobs.Document.load_model(model_id,jobs.game.game_folder,animated)
 	if visual == null: return null
 	if detached and is_instance_valid(armament) and is_instance_valid(armament.pitch):
 		# WALKHEAD's root is WALKER's yaw frame; its child preserves the guns'

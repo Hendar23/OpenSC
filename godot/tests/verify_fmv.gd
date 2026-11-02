@@ -50,6 +50,7 @@ func run() -> void:
 	check(Library.movie("dock",0,3).is_empty(),"Aquatraz has no invented docking film")
 	for city in [1,2,3,4]:
 		check(Library.movie("peace",city) == ("btvpeace" if city in [1,3] else "pnnpeace"),"Peace bulletin matches sponsor city "+str(city))
+		check(Library.movie("diplomats_rescued",city) == ("btvflat" if city in [1,3] else "pnnflat"),"Diplomat success selects original news table entries 3/4 for city "+str(city))
 	check(Library.movie("cities_destroyed",3) == "btvflat" and Library.movie("cities_destroyed",4) == "pnnflat","Later destruction news uses the recovered faction table")
 	for row in [["walker_catastrophe","walkfail"],["world_destroyed","destruct"],["campaign_escape","outro"],["antagonist_destroyed","altout"]]:
 		check(Library.movie(row[0]) == row[1] and Library.terminal(row[0]),"Recovered ending cue: "+row[0])

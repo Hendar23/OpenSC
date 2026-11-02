@@ -6,6 +6,11 @@ var provoked := false
 var queen := false
 var queen_held := false
 var probe_clock := 0.0
+var queen_motion_shape: SphereShape3D
+
+func repel_from(point: Vector3, duration: float) -> void:
+	if queen: return
+	super.repel_from(point,duration)
 
 func take_weapon_damage(strength: float, source: Vector3 = Vector3.ZERO) -> void:
 	provoked = true; super.take_weapon_damage(strength,source)
@@ -29,9 +34,12 @@ func _physics_process(delta: float) -> void:
 		query.hit_back_faces = true
 		var hit := get_world_3d().direct_space_state.intersect_ray(query)
 		avoidance = Vector3(hit.normal) if not hit.is_empty() else Vector3.ZERO
+	var previous_direction := direction
 	desired = (desired+avoidance).normalized(); _steer(desired,delta)
 	velocity = direction*swim_speed*(1.6 if fleeing else 1.0)+pushed_velocity
-	pushed_velocity = pushed_velocity.move_toward(Vector3.ZERO,delta*8); move_and_slide()
+	pushed_velocity = pushed_velocity.move_toward(Vector3.ZERO,delta*8)
+	if queen: _move_queen(delta,previous_direction)
+	else: move_and_slide()
 	global_position.y = minf(global_position.y,surface_height-radius-0.02)
 	_update_orientation()
 	combat.target = victim; combat.bite_timer = maxf(0,combat.bite_timer-delta)
@@ -40,3 +48,23 @@ func _physics_process(delta: float) -> void:
 	var repelled := fleeing
 	if queen and victim != player: fleeing = false
 	combat.attack(delta); fleeing = repelled
+
+func _move_queen(delta: float, previous_direction: Vector3) -> void:
+	# Sweep the queen's full bounding radius, not just her centre. A sphere
+	# avoids costly rotating-convex recovery while keeping her out of walls.
+	# The fitted hull remains available for weapons and submarine contacts.
+	var start := global_position
+	var finish := start+velocity*delta
+	if start.is_equal_approx(finish): return
+	if queen_motion_shape == null: queen_motion_shape = SphereShape3D.new()
+	queen_motion_shape.radius = radius
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = queen_motion_shape; query.transform.origin = start
+	query.motion = finish-start; query.collision_mask = 1; query.exclude = [get_rid()]
+	var fractions := get_world_3d().direct_space_state.cast_motion(query)
+	if fractions[0] >= 1.0:
+		global_position = finish
+	else:
+		global_position = start.lerp(finish,fractions[0]*0.9)
+		velocity = Vector3.ZERO
+		direction = previous_direction

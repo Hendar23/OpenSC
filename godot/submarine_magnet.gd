@@ -72,7 +72,7 @@ func setup(player: RigidBody3D, appearance: Node3D, folder: String) -> void:
  clamp_audio = AudioStreamPlayer.new(); clamp_audio.stream = preload("res://submarine_weapons.gd")._sound(folder,"audio.equipment." + tool_id + ".attach","GRAPPLE" if tool_id == "grapple" else "MAG3"); add_child(clamp_audio)
 func set_enabled(on: bool) -> void:
  if on == enabled: return
- if on and (housing == null or chain_template == null or not is_instance_valid(pilot) or not pilot.active or not pilot.controls_enabled or pilot.dead):
+ if on and (housing == null or chain_template == null or not is_instance_valid(pilot) or not preload("res://submarine_controller.gd").tools_allowed(pilot)):
   state_changed.emit(false); return
  enabled = on
  if on:

@@ -62,9 +62,8 @@ func _ready() -> void:
 		font.multichannel_signed_distance_field = true
 		menu_theme.default_font = font
 	menu_layout.theme = menu_theme
-	menu_layout.get_parent().color = Color(0.0,0.01,0.025,0.25)
+	menu_layout.get_parent().color = Color.TRANSPARENT
 	loading_picture = _picture(loading_layout)
-	loading_picture.texture = TITLE_TEXTURE
 	menu_picture = _picture(menu_layout)
 	progress_bar = ProgressBar.new()
 	progress_bar.position = Vector2(140,14); progress_bar.size = Vector2(360,20)
@@ -226,10 +225,13 @@ func _layout() -> void:
 		layout.position = (viewport - Vector2(640,480) * scale_factor) * 0.5
 
 func load_art(folder: String) -> void:
-	loading_picture.texture = _texture(folder,"INTROTEX/LOADING.BMP","texture.menu_loading")
+	load_loading_art(folder)
 	menu_picture.texture = _texture(folder,"","texture.menu_title",TITLE_TEXTURE)
 	_update_title_mask()
 	_load_menu_audio(folder)
+
+func load_loading_art(folder: String) -> void:
+	loading_picture.texture = _texture(folder,"INTROTEX/LOADING.BMP","texture.menu_loading") if not folder.is_empty() else null
 
 func _load_menu_audio(folder: String) -> void:
 	for role in MENU_SOUNDS:
