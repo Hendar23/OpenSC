@@ -262,3 +262,6 @@ func _smoke_at(point: Vector3) -> Node3D:
 	jobs.game.world_root.add_child(effect); jobs.actors.append(effect)
 	effect.global_position = point; effect.configure(jobs.game.game_folder,{})
 	return effect
+
+func completes_on_docking(city: int) -> bool:
+	return jobs.id == "rovrtn" and rescued and not failed and city in [1,2,3,4]

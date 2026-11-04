@@ -14,6 +14,9 @@ var fmv_button: Button
 var sun_shafts_enabled := true
 var sun_shafts_button: Button
 const WILDLIFE_LIMITS := [40,60,80,100,150,200,0]
+const BUBBLE_LIMITS := [0,50,100,200,500,1000,2000,4000,-1]
+var bubble_limit := 200
+var bubble_button: Button
 var wildlife_limit := 80
 var wildlife_button: Button
 var remember_preferences := true
@@ -35,6 +38,9 @@ func _ready() -> void:
 		if saved_limit in WILDLIFE_LIMITS: wildlife_limit = saved_limit
 		replay_enabled = bool(config.get_value("gameplay","photo_replay",true))
 		fmvs_enabled = bool(config.get_value("gameplay","play_fmvs",true))
+		var saved_bubbles := int(config.get_value("gameplay","bubble_limit",config.get_value("graphics","bubble_limit",200)))
+		if saved_bubbles in BUBBLE_LIMITS: bubble_limit = saved_bubbles
+	preload("res://propeller_bubbles.gd").set_limit(bubble_limit)
 	# Older installations may have selected Classic; enhanced effects now stay on.
 	preload("res://mine_explosion.gd").enhanced_enabled = true
 	var shade := ColorRect.new(); shade.color = Color.TRANSPARENT
@@ -45,8 +51,9 @@ func _ready() -> void:
 	sun_shafts_button = _button(Vector2(196,226),Vector2(248,28)); sun_shafts_button.pressed.connect(_toggle_sun_shafts)
 	replay_button = _button(Vector2(196,264),Vector2(248,28)); replay_button.pressed.connect(_toggle_replay)
 	fmv_button = _button(Vector2(196,302),Vector2(248,28)); fmv_button.pressed.connect(_toggle_fmvs)
-	back = _button(Vector2(216,350),Vector2(208,28)); back.text = "Back"; back.pressed.connect(close_menu)
-	status = Label.new(); status.position = Vector2(160,396); status.size = Vector2(320,60)
+	bubble_button = _button(Vector2(196,340),Vector2(248,28)); bubble_button.pressed.connect(_cycle_bubble_limit)
+	back = _button(Vector2(216,388),Vector2(208,28)); back.text = "Back"; back.pressed.connect(close_menu)
+	status = Label.new(); status.position = Vector2(160,424); status.size = Vector2(320,52)
 	status.add_theme_font_size_override("font_size",14); status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; layout.add_child(status)
 	get_viewport().size_changed.connect(_layout); _layout(); _refresh(); hide()
 
@@ -61,6 +68,7 @@ func _button(point: Vector2,dimensions: Vector2) -> Button:
 	layout.add_child(button); return button
 
 func _refresh() -> void:
+	bubble_button.text = "Maximum bubbles: %s" % ("Unlimited" if bubble_limit < 0 else "Off" if bubble_limit == 0 else str(bubble_limit))
 	fmv_button.text = "Play FMVs: %s" % ("On" if fmvs_enabled else "Off")
 	replay_button.text = "Photo mode replay: %s" % ("On" if replay_enabled else "Off")
 	toggle.text = "Zapper auto aim: %s" % ("On" if zapper_auto_aim else "Off")
@@ -88,6 +96,14 @@ func _cycle_wildlife_limit(step: int = 1) -> void:
 	wildlife_limit = WILDLIFE_LIMITS[posmod(WILDLIFE_LIMITS.find(wildlife_limit) + step,WILDLIFE_LIMITS.size())]
 	_refresh(); wildlife_limit_changed.emit(wildlife_limit); _save()
 
+func _cycle_bubble_limit(step: int = 1) -> void:
+	_set_bubble_limit(BUBBLE_LIMITS[posmod(BUBBLE_LIMITS.find(bubble_limit)+step,BUBBLE_LIMITS.size())])
+
+func _set_bubble_limit(value: int) -> void:
+	bubble_limit = value if value in BUBBLE_LIMITS else 200
+	preload("res://propeller_bubbles.gd").set_limit(bubble_limit)
+	_refresh(); _save()
+
 func _save() -> void:
 	status.text = ""
 	if not remember_preferences: return
@@ -95,6 +111,8 @@ func _save() -> void:
 	if result == OK or result == ERR_FILE_NOT_FOUND:
 		config.set_value("gameplay","zapper_auto_aim",zapper_auto_aim)
 		config.set_value("gameplay","wildlife_limit",wildlife_limit)
+		config.set_value("gameplay","bubble_limit",bubble_limit)
+		if config.has_section_key("graphics","bubble_limit"): config.erase_section_key("graphics","bubble_limit")
 		config.set_value("gameplay","sun_shafts",sun_shafts_enabled)
 		config.set_value("gameplay","photo_replay",replay_enabled)
 		config.set_value("gameplay","play_fmvs",fmvs_enabled)
@@ -120,7 +138,7 @@ func _input(event: InputEvent) -> void:
 	if not visible: return
 	if Bindings.pressed(event,"menu_cancel"): close_menu()
 	elif Bindings.pressed(event,"menu_up") or Bindings.pressed(event,"menu_down"):
-		var buttons := [toggle,wildlife_button,sun_shafts_button,replay_button,fmv_button,back]
+		var buttons := [toggle,wildlife_button,sun_shafts_button,replay_button,fmv_button,bubble_button,back]
 		var selected := buttons.find(get_viewport().gui_get_focus_owner())
 		buttons[posmod(selected + (-1 if Bindings.pressed(event,"menu_up") else 1),buttons.size())].grab_focus()
 	elif toggle.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle()
@@ -128,6 +146,8 @@ func _input(event: InputEvent) -> void:
 		_cycle_wildlife_limit(-1 if Bindings.pressed(event,"menu_left") else 1)
 	elif sun_shafts_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_sun_shafts()
 	elif replay_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_replay()
+	elif bubble_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")):
+		_cycle_bubble_limit(-1 if Bindings.pressed(event,"menu_left") else 1)
 	elif fmv_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_fmvs()
 	elif Bindings.pressed(event,"menu_accept"):
 		if toggle.has_focus(): _toggle()
@@ -135,6 +155,7 @@ func _input(event: InputEvent) -> void:
 		elif sun_shafts_button.has_focus(): _toggle_sun_shafts()
 		elif replay_button.has_focus(): _toggle_replay()
 		elif fmv_button.has_focus(): _toggle_fmvs()
+		elif bubble_button.has_focus(): _cycle_bubble_limit()
 		elif back.has_focus(): close_menu()
 	else: return
 	get_viewport().set_input_as_handled()

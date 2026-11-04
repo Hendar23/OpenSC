@@ -1,5 +1,6 @@
 extends Node3D
-## SC.EXE 004857d0 (Bacau), 0045d0a0 (prisoners), 00490640 (Bohine covert).
+## Stage-independent encounter dispatch, shared actors and mission lifecycle.
+const Families = preload("res://mission_families.gd")
 const Document = preload("res://map_document.gd")
 const Vessel = preload("res://mission_vessel.gd")
 const Mine = preload("res://floating_mine.gd")
@@ -35,69 +36,42 @@ var reinforcement_radio_clock := -1.0
 var missile_template: Node3D
 var bubble_trail: Node3D
 var hitbox: CollisionObject3D
-var fishing: RefCounted
-var genocide: RefCounted
-var remaining: RefCounted
-var terrorists: RefCounted
-var stage_three_remaining: RefCounted
-var stage_three: RefCounted
-var volcano: StaticBody3D
-var rampaging: RefCounted
-var diplomats: RefCounted
-var defection: RefCounted
+var family := ""
+var controller: Object
+
+func _clear_controller() -> void:
+	if is_instance_valid(controller): controller.clear()
+	controller = null
 
 func _exit_tree() -> void:
-	if rampaging != null: rampaging.clear(); rampaging = null
-	if diplomats != null: diplomats.clear(); diplomats = null
-	if defection != null: defection.clear(); defection = null
-	if is_instance_valid(volcano): volcano.clear(); volcano = null
-	if stage_three_remaining != null: stage_three_remaining.clear(); stage_three_remaining = null
-	if stage_three != null: stage_three.clear(); stage_three = null
-	if terrorists != null: terrorists.clear(); terrorists = null
-	if genocide != null: genocide.clear(); genocide = null
-	if fishing != null: fishing.clear(); fishing = null
-	if remaining != null: remaining.clear(); remaining = null
+	_clear_controller()
 
 func start(mission_id: String) -> void:
 	clear(); id = mission_id; age = 0; clock = 0; transfer = 0; warning = 0; delivered_city = 0
 	passengers = false; tapped = false; warned = false; convinced = false; dialogue = 0; interception_instruction = false; interception_cancelled = false
 	base_guidance = false; base_instruction_clock = -1.0; reinforcements = false; armour_clock = 0
 	reinforcement_radio_clock = -1.0
-	if id in ["pwalker","pwalker2"]:
-		rampaging = preload("res://rampaging_walker.gd").new(); rampaging.jobs = self; rampaging.start()
-	elif id in runtime.Rules.CORE_THREE.values():
-		diplomats = preload("res://escort_diplomats.gd").new(); diplomats.jobs = self; diplomats.start()
-	elif id in ["miners","miners2","bomb","aliens","aliens2"]:
-		stage_three_remaining = preload("res://stage_three_remaining.gd").new(); stage_three_remaining.jobs = self; stage_three_remaining.start()
-	elif id in ["defect","defect2"]:
-		defection = preload("res://covert_defection.gd").new(); defection.jobs = self; defection.start()
-	elif id in ["fumehole","fumehole2"]:
-		volcano = preload("res://volcanic_disaster.gd").new(); game.world_root.add_child(volcano); actors.append(volcano); volcano.setup(self)
-	elif id in ["disperse","rovrtn"]:
-		stage_three = preload("res://stage_three_missions.gd").new(); stage_three.jobs = self; stage_three.start()
-	elif id == "minefield":
-		terrorists = preload("res://thwart_terrorists.gd").new(); terrorists.jobs = self; terrorists.start()
-	elif id in runtime.Rules.CORE.values():
-		genocide = preload("res://genocide_weapon.gd").new(); genocide.jobs = self; genocide.start()
-	elif id == "stranded": _start_stranded()
-	elif id in ["breakout","breakout2"]: _start_breakout()
-	elif id in ["fishing","bigherd"]:
-		fishing = preload("res://fishing_missions.gd").new(); fishing.jobs = self; fishing.start()
-	elif id in ["spytech","spytech2","escort","escort2","tagtech","eel","recontech","recontech2"]:
-		remaining = preload("res://stage_two_remaining.gd").new(); remaining.jobs = self; remaining.start()
-	else: _start_covert()
+	family = Families.family_for(id)
+	if family.is_empty():
+		push_error("Unknown mission encounter: " + id)
+		id = ""; return
+	var script: Script = Families.FAMILIES[family].script
+	if script != null:
+		controller = script.new()
+		if controller is Node:
+			game.world_root.add_child(controller); actors.append(controller)
+			controller.setup(self)
+		else:
+			controller.jobs = self; controller.start()
+	else:
+		match family:
+			"bacau_rescue": _start_stranded()
+			"prison_breakout": _start_breakout()
+			"bohine_covert": _start_covert()
 
 func clear(reset_rover: bool = false) -> void:
-	if rampaging != null: rampaging.clear(); rampaging = null
-	if diplomats != null: diplomats.clear(); diplomats = null
-	if defection != null: defection.clear(); defection = null
-	if is_instance_valid(volcano): volcano.clear(); volcano = null
-	if stage_three_remaining != null: stage_three_remaining.clear(); stage_three_remaining = null
-	if stage_three != null: stage_three.clear(); stage_three = null
-	if terrorists != null: terrorists.clear(); terrorists = null
-	if genocide != null: genocide.clear(); genocide = null
-	if fishing != null: fishing.clear(); fishing = null
-	if remaining != null: remaining.clear(); remaining = null
+	_clear_controller()
+	family = ""
 	id = ""; phase = ""
 	if game == null: return
 	if game.equipment != null and game.equipment.support_tools != null: game.equipment.support_tools.reset(reset_rover)
@@ -275,19 +249,12 @@ func _start_covert() -> void:
 func _physics_process(delta: float) -> void:
 	if id.is_empty() or phase == "finished" or runtime.active().is_empty() or not game.pilot.active: return
 	age += delta; clock -= delta; armour_clock = maxf(0,armour_clock - delta)
-	if rampaging != null: rampaging.step(delta)
-	elif diplomats != null: diplomats.step(delta)
-	elif defection != null: defection.step(delta)
-	elif is_instance_valid(volcano): volcano.step(delta)
-	elif stage_three_remaining != null: stage_three_remaining.step(delta)
-	elif stage_three != null: stage_three.step(delta)
-	elif terrorists != null: terrorists.step(delta)
-	elif genocide != null: genocide.step(delta)
-	elif id == "stranded": _step_stranded()
-	elif id in ["breakout","breakout2"]: _step_breakout(delta)
-	elif fishing != null: fishing.step(delta)
-	elif remaining != null: remaining.step(delta)
-	else: _step_covert(delta)
+	if is_instance_valid(controller): controller.step(delta)
+	else:
+		match family:
+			"bacau_rescue": _step_stranded()
+			"prison_breakout": _step_breakout(delta)
+			"bohine_covert": _step_covert(delta)
 
 func _step_stranded() -> void:
 	if not is_instance_valid(target) or target.dead: return
@@ -420,22 +387,17 @@ func _reinforce_base() -> void:
 			agent.engage_player = true; agent.pursue_offscreen = true; agent.tuning.npc_detection = 1000.0
 
 func attach_listening_device(body: Node3D) -> bool:
-	if remaining != null: return remaining.attach_listening(body)
+	if is_instance_valid(controller) and controller.has_method("attach_listening"): return controller.attach_listening(body)
 	if id not in ["spytrad","spytrad2"] or phase != "tag" or not is_instance_valid(target) or target.dead or body != target.body: return false
 	tapped = true; phase = "listen"; transfer = 0; dialogue = 0; radio("af1")
 	return true
 
 func can_attach_pod(body: Node3D) -> bool:
-	if defection != null: return defection.can_attach_pod(body)
-	if stage_three != null: return stage_three.can_attach_pod(body)
-	if terrorists != null: return terrorists.can_attach_pod(body)
-	if remaining != null: return remaining.can_attach_pod(body)
+	if is_instance_valid(controller) and controller.has_method("can_attach_pod"): return controller.can_attach_pod(body)
 	return id in ["breakout","breakout2"] and not passengers and is_instance_valid(target) and not target.dead and body == target.body
 
 func delivery(body: Node3D, city: int) -> bool:
-	if stage_three_remaining != null: return stage_three_remaining.delivery(body,city)
-	if genocide != null: return genocide.delivery(body,city)
-	if remaining != null: return remaining.delivery(body,city)
+	if is_instance_valid(controller) and controller.has_method("delivery"): return controller.delivery(body,city)
 	if id != "stranded" or body != target or city not in [1,2,3,4] or delivered_city != 0: return false
 	delivered_city = city; target.delivered = true; target.set_meta("delivery_city",city)
 	target.set_meta("metal_tow_target",false); game.equipment.magnet.set_enabled(false)
@@ -450,16 +412,12 @@ func delivery(body: Node3D, city: int) -> bool:
 	return true
 
 func completes_on_docking(city: int) -> bool:
-	if stage_three != null: return id == "rovrtn" and stage_three.rescued and not stage_three.failed and city in [1,2,3,4]
-	if terrorists != null: return terrorists.won and not terrorists.lost
-	if remaining != null:
-		return (remaining.family == "eel" and remaining.flags.get("miners_aboard",false)) or (remaining.family == "recon" and remaining.flags.get("recorded",false))
+	if is_instance_valid(controller) and controller.has_method("completes_on_docking"): return controller.completes_on_docking(city)
 	return id in ["breakout","breakout2"] and passengers and city in [1,2,3,4]
 
 func docked(city: int) -> void:
-	if stage_three != null: stage_three.docked(city); return
-	if terrorists != null: terrorists.docked(city); return
-	if remaining != null: remaining.docked(city); return
+	if is_instance_valid(controller) and controller.has_method("docked"):
+		controller.docked(city); return
 	if id in ["breakout","breakout2"] and passengers and city in [1,2,3,4]:
 		runtime.active()["resolved_city"] = city
 		# Retail keeps the rescue success flag for the alternate Bohine return,
@@ -553,4 +511,37 @@ func _burst(point: Vector3, size: float) -> void:
 	effect.setup(game.submarine_traffic.explosion_frames,size,game.submarine_traffic.explosion_sound)
 
 func _detach_walker_head() -> void:
-	if genocide != null: genocide.detach_head()
+	if is_instance_valid(controller) and controller.has_method("detach_head"): controller.detach_head()
+
+func target_body() -> CollisionObject3D:
+	if is_instance_valid(controller): return controller.target_body()
+	if id == "stranded":
+		if delivered_city == 0 and is_instance_valid(target) and not target.dead: return target
+	elif id in ["breakout","breakout2"]:
+		if not passengers and is_instance_valid(target) and not target.dead: return target.body
+	elif id in ["spytrad","spytrad2"]:
+		# Original 00490640 targets the scout first, then the revealed base.
+		if not vents.is_empty():
+			for vent in vents:
+				if is_instance_valid(vent) and not vent.dead: return vent
+		elif is_instance_valid(target) and not target.dead: return target.body
+	return null
+
+func target_center(body: CollisionObject3D) -> Vector3:
+	if family == "fishing": return body.get_parent().get_node("Trader").bounds.get_center()
+	if is_instance_valid(target) and body == target.get("body"): return target.bounds.get_center()
+	return body.get_meta("mission_target_center",Vector3.ZERO)
+
+func release_survivors(success: bool) -> void:
+	if not is_instance_valid(controller): return
+	match family:
+		"diplomats":
+			var survivors: Array[Node3D] = []
+			if is_instance_valid(controller.pirate): survivors.append(controller.pirate)
+			preload("res://mission_survivors.gd").release(self,survivors)
+		"defection": controller.release_survivors(success)
+		"terrorists": controller.release_survivor()
+		"pirate_stockpile": controller.release_survivors(success)
+		"fishing", "support": preload("res://mission_survivors.gd").release(self,controller.enemies)
+		_:
+			if controller.has_method("release_survivors"): controller.release_survivors()

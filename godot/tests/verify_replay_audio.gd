@@ -39,6 +39,7 @@ func run() -> void:
 	audio.clear()
 	for index in range(700): audio.append(block(5,Vector2.ONE),(index+1)*0.05)
 	check(audio.frame_count <= 3000 and audio.chunks.size() <= 601 and audio.chunks[0].start >= 5.0-0.00001,"Long recording has a hard thirty-second memory bound")
+
 	audio.set_recording(true)
 	check(audio.recording and AudioServer.get_bus_effect_count(0) == effects_count+1,"Recording installs one non-destructive master mix tap")
 	audio.set_recording(true)

@@ -3,6 +3,9 @@ const Progress = preload("res://player_progress.gd")
 const Rules = preload("res://mission_rules.gd")
 # REWARD1.CSV from the released original, plus the owner's miners2 correction.
 const REWARDS := {
+	"canister":6000,"canister2":6000,"canister3":6000,"canister4":6000,
+	"backstab":2000,"backstab2":2000,"backstab3":2000,"backstab4":2000,
+	"puffa":4000,"puffa2":4000,
 	"pwalker":8000,"pwalker2":8000,
 	"tradetrad":0,"tradetrad2":0,"tradetech":0,"tradetech2":0,
 	"stranded":2000,"spytrad":5000,"spytrad2":5000,"bigherd":3500,"fishing":3000,

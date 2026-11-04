@@ -36,7 +36,7 @@ func run() -> void:
 	game.world_root.get_node("ActorActivity").set_physics_process(false)
 	runtime = game.mission_runtime; jobs = runtime.side_jobs
 	await fresh("tagtech")
-	var center: Vector3 = jobs.remaining.cargo.global_position
+	var center: Vector3 = jobs.controller.cargo.global_position
 	var pop: Node3D = game.object_population; pop.set_physics_process(false)
 	var original: AABB = pop.world_bounds; pop.dock_spawn_exclusions.clear()
 	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state

@@ -37,7 +37,7 @@ func fresh() -> RefCounted:
 	jobs.set_physics_process(false)
 	for agent in jobs.vessels: agent.set_physics_process(false)
 	await physics_frame; await physics_frame
-	return jobs.terrorists
+	return jobs.controller
 
 func attach(mission: RefCounted) -> void:
 	game.equipment.support_tools.pod_target = mission.ship.body
@@ -69,7 +69,7 @@ func run() -> void:
 	for city in [2,3,4,5,6]: check(Rules.next_offer(progress,city) != "minefield","No invented city variant at "+str(city))
 	check(runtime.testing_mission_city("minefield") == 1 and "minefield2" not in runtime.testing_missions(),"Dev offers use only released availability")
 	progress.missions.completed.minefield = {"success":true}
-	check(Rules.next_offer(progress,1).is_empty() and not Rules.core_unlocked(progress),"Resolved stage-three job is not offered again or counted for stage two")
+	check(Rules.next_offer(progress,1) != "minefield" and not Rules.core_unlocked(progress),"Resolved stage-three job is not offered again or counted for stage two")
 	var mission: RefCounted = await fresh()
 	check(game.submarine_traffic.roaming_population.attacks_suppressed(),"Accepting Thwart Terrorists suppresses ambient pirate attacks")
 	check(mission.ship.get_parent().get_meta("editor_model") == "FREIGHT","Original FREIGHT model, not a prison or shuttle substitute")

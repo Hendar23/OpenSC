@@ -127,5 +127,35 @@ func run() -> void:
 	check(restored.missions.version == state.version and restored.missions.active.escort.target == id and restored.missions.active.escort.delivered == 2 and restored.missions.completed.intro == true,"Mission state round-trips through JSON and player progress")
 	state.active.escort.delivered = NAN
 	check(not preload("res://mission_state.gd").valid(state),"Non-finite mission progress is rejected")
+	_check_wakes(world)
 	world.free()
 	print("Performance foundation: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)
+
+func _check_wakes(world: Node3D) -> void:
+	preload("res://propeller_bubbles.gd").set_limit(-1)
+	var camera := Camera3D.new(); world.add_child(camera); camera.make_current()
+	var wake := preload("res://propeller_bubbles.gd").new(); world.add_child(wake)
+	wake.set_physics_process(false); wake.set_process(false); wake.surface_height = 10.0
+	var normal := {"replay_id":1,"position":Vector3(2,2,2),"drift":Vector3(0.1,0,0.2),"rise":1.0,"age":0.0,"size":0.08}
+	var timed := {"replay_id":2,"position":Vector3(0.5,9.6,0),"drift":Vector3.ZERO,"rise":0.1,"age":0.6,"size":0.1,"end_size":0.4,"lifetime":1.0,"opacity":0.5}
+	wake.particles.assign([normal.duplicate(),{"replay_id":3,"position":Vector3(0,10,0),"drift":Vector3.ZERO,"rise":1.0,"age":0.0,"size":0.1},timed.duplicate()])
+	wake.advance(0.1,false); wake.advance(0.1,false)
+	check(wake.particles.size() == 2 and wake.particles[0].replay_id == 1 and wake.particles[1].replay_id == 2,"Wake compaction preserves survivor identities/order across catch-up ticks")
+	var expected: Vector3 = normal.position+normal.drift*((1.0-exp(-12.0*0.2))/12.0)+Vector3.UP*0.2
+	check(wake.particles[0].position.is_equal_approx(expected) and is_equal_approx(wake.particles[0].age,0.2),"Deferred rendering retains every physics tick of bubble travel and age")
+	check(wake.instances.visible_instance_count == 0,"Catch-up ticks do not submit intermediate render buffers")
+	wake._update_instances()
+	check(wake.instances.visible_instance_count == 2 and wake.render_buffer.size() == wake.capacity*16,"One frame upload includes every surviving bubble")
+	var size := 0.08*(1.0+0.2/6.0*0.45)
+	check(is_equal_approx(wake.render_buffer[0],size) and Vector3(wake.render_buffer[3],wake.render_buffer[7],wake.render_buffer[11]).is_equal_approx(expected),"Bulk buffer preserves original scale/translation layout")
+	var point: Vector3 = wake.particles[1].position
+	var opacity := 0.5*smoothstep(0.25,1.25,camera.global_position.distance_to(point))*smoothstep(0.0,0.2,10.0-point.y)*smoothstep(0.0,0.5,0.2)
+	check(is_equal_approx(wake.render_buffer[16],0.34) and is_equal_approx(wake.render_buffer[31],opacity),"Timed bubbles retain growth plus camera/surface/lifetime fading")
+	wake.advance(0.3)
+	check(wake.particles.size() == 1 and wake.instances.visible_instance_count == 1,"Expired timed bubbles leave no stale visible instance")
+	wake.clear();wake.advance(0)
+	check(wake.instances.visible_instance_count == 0 and wake.particles.is_empty(),"Clearing a wake empties the render and replay source")
+	for index in wake.capacity: wake.particles.append(normal.duplicate())
+	wake.advance(0.01)
+	check(wake.particles.size() == wake.capacity and wake.instances.visible_instance_count == wake.capacity,"Full original wake capacity remains available without quality reduction")
+	wake.free();camera.free()

@@ -27,7 +27,7 @@ func run() -> void:
 	runtime = game.mission_runtime; jobs = runtime.side_jobs
 	var before: Array = game.object_population.get_children()
 	await fresh("tagtech")
-	var mission: RefCounted = jobs.remaining
+	var mission: RefCounted = jobs.controller
 	var extra_fish: Array = jobs.actors.filter(func(body: Node) -> bool: return body is Fish and body != mission.creature)
 	check(extra_fish.size() == 9 and extra_fish.all(func(body: Node) -> bool: return not body.has_meta("mission_marker") and body not in game.cockpit_hud.map_data.actor_markers),"Extra mission wildlife have no minimap dots")
 	check(mission.creature in game.cockpit_hud.map_data.actor_markers,"Tagged specimen retains its designated map marker")
@@ -81,7 +81,7 @@ func run() -> void:
 	game.object_population.restore_snapshot(snapshot)
 	check(ids.all(func(id: String) -> bool: return game.object_population.get_children().any(func(body: Node) -> bool: return preload("res://entity_identity.gd").of(body) == id)),"Retained crystals and shards restore from their normal snapshot")
 	before = game.object_population.get_children()
-	await fresh("tagtech"); mission = jobs.remaining
+	await fresh("tagtech"); mission = jobs.controller
 	crystals = game.object_population.get_children().filter(func(body: Node) -> bool: return body is Thorium and body not in before)
 	check(jobs.delivery(mission.cargo,4),"Canister can still be delivered to Procha")
 	await process_frame

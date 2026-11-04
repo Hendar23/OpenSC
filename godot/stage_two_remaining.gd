@@ -615,3 +615,6 @@ func _event(event: String) -> void:
 		"eel_failed": radio("c8",true); finish(false,0,2)
 		"recon_alarm": _recon_alarm()
 		_: radio(event)
+
+func completes_on_docking(_city: int) -> bool:
+	return (family == "eel" and flags.get("miners_aboard",false)) or (family == "recon" and flags.get("recorded",false))

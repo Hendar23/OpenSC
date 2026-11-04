@@ -51,7 +51,7 @@ func run() -> void:
 	runtime = game.mission_runtime; jobs = runtime.side_jobs
 	for id in ["spytech","spytech2","escort","escort2","tagtech","eel","recontech","recontech2"]:
 		await fresh(id)
-		check(jobs.remaining != null and jobs.remaining.family != "","Mission has its own initialized flow")
+		check(jobs.controller != null and jobs.controller.family != "","Mission has its own initialized flow")
 		check(runtime.target_marker.target_body() != null,"HUD has an initial target for "+id)
 		check(Vector3(runtime.target_marker.target_body().get_meta("mission_target_center",Vector3.ZERO)).length() < 15,"HUD centre is a local hull point rather than the world bounds")
 		await capture(id)
@@ -62,7 +62,7 @@ func run() -> void:
 		for agent in jobs.vessels:
 			check(not agent.get_parent().find_children("*","MeshInstance3D",true,false).is_empty(),"Vessel loads its visible original model")
 		if id == "spytech":
-			var mission: RefCounted = jobs.remaining
+			var mission: RefCounted = jobs.controller
 			check(jobs.attach_listening_device(mission.ship.body),"Big Ears attaches to designated Bohine shuttle")
 			game.pilot.global_position = Vector3(-100,20,-100)
 			mission.step(40)
@@ -78,7 +78,7 @@ func run() -> void:
 			for survivor in game.submarine_traffic.traders.filter(func(agent: Node3D) -> bool: return agent.has_meta("fishing_survivor")):
 				check(survivor.get_signal_connection_list("destroyed").all(func(connection: Dictionary) -> bool: return connection.callable.get_object() != mission),"Surviving ships release old mission callbacks")
 		elif id == "escort":
-			var mission: RefCounted = jobs.remaining
+			var mission: RefCounted = jobs.controller
 			game.pilot.global_position = mission.ship.global_position+Vector3.UP*2
 			mission.step(0.1)
 			check(not mission.ship.waypoints.is_empty() and mission.ship.dock_destination == 5,"Prison transport departs toward Aquatraz when joined")
@@ -99,7 +99,7 @@ func run() -> void:
 			mission.rescuer.take_weapon_damage_from(1000,mission.rescuer.global_position,game.pilot)
 			check(runtime.active().is_empty() and game.player_progress.missions.completed.escort.score == 0.5,"Stopping escaped prisoners gives original partial-success outcome")
 		elif id == "tagtech":
-			var mission: RefCounted = jobs.remaining
+			var mission: RefCounted = jobs.controller
 			check(mission.creature.route.size() == 17,"Tagged fish follows all 17 original markers")
 			game.pilot.global_position = mission.cargo.global_position+Vector3.UP*2; mission.step(0.1)
 			check(runtime.target_marker.target_body() == mission.cargo,"Finding the canister switches guidance")
@@ -108,7 +108,7 @@ func run() -> void:
 			check(jobs.delivery(mission.cargo,4) and runtime.active().is_empty(),"Procha canister delivery resolves at the drop point")
 			check(game.player_progress.status.credits == 103000,"Canister reward paid")
 		elif id == "eel":
-			var mission: RefCounted = jobs.remaining
+			var mission: RefCounted = jobs.controller
 			mission.creature.set_physics_process(false)
 			check(mission.eel_helpers.size() == 3 and jobs.vessels.size() == 3,"Three Bohine helpers exist from acceptance, before the approach trigger")
 			var waiting: Array[Vector3] = []
@@ -189,7 +189,7 @@ func run() -> void:
 			jobs.docked(3)
 			check(game.player_progress.status.credits == 105000,"Repeated dock notification cannot duplicate the rescue reward")
 		elif id == "recontech":
-			var mission: RefCounted = jobs.remaining
+			var mission: RefCounted = jobs.controller
 			var vessel_count: int = jobs.vessels.size()
 			check(mission.recon_reinforcements.is_empty() and vessel_count == 1,"Only the original outpost guard exists before the Recon alarm")
 			check(mission.turrets.size() == 3,"Cave outpost has three destructible turrets")
@@ -277,13 +277,13 @@ func run() -> void:
 			check(game.player_progress.hold.get("depthl",0) == 1 and Shop.installed(game.equipment,game.weapons).get(7) == "rover","ROV replaces Charge Launcher without losing either item")
 		await physics_frame; await physics_frame
 	await fresh("spytech2")
-	var spy: RefCounted = jobs.remaining
+	var spy: RefCounted = jobs.controller
 	game.pilot.global_position = spy.ship.global_position+spy.ship.get_parent().global_basis.z
 	spy.step(4.1); spy.step(2.5); spy.step(1.1); spy.step(6.1)
 	check(runtime.active().is_empty() and not game.player_progress.missions.completed.spytech2.success,"Repeated visible approach gives the warning and original detection failure")
 	check(game.player_progress.status.credits == 100000,"Detected covert mission pays no reward")
 	await fresh("escort2")
-	var convoy: RefCounted = jobs.remaining
+	var convoy: RefCounted = jobs.controller
 	game.pilot.global_position = convoy.ship.global_position+Vector3.UP
 	convoy.step(0.1)
 	convoy.ship.local_simulation = false
@@ -292,18 +292,18 @@ func run() -> void:
 		convoy.ship.advance_abstract(0.25); convoy._step_escort(0.25)
 	check(runtime.active().is_empty() and game.player_progress.missions.completed.get("escort2",{}).get("score",0) == 1,"Prison transport can traverse the actual map route and finish at Aquatraz without player docking")
 	await fresh("escort")
-	jobs.remaining.ship.take_weapon_damage_from(1000,jobs.remaining.ship.global_position,game.pilot)
-	jobs.remaining.step(6.1)
+	jobs.controller.ship.take_weapon_damage_from(1000,jobs.controller.ship.global_position,game.pilot)
+	jobs.controller.step(6.1)
 	check(runtime.active().is_empty() and not game.player_progress.missions.completed.escort.success,"Destroying the occupied prison transport fails the escort")
 	await fresh("tagtech")
-	jobs.remaining.creature.take_weapon_damage(1000,jobs.remaining.creature.global_position)
+	jobs.controller.creature.take_weapon_damage(1000,jobs.controller.creature.global_position)
 	check(runtime.active().is_empty() and not game.player_progress.missions.completed.tagtech.success,"Losing the tagged fish before finding the canister fails")
 	await fresh("eel")
-	jobs.remaining.structure.take_weapon_damage(1000)
-	jobs.remaining.step(6.1)
+	jobs.controller.structure.take_weapon_damage(1000)
+	jobs.controller.step(6.1)
 	check(runtime.active().is_empty() and not game.player_progress.missions.completed.eel.success,"Destroying the occupied mine fails with the original delayed report")
 	await fresh("recontech2")
-	var attacked_recon: RefCounted = jobs.remaining
+	var attacked_recon: RefCounted = jobs.controller
 	game.pilot.global_position = attacked_recon.structure.global_position+Vector3.RIGHT*30
 	attacked_recon.structure.take_weapon_damage(1)
 	check(attacked_recon.flags.get("attacked",false) and not attacked_recon.flags.get("alarm",false) and attacked_recon.ship.engage_player and not is_instance_valid(attacked_recon.recon_cable),"Damaging distant outpost releases its guard but does not invent an immediate reinforcement wave")
@@ -311,12 +311,12 @@ func run() -> void:
 	jobs.docked(4)
 	check(runtime.active().is_empty() and game.player_progress.missions.completed.recontech2.score == 0 and runtime.last_response == runtime.text("recontech2",3),"Returning after attacking without footage gives original propaganda response and no reward")
 	await fresh("recontech2")
-	var ambushed_recon: RefCounted = jobs.remaining
+	var ambushed_recon: RefCounted = jobs.controller
 	check(ambushed_recon.recon_reinforcements.is_empty() and jobs.vessels.size() == 1,"Second city variant also leaves the cave approach clear before its alarm")
 	game.pilot.global_position = ambushed_recon.structure.global_position+Vector3.RIGHT*10
 	ambushed_recon.step(8.1); ambushed_recon.step(2.1); ambushed_recon.step(0.5)
 	check(ambushed_recon.flags.get("alarm",false) and jobs.vessels.size() == 4 and ambushed_recon.recon_reinforcements.filter(func(agent: Node3D) -> bool: return not agent.dead and not agent.dormant and agent.engage_player).size() == 3,"Proximity alarm spawns and activates all three reinforcements once")
-	jobs.remaining.structure.take_weapon_damage(1000)
+	jobs.controller.structure.take_weapon_damage(1000)
 	check(runtime.active().is_empty() and not game.player_progress.missions.completed.recontech2.success,"Destroying the outpost before confirmation fails recon")
 	check(runtime.last_response == runtime.text("recontech2",2),"Unconfirmed destruction selects the original hospital response")
 	# Every source radio code used by these missions has both text and a portrait.

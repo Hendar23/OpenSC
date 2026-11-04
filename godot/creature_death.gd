@@ -106,6 +106,7 @@ func setup(creature: Node3D, bubble_texture: Texture2D, sound: AudioStream, bloo
 		bubbles.scale_amount_min *= particle_scale; bubbles.scale_amount_max *= particle_scale
 		bubbles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(bubbles); bubbles.emitting = true
+		preload("res://propeller_bubbles.gd").reserve_burst(bubbles)
 	if sound != null:
 		explosion_audio = AudioStreamPlayer3D.new(); explosion_audio.stream = sound; explosion_audio.pitch_scale = random.randf_range(0.9,1.1); explosion_audio.max_distance = 35; add_child(explosion_audio); preload("res://explosion_audio.gd").apply(explosion_audio,0.0,"wildlife_splat_volume"); explosion_audio.play()
 

@@ -38,11 +38,20 @@ func run() -> void:
 		game.docking.current = game.submarine_traffic.port_by_id(Rules.offering_city(id)); game.docking.stage = game.Docking.Stage.DOCKED
 		check(runtime.accept(Rules.offering_city(id),id).is_empty(),"Accept "+id)
 		game.docking.stage = game.Docking.Stage.IDLE; jobs.set_physics_process(false)
-		var mission=jobs.rampaging
+		var mission=jobs.controller
 		check(mission.walker != null and mission.route.size()==11,"Original walker and eleven path markers")
 		check(mission.minelayers.size()==2 and mission.allies.size()==4,"Two minelayers and four allied attackers")
 		check(mission.minelayers.all(func(a):return is_equal_approx(a.health.remaining,6)),"Original minelayer shield modifier")
 		check(mission.animation.has_animation(),"Walker loads original walking morph animation")
+		check(jobs.target_center(mission.walker).is_equal_approx(mission.walker.get_meta("mission_target_center")),"Walker HUD uses the rigid chassis centre without vessel-property errors")
+		check(mission.gait_stride > 2.8 and mission.gait_stride < 2.9,"Gait stride follows original planted-foot vertices")
+		var gait_start: float = mission.gait_distance
+		mission._advance_gait(mission.gait_stride/8.0)
+		check(is_equal_approx(mission.anchor_mesh.get_blend_shape_value(0),1.0),"One eighth stride advances one original pose")
+		mission._advance_gait(0.0)
+		check(is_equal_approx(mission.anchor_mesh.get_blend_shape_value(0),1.0),"Stopped chassis keeps its foot pose")
+		for frame in 70: mission._advance_gait(mission.gait_stride/80.0)
+		check(is_equal_approx(mission.gait_distance-gait_start,mission.gait_stride) and absf(mission.anchor_mesh.get_blend_shape_value(0)) < 0.0001,"Distance-driven gait returns to rest after one complete stride")
 		check(mission.walker.health==300,"Original walker shields")
 		check(mission.armament.yaw!=null and mission.armament.pitch!=null,"Separate original gun head tracks targets")
 		var saved_pose: Transform3D = mission.walker.global_transform
@@ -53,8 +62,15 @@ func run() -> void:
 		mission.armament.cooldown = 0; mission.armament._physics_process(0.04)
 		check(mission.armament.shots>0,"Walker fires original rotating weapon ports")
 		mission.walker.global_transform = saved_pose
-		game.pilot.active = true; game.pilot.global_position = mission.walker.global_position+Vector3.UP*3
+		game.pilot.active = true
+		game.pilot.global_position = mission.walker.global_position+Vector3.RIGHT*(mission._battle_range()+5.0)
 		mission.step(4.1)
+		check(not mission.begun and mission.allies.all(func(a):return a.dormant),"Distant battle waits until player approaches the extended view range")
+		game.pilot.global_position = mission.walker.global_position+Vector3.RIGHT*(mission._battle_range()-1.0)
+		mission.step(0.1)
+		check(mission.begun and mission.walker.global_position.distance_to(game.pilot.global_position)>20,"Battle starts before the old twenty-unit rendezvous threshold")
+		game.pilot.global_position = mission.walker.global_position+Vector3.UP*3
+		mission.step(0.4)
 		check(mission.begun and heard("d1"),"Rendezvous plays original greeting")
 		check(mission.allies.all(func(a):return a.combat_target==mission.walker),"Allied subs attack walker")
 		check(mission.mines.size()==2,"Both minelayers lay mines")
@@ -74,7 +90,7 @@ func run() -> void:
 		check(game.player_progress.campaign_stage==4,"Side job preserves campaign stage")
 		check(Rules.next_offer(game.player_progress,3 if id=="pwalker" else 1)=="","Alternate city offer excluded")
 		check(survivors.all(func(a):return is_instance_valid(a) and a.retiring),"Surviving allied subs depart after success")
-		check(jobs.rampaging==null,"Mission callbacks cleaned up")
+		check(jobs.controller==null,"Mission callbacks cleaned up")
 		check(game.submarine_traffic.valid_snapshot(game.submarine_traffic.snapshot()),"Departing allies remain valid in published save format")
 	runtime._cleanup(); await physics_frame
 	game.player_progress = Progress.restore({"campaign_stage":4})
@@ -82,10 +98,10 @@ func run() -> void:
 	var accepted: String = runtime.accept(1,"pwalker")
 	check(accepted.is_empty(),"Mission can start in a fresh session: "+accepted)
 	if not accepted.is_empty(): game.free();quit(1);return
-	var abandoned = jobs.rampaging
+	var abandoned = jobs.controller
 	var surviving = abandoned.minelayers+abandoned.allies
 	runtime.finish(false)
-	check(jobs.rampaging==null and game.player_progress.status.credits==0,"Abort cleans callbacks without a success reward")
+	check(jobs.controller==null and game.player_progress.status.credits==0,"Abort cleans callbacks without a success reward")
 	check(surviving.all(func(a):return is_instance_valid(a) and a.retiring),"Abort preserves surviving allies and sends them home")
 	game.free();await process_frame
 	print("Rampaging walker: %d checks, %d failures" % [checks,failures]);quit(1 if failures else 0)

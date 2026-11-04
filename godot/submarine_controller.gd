@@ -352,6 +352,8 @@ func _contact_impact(state: PhysicsDirectBodyState3D) -> Dictionary:
 		var impulse_speed := state.get_contact_impulse(index).length() / maxf(1.0, mass)
 		strongest = maxf(strongest, maxf(closing, impulse_speed))
 		var inflict := -1.0
+		var rotating_hazard := body is StaticBody3D and body.has_meta("contact_inflict")
+		if rotating_hazard: inflict = float(body.get_meta("contact_inflict"))
 		if (body is RigidBody3D or body is FloatingMine) and body.get("stats") is Dictionary:
 			var stats: Dictionary = body.get("stats")
 			if stats.get("behavior","") == "thorium": inflict = 0.00006 if stats.get("id","") == "inert_thorium" else 0.0006
@@ -361,7 +363,7 @@ func _contact_impact(state: PhysicsDirectBodyState3D) -> Dictionary:
 		# Object damage uses centre-to-centre relative closing speed, rather
 		# than solver impulses (which also contain restitution and constraints).
 		var speed := closing
-		if inflict >= 0:
+		if inflict >= 0 and not rotating_hazard:
 			var direction := global_position - body.global_position
 			if direction.length_squared() > 0.000001: speed = maxf(0,-relative.dot(direction.normalized()))
 		var damage := impact_damage(speed,inflict)

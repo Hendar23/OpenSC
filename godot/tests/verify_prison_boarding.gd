@@ -17,7 +17,7 @@ func run() -> void:
 	game.day_night.hour = 12; game._update_daylight()
 	for id in ["escort","escort2"]:
 		await fresh(id)
-		var mission: RefCounted = jobs.remaining
+		var mission: RefCounted = jobs.controller
 		var host: Node3D = mission.ship
 		game.pilot.global_position = host.global_position+Vector3.UP*3; game.pilot.pending_reset = false
 		mission._step_escort(0.1)

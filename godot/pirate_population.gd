@@ -59,7 +59,7 @@ func setup(manager: Node, folder: String, document: Dictionary) -> void:
 		agent.player_attack_started.connect(_taunt.bind(agent))
 		ships.append(agent)
 		# Hidden until a safe first placement is found.
-		agent.dead = true; model.hide(); agent.body.collision_layer = 0
+		agent.dead = true; model.hide(); agent.set_hull_collision(false)
 	reset_population()
 
 func _taunt(agent: Node3D) -> void:
@@ -75,7 +75,7 @@ func attacks_suppressed() -> bool:
 
 func reset_population() -> void:
 	for agent in ships:
-		agent.dead = true; agent.get_parent().hide(); agent.body.collision_layer = 0
+		agent.dead = true; agent.get_parent().hide(); agent.set_hull_collision(false)
 	for agent in ships: replace(agent)
 
 func replenish_docked(delta: float) -> void:

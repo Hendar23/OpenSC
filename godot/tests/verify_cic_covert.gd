@@ -18,7 +18,7 @@ func run() -> void:
 	for id in ["spytech","spytech2"]:
 		for tapped in [false,true]:
 			Survivors.clear(game.submarine_traffic); await fresh(id)
-			var mission: RefCounted = jobs.remaining
+			var mission: RefCounted = jobs.controller
 			var shuttle: Node3D = mission.ship
 			shuttle.health.remaining = 7.5
 			var pose: Transform3D = shuttle.get_parent().global_transform
@@ -78,7 +78,7 @@ func run() -> void:
 			check(game.player_progress.status.credits == 100000,"Detection and departure award no money")
 
 	await fresh("spytech")
-	var mission: RefCounted = jobs.remaining
+	var mission: RefCounted = jobs.controller
 	game.pilot.global_position = Vector3(-100,20,-100)
 	jobs.attach_listening_device(mission.ship.body)
 	mission.step(39.9)
@@ -137,7 +137,7 @@ func run() -> void:
 	check(not is_instance_valid(demolition),"Completed destruction cleans up its visual copy")
 	Survivors.clear(game.submarine_traffic)
 	await fresh("spytech2")
-	mission = jobs.remaining
+	mission = jobs.controller
 	jobs.attach_listening_device(mission.ship.body); game.pilot.global_position = Vector3(-100,20,-100)
 	mission.step(40)
 	mission.enemies[0].take_weapon_damage_from(1,mission.enemies[0].global_position,mission.ship.body)
@@ -157,11 +157,11 @@ func run() -> void:
 	check(probe.is_queued_for_deletion() and not game.equipment.support_tools.projectiles.has(probe),"Destroyed shuttle loses its attached Big Ears probe")
 	check(mission.scheduled.all(func(event: Dictionary) -> bool: return event.event not in ["spy_warning","spy_failed"]),"Destroyed shuttle cancels stale warning and failure events")
 	await fresh("spytech")
-	mission = jobs.remaining
+	mission = jobs.controller
 	mission.ship.take_weapon_damage_from(1000,mission.ship.global_position,game.pilot)
 	check(runtime.active().is_empty() and not game.player_progress.missions.completed.spytech.success and game.player_progress.status.credits == 100000,"Destroying shuttle before reveal fails without a reward")
 	await fresh("spytech")
-	mission = jobs.remaining; mission._spawn_freighter()
+	mission = jobs.controller; mission._spawn_freighter()
 	mission.cargo.take_weapon_damage_from(1000,mission.cargo.global_position,game.pilot)
 	check(not get_nodes_in_group("base_destruction").is_empty(),"An unfinished demolition exists before session reset")
 	game._begin_new_game()

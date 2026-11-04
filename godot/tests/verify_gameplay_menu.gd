@@ -22,6 +22,30 @@ func _run() -> void:
 		for frame in range(5): await process_frame
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/gameplay-wildlife-cap.png")
+	var bubbles = preload("res://propeller_bubbles.gd")
+	check(menu.bubble_limit == 200 and menu.bubble_button.text.contains("200"),"Global bubble limit defaults to200 in General")
+	var wakes: Array[Node3D] = []
+	for index in 2:
+		var wake := bubbles.new(); front.add_child(wake); wake.set_physics_process(false); wake.set_process(false); wakes.append(wake)
+	for tick in 40:
+		for wake in wakes: wake.emit_from(0,Vector3.ZERO,Vector3.ZERO,1,1000,1)
+	check(bubbles.total_bubbles() == 200 and wakes.all(func(wake: Node3D) -> bool: return not wake.particles.is_empty()),"All emitters share200 slots and new wakes can replace old bubbles")
+	var burst := CPUParticles3D.new(); front.add_child(burst); burst.amount = 96; burst.lifetime = 2.4
+	bubbles.reserve_burst(burst)
+	check(bubbles.total_bubbles() == 200 and int(burst.get_meta("bubble_budget")) == 96,"Death bursts share the same global limit as wakes")
+	menu._set_bubble_limit(50)
+	check(bubbles.total_bubbles() == 50,"Lowering the limit immediately trims existing bubbles")
+	menu._set_bubble_limit(0)
+	for wake in wakes: wake.emit_from(0,Vector3.ZERO,Vector3.ZERO,1,1000,1)
+	check(bubbles.total_bubbles() == 0 and not burst.visible,"Off clears wakes and death bursts and stops new bubbles")
+	burst.free()
+	menu._set_bubble_limit(-1)
+	for tick in 30:
+		for wake in wakes: wake.emit_from(0,Vector3.ZERO,Vector3.ZERO,1,1000,1)
+	check(bubbles.total_bubbles() > 200,"Unlimited restores the existing per-emitter capacity")
+	for wake in wakes: wake.free()
+	check(bubbles.total_bubbles() == 0,"Freed emitters release their global slots")
+	menu._set_bubble_limit(200)
 	paused = true; press(menu,"menu_accept")
 	check(menu.zapper_auto_aim and menu.toggle.text.ends_with("On"),"Controller confirm enables auto aim while paused")
 	press(menu,"menu_left"); check(not menu.zapper_auto_aim,"Left/right can toggle auto aim")
@@ -36,12 +60,16 @@ func _run() -> void:
 	check(preload("res://mine_explosion.gd").enhanced_enabled and not menu.find_children("*","Button",true,false).any(func(button: Button) -> bool: return button.text.begins_with("Explosions:")),"Enhanced explosions remain enabled without a menu toggle")
 	press(menu,"menu_down"); check(menu.fmv_button.has_focus() and menu.fmvs_enabled,"FMVs default On and are reachable by controller")
 	press(menu,"menu_accept"); check(not menu.fmvs_enabled,"Controller confirm disables FMVs")
+	press(menu,"menu_down"); check(menu.bubble_button.has_focus(),"Down selects maximum bubbles")
+	press(menu,"menu_left"); check(menu.bubble_limit == 100,"Controller lowers maximum bubbles")
+	press(menu,"menu_right"); check(menu.bubble_limit == 200,"Controller restores default bubble limit")
 	press(menu,"menu_down"); check(menu.back.has_focus(),"Down selects Back")
 	press(menu,"menu_accept"); check(not menu.visible and front.buttons.gameplay.has_focus(),"Back restores Gameplay option focus")
 	paused = false
 	var path := "res://tests/gameplay-preferences-test.cfg"
 	var config := ConfigFile.new(); config.set_value("audio","effects_volume",175); config.save(path)
 	menu.settings_path = path; menu.remember_preferences = true; menu._toggle()
+	menu._set_bubble_limit(500)
 	menu._cycle_wildlife_limit()
 	config.load(path)
 	check(config.get_value("gameplay","zapper_auto_aim",false) == true,"Auto aim choice saves automatically")
@@ -49,6 +77,7 @@ func _run() -> void:
 	check(config.get_value("audio","effects_volume") == 175,"Gameplay saving preserves other preferences")
 	config.set_value("gameplay","enhanced_explosions",false); config.save(path)
 	var restored := Gameplay.new(); restored.settings_path = path; front.add_child(restored)
+	check(restored.bubble_limit == 500,"Bubble limit persists under General settings")
 	check(restored.zapper_auto_aim,"Gameplay choice loads on next launch")
 	check(restored.wildlife_limit == 100,"Wildlife cap loads on next launch")
 	check(not restored.sun_shafts_enabled,"Sun shafts choice saves and loads")
@@ -58,5 +87,10 @@ func _run() -> void:
 	menu._toggle_replay(); config.clear(); config.load(path)
 	check(config.get_value("gameplay","photo_replay",false),"Replay can be enabled again and saved")
 	check(not config.has_section_key("gameplay","enhanced_explosions"),"Saving removes the obsolete explosion setting")
+	config.erase_section_key("gameplay","bubble_limit"); config.set_value("graphics","bubble_limit",100); config.save(path)
+	var legacy := Gameplay.new(); legacy.settings_path = path; front.add_child(legacy)
+	check(legacy.bubble_limit == 100,"Moving the menu preserves a previously saved Graphics bubble limit")
+	legacy._set_bubble_limit(200); config.clear(); config.load(path)
+	check(config.get_value("gameplay","bubble_limit") == 200 and not config.has_section_key("graphics","bubble_limit"),"Saving General moves the bubble preference without leaving a competing Graphics value")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	front.free(); print("Gameplay menu: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

@@ -207,8 +207,8 @@ func advance_recording(delta: float) -> void:
 	var runtime: Node = tools.runtime()
 	var jobs: Node = runtime.side_jobs if runtime != null else null
 	var step := minf(delta,recording)
-	if jobs != null and jobs.remaining != null and jobs.remaining.family == "recon":
-		var target: Node3D = jobs.remaining.structure
+	if jobs != null and jobs.family == "support" and jobs.controller != null and jobs.controller.family == "recon":
+		var target: Node3D = jobs.controller.structure
 		if is_instance_valid(target) and not target.dead:
 			var point: Vector3 = target.to_global(target.get_meta("mission_target_center",Vector3.ZERO))
 			var offset := point-global_position; var distance := offset.length()
@@ -218,7 +218,7 @@ func advance_recording(delta: float) -> void:
 			# over 100 ticks, then divides by 100. Recon accepts quality > .05.
 			if get_world_3d().direct_space_state.intersect_ray(ray).is_empty(): exposure += pow(facing/(distance if distance >= 0.5 else 10.0),2)*step
 	recording = maxf(0,recording-step)
-	if recording == 0 and jobs != null and jobs.remaining != null: jobs.remaining.rov_recorded(exposure/4.0)
+	if recording == 0 and jobs != null and jobs.family == "support" and jobs.controller != null: jobs.controller.rov_recorded(exposure/4.0)
 
 func camera_pose() -> Transform3D:
 	return get_global_transform_interpolated()*Transform3D(Basis.IDENTITY,Vector3(0,0.04,-0.15))

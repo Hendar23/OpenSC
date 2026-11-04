@@ -17,6 +17,7 @@ static var shader_fields := {}
 var multimesh_copy: MultiMesh
 var material_templates := {}
 var material_values := {}
+var last_prune := 0.0
 
 func setup(node: Node3D, time: float) -> void:
 	source = weakref(node); born = time; last_seen = time
@@ -28,17 +29,39 @@ func setup(node: Node3D, time: float) -> void:
 	mutable_mesh = node.get_meta("replay_mutable_mesh",false)
 	data.resize(CAPACITY*stride); stamps.resize(CAPACITY); stamps.fill(-1)
 
+func _drop_version() -> void:
+	versions.pop_front()
+
+func _prune(tick: int, time: float) -> void:
+	while versions.size() > 1 and (versions[1].tick <= tick-CAPACITY+1 or versions[1].time <= time-30.0): _drop_version()
+	if time-last_seen > 30.0:
+		while not versions.is_empty(): _drop_version()
+		previous.clear(); multimesh_copy = null
+	if time-last_prune >= 1.0:
+		last_prune = time
+		for id in material_templates.keys():
+			if material_templates[id].get_ref() == null: material_templates.erase(id)
+
+func _signature(value: Variant) -> Variant:
+	if value is Resource:
+		return value.get_instance_id()
+	if value is Array:
+		var result: Array = []
+		for entry in value: result.append(_signature(entry))
+		return result
+	return value
+
 func record(tick: int, time: float, appearances: Dictionary = {}) -> void:
 	var node: Node3D = source.get_ref()
 	var slot := tick%CAPACITY; var offset := slot*stride
 	stamps[slot] = tick
 	data[offset+12] = 0
-	while versions.size() > 1 and versions[1].tick <= tick-CAPACITY+1: versions.pop_front()
+	_prune(tick,time)
+	material_values.clear()
 	if node == null or not node.is_inside_tree() or not node.is_visible_in_tree(): return
 	# Procedural beams acquire this flag on their first geometry build, which
 	# can happen after replay discovers the initially hidden mesh.
 	mutable_mesh = mutable_mesh or node.get_meta("replay_mutable_mesh",false)
-	last_seen = time
 	var pose := node.global_transform
 	# Avoid nested Variant indexing/loops for every recorded visual at20Hz.
 	var x := pose.basis.x; var y := pose.basis.y; var z := pose.basis.z; var p := pose.origin
@@ -46,31 +69,38 @@ func record(tick: int, time: float, appearances: Dictionary = {}) -> void:
 	data[offset+3] = y.x; data[offset+4] = y.y; data[offset+5] = y.z
 	data[offset+6] = z.x; data[offset+7] = z.y; data[offset+8] = z.z
 	data[offset+9] = p.x; data[offset+10] = p.y; data[offset+11] = p.z
-	data[offset+12] = 1
 	var values := _values(node,appearances)
-	if versions.is_empty() or values != previous or mutable_mesh:
+	if versions.is_empty() or values != previous or mutable_mesh or kind == "multi":
+		var state := _state(node)
 		previous = values
-		versions.append({"tick":tick,"state":_state(node)})
+		versions.append({"tick":tick,"time":time,"state":state})
+	last_seen = time; data[offset+12] = 1
 	data[offset+13] = versions.back().tick
 	if node is MeshInstance3D:
 		for index in range(stride-14): data[offset+14+index] = node.get_blend_shape_value(index)
 	# Keep one preceding appearance for interpolation across the buffer edge.
-	while versions.size() > 1 and versions[1].tick <= tick-CAPACITY+1: versions.pop_front()
+	while versions.size() > 1 and (versions[1].tick <= tick-CAPACITY+1 or versions[1].time <= time-30.0): _drop_version()
+	material_values.clear()
 
 func _values(node: Node3D, appearances: Dictionary) -> Array:
 	var result: Array = []
 	if node is MeshInstance3D:
-		result = [node.mesh,node.material_override,node.layers,node.transparency]
+		result = [_identity(node.mesh),_identity(node.material_override),node.layers,node.transparency]
 		if node.mesh != null:
 			for surface in node.mesh.get_surface_count():
 				var surface_material: Material = node.get_surface_override_material(surface)
-				result.append(surface_material); result.append(_material_values(surface_material,appearances))
-	elif node is Sprite3D: result = [node.texture,node.modulate,node.pixel_size,node.material_override]
-	elif node is MultiMeshInstance3D: result = [node.multimesh,node.multimesh.instance_count,node.multimesh.mesh,node.material_override]
+				result.append(_identity(surface_material)); result.append(_material_values(surface_material,appearances))
+	elif node is Sprite3D:
+		result = [_identity(node.texture),node.modulate,node.pixel_size,_identity(node.material_override)]
+	elif node is MultiMeshInstance3D:
+		result = [_identity(node.multimesh),node.multimesh.instance_count,_identity(node.multimesh.mesh),_identity(node.material_override)]
 	elif node is Light3D: return [node.light_color,node.light_energy,node.omni_range if node is OmniLight3D else node.spot_range]
 	var material: Material = node.material_override if node is GeometryInstance3D else null
 	result.append(_material_values(material,appearances))
 	return result
+
+func _identity(resource: Resource) -> int:
+	return resource.get_instance_id() if resource != null else 0
 
 func _fields(material: ShaderMaterial) -> Array:
 	var id: int = material.shader.get_instance_id() if material.shader != null else 0
@@ -91,12 +121,13 @@ func _material_values(material: Material, appearances: Dictionary) -> Array:
 	# Many hull parts/fish share a material. Read its uniforms once per sample,
 	# without carrying the snapshot into the next frame or missing animation.
 	if appearances.has(id):
-		material_values[id] = appearances[id]; return appearances[id]
+		material_values[id] = appearances[id].values; return appearances[id].signature
 	if material is ShaderMaterial:
 		for field in _fields(material): values.append(material.get_shader_parameter(field))
 	elif material is StandardMaterial3D: values = [material.albedo_color,material.albedo_texture,material.emission_texture]
-	appearances[id] = values; material_values[id] = values
-	return values
+	var signature: Array = _signature(values)
+	appearances[id] = {"values":values,"signature":signature}; material_values[id] = values
+	return signature
 
 func _state(node: Node3D) -> Dictionary:
 	var state := {}
@@ -111,18 +142,15 @@ func _state(node: Node3D) -> Dictionary:
 	elif node is Sprite3D:
 		state.merge({"texture":node.texture,"modulate":node.modulate,"pixel_size":node.pixel_size,"billboard":node.billboard,"double_sided":node.double_sided,"no_depth_test":node.no_depth_test})
 	elif node is MultiMeshInstance3D:
-		# Water specks use an immutable instance buffer and animated uniforms.
-		# Share one buffer copy across all samples, rather than copying it at20Hz.
-		if multimesh_copy == null or multimesh_copy.instance_count != node.multimesh.instance_count or multimesh_copy.mesh != node.multimesh.mesh:
-			var original: MultiMesh = node.multimesh
-			multimesh_copy = MultiMesh.new(); multimesh_copy.transform_format = original.transform_format
-			multimesh_copy.use_colors = original.use_colors; multimesh_copy.use_custom_data = original.use_custom_data
-			multimesh_copy.mesh = original.mesh; multimesh_copy.instance_count = original.instance_count
-			multimesh_copy.visible_instance_count = original.visible_instance_count
-			var buffer := original.buffer
-			if not buffer.is_empty(): multimesh_copy.buffer = buffer
+		# Instance buffers can animate without changing resource identity/count.
+		var original: MultiMesh = node.multimesh
+		multimesh_copy = MultiMesh.new(); multimesh_copy.transform_format = original.transform_format
+		multimesh_copy.use_colors = original.use_colors; multimesh_copy.use_custom_data = original.use_custom_data
+		multimesh_copy.mesh = original.mesh; multimesh_copy.instance_count = original.instance_count
+		multimesh_copy.visible_instance_count = original.visible_instance_count
+		var buffer := original.buffer
+		if not buffer.is_empty(): multimesh_copy.buffer = buffer
 		state["multimesh"] = multimesh_copy
-		state["cloud"] = node.get_script() == preload("res://water_particles.gd")
 	elif node is Light3D:
 		state = {"color":node.light_color,"energy":node.light_energy,"range":node.omni_range if node is OmniLight3D else node.spot_range,"spot":node is SpotLight3D,"angle":node.spot_angle if node is SpotLight3D else 45.0}
 	elif node is CPUParticles3D:
@@ -134,8 +162,10 @@ func _state(node: Node3D) -> Dictionary:
 func _material(material: Material) -> Dictionary:
 	if material == null: return {}
 	var id := material.get_instance_id()
-	if not material_templates.has(id): material_templates[id] = material.duplicate()
-	return {"base":material_templates[id],"fields":_fields(material) if material is ShaderMaterial else ["albedo_color","albedo_texture","emission_texture"],"values":material_values.get(id,[]),"shader":material is ShaderMaterial}
+	var base: Material = material_templates[id].get_ref() if material_templates.has(id) else null
+	if base == null:
+		base = material.duplicate(); material_templates[id] = weakref(base)
+	return {"base":base,"fields":_fields(material) if material is ShaderMaterial else ["albedo_color","albedo_texture","emission_texture"],"values":material_values.get(id,[]),"shader":material is ShaderMaterial}
 
 func _apply_material(state: Dictionary, current: Material) -> Material:
 	if state.is_empty(): return null
@@ -191,7 +221,6 @@ func show_at(root: Node3D, tick: int, fraction: float, time: float) -> void:
 	if proxy is MeshInstance3D:
 		for index in range(stride-14): proxy.set_blend_shape_value(index,lerpf(data[offset+14+index],data[next+14+index],fraction) if interpolate else data[offset+14+index])
 	elif kind == "burst": _burst(version.state,time-born)
-	elif kind == "multi": refresh_view(root.get_viewport().get_camera_3d())
 
 func _apply(state: Dictionary) -> void:
 	if proxy is GeometryInstance3D and kind != "burst":
@@ -208,7 +237,7 @@ func _apply(state: Dictionary) -> void:
 		proxy.light_color = state.color; proxy.light_energy = state.energy; proxy.shadow_enabled = false
 		if proxy is OmniLight3D: proxy.omni_range = state.range
 		else: proxy.spot_range = state.range; proxy.spot_angle = state.angle
-	elif kind == "multi": proxy.multimesh = state.multimesh; proxy.set_meta("camera_cloud",state.cloud)
+	elif kind == "multi": proxy.multimesh = state.multimesh
 	elif kind == "burst":
 		proxy.multimesh = MultiMesh.new(); proxy.multimesh.transform_format = MultiMesh.TRANSFORM_3D
 		proxy.multimesh.mesh = state.mesh; proxy.multimesh.instance_count = state.count
@@ -224,12 +253,8 @@ func _burst(state: Dictionary, age: float) -> void:
 		var size := rng.randf_range(state.size_min,state.size_max)
 		proxy.multimesh.set_instance_transform(index,Transform3D(Basis.IDENTITY.scaled(Vector3.ONE*size),point))
 
-func refresh_view(camera: Camera3D) -> void:
-	if proxy == null or not proxy.get_meta("camera_cloud",false): return
-	# Ambient specks surround the free camera, using the recorded drift.
-	proxy.global_position = camera.global_position
-	proxy.material_override.set_shader_parameter("cloud_center",proxy.global_position)
-
 func dispose() -> void:
 	if is_instance_valid(proxy): proxy.free()
-	proxy = null; versions.clear(); data.clear(); stamps.clear(); multimesh_copy = null; material_templates.clear(); material_values.clear()
+	while not versions.is_empty(): _drop_version()
+	proxy = null; previous.clear()
+	data.clear(); stamps.clear(); multimesh_copy = null; material_templates.clear(); material_values.clear()

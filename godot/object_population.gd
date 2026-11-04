@@ -446,5 +446,6 @@ func _update_radiation(delta: float) -> void:
 			var radius := float(body.stats.get("radiation_range",0.0))
 			var distance: float = body.global_position.distance_to(player.global_position)
 			if radius > 0 and distance < radius:
-				strength += preload("res://original_damage.gd").radiation(float(body.stats.get("radiation_strength",0.0)),distance)
+				# The nuclear cave uses uniform area exposure; cargo uses inverse distance.
+				strength += float(body.radiation_strength_at(distance)) if body.has_method("radiation_strength_at") else preload("res://original_damage.gd").radiation(float(body.stats.get("radiation_strength",0.0)),distance)
 	player.receive_radiation(strength,delta)

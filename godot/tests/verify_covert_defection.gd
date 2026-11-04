@@ -39,7 +39,7 @@ func fresh(id: String) -> RefCounted:
 	game.docking.stage = game.Docking.Stage.IDLE; game.dock_interface.dismiss(); jobs.set_physics_process(false)
 	for agent in jobs.vessels: agent.set_physics_process(false)
 	await physics_frame; await physics_frame
-	return jobs.defection
+	return jobs.controller
 
 func attach(mission: RefCounted) -> void:
 	var tools: Node3D = game.equipment.support_tools
@@ -212,10 +212,10 @@ func run() -> void:
 	mission.step(6)
 	check(runtime.active().is_empty() and heard("bb22") and runtime.last_response == runtime.text("defect",2),"Destroyed prototype selects original response2")
 	await physics_frame; await physics_frame
-	check(jobs.defection == null and jobs.actors.is_empty() and jobs.vessels.is_empty(),"Failure clears mission vessels, pod, cables and mines")
+	check(jobs.controller == null and jobs.actors.is_empty() and jobs.vessels.is_empty(),"Failure clears mission vessels, pod, cables and mines")
 	mission = await fresh("defect2")
 	mission.step(12); runtime._cleanup()
 	await physics_frame; await process_frame
-	check(jobs.defection == null and game.submarine_traffic.traders.all(func(agent: Node3D) -> bool: return agent.mission_owner not in ["defect","defect2"]),"Cancellation removes mission actors from ambient traffic")
+	check(jobs.controller == null and game.submarine_traffic.traders.all(func(agent: Node3D) -> bool: return agent.mission_owner not in ["defect","defect2"]),"Cancellation removes mission actors from ambient traffic")
 	game.free(); await process_frame; await process_frame
 	print("Covert Defection: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

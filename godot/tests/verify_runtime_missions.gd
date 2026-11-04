@@ -14,7 +14,7 @@ func run() -> void:
 	while not game.submarine_traffic.navigation_ready: game.submarine_traffic.build_graph(128); await process_frame
 	for id in ["spytech","spytech2"]:
 		await fresh(id)
-		var ship: Node3D = jobs.remaining.ship
+		var ship: Node3D = jobs.controller.ship
 		game.pilot.global_position = Vector3(-100,20,-100); game.pilot.pending_reset = false
 		game.dock_interface_active = false
 		game.camera.global_position = ship.global_position+Vector3(0,4,8); game.camera.look_at(ship.global_position)
@@ -62,16 +62,16 @@ func run() -> void:
 		jobs.set_physics_process(false)
 	for id in ["escort","escort2"]:
 		await fresh(id)
-		var ship: Node3D = jobs.remaining.ship
+		var ship: Node3D = jobs.controller.ship
 		game.pilot.global_position = Vector3(-100,20,-100); game.pilot.pending_reset = false
 		game.camera.global_position = ship.global_position+Vector3(0,4,8); game.camera.look_at(ship.global_position)
 		ship.set_physics_process(true); jobs.set_physics_process(true)
 		for frame in range(120): await physics_frame
-		check(not runtime.active().is_empty() and not jobs.remaining.flags.get("started",false),"Idle escort waits for the player instead of completing on launch: "+id)
+		check(not runtime.active().is_empty() and not jobs.controller.flags.get("started",false),"Idle escort waits for the player instead of completing on launch: "+id)
 		check(not ship.arrival_reported,"Unassigned route cannot report arrival")
 		game.pilot.global_position = ship.global_position+Vector3.UP*3
 		for frame in range(30): await physics_frame
-		check(not runtime.active().is_empty() and jobs.remaining.flags.get("started",false) and ship.dock_destination == 5,"Joining starts the prison journey without an instant reward")
+		check(not runtime.active().is_empty() and jobs.controller.flags.get("started",false) and ship.dock_destination == 5,"Joining starts the prison journey without an instant reward")
 		ship.arrived.emit()
 		check(not runtime.active().is_empty() and game.player_progress.status.credits == 100000,"An arrival signal away from Aquatraz cannot complete escort")
 		jobs.set_physics_process(false)

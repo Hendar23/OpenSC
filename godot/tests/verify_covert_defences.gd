@@ -1,5 +1,5 @@
 extends "res://tests/test_scene_tree.gd"
-const Jobs = preload("res://stage_two_missions.gd")
+const Jobs = preload("res://mission_dispatcher.gd")
 class Victim extends CharacterBody3D:
 	var dead := false
 class Traffic extends Node3D:

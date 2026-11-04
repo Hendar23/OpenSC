@@ -15,7 +15,7 @@ func run() -> void:
 	for agent in game.submarine_traffic.traders: agent.set_physics_process(false)
 	for id in ["escort","escort2"]:
 		await fresh(id)
-		var mission: RefCounted = jobs.remaining
+		var mission: RefCounted = jobs.controller
 		var ship: Node3D = mission.ship
 		game.pilot.global_position = ship.global_position+Vector3.UP*3
 		mission._step_escort(0.1)
@@ -66,7 +66,7 @@ func run() -> void:
 	# Source 0040cc80: the two TECHNEW ships carry rescue pods. The selected
 	# one approaches the host, transfers for 400 ticks and retreats to Velcova.
 	await fresh("escort")
-	var mission: RefCounted = jobs.remaining
+	var mission: RefCounted = jobs.controller
 	for index in range(4): mission._escort_wave()
 	check(mission.enemies.size() == 4 and mission.enemies.filter(func(agent: Node3D) -> bool: return agent.get_meta("pod_rescuer",false)).size() == 2,"Two of four Procha attackers carry rescue pods")
 	mission._step_escort(0)

@@ -32,6 +32,7 @@ var target_query_layer := false
 var drop_points: Array[Node] = []
 var delivery_point: Node
 var declined_point: Node
+var release_guard := Callable()
 var target: RigidBody3D
 var clamp_joint: Generic6DOFJoint3D
 var enabled := false
@@ -71,6 +72,7 @@ func setup(player: RigidBody3D, appearance: Node3D, folder: String) -> void:
  deploy_audio = AudioStreamPlayer.new(); deploy_audio.stream = preload("res://submarine_weapons.gd")._sound(folder,"audio.equipment." + tool_id + ".deploy","GRAPPLE" if tool_id == "grapple" else "MAG1"); add_child(deploy_audio)
  clamp_audio = AudioStreamPlayer.new(); clamp_audio.stream = preload("res://submarine_weapons.gd")._sound(folder,"audio.equipment." + tool_id + ".attach","GRAPPLE" if tool_id == "grapple" else "MAG3"); add_child(clamp_audio)
 func set_enabled(on: bool) -> void:
+ if not on and release_guard.is_valid() and release_guard.call(): return
  if on == enabled: return
  if on and (housing == null or chain_template == null or not is_instance_valid(pilot) or not preload("res://submarine_controller.gd").tools_allowed(pilot)):
   state_changed.emit(false); return
@@ -265,6 +267,7 @@ func _attach(body: Node) -> void:
  _update_delivery_point()
  _play(clamp_audio)
 func release(recall: bool = true) -> void:
+ if release_guard.is_valid() and release_guard.call(): return
  delivery_point = null; declined_point = null
  if is_instance_valid(clamp_joint): clamp_joint.free()
  clamp_joint = null
@@ -323,6 +326,7 @@ func _update_cargo_mass() -> void:
  if is_instance_valid(pilot) and pilot.has_method("set_towed_mass"):
   pilot.set_towed_mass(target.mass * cargo_weight if is_instance_valid(target) else 0.0)
 func reset() -> void:
+ release_guard = Callable()
  enabled = false; retracting = false; deploying = false
  release(false); _clear_rig(); state_changed.emit(false)
  if deploy_audio != null: deploy_audio.stop()

@@ -405,6 +405,9 @@ func restore(value: Dictionary) -> void:
 				Access.open(agent.port,1 - smoothstep(0,1,fraction) if agent.stage in ["close","exit_close"] else smoothstep(0,1,fraction) if agent.stage in ["open","exit_open"] else 1)
 				agent.port.collision.collision_layer = 0 if agent.stage in ["descend","close","ascend","exit_close"] else 1
 		agent.body.collision_layer = 10 if agent.stage == "travel" and not agent.dead else 0
+		agent.body.collision_mask = (1 | 2 | 8) if not agent.dead else 0
+		for shape in agent.body.get_children():
+			if shape is CollisionShape3D: shape.set_deferred("disabled",agent.dead)
 		agent.get_parent().visible = not agent.dead and agent.stage != "berth"
 		agent._update_dock_audio()
 		if agent.smoke != null: agent.smoke.set_health(agent.health.remaining * 10)

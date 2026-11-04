@@ -108,7 +108,7 @@ func step(delta: float) -> void:
 		tick_credit -= TICK; cycle_tick = (cycle_tick+1)%501
 		_heat_tick()
 		# Fatal heat synchronously clears the active mission and its children.
-		if jobs.id.is_empty() or jobs.volcano != self: return
+		if jobs.id.is_empty() or jobs.controller != self: return
 		var peak := cycle_tick >= 250 and cycle_tick < 450
 		smoke.tuning.emission_rate = 16.0 if peak else 8.0 if cycle_tick >= 67 else 2.0
 		# Separate rising columns fill the crater instead of one narrow string.
@@ -136,7 +136,7 @@ func _heat_tick() -> void:
 	if distance < 3+float(pilot.COLLIDER_RADIUS) and pilot.active and not pilot.dead:
 		var before: float = pilot.health
 		Damage.weapon(pilot,heat_at(cycle_tick)/maxf(0.1,distance),global_position,self)
-		if jobs.id.is_empty() or jobs.volcano != self: return
+		if jobs.id.is_empty() or jobs.controller != self: return
 		if (before-pilot.health)*100 > 20 and heat_warning <= 0:
 			heat_warning = 6.0; jobs.radio("n21")
 	# Retail heat destroys nearby damageable wildlife and vessels outright,

@@ -22,3 +22,4 @@ func setup_machine(machine: Node3D, visual: Node3D, bubble_texture: Texture2D, m
 		bubbles.initial_velocity_min = 0.3; bubbles.initial_velocity_max = 1.2
 		bubbles.scale_amount_min = 0.04; bubbles.scale_amount_max = 0.16
 		bubbles.restart()
+		preload("res://propeller_bubbles.gd").reserve_burst(bubbles)

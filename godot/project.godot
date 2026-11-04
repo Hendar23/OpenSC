@@ -33,6 +33,8 @@ window/stretch/mode="canvas_items"
 
 [physics]
 
+3d/physics_engine="Jolt Physics"
+jolt_physics_3d/queries/enable_ray_cast_face_index=true
 common/physics_interpolation=true
 
 [rendering]

@@ -41,7 +41,7 @@ func fresh(id: String) -> void:
 	game.pilot.show(); game.pilot.visual.show(); game.pilot.collision_layer = 2; game.pilot.collision_mask = 13
 	for agent in jobs.vessels: agent.set_physics_process(false)
 	jobs.set_physics_process(false)
-	if jobs.genocide != null: jobs.genocide.armament.set_physics_process(false)
+	if jobs.controller != null: jobs.controller.armament.set_physics_process(false)
 	await physics_frame; await physics_frame
 
 func run() -> void:
@@ -69,7 +69,7 @@ func run() -> void:
 	check(Rules.core_unlocked(progress),"Published beta histories without counters unlock naturally")
 	for id in Rules.CORE.values():
 		await fresh(id)
-		var mission: RefCounted = jobs.genocide
+		var mission: RefCounted = jobs.controller
 		check(mission != null and is_instance_valid(mission.walker),id+" initializes original walker")
 		check(mission.walker.global_position.is_equal_approx(Vector3(286.839813,157.313339,164.02887)),"Walker uses exact database test-ground coordinates")
 		var bonus: Array = game.object_population.snapshot().filter(func(entry: Dictionary) -> bool: return entry.get("object_group","") == "campaign/genocide_bonus")
@@ -108,7 +108,7 @@ func run() -> void:
 		check(game.player_progress.missions.stage2_successes == 0 and game.player_progress.missions.stage2_resolved == 0 and game.player_progress.campaign_jobs == 0,"Core resets side-job counters for the next stage")
 		check(game.submarine_traffic.traders.any(func(agent: Node3D) -> bool: return agent.has_meta("fishing_survivor") and agent.get_parent().get_meta("editor_model","") == "TECH2SUB"),"Living guards persist through mission completion")
 	await fresh("walktech")
-	var mission: RefCounted = jobs.genocide
+	var mission: RefCounted = jobs.controller
 	mission.walker.take_typed_weapon_damage(2.5*79,mission.walker.global_position,game.pilot,"zapper")
 	check(mission.phase == "walker","Seventy-nine original leg zapper ticks do not release head")
 	mission.walker.take_typed_weapon_damage(2.5,mission.walker.global_position,game.pilot,"zapper")
@@ -121,13 +121,13 @@ func run() -> void:
 	mission.head.take_weapon_damage_from(100.0,mission.head.global_position,game.pilot)
 	check(game.pilot.dead and runtime.active().is_empty(),"Destroyed head triggers original global catastrophe and mission failure")
 	await fresh("walktrad")
-	mission = jobs.genocide
+	mission = jobs.controller
 	mission.step(117.9)
 	check(not game.pilot.dead,"Original warning timer has not expired just before 118 seconds")
 	mission.step(0.2)
 	check(game.pilot.dead and runtime.active().is_empty(),"Undetached walker catastrophically fails at original deadline")
 	await fresh("walktrad2")
-	mission = jobs.genocide
+	mission = jobs.controller
 	# Exercise the actual swept projectile/damage route, including its singular
 	# "missile" ID, rather than testing only the mission's direct callback.
 	game.pilot.global_position = Vector3(10000,150,10000)
@@ -196,7 +196,7 @@ func run() -> void:
 	check(game.player_progress.campaign_stage == 3,"Beluga is a valid alternative Bohine delivery")
 	check(game.object_population.snapshot().filter(func(entry: Dictionary) -> bool: return entry.get("object_group","") == "campaign/genocide_bonus").size() == 8,"Stage bonus resources persist after mission cleanup")
 	await fresh("walktrad")
-	mission = jobs.genocide
+	mission = jobs.controller
 	game.pilot.global_position = Vector3(10000,150,10000)
 	for index in range(3):
 		var shot := preload("res://player_projectile.gd").new(); game.world_root.add_child(shot)
@@ -213,7 +213,7 @@ func run() -> void:
 	check(game.pilot.dead and runtime.active().is_empty() and mission.head == null,"Third confirmed head torpedo causes catastrophe instead of awarding a salvageable head")
 
 	await fresh("walktrad2")
-	mission = jobs.genocide
+	mission = jobs.controller
 	var head_ray := PhysicsRayQueryParameters3D.create(mission.walker.to_global(Vector3(0,4,0)),mission.walker.to_global(Vector3(0,-2,0)),15,[game.pilot.get_rid()])
 	var head_contact: Dictionary = game.world_root.get_world_3d().direct_space_state.intersect_ray(head_ray)
 	check(head_contact.get("collider") == mission.walker,"Zapper contact fixture hits the visible head mesh")
@@ -224,7 +224,7 @@ func run() -> void:
 	check(game.pilot.dead and runtime.active().is_empty(),"Twenty-seventh head Zapper contact causes original catastrophe")
 
 	await fresh("walktech")
-	mission = jobs.genocide
+	mission = jobs.controller
 	game.pilot.global_position = mission.walker.to_global(Vector3(0,1,8))
 	game.pilot.restore_health(100000,100000); game.pilot.linear_velocity = Vector3.ZERO
 	await physics_frame; await physics_frame

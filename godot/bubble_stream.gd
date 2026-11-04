@@ -22,10 +22,11 @@ func _physics_process(delta: float) -> void:
 	var camera := get_viewport().get_camera_3d()
 	if not enabled or (camera != null and camera.global_position.distance_squared_to(global_position) > 6400):
 		renderer.clear(); return
-	var before: int = renderer.particles.size()
+	var before: int = renderer.birth_serial
 	renderer.emit_from(0,global_position,Vector3.ZERO,1.0,tuning.emission_rate,delta)
-	for index in range(before,renderer.particles.size()):
+	for index in range(renderer.particles.size()-1,-1,-1):
 		var particle: Dictionary = renderer.particles[index]
+		if int(particle.get("budget_birth",0)) <= before: break
 		particle.position += Vector3(randf_range(-1,1),0,randf_range(-1,1)) * float(tuning.spread)
 		particle.drift = Vector3(tuning.drift_x,0,tuning.drift_z)
 		particle.rise = tuning.rise_speed

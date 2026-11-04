@@ -25,6 +25,7 @@ static func load_catalogue(folder: String, with_mods: bool = true) -> Dictionary
 		cached_signature = signature
 	var result := cached_base.duplicate(true)
 	if with_mods:
+		_briefing_requirements(result)
 		Mods.ensure()
 		result.provenance["mods"] = []
 		var candidates := Mods.candidates("data.gameplay"); candidates.reverse()
@@ -35,6 +36,20 @@ static func load_catalogue(folder: String, with_mods: bool = true) -> Dictionary
 			for error in errors: Mods.note("%s gameplay data: %s" % [entry.name,error])
 	_display_terminology(result)
 	return result
+
+static func _briefing_requirements(catalogue: Dictionary) -> void:
+	# Owner-approved corrections to incomplete retail REQUIRE.TXT entries.
+	# Apply only to the gameplay copy before mod patches; raw imports/source
+	# archives remain original, and explicit modded lists can replace these.
+	if not catalogue.tables.has("mission_requirements"): return
+	var records: Dictionary = catalogue.tables.mission_requirements.records
+	var corrections := {"miners2":["magnet"],"minefield":["escape"],"rovrtn":["escape","rover"]}
+	for id in ["backstab","backstab2","backstab3","backstab4","filters","filters2","filters3","filters4"]:
+		corrections[id] = ["magnet"]
+	for id in corrections:
+		if not records.has(id): records[id] = {"items":corrections[id].duplicate()}
+		elif id == "rovrtn" and records[id].get("items",[]) == ["escape"]:
+			records[id]["items"] = corrections[id].duplicate()
 
 static func _display_terminology(catalogue: Dictionary) -> void:
 	# Run after cached imports and mod patches, on the detached catalogue copy.

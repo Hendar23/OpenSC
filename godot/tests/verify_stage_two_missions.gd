@@ -115,8 +115,8 @@ func run() -> void:
 	game.player_progress.missions.completed["stranded"] = {"success":true}
 	game.player_progress.missions["unavailable"] = ["breakout","breakout2"]
 	unlock.button_pressed = true
-	check(runtime.testing_all_missions and runtime.testing_missions().size() == 41,"Dev button unlocks all missions globally")
-	var origins := {"pwalker":1,"pwalker2":3,"tradetrad":1,"tradetrad2":3,"tradetech":2,"tradetech2":4,"stranded":1,"spytrad":1,"spytrad2":3,"breakout":2,"breakout2":4,"fishing":2,"bigherd":3,"spytech":2,"spytech2":4,"escort":1,"escort2":3,"tagtech":4,"eel":3,"recontech":2,"recontech2":4,"walktrad":3,"walktrad2":1,"walktech":2,"walktech2":4,"minefield":1,"disperse":2,"rovrtn":3,"fumehole":2,"fumehole2":4,"defect":1,"defect2":3,"miners":2,"miners2":4,"bomb":1,"aliens":2,"aliens2":4,"diptrad":1,"diptrad2":3,"diptech":2,"diptech2":4}
+	check(runtime.testing_all_missions and runtime.testing_missions().size() == 43,"Dev button unlocks all missions globally")
+	var origins := {"puffa":2,"puffa2":4,"pwalker":1,"pwalker2":3,"tradetrad":1,"tradetrad2":3,"tradetech":2,"tradetech2":4,"stranded":1,"spytrad":1,"spytrad2":3,"breakout":2,"breakout2":4,"fishing":2,"bigherd":3,"spytech":2,"spytech2":4,"escort":1,"escort2":3,"tagtech":4,"eel":3,"recontech":2,"recontech2":4,"walktrad":3,"walktrad2":1,"walktech":2,"walktech2":4,"minefield":1,"disperse":2,"rovrtn":3,"fumehole":2,"fumehole2":4,"defect":1,"defect2":3,"miners":2,"miners2":4,"bomb":1,"aliens":2,"aliens2":4,"diptrad":1,"diptrad2":3,"diptech":2,"diptech2":4}
 	for city in [1,2,3,4,5,6]:
 		var expected: Array = origins.keys().filter(func(id: String) -> bool: return origins[id] == city)
 		var offered: Array = runtime.board(city).offers.map(func(entry: Dictionary) -> String: return entry.id)
@@ -128,7 +128,7 @@ func run() -> void:
 	game.dock_interface.layout.get_node("MissionOffer_bigherd").pressed.emit()
 	check(game.dock_interface.layout.get_node("MissionBriefingScroll/MissionBriefing").text == runtime.text("bigherd") and not game.dock_interface.layout.get_node("accept_mission").disabled,"Choosing the Beluga fishing row shows its own briefing and enables Accept")
 	game.dock_interface.layout.get_node("accept_mission").pressed.emit()
-	check(runtime.active().id == "bigherd" and runtime.active().city == 3 and jobs.fishing != null and jobs.fishing.herders.size() == 3,"Actual dock Accept action starts the selected Beluga fishing mission from the station board")
+	check(runtime.active().id == "bigherd" and runtime.active().city == 3 and jobs.controller != null and jobs.controller.herders.size() == 3,"Actual dock Accept action starts the selected Beluga fishing mission from the station board")
 	check(not runtime.can_save() and runtime.board(2).offers.is_empty(),"Accepting a testing job still hides other offers and blocks saving")
 	runtime.finish(false); await process_frame
 	port(1)
@@ -139,6 +139,33 @@ func run() -> void:
 	check(not runtime.can_save() and not runtime.board(1).available,"Testing acceptance still enforces one mission and blocks saving")
 	fresh(); unlock.button_pressed = false
 	check(not runtime.testing_all_missions and not runtime.board(5).available,"Turning testing off restores normal mission availability")
+	var required_rows: Dictionary = game.gameplay_catalogue.tables.mission_requirements.records
+	var expected := {"miners2":["magnet"],"minefield":["escape"],"rovrtn":["escape","rover"]}
+	for id in ["backstab","backstab2","backstab3","backstab4","filters","filters2","filters3","filters4"]: expected[id] = ["magnet"]
+	for id in expected:
+		check(required_rows[id].items == expected[id],"Briefing equipment is represented in acceptance requirements: "+id)
+	var raw := preload("res://original_game_data.gd").load_catalogue(game.game_folder,false)
+	check(not raw.tables.mission_requirements.records.has("minefield") and raw.tables.mission_requirements.records.rovrtn.items == ["escape"],"Raw catalogue preserves the original omissions for inspection")
+	var corrected: Dictionary = game.gameplay_catalogue.duplicate(true)
+	var patch_errors: Array = preload("res://original_game_data.gd").apply_patch(corrected,{"schema_version":1,"tables":{"mission_requirements":{"records":{"rovrtn":{"items":[]}}}}})
+	check(patch_errors.is_empty() and corrected.tables.mission_requirements.records.rovrtn.items.is_empty(),"An explicit gameplay mod can override corrected requirements")
+	fresh(); game.player_progress.campaign_stage = 3; game.equipment.set_installed([]); game.player_progress.hold.clear()
+	var combined := Rules.requirement_cost(game,"rovrtn",3)
+	var pod_only := Rules.requirement_cost(game,"breakout2",3)
+	var rov_only := Rules.requirement_cost(game,"recontech",3)
+	check(combined == pod_only+rov_only and combined > pod_only,"Minelayer acceptance budgets both Escape Pod and ROV")
+	game.player_progress.hold.escape = 1
+	check(Rules.requirement_cost(game,"rovrtn",3) == rov_only,"Owned pod leaves only the missing ROV cost")
+	game.player_progress.hold.rover = 1
+	check(Rules.requirement_cost(game,"rovrtn",3) == 0,"Both owned rescue tools satisfy the combined requirement")
+	fresh(); port(1); game.player_progress.campaign_stage = 3
+	var pod_cost := Rules.requirement_cost(game,"minefield",1)
+	game.player_progress.status.credits = pod_cost-1
+	check(not runtime.board(1).available,"Thwart Terrorists blocks acceptance below the missing pod price")
+	game.player_progress.status.credits = pod_cost
+	check(runtime.board(1).available and runtime.board(1).id == "minefield","Thwart Terrorists allows acceptance at the exact pod affordability threshold")
+	game.player_progress.status.credits = 0; game.player_progress.hold.escape = 1
+	check(runtime.board(1).available,"Owned Escape Pod satisfies Thwart Terrorists without credits")
 	for row in [[1,"stranded","magnet",2500],[1,"spytrad","bigears",4900],[3,"spytrad2","bigears",5000],[2,"breakout","escape",5060],[4,"breakout2","escape",5060]]:
 		fresh(); port(row[0]); game.player_progress.status.credits = row[3] - 1
 		if row[1] == "spytrad": game.player_progress.missions.completed["stranded"] = {"success":true,"city":1}

@@ -1,11 +1,9 @@
 extends Node3D
-## Bounded visual/audio recording. Playback never runs gameplay controllers.
+## Thirty-second visual/audio recording. Playback never runs gameplay controllers.
 const Visual = preload("res://replay_visual.gd")
 const Wake = preload("res://replay_wake.gd")
 const INTERVAL := 0.05
 const DURATION := 30.0
-const MAX_TRACKS := 2048
-const MAX_BYTES := 96*1024*1024
 var game: Node
 var tracks := {}
 var wakes := {}
@@ -15,7 +13,6 @@ var tick := -1
 var clock := 0.0
 var started := false
 var death_captured := false
-var bytes := 0
 var enabled := true
 var playing := false
 var speed := 1.0
@@ -66,13 +63,21 @@ func _process(delta: float) -> void:
 		audio.set_recording(false); return
 	audio.set_recording(true)
 	if not started:
-		started = true; _scan(game,true)
+		_start_recording()
 	clock += delta
 	if clock < INTERVAL:
 		_register_pending(); return
 	# Never manufacture multiple identical frames after a hitch.
 	var elapsed := clock; clock = 0
 	capture(elapsed)
+
+func _start_recording() -> void:
+	started = true
+	# Capture the player immediately; discover the rest in short work slices.
+	# Photo entry completes discovery before creating any playback visuals.
+	_scan(game.pilot)
+	capture(0)
+	_scan(game,true)
 
 func _added(node: Node) -> void:
 	if started and enabled and playback == null and (node is VisualInstance3D or node is Light3D): pending[node.get_instance_id()] = weakref(node)
@@ -104,17 +109,16 @@ func _dynamic(node: Node) -> bool:
 	return dynamic
 
 func _register(node: Node3D) -> void:
-	if not node.is_inside_tree() or not _dynamic(node): return
+	if not node.is_inside_tree() or node.get_script() == preload("res://water_particles.gd") or not _dynamic(node): return
 	var id := node.get_instance_id()
 	if node is MultiMeshInstance3D:
 		if node.get_parent().get_script() == preload("res://propeller_bubbles.gd") and not wakes.has(id):
 			var wake := Wake.new(); wake.setup(node.get_parent(),timeline); wakes[id] = wake
-		if node.get_script() != preload("res://water_particles.gd"): return
-	if not (node is MeshInstance3D or node is Sprite3D or node is OmniLight3D or node is SpotLight3D or node is CPUParticles3D or node is MultiMeshInstance3D) or tracks.has(id) or tracks.size() >= MAX_TRACKS: return
+		if node.get_parent().get_script() == preload("res://propeller_bubbles.gd"): return
+	if not (node is MeshInstance3D or node is Sprite3D or node is OmniLight3D or node is SpotLight3D or node is CPUParticles3D or node is MultiMeshInstance3D) or tracks.has(id): return
 	if node is MeshInstance3D and node.mesh == null: return
 	var track := Visual.new(); track.setup(node,timeline)
-	if bytes+track.data.size()*4 > MAX_BYTES: track.dispose(); return
-	bytes += track.data.size()*4; tracks[id] = track
+	tracks[id] = track
 
 func capture(delta: float) -> void:
 	var began := Time.get_ticks_usec()
@@ -125,24 +129,32 @@ func capture(delta: float) -> void:
 	oldest = maxf(0,timeline-DURATION)
 	if audio != null: audio.capture(timeline,oldest)
 	last_audio_usec = Time.get_ticks_usec()-began
+	# Reclaim expired histories before retrying waiting visuals in this capture.
+	for id in tracks.keys():
+		var track: RefCounted = tracks[id]
+		if track.last_seen < oldest and track.source.get_ref() == null:
+			track.dispose(); tracks.erase(id)
+	for id in wakes.keys():
+		var wake: RefCounted = wakes[id]
+		if wake.last_seen < oldest and wake.source.get_ref() == null:
+			wake.dispose(); wakes.erase(id)
 	_register_pending()
 	var appearances := {}
 	var visual_began := Time.get_ticks_usec()
 	for id in tracks.keys():
 		var track: RefCounted = tracks[id]
-		if track.last_seen < oldest and track.source.get_ref() == null:
-			bytes -= track.data.size()*4; track.dispose(); tracks.erase(id); continue
 		track.record(tick,timeline,appearances)
 	last_visual_usec = Time.get_ticks_usec()-visual_began
 	var wake_began := Time.get_ticks_usec()
 	for id in wakes.keys():
 		var wake: RefCounted = wakes[id]; wake.record(timeline,oldest)
-		if wake.last_seen < oldest and wake.source.get_ref() == null: wake.dispose(); wakes.erase(id)
 	last_wake_usec = Time.get_ticks_usec()-wake_began
 	last_capture_usec = Time.get_ticks_usec()-began; capture_total_usec += last_capture_usec; capture_count += 1
 
 func begin() -> bool:
 	if not enabled or tick < 0: return false
+	# Finish discovery on entry so no newly spawned visual remains frozen live.
+	_scan(game)
 	# Capture the exact present once before hiding it, with no simulation step.
 	capture(clock); clock = 0
 	audio.set_recording(false)
@@ -154,7 +166,6 @@ func begin() -> bool:
 		if node != null:
 			for child in node.get_children():
 				if child is MultiMeshInstance3D: _hide_source(child)
-	_hide_overflow(game)
 	cursor = timeline; playing = false; speed = 1.0
 	seek(cursor)
 	return true
@@ -163,13 +174,6 @@ func _hide_source(node: Node3D) -> void:
 	if node == null or hidden_sources.has(node.get_instance_id()): return
 	hidden_sources[node.get_instance_id()] = true
 	frozen.append({"node":weakref(node),"visible":node.visible}); node.hide()
-
-func _hide_overflow(node: Node) -> void:
-	if node == game.photo_mode or node is CanvasLayer or node is SubViewport or node is Camera3D: return
-	# A saturated budget must omit excess visuals instead of showing future
-	# live objects inside the past. This walk occurs only when entering photo.
-	if node is Node3D and (node is MeshInstance3D or node is Sprite3D or node is CPUParticles3D or node is OmniLight3D or node is SpotLight3D) and _dynamic(node): _hide_source(node)
-	for child in node.get_children(): _hide_overflow(child)
 
 func end() -> void:
 	if audio != null: audio.stop()
@@ -217,8 +221,6 @@ func advance(delta: float, scrub: float = 0.0) -> void:
 		seek(cursor+delta*speed,true)
 		if cursor >= timeline: playing = false
 	else:
-		for track in tracks.values():
-			if track.kind == "multi": track.refresh_view(game.photo_mode.view)
 		for wake in wakes.values(): wake.show_at(playback,cursor,game.photo_mode.view)
 	audio.update(cursor,playing and is_equal_approx(speed,1.0))
 
@@ -235,7 +237,7 @@ func clear() -> void:
 	for track in tracks.values(): track.dispose()
 	for wake in wakes.values(): wake.dispose()
 	tracks.clear(); wakes.clear(); pending.clear()
-	timeline = 0; tick = -1; clock = 0; oldest = 0; bytes = 0; started = false
+	timeline = 0; tick = -1; clock = 0; oldest = 0; started = false
 	sample_times.fill(0); shader_times.fill(0)
 	capture_total_usec = 0; capture_count = 0; last_capture_usec = 0
 	last_visual_usec = 0; last_wake_usec = 0; last_audio_usec = 0

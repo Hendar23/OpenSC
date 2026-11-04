@@ -32,6 +32,8 @@ var anchor_base := Vector3.ZERO
 var anchor_poses: Array = []
 var head_anchor := Vector3.ZERO
 var foot_height := 0.0
+var gait_distance := 0.0
+var gait_stride := 1.0
 
 func start() -> void:
 	jobs.phase = "rendezvous"
@@ -52,6 +54,7 @@ func start() -> void:
 				anchor_mesh = walker.appearance.find_children("*","MeshInstance3D",true,false)[0]
 				anchor_base = anchor_mesh.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX][5]
 				anchor_poses = anchor_mesh.mesh.surface_get_blend_shape_arrays(0)
+				_measure_stride()
 				foot_height = -preload("res://submarine_equipment.gd")._bounds(preload("res://submarine_equipment.gd")._meshes(walker.appearance,Transform3D.IDENTITY)).position.y
 				var head: Node3D = jobs.Document.load_model("WALKHEAD",jobs.game.game_folder)
 				if head != null:
@@ -104,7 +107,7 @@ func step(delta: float) -> void:
 		return
 	elapsed += delta
 	if not begun:
-		if elapsed < 4 or walker.global_position.distance_to(jobs.game.pilot.global_position) > 20: return
+		if elapsed < 4 or walker.global_position.distance_to(jobs.game.pilot.global_position) > _battle_range(): return
 		begun = true; jobs.phase = "battle"; jobs.radio("d1")
 		for index in minelayers.size():
 			var ship: Node3D = minelayers[index]; ship.dormant = false
@@ -135,7 +138,7 @@ func step(delta: float) -> void:
 			var ray := PhysicsRayQueryParameters3D.create(walker.global_position+Vector3.UP*3,walker.global_position+Vector3.DOWN*5,1,[walker.get_rid()]); ray.hit_back_faces = true
 			var ground: Dictionary = jobs.game.get_world_3d().direct_space_state.intersect_ray(ray)
 			if not ground.is_empty(): walker.global_position.y = ground.position.y+foot_height
-			animation.apply(elapsed*12.5); _head_pose()
+			_advance_gait(travel); _head_pose()
 	if city_clock >= 0:
 		city_clock -= delta
 		if city_clock <= 0:
@@ -200,9 +203,34 @@ func clear() -> void:
 func target_body() -> CollisionObject3D:
 	return walker if is_instance_valid(walker) and not resolved else null
 
+func _measure_stride() -> void:
+	# Retail 00463b70 translates the chassis to keep the planted foot fixed,
+	# using PWALKER vertices110/69. Measure that same net travel over its eight
+	# supplied poses, rather than running the generic creature preview at25Hz.
+	var poses: Array = [anchor_mesh.mesh.surface_get_arrays(0)] + anchor_poses
+	var advance := 0.0
+	for index in poses.size():
+		var before: PackedVector3Array = poses[index][Mesh.ARRAY_VERTEX]
+		var after: PackedVector3Array = poses[(index+1)%poses.size()][Mesh.ARRAY_VERTEX]
+		var foot := 110 if before[110].y+after[110].y < before[69].y+after[69].y else 69
+		advance += (anchor_mesh.basis*(before[foot]-after[foot])).z
+	gait_stride = maxf(0.001,absf(advance))
+
+func _advance_gait(distance: float) -> void:
+	gait_distance += distance
+	# Morph.apply advances two poses per unit of time. One measured stride
+	# completes the full cycle; stopping the chassis also stops the feet.
+	animation.apply(gait_distance*float(anchor_poses.size()+1)/(2.0*gait_stride))
+
 func _head_pose() -> void:
 	if not is_instance_valid(head_visual): return
 	var anchor := anchor_base
 	for index in anchor_poses.size(): anchor += (anchor_poses[index][Mesh.ARRAY_VERTEX][5]-anchor_base)*anchor_mesh.get_blend_shape_value(index)
 	anchor = anchor_mesh.transform*anchor
 	head_visual.position = Vector3(0,anchor.y-head_anchor.y,anchor.z-1.0)
+
+func _battle_range() -> float:
+	# Begin beyond the extended view range, giving the allies time to get
+	# underway before the player can see their original rendezvous formation.
+	var camera: Camera3D = jobs.game.camera
+	return maxf(20.0,camera.far+10.0) if is_instance_valid(camera) else 20.0

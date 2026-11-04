@@ -136,7 +136,8 @@ func reset() -> void:
 	escape_replan = 0.0
 	route_clock = 0; route_key = Vector3.INF; route_look = Vector3.INF
 	avoidance_clock = fmod(float(get_instance_id()%97)*0.037,0.12)
-	body.collision_layer = 10; get_parent().show()
+	set_hull_collision(true)
+	get_parent().show()
 	if smoke != null: smoke.set_health(health.remaining * 10)
 
 func release_port() -> void:
@@ -144,6 +145,12 @@ func release_port() -> void:
 	if Access.owner(port) == self:
 		Access.open(port,0); port.collision.collision_layer = 1; Access.release(port,self)
 	port = {}
+
+func set_hull_collision(enabled: bool) -> void:
+	body.collision_layer = 10 if enabled else 0
+	body.collision_mask = (1 | 2 | 8) if enabled else 0
+	for shape in body.get_children():
+		if shape is CollisionShape3D: shape.set_deferred("disabled",not enabled)
 
 func _exit_tree() -> void:
 	release_port()
@@ -153,6 +160,7 @@ func _physics_process(delta: float) -> void:
 	advance(delta)
 
 func set_local_simulation(on: bool) -> void:
+	if dead and (body.collision_layer != 0 or body.collision_mask != 0): set_hull_collision(false)
 	# A camera/activity change must not fast-forward an occupied departure.
 	if not on and stage in ["exit_open","ascend","exit_close"] and not _departure_clear(): return
 	if local_simulation == on:
@@ -179,7 +187,7 @@ func set_local_simulation(on: bool) -> void:
 	get_parent().process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 	set_physics_process(on)
 	body.collision_layer = 10 if on and not dead and stage == "travel" else 0
-	body.collision_mask = (1 | 2 | 8) if on else 0
+	body.collision_mask = (1 | 2 | 8) if on and not dead else 0
 	for shape in body.get_children():
 		if shape is CollisionShape3D: shape.set_deferred("disabled",not on or dead)
 	if is_instance_valid(smoke): smoke.set_process(on)
@@ -459,7 +467,7 @@ func take_weapon_damage(strength: float, source: Vector3 = Vector3.ZERO) -> void
 	_react_to_damage(source)
 	if smoke != null: smoke.set_health(health.remaining * 10)
 	if health.remaining > 0: return
-	dead = true; release_port(); get_parent().hide(); body.collision_layer = 0
+	dead = true; release_port(); get_parent().hide(); set_hull_collision(false)
 	destroyed.emit(preload("res://entity_identity.gd").of(self),preload("res://entity_identity.gd").of(damage_attacker) if is_instance_valid(damage_attacker) else "")
 	respawn = float(tuning.npc_respawn_delay)
 	_destroy_visuals()

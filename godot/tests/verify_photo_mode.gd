@@ -38,8 +38,8 @@ func run() -> void:
 	game._set_camera_mode(true)
 	var pose: Transform3D = game.pilot.global_transform; var velocity: Vector3 = game.pilot.linear_velocity
 	var camera_pose: Transform3D = game.camera.global_transform; var cull: int = game.camera.cull_mask
-	var hour: float = game.day_night.hour; var elapsed: float = jobs.remaining.elapsed
-	var npc_pose: Transform3D = jobs.remaining.ship.get_parent().global_transform
+	var hour: float = game.day_night.hour; var elapsed: float = jobs.controller.elapsed
+	var npc_pose: Transform3D = jobs.controller.ship.get_parent().global_transform
 	var credits: float = game.player_progress.status.credits
 	var status: Dictionary = game._save_snapshot("Photo boundary")
 	button(JOY_BUTTON_BACK); button(JOY_BUTTON_BACK,false)
@@ -51,13 +51,14 @@ func run() -> void:
 	check(photo.find_children("*","Control",true,false).is_empty(),"Photo mode creates no on-screen instructions or controls")
 	for frame in range(20): await process_frame
 	check(game.pilot.global_transform.is_equal_approx(pose) and game.pilot.linear_velocity.is_equal_approx(velocity),"Player position and momentum stay frozen")
-	check(jobs.remaining.ship.get_parent().global_transform.is_equal_approx(npc_pose) and jobs.remaining.elapsed == elapsed,"NPC movement and mission timers stay frozen")
+	check(jobs.controller.ship.get_parent().global_transform.is_equal_approx(npc_pose) and jobs.controller.elapsed == elapsed,"NPC movement and mission timers stay frozen")
 	check(game.day_night.hour == hour and game.player_progress.status.credits == credits,"World clock and economy do not advance")
 	check(clock.elapsed == 0,"Controllers that normally run while paused are frozen too")
 	var start: Vector3 = photo.view.global_position
 	photo.move(Vector3(1,0,-1),1,0.5); photo.look(Vector2(0.3,-0.2))
 	check(photo.view.global_position.distance_to(start) > 1 and not photo.view.global_basis.is_equal_approx(camera_pose.basis),"Camera translates and looks freely while simulation is paused")
 	check(game.camera.global_transform.is_equal_approx(camera_pose),"Free movement never changes the gameplay camera")
+	await camera_limits(photo)
 	if DisplayServer.get_name() != "headless":
 		# Controller capture uses the screenshot system without a text overlay.
 		button(JOY_BUTTON_A); button(JOY_BUTTON_A,false)
@@ -113,7 +114,29 @@ func run() -> void:
 	for path in ["res://photo_mode.gd","res://tests/verify_photo_mode.gd"]:
 		if not FileAccess.file_exists(path+".uid"):
 			var file := FileAccess.open(path+".uid",FileAccess.WRITE); file.store_string(ResourceUID.id_to_text(ResourceUID.create_id())+"\n")
-	game.free()
+	game.queue_free(); await process_frame; await process_frame
 	check(not paused and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE,"Removing the scene from photo mode releases pause and the captured pointer")
 	await process_frame
 	print("Photo mode: %d/%d checks passed" % [checks-failures,checks]); quit(1 if failures else 0)
+
+func camera_limits(photo: Node3D) -> void:
+	var saved_pose: Transform3D = photo.view.global_transform
+	var origin := Vector3(-10000,50,-10000)
+	var terrain := StaticBody3D.new(); terrain.collision_layer = 1; root.add_child(terrain)
+	terrain.position = origin
+	for entry in [[Vector3(0,0,-2),Vector3(20,20,0.05)],[Vector3(0,-2,0),Vector3(20,0.05,20)]]:
+		var shape := CollisionShape3D.new(); shape.shape = BoxShape3D.new(); shape.shape.size = entry[1]; shape.position = entry[0]; terrain.add_child(shape)
+	await physics_frame; await physics_frame
+	photo.view.global_transform = Transform3D(Basis.IDENTITY,origin)
+	photo.move(Vector3.FORWARD,0,10,4)
+	check(photo.view.global_position.z > origin.z-1.95 and photo.view.global_position.z < origin.z-1,"Swept camera movement cannot tunnel through a thin terrain wall at high speed")
+	photo.view.global_transform = Transform3D(Basis.IDENTITY,origin)
+	photo.move(Vector3.ZERO,-1,10,4)
+	check(photo.view.global_position.y > origin.y-1.95 and photo.view.global_position.y < origin.y-1,"Camera cannot descend through terrain while gameplay is paused")
+	photo.view.global_transform = Transform3D(Basis.IDENTITY,Vector3(origin.x,game.pilot.surface_height-1,origin.z))
+	photo.move(Vector3.ZERO,1,10,4)
+	check(photo.view.global_position.y <= game.pilot.surface_height-absf(float(game.water_visuals.settings.wave_height))-photo.camera_shape.radius+0.00001,"Camera remains below water troughs including near-plane clearance")
+	photo.view.global_transform = Transform3D(Basis.IDENTITY,origin)
+	photo.move(Vector3.RIGHT,0,0.2)
+	check(photo.view.global_position.is_equal_approx(origin+Vector3.RIGHT*0.6),"Camera retains normal movement through unobstructed water")
+	photo.view.global_transform = saved_pose; terrain.free()

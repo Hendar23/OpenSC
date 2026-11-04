@@ -195,3 +195,6 @@ func clear() -> void:
 	if is_instance_valid(ship):
 		if ship.arrived.is_connected(_city_collision): ship.arrived.disconnect(_city_collision)
 		if ship.destroyed.is_connected(_destroyed): ship.destroyed.disconnect(_destroyed)
+
+func completes_on_docking(_city: int) -> bool:
+	return won and not lost

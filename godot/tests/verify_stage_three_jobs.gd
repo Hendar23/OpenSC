@@ -36,7 +36,7 @@ func fresh(id: String) -> RefCounted:
 	jobs.set_physics_process(false)
 	for agent in jobs.vessels: agent.set_physics_process(false)
 	await physics_frame; await physics_frame
-	return jobs.stage_three
+	return jobs.controller
 
 func radio_sent(code: String) -> bool:
 	var line: String = game.gameplay_catalogue.tables.radio_messages.records[code].text

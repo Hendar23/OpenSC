@@ -45,7 +45,7 @@ func fresh(id: String) -> RefCounted:
 		if actor is CharacterBody3D: actor.set_physics_process(false)
 	for agent in jobs.vessels: agent.set_physics_process(false)
 	await physics_frame; await physics_frame
-	return jobs.stage_three_remaining.mission
+	return jobs.controller
 
 func clear_terrain(body: RigidBody3D) -> bool:
 	var query := PhysicsShapeQueryParameters3D.new(); query.shape = body.get_child(1).shape
@@ -161,7 +161,9 @@ func run() -> void:
 			item.body.global_position += offset
 			game.equipment.magnet.head.global_position += offset
 			item.body.linear_velocity = Vector3.ZERO
-		game.equipment.magnet.release(false); mission.step(0)
+		# Use the player's actual switch-off action. An enabled head touching
+		# the released bomb can recapture it through its contact signal.
+		game.equipment.magnet.set_enabled(false); mission.step(0)
 		if index == 0:
 			for frame in 240: await physics_frame
 			check(item.body.global_position.y < 99.7,"Released PIXIE sinks under real physics instead of hovering: y=%f frozen=%s sleeping=%s enabled=%s" % [item.body.global_position.y,item.body.freeze,item.body.sleeping,item.body.enabled])
@@ -288,7 +290,7 @@ func run() -> void:
 		check(splat != null and splat.pieces.is_empty() and splat.lifetime < 3.0,"Egg splat stays short-lived without duplicating shell debris")
 		mission.queen.take_weapon_damage(10000)
 		check(runtime.active().is_empty() and game.player_progress.status.credits == 17000 and heard("miss1"),"Both queen variants award original 7000 only on queen death")
-		check(jobs.stage_three_remaining == null and jobs.actors.is_empty(),"Completion removes mission callbacks and chains")
+		check(jobs.controller == null and jobs.actors.is_empty(),"Completion removes mission callbacks and chains")
 	await physics_frame; await process_frame
 	game.free(); await process_frame; await process_frame
 	print("Remaining stage three: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

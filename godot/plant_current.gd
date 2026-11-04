@@ -44,7 +44,7 @@ func _prepare_batch(node: MultiMeshInstance3D) -> void:
 	var material: ShaderMaterial = batch_materials.get(id)
 	if material == null:
 		material = ShaderMaterial.new(); material.shader = preload("res://plant_current.gdshader")
-		var bounds := mesh.get_aabb()
+		var bounds := preload("res://modern_model.gd").source_bounds(mesh)
 		material.set_shader_parameter("albedo_color", original.albedo_color)
 		material.set_shader_parameter("has_texture", original.albedo_texture != null)
 		material.set_shader_parameter("albedo_texture", original.albedo_texture)
@@ -68,7 +68,7 @@ func _prepare(node: Node, subdivide_sparse: bool = true) -> void:
 		# Legacy-only subdivision multiplied some biome meshes by four and
 		# rebuilding their surfaces also discarded the distance index buffers.
 		if subdivide_sparse: node.mesh = _flexible_mesh(node.mesh)
-		var bounds: AABB = node.mesh.get_aabb()
+		var bounds: AABB = preload("res://modern_model.gd").source_bounds(node.mesh)
 		var patch_materials: Array[ShaderMaterial] = []
 		for surface in range(node.mesh.get_surface_count()):
 			var original := node.get_active_material(surface) as StandardMaterial3D

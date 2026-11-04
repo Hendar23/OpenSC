@@ -211,7 +211,9 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 				# Pulse-light generators have no mesh; don't render their editor clump.
 				if definition.get("object") == "PULSELIGHT":
 					_add_light(scenery, placement(row, offset).origin, 0.7, 4.0, folder,"Object_" + str(int(row.index)))
-		elif row.get("clump") == "PIPEBARS":
+		elif row.get("clump") == "PIPEBARS" and int(row.get("MissionID",0)) == 2:
+			# Startup owns only these intact grilles; dormant mission grating
+			# poses (including the fallen West Outlet prop) are not scenery.
 			model_name = "PIPEBARS"
 		if model_name.is_empty() or model_name == "NONE":
 			skipped += 1

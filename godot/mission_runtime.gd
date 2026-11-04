@@ -44,7 +44,7 @@ func setup(context: Node) -> void:
 	game.events.city_docking_started.connect(docking_started)
 	game.events.session_started.connect(_session_started)
 	outcome = preload("res://mission_outcome.gd").new(); game.add_child(outcome)
-	side_jobs = preload("res://stage_two_missions.gd").new(); add_child(side_jobs); side_jobs.runtime = self; side_jobs.game = game
+	side_jobs = preload("res://mission_dispatcher.gd").new(); add_child(side_jobs); side_jobs.runtime = self; side_jobs.game = game
 	var guidance := CanvasLayer.new(); guidance.layer = 1; add_child(guidance)
 	target_marker = preload("res://mission_target.gd").new(); target_marker.game = game; target_marker.jobs = side_jobs; guidance.add_child(target_marker)
 
@@ -132,9 +132,9 @@ func accept(city: int, selected_id: String = "") -> String:
 			var unavailable: Array = game.player_progress.missions.get("unavailable",[])
 			if not unavailable.has(Rules.PAIRED[id]): unavailable.append(Rules.PAIRED[id])
 			game.player_progress.missions["unavailable"] = unavailable
-		if id in Rules.CORE.values() or id in Rules.CORE_THREE.values():
+		if id in Rules.CORE.values() or id in Rules.CORE_THREE.values() or id in Rules.CORE_FOUR.values():
 			var unavailable: Array = game.player_progress.missions.get("unavailable",[])
-			for sibling in (Rules.CORE_THREE if id in Rules.CORE_THREE.values() else Rules.CORE).values():
+			for sibling in (Rules.CORE_FOUR if id in Rules.CORE_FOUR.values() else Rules.CORE_THREE if id in Rules.CORE_THREE.values() else Rules.CORE).values():
 				if sibling != id and sibling not in unavailable: unavailable.append(sibling)
 			game.player_progress.missions["unavailable"] = unavailable
 		side_jobs.start(id)
@@ -174,7 +174,8 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	var city := int(active().get("resolved_city",active().city))
 	last_response_city = city
 	var diplomats := id in Rules.CORE_THREE.values()
-	var core := id in Rules.CORE.values() or diplomats
+	var nuclear := id in Rules.CORE_FOUR.values()
+	var core := id in Rules.CORE.values() or diplomats or nuclear
 	var side_job := Rules.IMPLEMENTED.has(id) and not core
 	var outcome_shown := bool(active().get("outcome_shown",false))
 	if score < 0: score = 1.0 if success else 0.0
@@ -192,15 +193,17 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 		game.player_progress.missions[prefix+"resolved"] = int(game.player_progress.missions.get(prefix+"resolved",0)) + 1
 		if success: game.player_progress.missions[prefix+"successes"] = int(game.player_progress.missions.get(prefix+"successes",0)) + 1
 	if success:
-		if not side_job: game.player_progress.campaign_stage = 4 if diplomats else 3 if core else 2
+		if not side_job: game.player_progress.campaign_stage = 5 if nuclear else 4 if diplomats else 3 if core else 2
 		game.player_progress.campaign_jobs += 1
 		if core:
 			game.player_progress.campaign_jobs = 0
-			game.player_progress.missions["stage3_successes" if diplomats else "stage2_successes"] = 0
-			game.player_progress.missions["stage3_resolved" if diplomats else "stage2_resolved"] = 0
+			game.player_progress.missions["stage4_successes" if nuclear else "stage3_successes" if diplomats else "stage2_successes"] = 0
+			game.player_progress.missions["stage4_resolved" if nuclear else "stage3_resolved" if diplomats else "stage2_resolved"] = 0
 			# Retail post bulletins depend on the faction-family IDs, whereas
 			# each station has its own accepted mission record.
-			var bulletin_id := ("diptrad2" if sponsor_city in [1,3] else "diptech2") if diplomats else ("walktrad" if sponsor_city in [1,3] else "walktech")
+			var bulletin_id := "walktrad" if sponsor_city in [1,3] else "walktech"
+			if diplomats: bulletin_id = "diptrad2" if sponsor_city in [1,3] else "diptech2"
+			elif nuclear: bulletin_id = id
 			preload("res://mailbox.gd").mission_completed(game.player_progress,bulletin_id,score)
 		# 0041ec40 pays the fixed REWARD1 amount; score selects bulletins,
 		# rather than scaling the credit reward.
@@ -218,25 +221,14 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	var enemy := "2" if faction == "1" else "1"
 	if success: reputation[enemy] = float(reputation.get(enemy,0)) + delta * float(rewards.get("enemy",-0.5))
 	game.player_progress.missions["reputation"] = reputation
-	if side_jobs.diplomats != null:
-		var survivors: Array[Node3D] = []
-		if is_instance_valid(side_jobs.diplomats.pirate): survivors.append(side_jobs.diplomats.pirate)
-		preload("res://mission_survivors.gd").release(side_jobs,survivors)
-	if side_jobs.rampaging != null: side_jobs.rampaging.release_survivors()
-	if side_jobs.defection != null: side_jobs.defection.release_survivors(success)
-	if side_jobs.stage_three_remaining != null: side_jobs.stage_three_remaining.release_survivors()
-	if side_jobs.stage_three != null: side_jobs.stage_three.release_survivors()
-	if side_jobs.genocide != null: side_jobs.genocide.release_survivors()
-	if side_jobs.terrorists != null: side_jobs.terrorists.release_survivor()
-	if side_jobs.fishing != null: preload("res://mission_survivors.gd").release(side_jobs,side_jobs.fishing.enemies)
-	if side_jobs.remaining != null: preload("res://mission_survivors.gd").release(side_jobs,side_jobs.remaining.enemies)
+	side_jobs.release_survivors(success)
 	_cleanup(true)
 	_publish_offers()
 	if not outcome_shown or not success: outcome.play(game.game_folder,success)
 	if game.dock_interface_active: game.dock_interface.rebuild()
 	# Original news table: walker success selects entries 1/2 (peace),
 	# diplomat success selects entries 3/4 (flat), despite the filenames.
-	if success and core: game.events.fmv_requested.emit("diplomats_rescued" if diplomats else "peace",sponsor_city)
+	if success and core and not nuclear: game.events.fmv_requested.emit("diplomats_rescued" if diplomats else "peace",sponsor_city)
 
 func _session_started(_restored: bool) -> void:
 	_clear_retained_props()
@@ -247,9 +239,13 @@ func _session_started(_restored: bool) -> void:
 
 func retain_prop_until_docking(body: Node3D) -> void:
 	if not is_instance_valid(body) or body.dead or retained_props.has(body): return
-	retained_props.append(body)
-	body.remove_meta("mission_owner")
+	retain_scene_until_docking(body)
 	body.destroyed.connect(_retained_prop_destroyed.bind(body))
+
+func retain_scene_until_docking(scene: Node3D) -> void:
+	if not is_instance_valid(scene) or retained_props.has(scene): return
+	retained_props.append(scene)
+	if scene.has_meta("mission_owner"): scene.remove_meta("mission_owner")
 
 func _retained_prop_destroyed(body: Node3D) -> void:
 	if not is_instance_valid(body): return

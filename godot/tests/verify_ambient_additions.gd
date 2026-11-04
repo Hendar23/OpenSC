@@ -81,6 +81,8 @@ func run() -> void:
 	check(traffic.traders.all(func(agent: Node3D) -> bool: return agent.dead and not agent.get_parent().visible and agent.body.collision_layer == 0),"All destroyed submarine types remain hidden and non-colliding after a long swim")
 	saved = traffic.snapshot(); traffic.restore(saved)
 	check(traffic.traders.all(func(agent: Node3D) -> bool: return agent.dead),"Save/restore retains destroyed subs awaiting docking")
+	await physics_frame
+	check(traffic.traders.all(func(agent: Node3D) -> bool: return agent.body.collision_layer == 0 and agent.body.collision_mask == 0 and agent.body.get_children().all(func(node):return not node is CollisionShape3D or node.disabled)),"Save/restore keeps every destroyed hull physically disabled")
 	game._process(0.01)
 	check(traffic.traders.all(func(agent: Node3D) -> bool: return agent.dead),"Ordinary swimming does not replenish subs")
 	game.docking.stage = game.Docking.Stage.DOCKED
@@ -92,6 +94,7 @@ func run() -> void:
 	game.dock_interface.page = "home"
 	game._process(0.01)
 	check(traffic.traders.all(func(agent: Node3D) -> bool: return not agent.dead and agent.get_parent().visible and agent.body.collision_layer == 10 and agent.health.remaining == float(agent.tuning.npc_health)),"Paused dock menu restores every submarine with full health and collision")
+	check(traffic.traders.all(func(agent: Node3D) -> bool: return agent.body.collision_mask == 11),"Dock replacements restore live hull collision masks")
 	var poses: Array = traffic.traders.map(func(agent: Node3D) -> Transform3D: return agent.get_parent().global_transform)
 	game._process(0.01)
 	check(traffic.traders.map(func(agent: Node3D) -> Transform3D: return agent.get_parent().global_transform) == poses,"Subsequent dock frames leave live submarines in place")

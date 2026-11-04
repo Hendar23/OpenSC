@@ -30,6 +30,7 @@ func _run() -> void:
 	check(menu.order.filter(func(control: Control) -> bool: return control is Button).all(func(control: Control) -> bool: return control.get_theme_font_size("font_size") == 14) and menu.labels.values().all(func(label: Label) -> bool: return label.get_theme_font_size("font_size") == 14),"Graphics uses the main menu font size")
 	check(menu.get_child(0).color.a == 0.0,"Graphics retains the live sea")
 	check(graphics.settings.reflective_canopies and menu.controls.reflective_canopies.text.contains("On"),"Reflective canopies default on")
+	check(not menu.controls.has("bubble_limit"),"Bubble limit belongs to General rather than Graphics")
 	var capture := preload("res://exterior_reflections.gd").new(); game.add_child(capture); capture.setup(root.world_3d)
 	menu._cycle("reflective_canopies",1)
 	check(not graphics.settings.reflective_canopies and not capture.enabled and not capture.is_processing() and menu.controls.reflective_canopies.text.contains("Off"),"Toggle disables reflections and capture work immediately while paused")

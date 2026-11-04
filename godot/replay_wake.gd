@@ -36,6 +36,7 @@ func show_at(root: Node3D, time: float, camera: Camera3D) -> void:
 	if mesh == null: return
 	if proxy == null:
 		proxy = MultiMeshInstance3D.new(); proxy.process_mode = Node.PROCESS_MODE_DISABLED
+		proxy.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 		proxy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		proxy.multimesh = MultiMesh.new(); proxy.multimesh.transform_format = MultiMesh.TRANSFORM_3D
 		proxy.multimesh.use_colors = true; proxy.multimesh.mesh = mesh; root.add_child(proxy)

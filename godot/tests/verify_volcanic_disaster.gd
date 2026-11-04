@@ -42,7 +42,7 @@ func fresh(id: String) -> StaticBody3D:
 	check(result.is_empty(),"Accept original city variant "+id+": "+result)
 	game.docking.stage = game.Docking.Stage.IDLE; game.dock_interface.dismiss(); jobs.set_physics_process(false)
 	await physics_frame; await physics_frame
-	return jobs.volcano
+	return jobs.controller
 
 func run() -> void:
 	game = preload("res://game.gd").new(); game.remember_preferences = false; root.add_child(game)
@@ -180,7 +180,7 @@ func run() -> void:
 	core._erupt(true,true)
 	runtime.finish(false)
 	await physics_frame; await physics_frame
-	check(get_nodes_in_group("depth_charge_vents").is_empty() and jobs.volcano == null,"Failure/cancellation cleans all volcano-owned actors")
+	check(get_nodes_in_group("depth_charge_vents").is_empty() and jobs.controller == null,"Failure/cancellation cleans all volcano-owned actors")
 	core = await fresh("fumehole")
 	jobs.docked(2)
 	check(not runtime.active().is_empty(),"Returning to a dock cannot complete an active volcano")
@@ -192,7 +192,7 @@ func run() -> void:
 	game.pilot.global_position = core.global_position+Vector3.UP
 	game.pilot.health = 0.01
 	core.step(0.04)
-	check(game.pilot.dead and runtime.active().is_empty() and jobs.volcano == null,"Fatal heat uses standard player death and safely cleans mission during its tick")
+	check(game.pilot.dead and runtime.active().is_empty() and jobs.controller == null,"Fatal heat uses standard player death and safely cleans mission during its tick")
 	await physics_frame; await physics_frame
 	check(get_nodes_in_group("depth_charge_vents").is_empty(),"No lingering hazard after player death")
 	game.free(); await process_frame

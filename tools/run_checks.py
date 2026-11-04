@@ -9,9 +9,9 @@ import time
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-CORE = ['script_compilation', 'game_updates', 'official_mods', 'npc_torpedoes', 'cache_dependencies', 'loading_cache',
-        'npc_navigation_budget', 'local_simulation', 'performance_foundation']
-INTEGRATION = ['asset_cache', 'continue_game', 'mission_rewards', 'stage_two_missions', 'stage_three_jobs', 'volcanic_disaster', 'covert_defection', 'stage_three_remaining', 'rampaging_walker', 'escort_diplomats', 'original_fidelity']
+CORE = ['script_compilation', 'modern_model_bounds', 'game_updates', 'official_mods', 'npc_torpedoes', 'cache_dependencies', 'loading_cache',
+        'npc_navigation_budget', 'local_simulation', 'performance_foundation', 'mission_dispatcher']
+INTEGRATION = ['asset_cache', 'continue_game', 'mission_rewards', 'stage_two_missions', 'stage_three_jobs', 'volcanic_disaster', 'covert_defection', 'stage_three_remaining', 'pirate_stockpile', 'allied_distress', 'nuclear_stockpile', 'rampaging_walker', 'escort_diplomats', 'original_fidelity']
 LOCAL_MOD = ['scenery_scatter', 'scenery_sessions']
 
 
@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--engine', type=Path, required=True)
     parser.add_argument('--game-folder', type=Path)
     parser.add_argument('--marine', action='store_true', help='Also verify the locally installed Marine Biome')
+    parser.add_argument('--mods-folder', type=Path, help='Read-only source Mods folder; defaults to the game player folder (or OPENSC_TEST_MODS_FOLDER)')
     parser.add_argument('--suite', action='append', choices=CORE + INTEGRATION + LOCAL_MOD)
     parser.add_argument('--timeout', type=float, default=300, help='Maximum seconds per process')
     args = parser.parse_args()
@@ -29,13 +30,14 @@ def main():
     if any(s in INTEGRATION + LOCAL_MOD for s in suites):
         if not args.game_folder or not (args.game_folder / 'DATA/SCEN1.BSP').is_file():
             parser.error('Integration suites require --game-folder containing DATA/SCEN1.BSP')
-    if any(s in LOCAL_MOD for s in suites) and not (ROOT / 'Mods/marine-biome/mod.json').is_file():
-        parser.error('Marine suites require the local Marine Biome assets')
+    if any(s in LOCAL_MOD for s in suites) and args.mods_folder and not (args.mods_folder / 'marine-biome/mod.json').is_file():
+        parser.error('--mods-folder must contain marine-biome/mod.json')
     run_id = time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
     output = ROOT / '.local/checks' / run_id
     output.mkdir(parents=True)
     environment = os.environ.copy()
     if args.game_folder: environment['OPENSC_TEST_GAME_FOLDER'] = str(args.game_folder.resolve())
+    if args.mods_folder: environment['OPENSC_TEST_MODS_FOLDER'] = str(args.mods_folder.resolve())
     fixture = f'res://tests/cache-runner-{run_id}-fixtures'
     failed = []
     for suite in suites:

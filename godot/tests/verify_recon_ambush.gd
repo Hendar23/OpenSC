@@ -56,7 +56,7 @@ func run() -> void:
 	for agent in game.submarine_traffic.traders:
 		agent.running = false; agent.body.collision_layer = 0; agent.set_physics_process(false)
 	await fresh("recontech")
-	var mission: RefCounted = jobs.remaining
+	var mission: RefCounted = jobs.controller
 	mission._recon_alarm()
 	var attackers: Array = mission.recon_reinforcements
 	var starts := {}

@@ -18,14 +18,14 @@ func accept_fishing(city: int) -> String:
 func collect_one(state: Dictionary, body: Node3D) -> void:
 	body.global_position = state.agent.get_parent().to_global(Vector3(0,-1.5,0))
 	body.set_physics_process(false)
-	var fishing: RefCounted = jobs.fishing
+	var fishing: RefCounted = jobs.controller
 	for step in range(12):
 		fishing.capture_clock = 0; fishing.step(0.05)
 		if body.dead: break
 	check(body.dead,"Real fish enters the stun cone, is pulled aboard, and is counted once")
 
 func fill(state: Dictionary) -> void:
-	var fishing: RefCounted = jobs.fishing
+	var fishing: RefCounted = jobs.controller
 	for body in fishing.fish.duplicate():
 		if is_instance_valid(body) and not body.dead and not state.returning: collect_one(state,body)
 	check(state.count == 12 and state.returning,"Twelve physical catches fill the hold and start the return route")
@@ -81,8 +81,8 @@ func run() -> void:
 	fresh(); port(3); game.player_progress.missions.completed["spytrad"] = {"success":true,"city":1}
 	check(runtime.board(3).id == "bigherd","Touka's completed covert variant advances the paired Beluga queue")
 	check(accept_fishing(2).is_empty(),"Accept Defend Fishing Grounds at Velcova")
-	if jobs.fishing == null: quit(1); return
-	var fishing: RefCounted = jobs.fishing
+	if jobs.controller == null: quit(1); return
+	var fishing: RefCounted = jobs.controller
 	var state: Dictionary = fishing.herders[0]
 	check(fishing.herders.size() == 1 and fishing.fish.size() == 20 and state.agent.get_parent().get_meta("editor_model") == "TECHHERD","Retail Velcova encounter has one Procha herder and twenty silverbacks, overriding the database's draft clump names")
 	check(not runtime.can_save() and runtime.target_marker.target_body() == state.agent.body,"Fishing blocks saving and gives the herder its green HUD target")
@@ -212,7 +212,7 @@ func run() -> void:
 	check(game.submarine_traffic.traders.size() == original_npcs,"New game removes retained encounter ships instead of carrying them into a fresh world")
 	await process_frame
 	check(accept_fishing(3).is_empty(),"Accept Protect Beluga Trawlers at Beluga")
-	fishing = jobs.fishing
+	fishing = jobs.controller
 	check(fishing.herders.size() == 3 and fishing.fish.size() == 50 and fishing.herders.all(func(ship: Dictionary) -> bool: return ship.agent.get_parent().get_meta("editor_model") == "TRADHERD"),"Beluga spawns three original Bohine herders and fifty silverbacks")
 	check(fishing.herders.all(func(ship: Dictionary) -> bool: return ship.agent.propellers.size() == 2),"Both original Bohine herder propellers are registered for movement-driven animation and wakes")
 	for ship in fishing.herders:
@@ -235,7 +235,7 @@ func run() -> void:
 	check(beluga_attackers.all(func(agent: Node3D) -> bool: return is_instance_valid(agent) and not agent.dead and agent.has_meta("fishing_survivor") and game.submarine_traffic.traders.has(agent)),"Surviving Procha attackers also remain after the Beluga mission resolves")
 	await process_frame
 	check(accept_fishing(3).is_empty(),"Recreate complete Beluga success case")
-	fishing = jobs.fishing
+	fishing = jobs.controller
 	for agent in jobs.vessels: agent.set_physics_process(false)
 	for body in fishing.fish: body.set_physics_process(false)
 	jobs.age = 10; game.pilot.global_position = fishing.herders[0].agent.global_position; fishing.step(0)
@@ -245,7 +245,7 @@ func run() -> void:
 	check(runtime.can_save() and game.player_progress.missions.completed.bigherd.score == 1.0 and game.player_progress.status.credits == 103500,"All three Bohine returns finish with full score and the fixed reward")
 	await process_frame
 	check(accept_fishing(2).is_empty(),"Recreate Procha loss case")
-	fishing = jobs.fishing; state = fishing.herders[0]
+	fishing = jobs.controller; state = fishing.herders[0]
 	for index in range(6): collect_one(state,fishing.fish.filter(func(body: Node3D) -> bool: return is_instance_valid(body) and not body.dead)[0])
 	var failure_attackers: Array[Node3D] = fishing.enemies.duplicate()
 	var wrecks_before: int = get_nodes_in_group("trader_wrecks").size()
@@ -260,7 +260,7 @@ func run() -> void:
 	check(failure_attackers.size() == 2 and failure_attackers.all(func(agent: Node3D) -> bool: return is_instance_valid(agent) and not agent.dead and agent.has_meta("fishing_survivor") and game.submarine_traffic.traders.has(agent)),"Live Bohine attackers remain after mission failure as well as success")
 	await process_frame
 	check(accept_fishing(3).is_empty(),"Recreate complete Beluga loss case")
-	fishing = jobs.fishing
+	fishing = jobs.controller
 	for other in fishing.herders: other.agent.take_weapon_damage_from(10000,game.pilot.global_position,game.pilot)
 	check(runtime.can_save() and not game.player_progress.missions.completed.bigherd.success and game.player_progress.status.credits == 100000,"Losing all three Bohine herders fails without reward")
 	fresh(); await process_frame

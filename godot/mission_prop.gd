@@ -21,7 +21,10 @@ func take_weapon_damage(strength: float, _source: Vector3 = Vector3.ZERO) -> voi
 	if dead or delivered or strength <= 0: return
 	health -= strength*sustain; damaged.emit()
 	if health <= 0:
-		dead = true; set_deferred("collision_layer",0); destroyed.emit()
+		dead = true; set_deferred("collision_layer",0); set_deferred("collision_mask",0)
+		for shape in get_children():
+			if shape is CollisionShape3D: shape.set_deferred("disabled",true)
+		destroyed.emit()
 
 func take_weapon_damage_from(strength: float, source: Vector3, _attacker: Node3D) -> void:
 	take_weapon_damage(strength,source)

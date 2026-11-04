@@ -203,13 +203,18 @@ func run() -> void:
 	check(replay.playback == null,"Disabled replay does not allocate playback visuals"); photo.leave()
 	menu._toggle_replay(); replay.set_process(false); replay._process(0.1)
 	check(replay.enabled and replay.tick >= 0,"Options On starts a fresh recording")
-	check(replay.tracks.has(game.particles.get_instance_id()),"Ambient water particles are included in visual replay")
+	var player_recorded := true
+	for hull in game.pilot.visual.find_children("*","MeshInstance3D",true,false):
+		var history: RefCounted = replay.tracks.get(hull.get_instance_id())
+		if hull.is_visible_in_tree() and (history == null or history.versions.is_empty()): player_recorded = false
+	check(player_recorded,"Starting replay captures the real player hull before world admission")
+	check(not replay.tracks.has(game.particles.get_instance_id()),"Ambient water motes use no replay history")
 	var cold: int = replay.last_capture_usec
 	var samples := PackedInt64Array()
 	for index in range(40):
 		replay.capture(0.05); samples.append(replay.last_capture_usec)
 	samples.sort()
-	print("Replay profile: tracks=",replay.tracks.size()," packed MiB=",float(replay.bytes)/1048576.0," cold usec=",cold," steady median usec=",samples[20]," max=",samples[39])
+	print("Replay profile: tracks=",replay.tracks.size()," cold usec=",cold," steady median usec=",samples[20]," max=",samples[39])
 	var bursts: Array[Node3D] = []
 	for index in range(12):
 		var effect := preload("res://mine_explosion.gd").new(); actor.add_child(effect)
@@ -220,13 +225,25 @@ func run() -> void:
 		for effect in bursts: effect._process(0.05)
 		wake.advance(0.05); replay.capture(0.05); samples.append(replay.last_capture_usec)
 	samples.sort()
-	print("Busy replay profile: tracks=",replay.tracks.size()," wake bubbles=",wake.particles.size()," packed MiB=",float(replay.bytes)/1048576.0," median usec=",samples[20]," max=",samples[39])
-	check(replay.tracks.size() <= replay.MAX_TRACKS and replay.bytes <= replay.MAX_BYTES,"Busy effects retain fixed track and packed-memory limits")
+	print("Busy replay profile: tracks=",replay.tracks.size()," wake bubbles=",wake.particles.size()," median usec=",samples[20]," max=",samples[39])
+	check(replay.wakes[wake.get_child(0).get_instance_id()].events.size() >= wake.particles.size(),"Busy replay retains every emitted wake bubble")
 	var particle_pose: Transform3D = game.particles.global_transform
 	check(photo.enter(),"Photo mode can replay a busy world")
-	var cloud: RefCounted = replay.tracks[game.particles.get_instance_id()]
-	photo.move(Vector3.RIGHT,0,1); replay.advance(0)
-	check(cloud.proxy == null or cloud.proxy.global_position.is_equal_approx(photo.view.global_position),"Paused replay's ambient cloud follows the free camera")
+	var player_visible := true
+	for hull in game.pilot.visual.find_children("*","MeshInstance3D",true,false):
+		var history: RefCounted = replay.tracks.get(hull.get_instance_id())
+		if history == null or history.proxy == null or not history.proxy.visible: player_visible = false
+	check(player_visible,"Photo mode reconstructs every player hull part when world recording is busy")
+	var particle_drift: float = game.particles.drift_distance
+	photo.move(Vector3.RIGHT,0,1); photo._process(0.1)
+	check(game.particles.visible and game.particles.global_position.is_equal_approx(photo.view.global_position),"Live ambient motes follow the free camera without a recorded cloud")
+	check(is_equal_approx(game.particles.drift_distance,particle_drift),"Ambient mote drift stops while replay is paused")
+	replay.seek(replay.timeline-0.5); photo._update_particles()
+	check(is_equal_approx(game.particles.drift_distance,particle_drift-0.5*float(game.particles.settings.drift)),"Motes scrub backwards with replay time without recording cloud snapshots")
+	replay.playing = true; var before_motes: float = game.particles.drift_distance; replay.speed = 0.25
+	photo._process(0.1)
+	check(is_equal_approx(game.particles.drift_distance-before_motes,0.025*float(game.particles.settings.drift)),"Mote drift follows slow-motion playback speed")
+	replay.playing = false; replay.speed = 1.0
 	photo.leave(); check(game.particles.global_transform == particle_pose,"Free camera never moves the live particle cloud")
 	for effect in bursts: effect.free()
 	game.pilot.take_damage(1000000)
@@ -245,6 +262,22 @@ func run() -> void:
 	game.docking.stage = game.Docking.Stage.IDLE; replay._process(0.1)
 	check(replay.timeline <= 0.11,"Launching starts with a short fresh replay")
 	game._reset_loaded_world(); check(replay.tick == -1,"New game and save restoration clear recording history")
+	# More than the former track limit and a large texture cannot omit visuals.
+	replay.set_process(false); replay.clear()
+	var crowd := Actor.new(); game.world_root.add_child(crowd)
+	for index in range(2050):
+		var part := MeshInstance3D.new(); part.mesh = shared_mesh; crowd.add_child(part)
+	replay._scan(crowd)
+	check(replay.tracks.size() == 2050,"All eligible visuals are admitted beyond the former 2048-track cap")
+	var large_texture := ImageTexture.create_from_image(Image.create(2048,2048,false,Image.FORMAT_RGBA8))
+	for index in range(3):
+		var detail := Sprite3D.new(); detail.texture = large_texture; crowd.add_child(detail); replay._register(detail)
+	replay.capture(0.05)
+	var complete := true
+	for history in replay.tracks.values():
+		if history.versions.is_empty(): complete = false
+	check(complete and replay.tracks.size() == 2053,"Dense scenes and detailed appearances retain every historical visual")
+	replay.clear(); crowd.free()
 	for path in ["res://photo_replay.gd","res://replay_visual.gd","res://replay_wake.gd","res://replay_clock.gdshaderinc","res://tests/verify_photo_replay.gd"]:
 		if not FileAccess.file_exists(path+".uid"):
 			var file := FileAccess.open(path+".uid",FileAccess.WRITE); file.store_string(ResourceUID.id_to_text(ResourceUID.create_id())+"\n")

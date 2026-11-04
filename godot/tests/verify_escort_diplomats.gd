@@ -33,7 +33,7 @@ func fresh(id: String) -> RefCounted:
 	game.docking.stage = game.Docking.Stage.IDLE; game.dock_interface.dismiss(); jobs.set_physics_process(false)
 	for agent in jobs.vessels: agent.set_physics_process(false)
 	await physics_frame; await physics_frame
-	return jobs.diplomats
+	return jobs.controller
 func capture(m: RefCounted) -> void:
 	game.pilot.global_position = m.ship.global_position
 	m.step(0)
@@ -190,7 +190,7 @@ func run() -> void:
 	m.step(8)
 	check(runtime.active().is_empty() and game.pilot.dead,"Retail failure initiates player auto-destruct")
 	m = await fresh("diptrad2"); capture(m); runtime._cleanup()
-	check(not game.pilot.has_meta("diplomat_system_failure") and jobs.diplomats == null,"Cancellation cleans actors and always restores controls")
+	check(not game.pilot.has_meta("diplomat_system_failure") and jobs.controller == null,"Cancellation cleans actors and always restores controls")
 	m = await fresh("diptech"); capture(m)
 	var early_pose: Transform3D = m.ship.get_parent().global_transform
 	m.guns[0].hitbox.take_weapon_damage(40); m.guns[1].hitbox.take_weapon_damage(40); m.step(0); m.step(0.1)

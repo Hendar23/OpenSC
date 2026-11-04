@@ -11,6 +11,8 @@ var device := -1
 var yaw := 0.0
 var pitch := 0.0
 var replay: Node3D
+var particle_state := {}
+var camera_shape := SphereShape3D.new()
 
 func setup(context: Node) -> void:
 	game = context; name = "PhotoMode"; process_mode = Node.PROCESS_MODE_ALWAYS
@@ -36,7 +38,11 @@ func enter(controller: int = -1) -> bool:
 	active = true
 	_suspend(game)
 	view.make_current(); get_tree().paused = true
+	particle_state = {"camera":game.particles.camera,"pose":game.particles.global_transform,"drift":game.particles.drift_distance,"visible":game.particles.visible}
+	game.particles.camera = view
+	game.particles._process(0)
 	replay.begin()
+	_update_particles()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	return true
 
@@ -55,6 +61,12 @@ func _suspend(node: Node) -> void:
 func leave() -> void:
 	if not active: return
 	replay.end()
+	game.particles.camera = particle_state.camera
+	game.particles.drift_distance = particle_state.drift
+	game.particles._process(0)
+	game.particles.global_transform = particle_state.pose
+	game.particles.visible = particle_state.visible
+	particle_state.clear()
 	active = false; view.clear_current()
 	if is_instance_valid(source): source.make_current()
 	for entry in saved:
@@ -113,10 +125,45 @@ func _process(delta: float) -> void:
 	var slow := Input.is_physical_key_pressed(KEY_CTRL) or (device >= 0 and Input.is_joy_button_pressed(device,JOY_BUTTON_LEFT_SHOULDER))
 	move(direction,rise,delta,0.25 if slow else 4.0 if fast else 1.0)
 	replay.advance(delta,clampf(scrub,-1,1))
+	_update_particles()
+
+func _update_particles() -> void:
+	# Evaluate drift from replay time without storing the ambient cloud. Pausing,
+	# scrubbing and slow motion therefore affect motes like other replay visuals.
+	var elapsed: float = replay.cursor-replay.timeline if replay.playback != null else 0.0
+	game.particles.drift_distance = float(particle_state.drift)+elapsed*float(game.particles.settings.drift)
+	game.particles._process(0)
 
 func move(direction: Vector3, rise: float, delta: float, speed_scale: float = 1.0) -> void:
 	var motion := view.global_basis*direction+Vector3.UP*rise
-	view.global_position += motion.limit_length(1.0)*3.0*speed_scale*delta
+	motion = motion.limit_length(1.0)*3.0*speed_scale*delta
+	# A sphere enclosing the near plane prevents corners of the image from
+	# clipping through rock even when the camera is looking along a wall.
+	var half_height := view.near*tan(deg_to_rad(view.fov)*0.5)
+	var aspect := float(get_viewport().get_visible_rect().size.x)/maxf(1,get_viewport().get_visible_rect().size.y)
+	camera_shape.radius = maxf(0.08,sqrt(view.near*view.near+half_height*half_height*(1+aspect*aspect)))
+	var point := view.global_position
+	# Stay below wave troughs as well as the nominal water plane.
+	var ceiling: float = game.pilot.surface_height-absf(float(game.water_visuals.settings.wave_height))-camera_shape.radius
+	point.y = minf(point.y,ceiling)
+	motion.y = minf(point.y+motion.y,ceiling)-point.y
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = camera_shape; query.collision_mask = 1; query.margin = 0.01
+	var space := view.get_world_3d().direct_space_state
+	for slide in range(3):
+		if motion.length_squared() < 0.00000001: break
+		query.transform = Transform3D(Basis.IDENTITY,point); query.motion = motion
+		var fractions := space.cast_motion(query)
+		if fractions[0] >= 1:
+			point += motion; break
+		var contact := point+motion*fractions[1]
+		point += motion*maxf(0,float(fractions[0])-0.001/motion.length())
+		query.transform.origin = contact; query.motion = Vector3.ZERO
+		var hit := space.get_rest_info(query)
+		if hit.is_empty(): break
+		motion = (motion*(1-fractions[0])).slide(hit.normal)
+		motion.y = minf(point.y+motion.y,ceiling)-point.y
+	view.global_position = point
 
 func _exit_tree() -> void:
 	if active:

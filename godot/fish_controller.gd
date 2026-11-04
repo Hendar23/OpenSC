@@ -242,10 +242,13 @@ func take_damage(amount: float, _source: Vector3 = Vector3.ZERO) -> void:
 	if combat != null: combat._stop_weapon()
 	(get_child(0) as CollisionShape3D).set_deferred("disabled",true)
 	set_physics_process(false); set_process(false)
+	_death_effect()
+	visible = false; died.emit()
+
+func _death_effect() -> void:
 	var holder: Node = population.world if population != null else get_parent()
 	var burst := Death.new(); holder.add_child(burst); burst.global_position = global_position
 	burst.setup(self,death_texture,death_sound,death_frames,death_flesh_texture,null,[],death_particle_scale)
-	visible = false; died.emit()
 
 func _ready() -> void:
 	if not get_meta("wildlife_preparing",false): register_wildlife_groups()

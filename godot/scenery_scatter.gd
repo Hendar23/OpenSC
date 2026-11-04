@@ -36,7 +36,7 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, session_see
 			var mesh := template.find_child(str(entry.node), true, false) as MeshInstance3D
 			if mesh == null or mesh.mesh == null or mesh.mesh.get_surface_count() != 1:
 				Mods.note("%s: missing single-surface scenery mesh %s." % [pack.name, entry.node]); continue
-			var box := mesh.mesh.get_aabb()
+			var box := Modern.source_bounds(mesh.mesh)
 			var width := maxf(box.size.x, box.size.z)
 			if width <= 0.00001 or not box.position.is_finite() or not box.size.is_finite(): continue
 			var anchor := Vector3(box.get_center().x, box.position.y, box.get_center().z)

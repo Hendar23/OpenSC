@@ -7,7 +7,11 @@ const Mods = preload("res://mod_registry.gd")
 var checks := 0
 var failures := 0
 
-func _initialize() -> void: call_deferred("_run")
+func _initialize() -> void:
+	var storage = preload("res://player_storage.gd")
+	storage.root_override = "res://tests/cache-verify_submarine_collision-fixtures"
+	preload("res://mod_registry.gd").initialize(true,storage.mods_path(),storage.preferences_path())
+	call_deferred("_run")
 func check(condition: bool, message: String) -> void:
 	checks += 1
 	if not condition: failures += 1; push_error(message)
@@ -22,7 +26,9 @@ func _run() -> void:
 	Mods.initialize(false)
 	var world := Node3D.new(); root.add_child(world)
 	var pilot := Pilot.new(); pilot.remember_settings = false; world.add_child(pilot)
-	var visual := Assets.load_submarine(Paths.find_game_folder().path_join("CLUMPS/SUB.DFF"))
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = Paths.find_game_folder()
+	var visual := Assets.load_submarine(folder.path_join("CLUMPS/SUB.DFF"))
 	visual.scale *= pilot.VISUAL_SCALE; visual.rotation.y = PI
 	pilot.add_child(visual); pilot.visual = visual; pilot.fit_collision_to_visual()
 	await physics_frame; await physics_frame

@@ -110,7 +110,7 @@ func _attach_pod(body: Node) -> void:
 	if mission == null or not mission.side_jobs.can_attach_pod(body): return
 	# Thwart Terrorists starts with the SWAT team already in the pod. Other
 	# rescues still require an empty pod; their mission eligibility enforces it.
-	if passengers and mission.side_jobs.terrorists == null and not (mission.side_jobs.stage_three != null and mission.side_jobs.id == "rovrtn"): return
+	if passengers and mission.side_jobs.family != "terrorists" and not (mission.side_jobs.family == "dock_rescue" and mission.side_jobs.id == "rovrtn"): return
 	# Seat the pod at the transport's visible surface, preserving its contact
 	# point as the convoy moves. The enclosing NPC collider includes empty space.
 	var agent: Node3D = mission.side_jobs.target
@@ -160,7 +160,7 @@ func fire_listening() -> void:
 	projectile.linear_velocity = equipment.pilot.linear_velocity
 	projectile.add_collision_exception_with(equipment.pilot)
 	if mission.side_jobs.id in ["spytrad","spytrad2","spytech","spytech2"] and is_instance_valid(mission.side_jobs.target):
-		var listening_target: Node3D = mission.side_jobs.remaining.ship if mission.side_jobs.remaining != null else mission.side_jobs.target
+		var listening_target: Node3D = mission.side_jobs.controller.ship if mission.side_jobs.family == "support" and mission.side_jobs.controller != null else mission.side_jobs.target
 		projectile.designated_target = listening_target.body
 	progress.ammunition.bigears = count - 1
 	if fire_audio.stream != null:

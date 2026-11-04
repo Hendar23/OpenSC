@@ -292,10 +292,11 @@ static func _build_mesh(data: PackedByteArray, geometry: int, end: int, path: St
 			surface_material.cull_mode = BaseMaterial3D.CULL_BACK
 		if int(material_id) < references.size():
 			var reference: Dictionary = references[int(material_id)]
-			# BOSS uses authored solid gun colours and neutral translucent glazing.
+			# Preserve authored solid colours on BOSS, SWITCH and PIPEBARS.
+			# BOSS also uses neutral translucent glazing.
 			# The diagnostic palette must not turn either into opaque cyan/gold.
 			var boss_material := path.get_file().to_upper() == "BOSS.DFF"
-			if boss_material and str(reference.texture).is_empty():
+			if (boss_material or path.get_file().to_upper() in ["SWITCH.DFF","PIPEBARS.DFF"]) and str(reference.texture).is_empty():
 				surface_material.albedo_color = reference.color
 				surface_material.albedo_color.a = float(reference.alpha)
 				if float(reference.alpha) < 1.0:

@@ -4,7 +4,11 @@ const Assets = preload("res://clump_loader.gd")
 const Creatures = preload("res://creature_loader.gd")
 var checks := 0
 var failures := 0
-func _initialize() -> void: call_deferred("run")
+func _initialize() -> void:
+	var storage = preload("res://player_storage.gd")
+	storage.root_override = "res://tests/cache-verify_wildlife_hitboxes-fixtures"
+	preload("res://mod_registry.gd").initialize(true,storage.mods_path(),storage.preferences_path())
+	call_deferred("run")
 func check(ok: bool, message: String) -> void:
 	checks += 1
 	if not ok: failures += 1; push_error(message)
