@@ -153,8 +153,18 @@ func _step_machinery(delta: float) -> void:
 	var touching: bool = button.touching(player)
 	if touching and not switch_touching: switch_hit()
 	switch_touching = touching
-	if player.global_position.distance_to(current_pose.origin) < 11:
-		player.movement.velocity += current_pose.basis.z.normalized()*current_direction*10.0*(1.0-player.global_position.distance_to(current_pose.origin)/11.0)*delta
+	_apply_current(delta)
+
+func _apply_current(delta: float) -> void:
+	var player: RigidBody3D = jobs.game.pilot
+	if not player.active or player.dead or player.freeze: return
+	var distance := player.global_position.distance_to(current_pose.origin)
+	if distance >= 11: return
+	# The player copies physical velocity into movement on every integration.
+	# Its custom integrator also skips ordinary forces: deliver a timestep-scaled
+	# impulse, like towing, rather than editing the discarded movement scratchpad.
+	var impulse := current_pose.basis.z.normalized()*current_direction*10.0*(1.0-distance/11.0)*delta
+	player.apply_central_impulse(impulse*preload("res://movement_model.gd").REFERENCE_MASS)
 
 func _destroyed() -> void:
 	if resolved: return
@@ -174,6 +184,15 @@ func release_survivors(success: bool = false) -> void:
 	jobs.actors.erase(fan); jobs.actors.erase(button)
 	machinery_retained = true
 	jobs.runtime.retain_scene_until_docking(retained)
+	for robot in fish:
+		if is_instance_valid(robot) and not robot.dead:
+			jobs.actors.erase(robot)
+			jobs.runtime.retain_scene_until_docking(robot)
+	for gun in turrets:
+		if is_instance_valid(gun) and not gun.dead:
+			var mount := gun.get_parent() as Node3D
+			jobs.actors.erase(mount)
+			jobs.runtime.retain_scene_until_docking(mount)
 
 func clear() -> void:
 	if not machinery_retained: _restore_pipe()

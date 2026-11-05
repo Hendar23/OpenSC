@@ -69,7 +69,10 @@ func run() -> void:
 		check(m.announced and m.warned and m.setting_charges and not m.cave.radioactive and m.first_destroyed_at < 0,"Approaching triggers original briefing without starting the escape clock")
 		m.canisters[0].take_weapon_damage(19)
 		check(m.remaining == 6 and m.first_destroyed_at < 0,"Nonfatal damage cannot start the deadline")
+		var scene_children: Array[Node] = game.world_root.get_children()
 		m.canisters[0].take_weapon_damage(1)
+		var blasts: Array = game.world_root.get_children().filter(func(node: Node) -> bool: return node.get_script() == preload("res://mine_explosion.gd") and node not in scene_children)
+		check(blasts.size() == 1 and not blasts[0].frames.is_empty() and blasts[0].audio != null and blasts[0].global_position.is_equal_approx(m.canisters[0].global_position),"Destroyed canister produces a visible and audible explosion at its location")
 		check(m.remaining == 5 and m.first_destroyed_at == m.elapsed and not m.canisters[0].visible,"First actual destruction starts the countdown and hides the destroyed canister")
 		check(m.allies[1].global_position.distance_to(m.guard_pose.origin) < 3 and m.allies[0].global_position.is_equal_approx(m.allies[0].home.origin),"Only the charge carrier moves to the original guard marker, with hull clearance for our physics")
 		check(m.cave.get_children().any(func(node: Node) -> bool: return node.get("puffs") != null and node.puffs.size() == 9),"Canister destruction produces the original nine cloud puffs")
@@ -78,10 +81,14 @@ func run() -> void:
 		game.pilot.global_position = m.cave.global_position+Vector3.RIGHT*10
 		game.pilot.radiation_rating = 0; game.pilot.restore_health()
 		game.object_population._update_radiation(1)
-		check(is_equal_approx(game.pilot.health,100-1.1375) and game.pilot.radiation_exposed,"Cave damage is original flat .013 per tick through the combined radiation HUD")
+		check(is_equal_approx(game.pilot.health,100-9.1) and game.pilot.radiation_exposed,"Cave radiation drains 9.1 shield points per second on a stock hull")
+		game.pilot.restore_health()
+		for tick in range(Engine.physics_ticks_per_second):
+			await physics_frame
+		check(absf(game.pilot.health-90.9) < 0.3,"Normal physics ticks apply a full second of cave radiation (health %s)" % game.pilot.health)
 		game.pilot.global_position = m.cave.global_position+Vector3.RIGHT*20; game.pilot.restore_health(); game.pilot.radiation_rating = 100
 		game.object_population._update_radiation(1)
-		check(is_equal_approx(game.pilot.health,100-1.1375*0.2),"RADOFF protects the player; area damage does not vary inside the cave")
+		check(is_equal_approx(game.pilot.health,100-9.1*0.2),"RADOFF protects the player; area damage does not vary inside the cave")
 		game.pilot.global_position = m.cave.global_position+Vector3.UP*100; game.pilot.restore_health()
 		game.object_population._update_radiation(1)
 		check(game.pilot.health == 100 and not game.pilot.radiation_exposed,"Outside original 31-unit area there is no radiation")

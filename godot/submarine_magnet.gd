@@ -25,6 +25,8 @@ var chain_bounds := AABB()
 var chain_has_pose := false
 var rig: Node3D
 var head: CableBody
+var stored_rig: Node3D
+var stored_head: CableBody
 var links: Array[Node3D] = []
 var link_colliders: Array[CollisionShape3D] = []
 var target_chain_mask := false
@@ -88,38 +90,59 @@ func set_enabled(on: bool) -> void:
    head.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC; head.freeze = true; retracting = true
   else: _clear_rig()
  _play(deploy_audio); state_changed.emit(enabled)
-func _deploy() -> void:
- drop_points.assign(pilot.get_parent().find_children("*","Area3D",true,false).filter(func(point: Node) -> bool: return point.get_meta("editor_dropoff",false)))
- rig = Node3D.new(); rig.name = "GrappleRope" if tool_id == "grapple" else "MagnetChain"; rig.top_level = true; add_child(rig); rig.global_transform = Transform3D.IDENTITY
- rig.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON
- links.clear()
+func prepare_deployment() -> void:
+ if is_instance_valid(stored_rig) or housing == null or chain_template == null: return
+ # Keep the assembled rig off-tree while stowed. Only the active cable
+ # participates in rendering, collisions or replay discovery.
+ stored_rig = Node3D.new()
+ stored_rig.name = "GrappleRope" if tool_id == "grapple" else "MagnetChain"
+ stored_rig.top_level = true
+ stored_rig.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON
  for index in range(LINK_COUNT):
   var visual := chain_template.duplicate() as Node3D; visual.name = ("RopeSegment%d" if tool_id == "grapple" else "ChainLink%d") % (index + 1)
-  rig.add_child(visual); links.append(visual)
+  stored_rig.add_child(visual); links.append(visual)
   for mesh in visual.find_children("*","MeshInstance3D",true,false): mesh.layers = 1
   # Kinematic contact follows each animated segment without another joint stack.
   var body := AnimatableBody3D.new(); body.name = "ChainContact%d" % (index + 1)
   body.collision_layer = CHAIN_LAYER; body.collision_mask = 0; body.sync_to_physics = false
-  rig.add_child(body)
+  stored_rig.add_child(body)
   var contact := CollisionShape3D.new(); var capsule := CapsuleShape3D.new()
   capsule.radius = CHAIN_RADIUS; capsule.height = CHAIN_RADIUS * 2.0
   contact.shape = capsule; body.add_child(contact); link_colliders.append(contact)
- head = CableBody.new(); head.name = "GrappleHead" if tool_id == "grapple" else "MagnetHead"; head.mass = 0.15; head.gravity_scale = 0.0
- head.water = float(pilot.get_parent().get_meta("surface_height",0.0)); head.water_drag = water_drag
- head.linear_damp = 0.0; head.angular_damp = 0.0; head.continuous_cd = true
- head.collision_layer = 16; head.collision_mask = 11; head.contact_monitor = true; head.max_contacts_reported = 8
- head.add_collision_exception_with(pilot)
- var visual := housing.duplicate() as Node3D; visual.scale *= global_basis.get_scale()
- var bounds := Mounts._bounds(Mounts._meshes(visual,Transform3D.IDENTITY)); visual.position -= bounds.get_center()
- head.add_child(visual)
+ stored_head = CableBody.new(); stored_head.name = "GrappleHead" if tool_id == "grapple" else "MagnetHead"; stored_head.mass = 0.15; stored_head.gravity_scale = 0.0
+ stored_head.linear_damp = 0.0; stored_head.angular_damp = 0.0; stored_head.continuous_cd = true
+ stored_head.collision_layer = 16; stored_head.collision_mask = 11; stored_head.contact_monitor = true; stored_head.max_contacts_reported = 8
+ var visual := housing.duplicate() as Node3D
+ stored_head.add_child(visual)
  for mesh in visual.find_children("*","MeshInstance3D",true,false): mesh.layers = 1
- var collider := CollisionShape3D.new(); var shape := BoxShape3D.new(); shape.size = bounds.size.max(Vector3.ONE * 0.01); collider.shape = shape; head.add_child(collider)
- rig.add_child(head); head_socket = Vector3.UP * bounds.size.y * 0.5
- head.global_transform = Transform3D(global_basis.orthonormalized(),global_position - global_basis.orthonormalized() * head_socket)
+ var collider := CollisionShape3D.new(); collider.shape = BoxShape3D.new(); stored_head.add_child(collider)
+ stored_rig.add_child(stored_head)
+ stored_head.body_entered.connect(func(body: Node) -> void: _attach.call_deferred(body))
+func _deploy() -> void:
+ var world := pilot.get_parent()
+ drop_points.assign(get_tree().get_nodes_in_group("city_drop_off_points").filter(world.is_ancestor_of))
+ prepare_deployment()
+ rig = stored_rig; head = stored_head
+ head.water = float(world.get_meta("surface_height",0.0)); head.water_drag = water_drag
+ head.drop_limit = 0.0; head.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC; head.freeze = false
+ var visual := head.get_child(0) as Node3D
+ visual.transform = housing.transform
+ visual.scale *= global_basis.get_scale()
+ var bounds := Mounts._bounds(Mounts._meshes(visual,Transform3D.IDENTITY)); visual.position -= bounds.get_center()
+ head.get_child(1).shape.size = bounds.size.max(Vector3.ONE * 0.01)
+ head_socket = Vector3.UP * bounds.size.y * 0.5
+ var basis := global_basis.orthonormalized()
+ head.transform = Transform3D(basis,global_position - basis * head_socket)
+ for index in range(LINK_COUNT):
+  links[index].hide()
+  link_colliders[index].disabled = true
+ add_child(rig)
+ head.add_collision_exception_with(pilot)
  head.linear_velocity = pilot.linear_velocity
- head.body_entered.connect(func(body: Node) -> void: _attach.call_deferred(body))
+ head.angular_velocity = Vector3.ZERO
  paid_length = 0.0; housing.hide(); retracting = false; deploying = true
  _draw_chain()
+ rig.reset_physics_interpolation()
 func _link_basis(up: Vector3) -> Basis:
  var y := up.normalized()
  var x := Vector3.FORWARD.cross(y).normalized()
@@ -333,8 +356,8 @@ func reset() -> void:
  if clamp_audio != null: clamp_audio.stop()
 func _clear_rig() -> void:
  release(false)
- if is_instance_valid(rig): rig.free()
- rig = null; head = null; links.clear(); link_colliders.clear()
+ if is_instance_valid(rig): remove_child(rig)
+ rig = null; head = null
  if is_instance_valid(housing): housing.show()
 func _play(audio: AudioStreamPlayer) -> void:
  if audio == null or audio.stream == null: return
@@ -383,4 +406,5 @@ func decline_delivery() -> void:
  declined_point = delivery_point; delivery_point = null
 func _exit_tree() -> void:
  release(false)
+ if is_instance_valid(stored_rig) and stored_rig.get_parent() == null: stored_rig.free()
  if chain_template != null: chain_template.free()

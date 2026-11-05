@@ -215,6 +215,8 @@ func _setup_vehicle(folder: String) -> void:
 	game._update_equipment_settings()
 	game.water_visuals.attach(game.pilot)
 	game.natural_light.attach(game.pilot)
+	for tool in [game.equipment.magnet,game.equipment.grapple]:
+		tool.prepare_deployment()
 	game.cockpit_hud = HUD.new()
 	game.cockpit_hud.process_mode = Node.PROCESS_MODE_PAUSABLE
 	game.add_child(game.cockpit_hud)

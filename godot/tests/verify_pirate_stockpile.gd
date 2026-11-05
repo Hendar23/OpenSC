@@ -59,9 +59,9 @@ func run() -> void:
 		check(m.blades.size() == 3 and m.outpost.health == 40 and is_equal_approx(m.outpost.sustain,0.2),"Original three fan blades and outpost shield values")
 		check(jobs.target_body() == m.outpost and jobs.target_center(m.outpost).is_finite(),"Stockpile targeting works with physical outpost")
 		game.pilot.global_position = m.current_pose.origin
-		var before: Vector3 = game.pilot.movement.velocity
+		await verify_current(m)
 		m.step(3)
-		check(m.fan_speed == 16 and game.pilot.movement.velocity.distance_to(before) > 1,"Fan reaches original full speed and current pushes submarine")
+		check(m.fan_speed == 16,"Fan reaches original full speed")
 		game.pilot.collision_layer = 2
 		game.pilot.global_position = m.button.global_position; m.switch_cooldown = 0
 		await physics_frame; await process_frame
@@ -96,14 +96,28 @@ func run() -> void:
 		check(not gate.visible and gate_bodies.all(func(body):return body.collision_layer == 0),"Pipe remains open while the fan is retained")
 		check(jobs.controller == null and jobs.actors.is_empty(),"Mission controllers release retained machinery from generic cleanup")
 		check(is_instance_valid(kept_fan) and kept_fan.is_visible_in_tree() and is_instance_valid(kept_switch),"Fan and switch survive mission completion")
+		var kept_robot: Node3D = m.fish[1]
+		var kept_gun: Node3D = m.turrets[0]
+		check(not is_instance_valid(robot),"Fishbots destroyed before success are cleaned up")
+		check(is_instance_valid(kept_robot) and kept_robot.is_visible_in_tree() and kept_robot.is_physics_processing(),"Living fishbots stay visible and active after success")
+		check(is_instance_valid(kept_gun) and kept_gun.is_visible_in_tree() and kept_gun.is_physics_processing(),"Living turrets stay visible and active after success")
+		m.fish[2].take_weapon_damage(100)
+		m.turrets[1].take_weapon_damage(100)
+		check(m.fish[2].dead and not m.fish[2].visible and m.turrets[1].dead and m.turrets[1].hitbox.collision_layer == 0,"Both retained defender types can still be destroyed")
 		var pose: Basis = kept_fan.basis
 		for tick in range(6): await physics_frame
 		check(not kept_fan.basis.is_equal_approx(pose),"Retained fan keeps rotating after success")
 		var sign_before: float = m.current_direction
 		m.switch_cooldown = 0; kept_switch.take_weapon_damage(1)
 		check(m.current_direction == -sign_before,"Retained switch continues controlling the current")
+		game.pilot.global_position = m.current_pose.origin; game.pilot.freeze = false
+		game.pilot.linear_velocity = Vector3.ZERO
+		m._apply_current(1.0/60.0); await physics_frame
+		check(game.pilot.linear_velocity.dot(m.current_pose.basis.z.normalized()*m.current_direction) > 0.001,"Retained machinery still pushes the physical player after mission success")
+		game.pilot.freeze = true
 		runtime.docked(city); await process_frame
 		check(not is_instance_valid(kept_fan) and not is_instance_valid(kept_switch),"Next docking removes retained machinery and collision")
+		check(not is_instance_valid(kept_robot) and not is_instance_valid(kept_gun),"Next docking also removes surviving tunnel defenders")
 		check(gate.visible and gate_bodies.all(func(body):return body.collision_layer != 0),"Next docking restores the original grille")
 	runtime._cleanup(); await process_frame
 	game.player_progress = Progress.restore({"campaign_stage":4})
@@ -114,10 +128,13 @@ func run() -> void:
 	var old_fan: Node3D = abort_mission.fan
 	var old_switch: Node3D = abort_mission.button
 	var surviving_pirate: Node3D = abort_mission.enemies[0]
+	var aborted_robot: Node3D = abort_mission.fish[0]
+	var aborted_gun: Node3D = abort_mission.turrets[0]
 	runtime.finish(false); await process_frame; await physics_frame
 	check(abort_gate.visible,"Abort restores the original closed grille")
 	check(not is_instance_valid(old_fan) and not is_instance_valid(old_switch),"Abort removes fan/switch and their collision")
 	check(is_instance_valid(surviving_pirate) and surviving_pirate.mission_owner.is_empty(),"Abort preserves surviving pirate ships")
+	check(not is_instance_valid(aborted_robot) and not is_instance_valid(aborted_gun),"Abort cleans up defenders when the grille closes")
 	check(game.player_progress.status.credits == 0,"Abort pays no success credits")
 	# A new-session reset also cleans up machinery retained after success.
 	game.player_progress = Progress.restore({"campaign_stage":4})
@@ -126,12 +143,45 @@ func run() -> void:
 	var session_mission = jobs.controller
 	var session_fan: Node3D = session_mission.fan
 	var session_gate: Node3D = session_mission.pipe_gate
+	var session_robot: Node3D = session_mission.fish[0]
+	var session_gun: Node3D = session_mission.turrets[0]
 	session_mission.outpost.take_weapon_damage(200); session_mission.step(2.1); await process_frame
 	check(is_instance_valid(session_fan),"Success retains machinery before session reset")
 	# Session cleanup removes released pirate ships; no repeated payout.
 	game.events.session_started.emit(false)
 	await process_frame
 	check(not is_instance_valid(session_fan) and session_gate.visible,"Session reset clears retained machinery and restores the grille")
+	check(not is_instance_valid(session_robot) and not is_instance_valid(session_gun),"Session reset clears retained tunnel defenders")
 	check(game.player_progress.status.credits == 4000,"Session reset does not repeat reward")
 	game.free(); await process_frame
 	print("Pirate stockpile: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)
+
+func verify_current(m: RefCounted) -> void:
+	game.dock_interface.dismiss(); paused = false
+	var player: RigidBody3D = game.pilot
+	var direction: Vector3 = m.current_pose.basis.z.normalized()
+	var mask: int = player.collision_mask
+	player.active = true; player.freeze = false; player.controls_enabled = false
+	player.pending_reset = false; player.collision_mask = 0; player.set_physics_process(false)
+	player.linear_velocity = Vector3.ZERO; player.angular_velocity = Vector3.ZERO
+	player.global_position = m.current_pose.origin
+	await physics_frame; await physics_frame
+	var start: Vector3 = player.global_position
+	for frame in range(60):
+		m._apply_current(1.0/60.0)
+		await physics_frame
+	check(player.linear_velocity.dot(direction) > 1 and (player.global_position-start).dot(direction) > 0.1,"Fan current moves the actual physics body from rest through repeated integration (speed %s, travel %s)" % [player.linear_velocity.dot(direction),(player.global_position-start).dot(direction)])
+	for distance in [0.0,5.5,10.0,11.1]:
+		player.global_position = m.current_pose.origin+Vector3.UP*distance
+		player.linear_velocity = Vector3.ZERO
+		await physics_frame
+		m._apply_current(1.0/60.0)
+		await physics_frame
+		var speed: float = player.linear_velocity.dot(direction)
+		check(speed > 0.001 if distance < 11 else absf(speed) < 0.001,"Original current radius includes distance %s only when inside11"%distance)
+	player.global_position = m.current_pose.origin; player.linear_velocity = Vector3.ZERO
+	m.current_direction = -1
+	m._apply_current(1.0/60.0); await physics_frame
+	check(player.linear_velocity.dot(direction) < -0.01,"Reversing the switch reverses physical current momentum")
+	m.current_direction = 1; player.linear_velocity = Vector3.ZERO
+	player.freeze = true; player.controls_enabled = true; player.collision_mask = mask

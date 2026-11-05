@@ -3,6 +3,7 @@ const VERTICAL_STRETCH := 8.0
 var radius := 0.5
 var city_id := 0
 func _enter_tree() -> void:
+	add_to_group("city_drop_off_points")
 	# Cached worlds may contain the old enabled editor-only shape.
 	var shape := get_node_or_null("DetectionShape") as CollisionShape3D
 	if shape != null: shape.disabled = true

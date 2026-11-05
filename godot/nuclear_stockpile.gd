@@ -3,6 +3,7 @@ extends RefCounted
 const Damage = preload("res://original_damage.gd")
 const Survivors = preload("res://mission_survivors.gd")
 const SEAL_DELAY := 59.2 # 100 + 5*260 + 80 original 25Hz ticks.
+const CAVE_RADIATION := 0.013 * 8.0 # Mission balance adjustment to the original rate.
 
 class Cloud extends "res://smoke_emitter.gd":
 	func _process(delta: float) -> void:
@@ -15,6 +16,8 @@ class Cave extends Node3D:
 	var delivered := false
 	var radioactive := false
 	var folder := ""
+	var explosion_frames: Array[Texture2D] = []
+	var explosion_sound: AudioStream
 	func configure_smoke(plume: Node3D, values: Dictionary) -> void:
 		# Explosion preparation already owns the mod-aware smoke textures.
 		# Reuse them when a canister breaks instead of decoding BMPs in combat.
@@ -23,9 +26,15 @@ class Cave extends Node3D:
 		plume.tuning.merge(values,true); plume.enabled = bool(values.get("enabled",true))
 		plume.textures.assign(textures); plume.rng.randomize()
 	func radiation_strength_at(_distance: float) -> float:
-		return Damage.radiation_strength(0.013) if radioactive else 0.0
+		return Damage.radiation_strength(CAVE_RADIATION) if radioactive else 0.0
 	func canister_destroyed(body: Node3D) -> void:
-		body.hide(); clouds(body.global_position,9)
+		var point := body.global_position
+		body.hide()
+		var explosion := preload("res://mine_explosion.gd").new()
+		get_parent().add_child(explosion)
+		explosion.global_position = point
+		explosion.setup(explosion_frames,3.0,explosion_sound)
+		clouds(point,9)
 	func clouds(point: Vector3, count: int) -> void:
 		var cloud := Cloud.new(); add_child(cloud); cloud.global_position = point
 		configure_smoke(cloud,{"enabled":false,"spread":0.5,"start_size":0.5,"end_size":2.0})
@@ -66,6 +75,8 @@ func start() -> void:
 	cave = Cave.new(); cave.name = "NuclearCave"
 	jobs.game.world_root.add_child(cave); jobs.actors.append(cave)
 	cave.folder = jobs.game.game_folder
+	cave.explosion_frames = jobs.game.submarine_traffic.explosion_frames
+	cave.explosion_sound = jobs.game.submarine_traffic.explosion_sound
 	cave.add_to_group("mission_radiation_sources")
 	allies.resize(3); canisters.resize(6); waypoints.resize(3); collapse_points.resize(2)
 	for row in jobs._rows(41):
