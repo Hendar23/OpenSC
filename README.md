@@ -30,10 +30,6 @@ OpenSC offers a few enhancements over the original:
 ### Gameplay & Physics
 - **Player Sub**
   - Reworked and enhanced player sub physics.
-- **Missiles**
-  - Renamed missiles to torpedoes.
-  - Longer powered range.
-  - Fuel-exhaustion: instead of removal at flight expiry, they stop producing bubbles, stop homing, coast, tumble and sink, exploding on contact with the seabed or another obstruction.
 
 ### Missions & NPCs
 - **Mission Improvements**
