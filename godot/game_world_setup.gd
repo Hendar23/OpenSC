@@ -163,7 +163,7 @@ func _setup_vehicle(folder: String) -> void:
 		game.add_child(game.pilot)
 		game.pilot.health_changed.connect(game._submarine_health_changed)
 		game.pilot.destroyed.connect(game._submarine_destroyed)
-	else: game.pilot.movement.load_settings(game.remember_preferences)
+	else: game.pilot.movement.load_settings(false,"",preload("res://current_settings.gd").path("submarine_tuning.cfg",game.defaults_directory))
 	game.turret_system = preload("res://turret_system.gd").new(); game.turret_system.name = "TurretSystem"
 	game.world_root.add_child(game.turret_system)
 	preload("res://entity_identity.gd").assign_id(game.pilot,"player")
@@ -231,7 +231,7 @@ func _setup_vehicle(folder: String) -> void:
 	game._build_expanded_map()
 	game._update_hud_settings()
 	for index in range(5):
-		game.cockpit_hud.set_enabled(index,game.hud_enabled[index],false)
+		game.cockpit_hud.set_enabled(index,game.game_settings.player_hud_enabled(index),false)
 	game.pilot.reset_physics_interpolation()
 	game.submarine_bubble_texture = Assets._load_texture(folder,"BUBBLE","BUBBLEM",{})
 	game.pilot.bubbles.configure(game.submarine_bubble_texture)
@@ -333,4 +333,4 @@ func _finish_start(folder: String) -> void:
 			await game.get_tree().process_frame
 	game.front_end.progress_bar.value = 100.0
 	if not game.loading_save: game.loading_canvas.visible = false
-	game._save_preferences()
+	game.game_settings.save_player_preferences()

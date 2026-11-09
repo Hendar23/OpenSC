@@ -52,8 +52,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		for index in range(5):
 			if Bindings.pressed(event,"hud_%d" % (index + 1)):
 				game.cockpit_hud.toggle(index)
-				game.hud_enabled[index] = game.cockpit_hud.enabled[index]
-				game._save_preferences()
+				game.game_settings.save_player_preferences(index)
 				game.get_viewport().set_input_as_handled()
 				return
 	if not game.developer_ui_visible and game.equipment != null and game.docking.stage != Docking.Stage.DOCKED:

@@ -81,6 +81,7 @@ var water_environment: Environment
 var sun: DirectionalLight3D
 var surface_material: ShaderMaterial
 var day_night := DayNight.new()
+var new_game_hour := 10.0
 var daylight_controls := {}
 var clock_label: Label
 var canvas: CanvasLayer
@@ -183,10 +184,6 @@ func _ready() -> void:
 	# their existing render-frame updates.
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	Mods.ensure(remember_preferences)
-	if remember_preferences:
-		var active_mods := Mods.active_ids()
-		var sound_profile := "user://submarine_sound.cfg" if active_mods.is_empty() else "user://sound-mod-%s.cfg" % JSON.stringify(active_mods).sha256_text().substr(0,16)
-		preload("res://current_settings.gd").migrate_legacy(Mods.movement_profile(),sound_profile)
 	get_window().title = "OpenSubCulture"
 	get_window().mode = Window.MODE_EXCLUSIVE_FULLSCREEN
 	get_window().min_size = Vector2i(1050, 600)

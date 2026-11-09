@@ -169,7 +169,7 @@ func _run() -> void:
 	game._set_map_open(true)
 	Input.parse_input_event(key_event(KEY_ESCAPE)); await process_frame
 	check(not game.map_open and not paused,"Escape closes map without opening main menu")
-	check(absf(game.day_night.hour - 10.0) < 0.1,"First New Game starts at 10:00 even with night selected")
+	check(absf(game.day_night.hour - game.new_game_hour) < 0.1,"First New Game starts at the authored hour even if the live clock is at night")
 	var pilot_position: Vector3 = game.pilot.global_position
 	var original_world: Node3D = game.world_root
 	var camera_pose: Transform3D = game.camera.global_transform
@@ -222,7 +222,7 @@ func _run() -> void:
 		await process_frame
 	check(not game.world_loading and not paused and game.pilot.global_position.distance_to(game.pilot.spawn) < 0.1,"New Game from the menu resets the submarine to its spawn")
 	check(game.world_root == original_world and game.cockpit_hud.map_data == map and not game.cockpit_hud.map_data.is_explored(distant),"New Game reuses the world and map renderer while clearing exploration")
-	check(absf(game.day_night.hour - 10.0) < 0.1 and game.day_night.daylight() > 0.99,"Restarting New Game resets the clock and lighting to 10:00")
+	check(absf(game.day_night.hour - game.new_game_hour) < 0.1 and game.day_night.daylight() > 0.99,"Restarting New Game restores the authored starting hour and lighting")
 	game._show_main_menu()
 	game.front_end.buttons.mods.pressed.emit()
 	game.mod_panel._apply()

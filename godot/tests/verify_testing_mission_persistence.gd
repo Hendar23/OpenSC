@@ -1,7 +1,9 @@
 extends "res://tests/verify_remaining_stage_two.gd"
 
 func start_game() -> void:
-	game = preload("res://game.gd").new(); game.remember_preferences = false; root.add_child(game)
+	game = preload("res://game.gd").new(); game.remember_preferences = false
+	game.defaults_directory = preload("res://player_storage.gd").root_path()
+	root.add_child(game)
 	for frame in range(4000):
 		if game.startup_complete: break
 		await process_frame
@@ -20,7 +22,7 @@ func offers_remain_local() -> void:
 		check(offered == expected,"Restored testing offers remain at their correct station: " + str(city))
 
 func run() -> void:
-	var path := preload("res://current_settings.gd").path("view_defaults.cfg")
+	var path := preload("res://current_settings.gd").path("view_defaults.cfg",preload("res://player_storage.gd").root_path())
 	var config := ConfigFile.new(); config.set_value("developer","enabled",true); config.save(path)
 	await start_game()
 	if not game.startup_complete: quit(1); return

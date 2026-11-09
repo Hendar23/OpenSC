@@ -15,7 +15,6 @@ var defaults: Dictionary = DEFAULTS.duplicate()
 var persistence_path := "user://submarine_sound.cfg"
 
 func load_settings(remember: bool = true, path: String = "", source: String = "res://submarine_audio.cfg") -> void:
-	if source == "res://submarine_audio.cfg" and path.is_empty(): source = preload("res://current_settings.gd").path("submarine_audio.cfg")
 	defaults = DEFAULTS.duplicate()
 	var config := ConfigFile.new()
 	if config.load(source) == OK: _apply(config, defaults)

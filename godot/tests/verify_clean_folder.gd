@@ -67,7 +67,7 @@ func run() -> void:
 	check(Paths.find_game_folder() == assets, "Selected original-game folder persists in isolated preferences")
 	if phase == "first":
 		await game._begin_new_game()
-		check(game.has_started_game and not paused and is_equal_approx(game.day_night.hour,10), "New Game starts at 10:00")
+		check(game.has_started_game and not paused and is_equal_approx(game.day_night.hour,game.new_game_hour), "New Game starts at the authored hour")
 		check(game.equipment.mounted.size() == 2 and game.weapons.mounted.size() == 1, "Starting tools and weapon load")
 		check(game.world_root.get_meta("searchlight_count",0) == 10 and not game.object_population.snapshot().is_empty(), "Searchlights and world items load in the clean project")
 		var port: Dictionary = game.docking.ports[0]

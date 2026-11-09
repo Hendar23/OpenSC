@@ -31,7 +31,7 @@ func _begin_new_game() -> void:
 	game.object_population.populate_startup()
 	game.cockpit_hud.set_bottom_camera_enabled(false)
 	game.cockpit_hud.set_rear_camera_enabled(false)
-	game.day_night.hour = 10.0
+	game.day_night.hour = game.new_game_hour
 	game.player_progress = PlayerProgress.restore()
 	# Starting a campaign clears testing cheats; loading an existing save does not.
 	game.mission_runtime.set_testing_missions(false,true)

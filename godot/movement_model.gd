@@ -141,9 +141,7 @@ func rotational_inertia() -> float:
 
 func load_settings(persist_update: bool = true, path: String = "user://submarine_tuning.cfg", source: String = "res://submarine_tuning.cfg") -> void:
 	mod_values.clear(); mod_section = ""
-	if path == "user://submarine_tuning.cfg" and source == "res://submarine_tuning.cfg":
-		source = preload("res://current_settings.gd").path("submarine_tuning.cfg")
-		path = source
+	if path.is_empty() or path == "user://submarine_tuning.cfg": path = source
 	defaults = DEFAULTS.duplicate()
 	var exported := ConfigFile.new()
 	if exported.load(source) == OK: _apply_values(exported,defaults)

@@ -86,7 +86,7 @@ func _build_interface() -> void:
 	game.wildlife_density_slider.focus_mode = Control.FOCUS_NONE
 	game.graphics_controls.add_child(game.wildlife_density_slider)
 	game.wildlife_density_slider.value_changed.connect(func(_value: float) -> void: game._update_wildlife_density())
-	game.wildlife_density_slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+	game.wildlife_density_slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 	game._update_wildlife_density()
 	game.hud_map_zoom_label = Label.new()
 	game.graphics_controls.add_child(game.hud_map_zoom_label)
@@ -98,7 +98,7 @@ func _build_interface() -> void:
 	game.hud_map_zoom_slider.focus_mode = Control.FOCUS_NONE
 	game.graphics_controls.add_child(game.hud_map_zoom_slider)
 	game.hud_map_zoom_slider.value_changed.connect(func(_value: float) -> void: game._update_hud_settings())
-	game.hud_map_zoom_slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+	game.hud_map_zoom_slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 	game.crt_reflection_label = Label.new()
 	game.graphics_controls.add_child(game.crt_reflection_label)
 	game.crt_reflection_slider = HSlider.new(); game.crt_reflection_slider.scrollable = false
@@ -109,7 +109,7 @@ func _build_interface() -> void:
 	game.crt_reflection_slider.focus_mode = Control.FOCUS_NONE
 	game.graphics_controls.add_child(game.crt_reflection_slider)
 	game.crt_reflection_slider.value_changed.connect(func(_value: float) -> void: game._update_hud_settings())
-	game.crt_reflection_slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+	game.crt_reflection_slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 	game._update_hud_settings()
 	game.map_reveal_label = Label.new()
 	game.graphics_controls.add_child(game.map_reveal_label)
@@ -121,7 +121,7 @@ func _build_interface() -> void:
 	game.map_reveal_slider.focus_mode = Control.FOCUS_NONE
 	game.graphics_controls.add_child(game.map_reveal_slider)
 	game.map_reveal_slider.value_changed.connect(func(_value: float) -> void: game._update_hud_settings())
-	game.map_reveal_slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+	game.map_reveal_slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 	var reset_map := Button.new()
 	reset_map.text = "Reset fog of war"
 	reset_map.tooltip_text = "Clear discovered areas to test the current reveal radius. Smaller radii keep previous discoveries."
@@ -162,7 +162,7 @@ func _build_interface() -> void:
 		game.fog_visibility = value
 		game._update_water_environment()
 	)
-	game.fog_slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+	game.fog_slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 	game.fog_button.toggled.connect(func(_enabled: bool) -> void:
 		game._update_water_environment()
 		game._save_preferences()
@@ -188,7 +188,7 @@ func _build_interface() -> void:
 	game.graphics_controls.add_child(game.fog_curve_slider)
 	for slider in [game.fog_start_slider, game.fog_curve_slider]:
 		slider.value_changed.connect(func(_value: float) -> void: game._update_water_environment())
-		slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+		slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 	_build_daylight_controls()
 	_build_natural_light_controls()
 	_build_particle_controls()
@@ -270,7 +270,7 @@ func _build_interface() -> void:
 	game.docking_radius_slider.focus_mode = Control.FOCUS_NONE
 	system.add_child(game.docking_radius_slider)
 	game.docking_radius_slider.value_changed.connect(func(_value: float) -> void: game._update_docking_radius())
-	game.docking_radius_slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+	game.docking_radius_slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 	game._update_docking_radius()
 	var choose := Button.new()
 	choose.text = "Choose Sub Culture folder…"
@@ -319,13 +319,15 @@ func _build_daylight_controls() -> void:
 		game.graphics_controls.add_child(slider); game.daylight_controls[key] = slider
 		label.text = caption if key == "time_of_day" else "%s: %.2f" % [caption, slider.value]
 		slider.value_changed.connect(func(value: float) -> void:
-			if key == "time_of_day": game.day_night.hour = fposmod(value, 24.0)
+			if key == "time_of_day":
+				game.day_night.hour = fposmod(value, 24.0)
+				if not game.loading_preferences: game.new_game_hour = game.day_night.hour
 			elif key == "cycle_minutes": game.day_night.cycle_minutes = value
 			else: game.day_night.night_brightness = value
 			label.text = caption if key == "time_of_day" else "%s: %.2f" % [caption, value]
 			game._update_daylight()
 		)
-		slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+		slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 	var hint := Label.new(); hint.text = "Pause the cycle to hold a time. F1 pauses it while you adjust settings."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; game.graphics_controls.add_child(hint)
 
@@ -339,7 +341,7 @@ func _build_natural_light_controls() -> void:
 	rays.value_changed.connect(func(value: float) -> void:
 		rays_label.text = "Sun ray brightness: %d%%" % int(value)
 		if is_instance_valid(game.sun_shafts): game.sun_shafts.brightness = value / 100.0)
-	rays.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+	rays.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 	for row in [["sun_depth","Sunlight fade begins at depth",0.0,100.0,0.5],["sun_falloff","Sunlight falloff distance",0.5,100.0,0.5],["cave_ambient","Cave ambient light",0.0,0.5,0.0005]]:
 		var key: String = row[0]; var caption: String = row[1]
 		var label = Label.new(); game.graphics_controls.add_child(label)
@@ -348,7 +350,7 @@ func _build_natural_light_controls() -> void:
 		label.text = "%s: %.2f%%" % [caption,slider.value * 100] if key == "cave_ambient" else "%s: %.1f units" % [caption,slider.value]
 		slider.value_changed.connect(func(value: float) -> void:
 			game.natural_light.configure({key:value}); label.text = "%s: %.2f%%" % [caption,value * 100] if key == "cave_ambient" else "%s: %.1f units" % [caption,value]; game._update_daylight())
-		slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+		slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 
 func _build_equipment_controls() -> void:
 	var scroll := ScrollContainer.new(); scroll.name = "Equipment"
@@ -375,7 +377,7 @@ func _build_equipment_controls() -> void:
 				label.text = "%s: %.2f" % [caption, value]
 				game._update_equipment_settings()
 			)
-			slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+			slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 
 func _build_weapon_controls() -> void:
 	var scroll = ScrollContainer.new(); scroll.name = "Weapons"; scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; game.developer_tabs.add_child(scroll)
@@ -388,7 +390,7 @@ func _build_weapon_controls() -> void:
 		slider.value_changed.connect(func(value: float) -> void:
 			label.text = "%s: %.2f" % [caption,value]; game.weapon_overrides[key] = value; game._update_weapon_settings())
 		slider.set_meta("caption",caption); slider.set_meta("label",label)
-		slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+		slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 
 func _build_particle_controls() -> void:
 	var enabled := CheckButton.new(); enabled.text = "Floating water particles"
@@ -409,7 +411,7 @@ func _build_particle_controls() -> void:
 			label.text = "%s: %.3f" % [caption, value]
 			game.particles.configure({key: value})
 		)
-		slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+		slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 	game.particles.configure({})
 
 func _build_plant_controls() -> void:
@@ -427,7 +429,7 @@ func _build_plant_controls() -> void:
 		slider.value_changed.connect(func(value: float) -> void:
 			label.text = "%s: %.2f" % [caption,value]; game.plant_current.configure({key:value})
 		)
-		slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+		slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 
 func _build_water_controls() -> void:
 	for row in [["caustics_strength","Sun caustics strength",0.0,2.0,0.05],["caustics_size","Caustics pattern size",0.5,8.0,0.25],["caustics_speed","Caustics animation speed",0.0,2.0,0.05],["caustics_depth","Caustics depth reach",2.0,80.0,1.0],["wave_height","Surface wave height",0.0,0.15,0.005],["wave_size","Surface wave size",1.0,12.0,0.25],["wave_speed","Surface wave speed",0.0,3.0,0.05],["wave_direction","Wave direction (degrees)",0.0,360.0,5.0],["surface_shine","Water surface shine",0.0,2.0,0.05]]:
@@ -439,7 +441,7 @@ func _build_water_controls() -> void:
 		slider.value_changed.connect(func(value: float) -> void:
 			label.text = "%s: %.3f" % [caption,value]; game.water_visuals.configure({key:value})
 		)
-		slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
+		slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 
 func _toggle_developer_ui() -> void:
 	if not game.developer_enabled and not game.developer_ui_visible: return

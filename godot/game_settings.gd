@@ -13,7 +13,7 @@ func _init(context: Node) -> void:
 
 func _load_preferences(path: String = "") -> void:
 	var explicit_import := not path.is_empty()
-	if path.is_empty(): path = preload("res://current_settings.gd").path("view_defaults.cfg")
+	if path.is_empty(): path = preload("res://current_settings.gd").path("view_defaults.cfg",game.defaults_directory)
 	var config := ConfigFile.new()
 	if config.load(path) != OK: return
 	var developer: Variant = config.get_value("developer","enabled",game.developer_enabled)
@@ -50,6 +50,9 @@ func _load_preferences(path: String = "") -> void:
 		var setting: Variant = config.get_value("view", row[0], row[1].value)
 		if (setting is float or setting is int) and is_finite(float(setting)):
 			row[1].value = clampf(float(setting), row[1].min_value, row[1].max_value)
+	var configured_hour: Variant = config.get_value("view","time_of_day",game.new_game_hour)
+	if (configured_hour is float or configured_hour is int) and is_finite(float(configured_hour)):
+		game.new_game_hour = fposmod(float(configured_hour),24.0)
 	for key in game.daylight_controls:
 		var fallback: Variant = game.daylight_controls[key].button_pressed if key == "cycle_enabled" else game.daylight_controls[key].value
 		var setting: Variant = config.get_value("view", key, fallback)
@@ -106,20 +109,20 @@ func _load_preferences(path: String = "") -> void:
 			if (setting is float or setting is int) and is_finite(float(setting)): canopy.set_setting(row[0],float(setting))
 		if explicit_import:
 			var result: Error = canopy.persist_settings()
-			if result != OK: game._report_settings_error("canopy.cfg",result)
+			if result != OK: game._report_settings_error("view_defaults.cfg",result)
 
 func _schedule_settings_save() -> void:
-	if not game.remember_preferences or game.loading_preferences or game.world_loading or not game.startup_complete or game.settings_save_pending: return
+	if not _can_author() or game.loading_preferences or game.world_loading or not game.startup_complete or game.settings_save_pending: return
 	game.settings_save_retries = 0
 	game.settings_save_pending = true
 	game._save_all_preferences.call_deferred()
 
 func _save_all_preferences() -> void:
 	game.settings_save_pending = false
-	if not game.remember_preferences or game.loading_preferences or game.world_loading or game.pilot == null: return
+	if not _can_author() or game.loading_preferences or game.world_loading or game.pilot == null: return
 	var view_result = game._save_preferences()
-	var movement_path = preload("res://current_settings.gd").path("submarine_tuning.cfg") if game.defaults_directory.is_empty() else game.defaults_directory.path_join("submarine_tuning.cfg")
-	var sound_path = preload("res://current_settings.gd").path("submarine_audio.cfg") if game.defaults_directory.is_empty() else game.defaults_directory.path_join("submarine_audio.cfg")
+	var movement_path = preload("res://current_settings.gd").path("submarine_tuning.cfg",game.defaults_directory)
+	var sound_path = preload("res://current_settings.gd").path("submarine_audio.cfg",game.defaults_directory)
 	var movement_result: Error = game.pilot.movement.save_settings(movement_path)
 	var sound_result: Error = game.pilot.submarine_audio.tuning.save_settings(sound_path)
 	if movement_result != OK: game._report_settings_error(movement_path,movement_result)
@@ -141,26 +144,45 @@ func _report_settings_error(path: String, result: Error) -> void:
 	game.status_label.tooltip_text = ProjectSettings.globalize_path(path)
 	push_warning(game.settings_save_error + " — " + ProjectSettings.globalize_path(path))
 
+func _can_author() -> bool:
+	return game.remember_preferences and (OS.has_feature("editor") or not game.defaults_directory.is_empty())
+
 func _save_preferences(path: String = "") -> Error:
 	if not game.remember_preferences or game.loading_preferences: return OK
-	if path.is_empty(): path = preload("res://current_settings.gd").path("view_defaults.cfg") if game.defaults_directory.is_empty() else game.defaults_directory.path_join("view_defaults.cfg")
+	if path.is_empty():
+		if not _can_author() or game.world_loading or not game.startup_complete: return OK
+		path = preload("res://current_settings.gd").path("view_defaults.cfg",game.defaults_directory)
 	var config := ConfigFile.new(); config.load(path)
 	config.set_value("developer","testing_all_missions",game.developer_enabled and game.mission_runtime.testing_all_missions)
 	var view = game._view_settings()
+	view["time_of_day"] = game.new_game_hour
 	for key in view: config.set_value("view",key,view[key])
 	if config.has_section_key("view","hud_scale"): config.erase_section_key("view","hud_scale")
 	config.set_value("settings","unified",true)
 	var result := config.save(path)
 	if result != OK: game._report_settings_error(path,result)
-	# The original asset folder is machine-specific, independent of tuning.
-	if not game.game_folder.is_empty() and game.defaults_directory.is_empty():
-		var preferences := preload("res://player_storage.gd").preferences_path()
-		var directory_result := preload("res://player_storage.gd").ensure_parent(preferences)
-		var paths := ConfigFile.new(); paths.load(preferences)
-		paths.set_value("game","folder",game.game_folder)
-		var preference_result := paths.save(preferences) if directory_result == OK else directory_result
-		if preference_result != OK: game._report_settings_error(preferences,preference_result); return preference_result
 	return result
+
+func save_player_preferences(hud_index: int = -1) -> void:
+	if not game.remember_preferences or not game.defaults_directory.is_empty(): return
+	var storage = preload("res://player_storage.gd")
+	var path := storage.preferences_path()
+	var config := ConfigFile.new()
+	config.load(path)
+	if hud_index >= 0:
+		config.set_value("hud",str(HUD.DEFINITIONS[hud_index].id),game.cockpit_hud.enabled[hud_index])
+	elif not game.game_folder.is_empty():
+		config.set_value("game","folder",game.game_folder)
+	else: return
+	var result := storage.ensure_parent(path)
+	if result == OK: result = config.save(path)
+	if result != OK: game._report_settings_error(path,result)
+
+func player_hud_enabled(index: int) -> bool:
+	var config := ConfigFile.new()
+	config.load(preload("res://player_storage.gd").preferences_path())
+	var value: Variant = config.get_value("hud",str(HUD.DEFINITIONS[index].id),game.hud_enabled[index])
+	return value if value is bool else game.hud_enabled[index]
 
 func _view_settings() -> Dictionary:
 	var settings = {"fog_visibility": game.fog_visibility, "fog_enabled": game.fog_button.button_pressed, "fog_start": game.fog_start_slider.value, "fog_curve": game.fog_curve_slider.value}

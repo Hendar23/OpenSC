@@ -67,10 +67,15 @@ func run() -> void:
 	panel.sliders.scratch_count.value = 4.0
 	var previous_roughness: float = canopy.settings.roughness_value
 	panel.sliders.roughness_value.value = 0.22
-	game.remember_preferences = true; check(canopy.persist_settings() == OK,"Canopy controls save outside the mod manifest")
-	var saved := ConfigFile.new(); saved.load(preload("res://current_settings.gd").path("canopy.cfg"))
-	check(is_equal_approx(saved.get_value(canopy.pack_id,"roughness_value"),0.22),"Canopy tuning persists per mod pack")
-	panel.sliders.roughness_value.value = previous_roughness; canopy.persist_settings(); game.remember_preferences = false
+	game.defaults_directory = "user://"
+	game.remember_preferences = true
+	check(canopy.persist_settings() == OK,"Canopy controls save in the shared view config")
+	var saved := ConfigFile.new(); saved.load(game.defaults_directory.path_join("view_defaults.cfg"))
+	check(is_equal_approx(saved.get_value("view","canopy/" + canopy.pack_id + "/roughness_value"),0.22),"Canopy tuning persists per mod pack")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(game.defaults_directory.path_join("view_defaults.cfg")))
+	game.remember_preferences = false
+	game.defaults_directory = ""
+	panel.sliders.roughness_value.value = previous_roughness
 	if DisplayServer.get_name() != "headless":
 		game.developer_enabled = true
 		game._toggle_developer_ui(); game.developer_tabs.current_tab = panel.get_index()

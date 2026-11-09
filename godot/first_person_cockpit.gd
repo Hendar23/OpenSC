@@ -68,13 +68,9 @@ func setup(context: Node) -> void:
 				glass_materials.append(glass)
 		game.natural_light.attach(model)
 		var preferences := ConfigFile.new()
-		if preferences.load(preload("res://current_settings.gd").path("view_defaults.cfg")) == OK:
+		if preferences.load(preload("res://current_settings.gd").path("view_defaults.cfg",game.defaults_directory)) == OK:
 			for row in CONTROLS:
 				var saved: Variant = preferences.get_value("view","canopy/" + pack_id + "/" + row[0],settings[row[0]])
-				if (saved is float or saved is int) and is_finite(float(saved)): settings[row[0]] = clampf(float(saved),row[2],row[3])
-		if preferences.load(preload("res://current_settings.gd").path("canopy.cfg")) == OK:
-			for row in CONTROLS:
-				var saved: Variant = preferences.get_value(pack_id,row[0],settings[row[0]])
 				if (saved is float or saved is int) and is_finite(float(saved)): settings[row[0]] = clampf(float(saved),row[2],row[3])
 		if not glass_materials.is_empty():
 			reflections = preload("res://canopy_reflections.gd").new(); add_child(reflections)
@@ -90,11 +86,7 @@ func set_setting(key: String, value: float) -> void:
 		settings[key] = snappedf(clampf(value,row[2],row[3]),row[4]); _apply_settings(); return
 
 func persist_settings() -> Error:
-	if not game.remember_preferences: return OK
-	var path := preload("res://current_settings.gd").path("canopy.cfg")
-	var preferences := ConfigFile.new(); preferences.load(path)
-	for key in settings: preferences.set_value(pack_id,key,settings[key])
-	return preferences.save(path)
+	return game._save_preferences()
 
 func _apply_settings() -> void:
 	for material in glass_materials:

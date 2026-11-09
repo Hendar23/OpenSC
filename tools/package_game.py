@@ -24,6 +24,7 @@ def release_view_settings(text: str) -> str:
         body = re.sub(r"(?m)^enabled[ \t]*=.*$", "enabled=false", body)
     else:
         body = body.rstrip() + "\nenabled=false\n\n"
+    body = re.sub(r"(?m)^testing_all_missions[ 	]*=.*$", "testing_all_missions=false", body)
     return text[:section.start()] + body + text[section.end():]
 
 

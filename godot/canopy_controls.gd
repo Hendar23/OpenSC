@@ -25,9 +25,7 @@ func _process(_delta: float) -> void:
 		slider.scrollable = false; slider.focus_mode = Control.FOCUS_NONE; slider.value = canopy.settings[key]; content.add_child(slider); sliders[key] = slider
 		label.text = "%s: %s" % [caption,str(slider.value)]
 		slider.value_changed.connect(func(value: float) -> void:
-			if is_instance_valid(canopy): canopy.set_setting(key,value)
-			label.text = "%s: %s" % [caption,str(value)])
-		slider.drag_ended.connect(func(_changed: bool) -> void:
 			if is_instance_valid(canopy):
-				var result: Error = canopy.persist_settings()
-				if result != OK: heading.text = "Could not save canopy settings: " + error_string(result))
+				canopy.set_setting(key,value)
+				game._schedule_settings_save()
+			label.text = "%s: %s" % [caption,str(value)])
