@@ -11329,18 +11329,18 @@
   "menu_camera": {
     "fov": 75.0,
     "transform": [
-      0.663481891155243,
+      0.999569833278656,
       0.0,
-      -0.748192310333252,
-      -0.172522813081741,
-      0.973051905632019,
-      -0.152989760041237,
-      0.72802996635437,
-      0.230586186051369,
-      0.645602345466614,
-      304.133453369141,
-      160.741073608398,
-      227.327484130859
+      0.0293290708214045,
+      0.00236370484344661,
+      0.996747136116028,
+      -0.0805578902363777,
+      -0.029233667999506,
+      0.0805925577878952,
+      0.996318340301514,
+      294.547393798828,
+      159.395446777344,
+      231.602752685547
     ]
   },
   "npc_types": [
@@ -12090,6 +12090,7 @@
       "groups_max": 24.0,
       "groups_min": 12.0,
       "has_zapper": false,
+      "health": 10.0,
       "id": "jackfish",
       "mobility": "swimming",
       "model": "JACKFISH",
@@ -12107,18 +12108,19 @@
       "startle_turn_speed": 720.0,
       "turn_speed": 60.0,
       "zapper_damage_per_tick": 0.1,
-      "zapper_range": 4.0,
-      "health": 10.0
+      "zapper_range": 4.0
     },
     {
       "animation_speed": 1.0,
       "attack_range": 8.0,
+      "bite_damage": 0.5,
       "count_max": 3.0,
       "count_min": 1.0,
       "flee_range": 4.0,
       "group_behaviour": "shoaling",
       "groups_max": 12.0,
       "groups_min": 6.0,
+      "health": 10.0,
       "id": "lionfish",
       "mobility": "swimming",
       "model": "LIONFISH",
@@ -12135,8 +12137,6 @@
       "startle_speed_multiplier": 5.0,
       "startle_turn_speed": 720.0,
       "turn_speed": 60.0,
-      "health": 10.0,
-      "bite_damage": 0.5,
       "zapper_damage_per_tick": 0.1
     },
     {
@@ -12209,12 +12209,14 @@
     },
     {
       "attack_range": 8.0,
+      "bite_damage": 0.5,
       "count_max": 10.0,
       "count_min": 2.0,
       "flee_range": 4.0,
       "group_behaviour": "shoaling",
       "groups_max": 24.0,
       "groups_min": 12.0,
+      "health": 10.0,
       "id": "dogfish",
       "mobility": "swimming",
       "model": "DOGFISH",
@@ -12231,8 +12233,6 @@
       "startle_speed_multiplier": 5.0,
       "startle_turn_speed": 720.0,
       "turn_speed": 60.0,
-      "health": 10.0,
-      "bite_damage": 0.5,
       "zapper_damage_per_tick": 0.1
     },
     {
@@ -12283,6 +12283,7 @@
       "groups_max": 12.0,
       "groups_min": 6.0,
       "has_zapper": false,
+      "health": 10.0,
       "id": "baracuda",
       "mobility": "swimming",
       "model": "BARACUDA",
@@ -12300,11 +12301,11 @@
       "startle_turn_speed": 720.0,
       "turn_speed": 60.0,
       "zapper_damage_per_tick": 0.1,
-      "zapper_range": 4.0,
-      "health": 10.0
+      "zapper_range": 4.0
     },
     {
       "attack_range": 8.0,
+      "bite_damage": 0.1,
       "count_max": 1.0,
       "count_min": 1.0,
       "flee_range": 4.0,
@@ -12328,7 +12329,6 @@
       "startle_speed_multiplier": 2.8,
       "startle_turn_speed": 720.0,
       "turn_speed": 30.0,
-      "bite_damage": 0.1,
       "zapper_damage_per_tick": 0.1
     },
     {
@@ -12345,6 +12345,7 @@
       "groups_max": 8.0,
       "groups_min": 4.0,
       "has_zapper": false,
+      "health": 10.0,
       "id": "entity_20030245",
       "mobility": "crawling",
       "model": "BADTHING",
@@ -12362,8 +12363,7 @@
       "startle_turn_speed": 720.0,
       "turn_speed": 60.0,
       "zapper_damage_per_tick": 0.1,
-      "zapper_range": 4.0,
-      "health": 10.0
+      "zapper_range": 4.0
     },
     {
       "animation_speed": 10.0,
@@ -12401,12 +12401,14 @@
     },
     {
       "attack_range": 8.0,
+      "bite_damage": 0.1,
       "count_max": 5.0,
       "count_min": 1.0,
       "flee_range": 4.0,
       "group_behaviour": "shoaling",
       "groups_max": 12.0,
       "groups_min": 6.0,
+      "health": 10.0,
       "id": "entity_31340139",
       "mobility": "swimming",
       "model": "SEAHORSE",
@@ -12423,8 +12425,6 @@
       "startle_speed_multiplier": 2.8,
       "startle_turn_speed": 720.0,
       "turn_speed": 60.0,
-      "health": 10.0,
-      "bite_damage": 0.1,
       "zapper_damage_per_tick": 0.1
     },
     {
@@ -12441,6 +12441,7 @@
       "groups_max": 6.0,
       "groups_min": 3.0,
       "has_zapper": true,
+      "health": 10.0,
       "id": "entity_210083360",
       "mobility": "swimming",
       "model": "MUTANT",
@@ -12458,17 +12459,18 @@
       "startle_turn_speed": 720.0,
       "turn_speed": 60.0,
       "zapper_damage_per_tick": 0.1,
-      "zapper_range": 1.0,
-      "health": 10.0
+      "zapper_range": 1.0
     },
     {
       "attack_range": 8.0,
+      "bite_damage": 0.5,
       "count_max": 5.0,
       "count_min": 1.0,
       "flee_range": 4.0,
       "group_behaviour": "shoaling",
       "groups_max": 8.0,
       "groups_min": 3.0,
+      "health": 10.0,
       "id": "entity_324827050",
       "mobility": "swimming",
       "model": "PIRANHA",
@@ -12485,18 +12487,18 @@
       "startle_speed_multiplier": 2.8,
       "startle_turn_speed": 720.0,
       "turn_speed": 60.0,
-      "health": 10.0,
-      "bite_damage": 0.5,
       "zapper_damage_per_tick": 0.1
     },
     {
       "attack_range": 8.0,
+      "bite_damage": 0.5,
       "count_max": 10.0,
       "count_min": 1.0,
       "flee_range": 4.0,
       "group_behaviour": "shoaling",
       "groups_max": 6.0,
       "groups_min": 3.0,
+      "health": 10.0,
       "id": "entity_372730315",
       "mobility": "swimming",
       "model": "SMALLEEL",
@@ -12513,8 +12515,6 @@
       "startle_speed_multiplier": 2.8,
       "startle_turn_speed": 720.0,
       "turn_speed": 60.0,
-      "health": 10.0,
-      "bite_damage": 0.5,
       "zapper_damage_per_tick": 0.1
     },
     {
