@@ -8,6 +8,7 @@ var game: Node
 var tracks := {}
 var wakes := {}
 var pending := {}
+var archive_id := -1
 var timeline := 0.0
 var tick := -1
 var clock := 0.0
@@ -29,6 +30,7 @@ var capture_total_usec := 0
 var capture_count := 0
 var shader_times := PackedFloat64Array()
 var sample_times := PackedFloat64Array()
+var ambient_positions := PackedVector3Array()
 var audio: Node
 
 func setup(context: Node) -> void:
@@ -36,7 +38,9 @@ func setup(context: Node) -> void:
 	audio = preload("res://replay_audio.gd").new(); add_child(audio); audio.setup()
 	shader_times.resize(Visual.CAPACITY)
 	sample_times.resize(Visual.CAPACITY)
+	ambient_positions.resize(Visual.CAPACITY)
 	get_tree().node_added.connect(_added)
+	get_tree().node_removed.connect(_removed)
 	game.events.session_started.connect(func(_loaded: bool) -> void: clear())
 
 func set_enabled(value: bool) -> void:
@@ -73,14 +77,23 @@ func _process(delta: float) -> void:
 
 func _start_recording() -> void:
 	started = true
-	# Capture the player immediately; discover the rest in short work slices.
-	# Photo entry completes discovery before creating any playback visuals.
-	_scan(game.pilot)
+	# Every existing actor needs the first sample. Discovering the world in
+	# time slices leaves holes that photo entry cannot reconstruct afterwards.
+	_scan(game)
 	capture(0)
-	_scan(game,true)
 
 func _added(node: Node) -> void:
 	if started and enabled and playback == null and (node is VisualInstance3D or node is Light3D): pending[node.get_instance_id()] = weakref(node)
+
+func _removed(node: Node) -> void:
+	var id := node.get_instance_id()
+	pending.erase(id)
+	if not tracks.has(id): return
+	# Ambient fish are pooled and re-enter with the same instance IDs. Their
+	# earlier voyage must not interpolate into the next fish's spawn position.
+	var track: RefCounted = tracks[id]
+	track.detached = true
+	tracks.erase(id); tracks[archive_id] = track; archive_id -= 1
 
 func _scan(node: Node, defer_registration: bool = false) -> void:
 	if node == self or node is CanvasLayer or node is SubViewport or node is Camera3D: return
@@ -90,19 +103,14 @@ func _scan(node: Node, defer_registration: bool = false) -> void:
 	for child in node.get_children(): _scan(child,defer_registration)
 
 func _register_pending() -> void:
-	var began := Time.get_ticks_usec()
 	for id in pending.keys():
 		var node: Node = pending[id].get_ref(); pending.erase(id)
 		if node != null: _register(node)
-		# Initial undocking and newly streamed shoals must not allocate every
-		# 30-second history buffer together in one frame.
-		if Time.get_ticks_usec()-began >= 1000: break
 
 func _dynamic(node: Node) -> bool:
 	var ancestor: Node = node
 	var dynamic := false
 	while ancestor != null and ancestor != game:
-		if ancestor.get_meta("wildlife_preparing",false): return false
 		if ancestor is CanvasLayer or ancestor is SubViewport or ancestor == self or ancestor == game.photo_mode: return false
 		if ancestor != game.world_root and (ancestor.get_script() != null or ancestor.has_meta("city_id") or ancestor.get_node_or_null("Trader") != null or ancestor.get_node_or_null("GunTurret") != null): dynamic = true
 		ancestor = ancestor.get_parent()
@@ -111,12 +119,20 @@ func _dynamic(node: Node) -> bool:
 func _register(node: Node3D) -> void:
 	if not node.is_inside_tree() or node.get_script() == preload("res://water_particles.gd") or not _dynamic(node): return
 	var id := node.get_instance_id()
+	# Constructors and streamed shoals can be incomplete when node_added fires.
+	# Keep them waiting until ready, rather than losing them until photo entry.
+	var ancestor: Node = node
+	while ancestor != null and ancestor != game:
+		if ancestor.get_meta("wildlife_preparing",false):
+			pending[id] = weakref(node); return
+		ancestor = ancestor.get_parent()
 	if node is MultiMeshInstance3D:
 		if node.get_parent().get_script() == preload("res://propeller_bubbles.gd") and not wakes.has(id):
 			var wake := Wake.new(); wake.setup(node.get_parent(),timeline); wakes[id] = wake
 		if node.get_parent().get_script() == preload("res://propeller_bubbles.gd"): return
 	if not (node is MeshInstance3D or node is Sprite3D or node is OmniLight3D or node is SpotLight3D or node is CPUParticles3D or node is MultiMeshInstance3D) or tracks.has(id): return
-	if node is MeshInstance3D and node.mesh == null: return
+	if node is MeshInstance3D and node.mesh == null:
+		pending[id] = weakref(node); return
 	var track := Visual.new(); track.setup(node,timeline)
 	tracks[id] = track
 
@@ -126,13 +142,15 @@ func capture(delta: float) -> void:
 	# Samples have timestamps because frame rate need not divide twenty Hz.
 	shader_times[tick%Visual.CAPACITY] = fmod(Time.get_ticks_msec()/1000.0,3600.0)
 	sample_times[tick%Visual.CAPACITY] = timeline
+	if is_instance_valid(game.pilot):
+		ambient_positions[tick%Visual.CAPACITY] = game.pilot.get_global_transform_interpolated().origin
 	oldest = maxf(0,timeline-DURATION)
 	if audio != null: audio.capture(timeline,oldest)
 	last_audio_usec = Time.get_ticks_usec()-began
 	# Reclaim expired histories before retrying waiting visuals in this capture.
 	for id in tracks.keys():
 		var track: RefCounted = tracks[id]
-		if track.last_seen < oldest and track.source.get_ref() == null:
+		if track.last_seen < oldest and (track.detached or track.source.get_ref() == null):
 			track.dispose(); tracks.erase(id)
 	for id in wakes.keys():
 		var wake: RefCounted = wakes[id]
@@ -160,7 +178,8 @@ func begin() -> bool:
 	audio.set_recording(false)
 	playback = Node3D.new(); playback.name = "ReplayVisuals"; add_child(playback)
 	frozen.clear(); hidden_sources.clear()
-	for track in tracks.values(): _hide_source(track.source.get_ref())
+	for track in tracks.values():
+		if not track.detached: _hide_source(track.source.get_ref())
 	for wake in wakes.values():
 		var node: Node = wake.source.get_ref()
 		if node != null:
@@ -210,6 +229,8 @@ func seek(time: float, continuous: bool = false) -> void:
 	if shader_end < shader_start-1800.0: shader_end += 3600.0
 	RenderingServer.global_shader_parameter_set("osc_replay_time",fmod(lerpf(shader_start,shader_end,fraction),3600.0))
 	RenderingServer.global_shader_parameter_set("osc_replay_active",true)
+	var ambient := ambient_positions[low%Visual.CAPACITY].lerp(ambient_positions[mini(low+1,tick)%Visual.CAPACITY],fraction)
+	game.natural_light.set_ambient_source(ambient)
 
 func _time(index: int) -> float:
 	return sample_times[index%Visual.CAPACITY]
@@ -236,7 +257,7 @@ func clear() -> void:
 	if audio != null: audio.clear()
 	for track in tracks.values(): track.dispose()
 	for wake in wakes.values(): wake.dispose()
-	tracks.clear(); wakes.clear(); pending.clear()
+	tracks.clear(); wakes.clear(); pending.clear(); archive_id = -1
 	timeline = 0; tick = -1; clock = 0; oldest = 0; started = false
 	sample_times.fill(0); shader_times.fill(0)
 	capture_total_usec = 0; capture_count = 0; last_capture_usec = 0

@@ -132,9 +132,10 @@ func accept(city: int, selected_id: String = "") -> String:
 			var unavailable: Array = game.player_progress.missions.get("unavailable",[])
 			if not unavailable.has(Rules.PAIRED[id]): unavailable.append(Rules.PAIRED[id])
 			game.player_progress.missions["unavailable"] = unavailable
-		if id in Rules.CORE.values() or id in Rules.CORE_THREE.values() or id in Rules.CORE_FOUR.values():
+		var core_offers := Rules.core_offers(id)
+		if not core_offers.is_empty():
 			var unavailable: Array = game.player_progress.missions.get("unavailable",[])
-			for sibling in (Rules.CORE_FOUR if id in Rules.CORE_FOUR.values() else Rules.CORE_THREE if id in Rules.CORE_THREE.values() else Rules.CORE).values():
+			for sibling in core_offers.values():
 				if sibling != id and sibling not in unavailable: unavailable.append(sibling)
 			game.player_progress.missions["unavailable"] = unavailable
 		side_jobs.start(id)
@@ -175,7 +176,8 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	last_response_city = city
 	var diplomats := id in Rules.CORE_THREE.values()
 	var nuclear := id in Rules.CORE_FOUR.values()
-	var core := id in Rules.CORE.values() or diplomats or nuclear
+	var filters := id in Rules.CORE_FIVE.values()
+	var core := not Rules.core_offers(id).is_empty()
 	var side_job := Rules.IMPLEMENTED.has(id) and not core
 	var outcome_shown := bool(active().get("outcome_shown",false))
 	if score < 0: score = 1.0 if success else 0.0
@@ -193,17 +195,18 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 		game.player_progress.missions[prefix+"resolved"] = int(game.player_progress.missions.get(prefix+"resolved",0)) + 1
 		if success: game.player_progress.missions[prefix+"successes"] = int(game.player_progress.missions.get(prefix+"successes",0)) + 1
 	if success:
-		if not side_job: game.player_progress.campaign_stage = 5 if nuclear else 4 if diplomats else 3 if core else 2
+		if not side_job: game.player_progress.campaign_stage = mini(7,Rules.mission_stage(id)+1) if core else 2
 		game.player_progress.campaign_jobs += 1
 		if core:
 			game.player_progress.campaign_jobs = 0
-			game.player_progress.missions["stage4_successes" if nuclear else "stage3_successes" if diplomats else "stage2_successes"] = 0
-			game.player_progress.missions["stage4_resolved" if nuclear else "stage3_resolved" if diplomats else "stage2_resolved"] = 0
+			if Rules.mission_stage(id) in [2,3,4]:
+				game.player_progress.missions["stage4_successes" if nuclear else "stage3_successes" if diplomats else "stage2_successes"] = 0
+				game.player_progress.missions["stage4_resolved" if nuclear else "stage3_resolved" if diplomats else "stage2_resolved"] = 0
 			# Retail post bulletins depend on the faction-family IDs, whereas
 			# each station has its own accepted mission record.
 			var bulletin_id := "walktrad" if sponsor_city in [1,3] else "walktech"
 			if diplomats: bulletin_id = "diptrad2" if sponsor_city in [1,3] else "diptech2"
-			elif nuclear: bulletin_id = id
+			elif nuclear or filters or Rules.mission_stage(id) >= 6: bulletin_id = id
 			preload("res://mailbox.gd").mission_completed(game.player_progress,bulletin_id,score)
 		# 0041ec40 pays the fixed REWARD1 amount; score selects bulletins,
 		# rather than scaling the credit reward.
@@ -228,7 +231,7 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	if game.dock_interface_active: game.dock_interface.rebuild()
 	# Original news table: walker success selects entries 1/2 (peace),
 	# diplomat success selects entries 3/4 (flat), despite the filenames.
-	if success and core and not nuclear: game.events.fmv_requested.emit("diplomats_rescued" if diplomats else "peace",sponsor_city)
+	if success and core and Rules.mission_stage(id) in [2,3]: game.events.fmv_requested.emit("diplomats_rescued" if diplomats else "peace",sponsor_city)
 
 func _session_started(_restored: bool) -> void:
 	_clear_retained_props()

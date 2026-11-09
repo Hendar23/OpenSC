@@ -3,6 +3,7 @@ extends RefCounted
 const CAPACITY := 602
 const MATERIAL_FIELDS := ["opacity","albedo_texture","emission_texture","albedo_color","emission_color","uv_offset","strength","beam_length","beam_width","seed","light_color","propeller_bend","drift_distance","cloud_center"]
 var source: WeakRef
+var detached := false
 var kind := ""
 var stride := 14
 var data := PackedFloat32Array()
@@ -52,7 +53,7 @@ func _signature(value: Variant) -> Variant:
 	return value
 
 func record(tick: int, time: float, appearances: Dictionary = {}) -> void:
-	var node: Node3D = source.get_ref()
+	var node: Node3D = null if detached else source.get_ref()
 	var slot := tick%CAPACITY; var offset := slot*stride
 	stamps[slot] = tick
 	data[offset+12] = 0
@@ -198,7 +199,9 @@ func show_at(root: Node3D, tick: int, fraction: float, time: float) -> void:
 	for entry in versions:
 		if entry.tick > tick: break
 		version = entry
-	if version.is_empty(): return
+	if version.is_empty():
+		if proxy != null: proxy.hide()
+		return
 	if proxy == null:
 		match kind:
 			"mesh": proxy = MeshInstance3D.new()

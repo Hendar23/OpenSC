@@ -2,6 +2,9 @@ extends RefCounted
 ## Campaign stage controls availability; encounter family selects its controller.
 ## The three original encounter flows still live in mission_dispatcher.gd.
 const FAMILIES := {
+	"aquatraz":{"ids":["aquatraz","aquatraz2","aquatraz3","aquatraz4"],"script":preload("res://aquatraz.gd")},
+	"armageddon":{"ids":["endgame","endgame2","endgame3","endgame4"],"script":preload("res://project_armageddon.gd")},
+	"hijacked_filters":{"ids":["filters","filters2","filters3","filters4"],"script":preload("res://hijacked_filters.gd")},
 	"nuclear_stockpile":{"ids":["canister","canister2","canister3","canister4"],"script":preload("res://nuclear_stockpile.gd")},
 	"allied_distress":{"ids":["backstab","backstab2","backstab3","backstab4"],"script":preload("res://allied_distress.gd")},
 	"pirate_stockpile":{"ids":["puffa","puffa2"],"script":preload("res://pirate_stockpile.gd")},

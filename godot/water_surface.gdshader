@@ -73,8 +73,6 @@ void fragment() {
 	vec3 daytime = mix(reflection,sky,sky_window*(1.0-fresnel));
 	vec3 nighttime = vec3(0.008,0.022,0.048) * (night_brightness / 0.18);
 	ALBEDO = mix(nighttime,daytime,daylight);
-	// The sunlit surface uses outdoor water fog even when the camera is in
-	// a cave. Its distance fade still blends the far plane into open water.
 	// Beer-Lambert water extinction, using the same visibility and fog colour
 	// as the rest of the scene (Triton underwater rendering guidance). Reach
 	// the exact background colour before camera clipping, without a hard rim.
@@ -83,5 +81,13 @@ void fragment() {
 	float extinction = 1.0-exp(-3.912*distance_to_camera/max(osc_natural_fog.x,0.1));
 	float far_fade = smoothstep(osc_natural_fog.x*0.65,osc_natural_fog.x*0.95,distance_to_camera);
 	float fog = max(natural_fog_amount(distance_to_camera),max(extinction,far_fade));
-	ALBEDO = natural_colour(mix(ALBEDO,water_colour,fog));
+	vec3 ray = (world_position - CAMERA_POSITION_WORLD) / max(distance_to_camera,0.001);
+	if (osc_natural_enabled) {
+		float exposure = natural_background_visibility(CAMERA_POSITION_WORLD,ray);
+		// Deep water absorbs the distant sky even with optional distance fog off.
+		fog = max(fog,(1.0 - exposure) * smoothstep(10.0,22.0,distance_to_camera));
+		ALBEDO = mix(natural_colour(ALBEDO),natural_water_colour(exposure),fog);
+	} else {
+		ALBEDO = natural_colour(mix(ALBEDO,water_colour,fog));
+	}
 }

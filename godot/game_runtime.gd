@@ -25,8 +25,9 @@ func _process(delta: float) -> void:
 	if game.get_tree().paused or game.world_loading or game.loading_save: return
 	game.particles.active = game.pilot_mode and not game.world_loading
 	if game.pilot_mode and not game.world_loading and not game.developer_ui_visible: game.day_night.step(delta)
-	game._update_daylight()
-	if not game.pilot_mode: return
+	if not game.pilot_mode:
+		game._update_daylight()
+		return
 	if not game.world_loading: game.plant_current.update_wash(game.pilot,delta)
 	if game.docked_screen != null:
 		game.docked_screen.visible = game.docking.stage == Docking.Stage.DOCKED
@@ -50,6 +51,7 @@ func _process(delta: float) -> void:
 			game.camera_follow.resume(game.camera.global_position, game.pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.35)
 			game.camera_was_frozen = false
 		game._update_follow_camera(delta)
+	game._update_daylight()
 	game._update_radio_messages(delta)
 	if game.developer_ui_visible:
 		var state: RefCounted = game.pilot.movement

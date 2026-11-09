@@ -107,7 +107,8 @@ func _load_environment(folder: String) -> bool:
 	game.plant_current.attach(game.world_root)
 	game._add_water_surface()
 	await game.get_tree().physics_frame
-	await game.natural_light.build(game.world_root,game._progress)
+	await game.natural_light.build(game.world_root,game._progress,512,true)
+	game.game_lighting.add_cave_background()
 	return true
 
 func _populate_world(folder: String) -> void:

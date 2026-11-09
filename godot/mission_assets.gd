@@ -2,8 +2,8 @@ extends RefCounted
 ## Prepare reusable mission assets while the existing startup screen is visible.
 const Assets = preload("res://clump_loader.gd")
 const Audio = preload("res://legacy_audio.gd")
-const MODELS := ["MASSIVE","PIRATEO","FANBLADE","BOSS","CARAVAN","MINING","MINE","HARDMINE","PRISON","TECHNEW","TECH2SUB","TRAD2","TRAD-SUB","TRADSHUT","TECHSHUT","TRADHERD","TECHHERD","FREIGHT","PIRATE","OUTPOST","TECHPOST","CANISTER","WALKER","WALKHEAD","ESCAPE","TURRET","LITEBEEM","MISSILE","HMISSILE","TMISSILE","DEPTHD","SMALROCK","ROCK","BIGROCK","PIXIE","CHAIN","JELLYEGG","EGGBROKE"]
-const ANIMATED := ["SWITCH","BLOWFISH","PWALKER","SILVER","BADJELLY","LIONFISH","MUTANT","MSILVER","BABY","MEEL","BIGEEL","TESTDOOR","MOMJELLY","KIDJELLY"]
+const MODELS := ["TRAZGUN","PIG","PIGCTRL","PURIFIER","MASSIVE","PIRATEO","FANBLADE","BOSS","CARAVAN","MINING","MINE","HARDMINE","PRISON","TECHNEW","TECH2SUB","TRAD2","TRAD-SUB","TRADSHUT","TECHSHUT","TRADHERD","TECHHERD","FREIGHT","PIRATE","OUTPOST","TECHPOST","CANISTER","WALKER","WALKHEAD","ESCAPE","TURRET","LITEBEEM","MISSILE","HMISSILE","TMISSILE","DEPTHD","SMALROCK","ROCK","BIGROCK","PIXIE","CHAIN","JELLYEGG","EGGBROKE"]
+const ANIMATED := ["PTRAZ","ENDIRIS","SWITCH","BLOWFISH","PWALKER","SILVER","BADJELLY","LIONFISH","MUTANT","MSILVER","BABY","MEEL","BIGEEL","TESTDOOR","MOMJELLY","KIDJELLY"]
 
 static func prepare(game: Node) -> void:
 	var loading: bool = game.world_loading; game.world_loading = true
@@ -16,8 +16,8 @@ static func prepare(game: Node) -> void:
 				game.water_visuals.attach(visual); game.natural_light.attach(visual); visual.free()
 		if Time.get_ticks_usec()-budget > 4000:
 			await game.get_tree().process_frame; budget = Time.get_ticks_usec()
-	# Known catalogue paths also work with installations whose directories
-	# cannot be enumerated, without depending on unused/local language files.
+	for index in range(1,5): Assets._load_texture(game.game_folder,"PLASMA%d"%index,"PLASMAM%d"%index,{})
+	# Known catalogue paths work without directory enumeration or unused languages.
 	var sounds: Array[String] = []
 	for code in game.gameplay_catalogue.tables.get("radio_messages",{}).get("records",{}):
 		sounds.append(game.game_folder.path_join("WAVES/ENGLISH/"+str(code).to_upper()+".RAW"))

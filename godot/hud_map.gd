@@ -163,7 +163,7 @@ func bake_world(world: Node3D, tree: SceneTree) -> void:
 	sun.light_energy = 0.65
 	view.add_child(sun)
 	for source in world.find_children("*", "MeshInstance3D",true,false):
-		if source.name == "WaterSurface": continue
+		if source.name in ["WaterSurface","CaveWaterBackground"]: continue
 		var ancestor: Node = source
 		var excluded := false
 		while ancestor != world and ancestor != null:
@@ -172,10 +172,9 @@ func bake_world(world: Node3D, tree: SceneTree) -> void:
 		if excluded: continue
 		var copy := MeshInstance3D.new()
 		copy.mesh = source.mesh
-		copy.material_override = _map_material(source.material_override)
 		copy.transform = world.global_transform.affine_inverse() * source.global_transform
-		for surface in range(source.get_surface_override_material_count()):
-			copy.set_surface_override_material(surface,_map_material(source.get_surface_override_material(surface)))
+		for surface in range(source.mesh.get_surface_count()):
+			copy.set_surface_override_material(surface,_map_material(source.get_active_material(surface)))
 		view.add_child(copy)
 	var camera := Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -210,7 +209,10 @@ func bake_world(world: Node3D, tree: SceneTree) -> void:
 			image.set_pixel(x,y,colour)
 		if y % 128 == 0: await tree.process_frame
 	image.generate_mipmaps()
-	texture = ImageTexture.create_from_image(image)
+	# Draw commands in a paused map/instrument can still reference the initial
+	# terrain texture. Replace its image, not the resource they already hold.
+	if texture == null: texture = ImageTexture.create_from_image(image)
+	else: texture.set_image(image)
 	scenery_baked = true
 
 static func _map_material(material: Material) -> Material:

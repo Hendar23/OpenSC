@@ -35,7 +35,7 @@ void fragment() {
 	float far_fade = 1.0 - smoothstep(cloud_radius * 0.75, cloud_radius, camera_distance);
 	ALBEDO = vec3(0.65, 0.82, 0.8);
 	natural_factor = natural_visibility(natural_position);
-	EMISSION = ALBEDO * natural_ambient(natural_factor);
+	EMISSION = ALBEDO * natural_ambient(natural_factor,natural_position);
 	ALPHA = shape * shape * near_fade * far_fade * visibility * speck_brightness;
 }
 void light() {

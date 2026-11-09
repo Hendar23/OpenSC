@@ -5,6 +5,7 @@
 uniform sampler2D albedo_texture : source_color, filter_nearest, repeat_enable;
 uniform sampler2D terrain_albedo_texture : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform bool terrain_mipmaps = false;
+uniform bool tryton_rock = false;
 uniform bool cull_backfaces = false;
 uniform sampler2D backface_texture : source_color, filter_nearest, repeat_enable;
 uniform bool has_backface_texture = false;
@@ -61,7 +62,7 @@ void fragment() {
 	vec3 air_normal = normalize((INV_VIEW_MATRIX * vec4(NORMAL,0.0)).xyz);
 	if (dot(NORMAL,VIEW) < 0.0) air_normal = -air_normal;
 	vec3 air_position = natural_position + air_normal * 0.1;
-	natural_factor = natural_visibility(air_position);
+	natural_factor = natural_exposure_for(air_position,vec2(0.05,0.4),tryton_rock);
 	float fog = natural_fog_amount(length(VERTEX));
 	natural_transmission = 1.0 - fog;
 	ALBEDO = color.rgb * (1.0 - fog);
@@ -76,7 +77,7 @@ void fragment() {
 	vec3 glow = emission_color.rgb;
 	if (has_emission_texture) glow *= texture(emission_texture,uv).rgb;
 	if (self_illuminated) glow = color.rgb * surface_emission_strength;
-	EMISSION = (glow + color.rgb * natural_ambient(natural_factor)) * natural_transmission + natural_fog_colour(air_position,INV_VIEW_MATRIX[3].xyz) * fog;
+	EMISSION = (glow + color.rgb * natural_ambient(natural_factor,natural_position)) * natural_transmission + natural_fog_colour(air_position,INV_VIEW_MATRIX[3].xyz) * fog;
 #ifdef EXTERIOR_CANOPY
 	if (osc_exterior_enabled && osc_exterior_ready) {
 		vec3 reflected_ray = normalize(mat3(INV_VIEW_MATRIX) * reflect(-normalize(VIEW),normalize(NORMAL)));

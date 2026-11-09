@@ -5,6 +5,7 @@ const GROUP := "campaign/opening_bonus"
 const GENOCIDE_GROUP := "campaign/genocide_bonus"
 
 static func restore_for_progress(game: Node) -> void:
+	apply_aquatraz_state(game)
 	_restore_starting_coins(game)
 	# Published betas removed these objects on completion. Seed missing world
 	# resources once for an existing post-opening save, independent of mail.
@@ -17,6 +18,24 @@ static func restore_for_progress(game: Node) -> void:
 	for id in ["walktrad","walktrad2","walktech","walktech2"]:
 		walker_started = walker_started or missions.completed.has(id) or str(missions.active.get("id","")) == id
 	if walker_started: spawn_genocide_bonus(game)
+
+static func apply_aquatraz_state(game: Node) -> void:
+	var destroyed := int(game.player_progress.campaign_stage) >= 7
+	for id in ["aquatraz","aquatraz2","aquatraz3","aquatraz4"]:
+		destroyed = destroyed or game.player_progress.missions.completed.get(id,{}).get("success",false)
+	var city: Node3D = game.submarine_traffic.port_by_id(5).get("node")
+	if city == null: return
+	var state: Array = city.get_meta("aquatraz_restore_state",[])
+	if destroyed:
+		if state.is_empty():
+			var mask := preload("res://mission_site.gd").new(); mask.mask(city)
+			city.set_meta("aquatraz_restore_state",mask.masked.duplicate()); mask.committed = true; mask.free()
+		else:
+			city.hide()
+			for body in city.find_children("*","CollisionObject3D",true,false): body.collision_layer = 0; body.collision_mask = 0
+		city.set_meta("mission_dock_disabled",true)
+	elif not state.is_empty():
+		var mask := preload("res://mission_site.gd").new(); mask.masked.assign(state); mask.restore(); mask.free()
 
 # The FAQ confirms three coins in the tin can. Their editable placements live
 # in the map; this only seeds the omitted objects once in published beta saves.

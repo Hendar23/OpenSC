@@ -172,8 +172,22 @@ func _physics_process(delta: float) -> void:
 
 func sync_collision() -> void:
 	if hitbox == null: return
+	# Database placements can contain skew/non-uniform scale. Bake it into
+	# the triangles so Jolt receives rigid transforms without approximating
+	# the rotating gun's shape or printing a scaling error every frame.
+	hitbox.top_level = true
+	hitbox.global_transform = Transform3D(get_parent().global_basis.orthonormalized(),get_parent().global_position)
 	for index in range(collision_meshes.size()):
-		collision_shapes[index].transform = hitbox.global_transform.affine_inverse() * collision_meshes[index].global_transform
+		var pose: Transform3D = hitbox.global_transform.affine_inverse()*collision_meshes[index].global_transform
+		var rotation := pose.basis.orthonormalized()
+		var deformation := rotation.inverse()*pose.basis
+		var collider := collision_shapes[index]
+		var previous: Variant = collider.get_meta("baked_turret_basis") if collider.has_meta("baked_turret_basis") else null
+		if previous == null or not (previous as Basis).is_equal_approx(deformation):
+			var faces: PackedVector3Array = collision_meshes[index].mesh.get_faces()
+			for vertex in faces.size(): faces[vertex]=deformation*faces[vertex]
+			collider.shape.set_faces(faces); collider.set_meta("baked_turret_basis",deformation)
+		collider.transform = Transform3D(rotation,pose.origin)
 
 func burst(point: Vector3, diameter: float) -> void:
 	var effect := preload("res://mine_explosion.gd").new()

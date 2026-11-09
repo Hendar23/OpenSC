@@ -340,14 +340,14 @@ func _build_natural_light_controls() -> void:
 		rays_label.text = "Sun ray brightness: %d%%" % int(value)
 		if is_instance_valid(game.sun_shafts): game.sun_shafts.brightness = value / 100.0)
 	rays.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
-	for row in [["sun_depth","Sunlight fade begins at depth",0.0,100.0,0.5],["sun_falloff","Sunlight falloff distance",0.5,100.0,0.5],["cave_ambient","Cave ambient light",0.0,0.5,0.005]]:
+	for row in [["sun_depth","Sunlight fade begins at depth",0.0,100.0,0.5],["sun_falloff","Sunlight falloff distance",0.5,100.0,0.5],["cave_ambient","Cave ambient light",0.0,0.5,0.0005]]:
 		var key: String = row[0]; var caption: String = row[1]
 		var label = Label.new(); game.graphics_controls.add_child(label)
 		var slider := HSlider.new(); slider.scrollable = false; slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]; slider.value = NaturalLight.DEFAULTS[key]; slider.focus_mode = Control.FOCUS_NONE
 		game.graphics_controls.add_child(slider); game.natural_light_controls[key] = slider
-		label.text = "%s: %.1f%%" % [caption,slider.value * 100] if key == "cave_ambient" else "%s: %.1f units" % [caption,slider.value]
+		label.text = "%s: %.2f%%" % [caption,slider.value * 100] if key == "cave_ambient" else "%s: %.1f units" % [caption,slider.value]
 		slider.value_changed.connect(func(value: float) -> void:
-			game.natural_light.configure({key:value}); label.text = "%s: %.1f%%" % [caption,value * 100] if key == "cave_ambient" else "%s: %.1f units" % [caption,value]; game._update_daylight())
+			game.natural_light.configure({key:value}); label.text = "%s: %.2f%%" % [caption,value * 100] if key == "cave_ambient" else "%s: %.1f units" % [caption,value]; game._update_daylight())
 		slider.drag_ended.connect(func(_changed: bool) -> void: game._save_preferences())
 
 func _build_equipment_controls() -> void:

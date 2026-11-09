@@ -7,6 +7,7 @@ global uniform float osc_caustics_strength;
 global uniform float osc_caustics_size;
 global uniform float osc_caustics_speed;
 global uniform float osc_caustics_depth;
+uniform bool tryton_rock = false;
 global uniform float osc_water_height;
 global uniform vec3 osc_sun_direction;
 global uniform float osc_wave_speed;
@@ -37,7 +38,7 @@ void fragment() {
 	float second = texture(osc_caustics_texture,uv * 1.13 - flow.yx * visual_time() * osc_caustics_speed * 0.01).r;
 	float pattern = max(first,second * 0.65);
 	float fade = exp(-depth / max(osc_caustics_depth,0.1)) * smoothstep(0.0,0.35,osc_sun_direction.y);
-	fade *= natural_visibility(world_position);
+	fade *= natural_exposure_for(world_position,vec2(0.05,0.4),tryton_rock);
 	// Fade the extra light into fog without adding the blue fog colour twice.
 	fade *= 1.0 - distance_fog_amount(length(VERTEX),vec3(osc_caustics_visibility,osc_caustics_fog_start,osc_caustics_fog_curve));
 	ALBEDO = vec3(0.88,1.0,0.93) * pattern * fade * osc_caustics_strength;

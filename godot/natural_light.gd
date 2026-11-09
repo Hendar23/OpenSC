@@ -1,4 +1,6 @@
 extends RefCounted
+const CaveDaylight = preload("res://cave_daylight.gd")
+const OtherCaveDaylight = preload("res://other_cave_daylight.gd")
 const DEFAULTS := {"sun_depth":25.0,"sun_falloff":20.0,"cave_ambient":0.03}
 static var registered := false
 static var transparent_shader: Shader
@@ -9,6 +11,9 @@ var surface := 0.0
 var materials := {}
 var light_slices: Array[Image] = []
 var light_volume: ImageTexture3D
+var touka_daylight_enabled := false
+var cave_sections: ImageTexture
+var other_cave_sections: ImageTexture
 func _init() -> void:
 	ensure_globals()
 static func ensure_globals() -> void:
@@ -18,9 +23,19 @@ static func ensure_globals() -> void:
 	RenderingServer.global_shader_parameter_add("osc_replay_active",RenderingServer.GLOBAL_VAR_TYPE_BOOL,false)
 	RenderingServer.global_shader_parameter_add("osc_replay_time",RenderingServer.GLOBAL_VAR_TYPE_FLOAT,0.0)
 	RenderingServer.global_shader_parameter_add("osc_cave_ambient",RenderingServer.GLOBAL_VAR_TYPE_FLOAT,0.03)
+	RenderingServer.global_shader_parameter_add("osc_ambient_source",RenderingServer.GLOBAL_VAR_TYPE_VEC4,Vector4.ZERO)
 	RenderingServer.global_shader_parameter_add("osc_sky_volume",RenderingServer.GLOBAL_VAR_TYPE_SAMPLER3D,null)
 	RenderingServer.global_shader_parameter_add("osc_volume_min",RenderingServer.GLOBAL_VAR_TYPE_VEC3,Vector3.ZERO)
 	RenderingServer.global_shader_parameter_add("osc_volume_size",RenderingServer.GLOBAL_VAR_TYPE_VEC3,Vector3.ONE)
+	RenderingServer.global_shader_parameter_add("osc_cave_sections",RenderingServer.GLOBAL_VAR_TYPE_SAMPLER2D,null)
+	RenderingServer.global_shader_parameter_add("osc_other_cave_sections",RenderingServer.GLOBAL_VAR_TYPE_SAMPLER2D,null)
+	RenderingServer.global_shader_parameter_add("osc_cave_min",RenderingServer.GLOBAL_VAR_TYPE_VEC3,CaveDaylight.REGION.position)
+	RenderingServer.global_shader_parameter_add("osc_cave_size",RenderingServer.GLOBAL_VAR_TYPE_VEC3,CaveDaylight.REGION.size)
+	RenderingServer.global_shader_parameter_add("osc_cave_active",RenderingServer.GLOBAL_VAR_TYPE_BOOL,false)
+	RenderingServer.global_shader_parameter_add("osc_cave_mouth",RenderingServer.GLOBAL_VAR_TYPE_VEC3,CaveDaylight.MOUTH)
+	RenderingServer.global_shader_parameter_add("osc_cave_inward",RenderingServer.GLOBAL_VAR_TYPE_VEC3,CaveDaylight.INWARD)
+	RenderingServer.global_shader_parameter_add("osc_cave_span",RenderingServer.GLOBAL_VAR_TYPE_VEC3,Vector3(CaveDaylight.FIRST_X,CaveDaylight.STEP,CaveDaylight.SECTIONS.size()))
+	RenderingServer.global_shader_parameter_add("osc_cave_view_radius",RenderingServer.GLOBAL_VAR_TYPE_FLOAT,CaveDaylight.VIEW_RADIUS)
 	for entry in [["osc_natural_enabled",RenderingServer.GLOBAL_VAR_TYPE_BOOL,false],["osc_overhead",RenderingServer.GLOBAL_VAR_TYPE_SAMPLER2D,null],["osc_overhead_bounds",RenderingServer.GLOBAL_VAR_TYPE_VEC4,Vector4(0,0,1,1)],["osc_overhead_pixel",RenderingServer.GLOBAL_VAR_TYPE_VEC2,Vector2.ONE],["osc_natural_surface",RenderingServer.GLOBAL_VAR_TYPE_FLOAT,0.0],["osc_sun_depth",RenderingServer.GLOBAL_VAR_TYPE_FLOAT,25.0],["osc_sun_falloff",RenderingServer.GLOBAL_VAR_TYPE_FLOAT,20.0],["osc_natural_ambient",RenderingServer.GLOBAL_VAR_TYPE_VEC4,Vector4(1,1,1,0.3)],["osc_natural_fog_color",RenderingServer.GLOBAL_VAR_TYPE_VEC4,Vector4.ZERO],["osc_natural_fog",RenderingServer.GLOBAL_VAR_TYPE_VEC3,Vector3(1000000,0,1)]]:
 		RenderingServer.global_shader_parameter_add(entry[0],entry[1],entry[2])
 static func background_colour(colour: Color) -> Color:
@@ -44,7 +59,9 @@ static func channel_mask(channel: int) -> Vector4:
 func configure(values: Dictionary) -> void:
 	settings.merge(values,true)
 	for key in DEFAULTS: RenderingServer.global_shader_parameter_set("osc_" + key,settings[key])
-func build(world: Node3D, progress: Callable = Callable(), resolution: int = 512) -> void:
+static func set_ambient_source(point: Vector3, enabled: bool = true) -> void:
+	RenderingServer.global_shader_parameter_set("osc_ambient_source",Vector4(point.x,point.y,point.z,1.0) if enabled else Vector4.ZERO)
+func build(world: Node3D, progress: Callable = Callable(), resolution: int = 512, touka_daylight: bool = false) -> void:
 	bounds = world.get_meta("bounds"); surface = world.get_meta("surface_height")
 	var cache := preload("res://asset_cache.gd")
 	var dimensions := Vector3i(128,64,96)
@@ -107,8 +124,16 @@ func build(world: Node3D, progress: Callable = Callable(), resolution: int = 512
 	RenderingServer.global_shader_parameter_set("osc_sky_volume",light_volume)
 	RenderingServer.global_shader_parameter_set("osc_volume_min",bounds.position)
 	RenderingServer.global_shader_parameter_set("osc_volume_size",volume_size)
+	touka_daylight_enabled = touka_daylight and bounds.has_point(CaveDaylight.MOUTH)
+	if touka_daylight_enabled:
+		cave_sections = CaveDaylight.texture()
+		RenderingServer.global_shader_parameter_set("osc_cave_sections",cave_sections)
+		other_cave_sections = OtherCaveDaylight.texture()
+		RenderingServer.global_shader_parameter_set("osc_other_cave_sections",other_cave_sections)
+	RenderingServer.global_shader_parameter_set("osc_cave_active",touka_daylight_enabled)
 	RenderingServer.global_shader_parameter_set("osc_natural_enabled",true)
 	configure({})
+
 func visibility(point: Vector3, fog: bool = false) -> float:
 	var light := 1.0 - smoothstep(float(settings.sun_depth),float(settings.sun_depth + settings.sun_falloff),maxf(0,surface - point.y))
 	if image == null: return light
@@ -117,21 +142,30 @@ func visibility(point: Vector3, fog: bool = false) -> float:
 	if light_slices.is_empty(): return light
 	var location := (point - bounds.position) / Vector3(bounds.size.x,surface - bounds.position.y,bounds.size.z)
 	if location.y < 0 or location.y > 1: return light
-	var dimensions := Vector3i(light_slices[0].get_width(),light_slices[0].get_height(),light_slices.size())
+	var exposure := _sample(light_slices,location).r
+	var outdoor := smoothstep(0.35,0.95,exposure) if fog else smoothstep(0.05,0.4,exposure)
+	if touka_daylight_enabled:
+		var passage := OtherCaveDaylight.shelter(point)
+		if passage > 0.0 and point.x < 158.0:
+			var pixel := Vector2i(uv * Vector2(image.get_size())).clamp(Vector2i.ZERO,image.get_size() - Vector2i.ONE)
+			var cover := smoothstep(0.35,0.95,image.get_pixelv(pixel).r - point.y)
+			passage *= lerpf(cover,1.0,smoothstep(154.0,158.0,point.x))
+		outdoor *= 1.0 - maxf(CaveDaylight.shelter(point),passage)
+	return light * outdoor
+
+static func _sample(slices: Array[Image], location: Vector3) -> Color:
+	var dimensions := Vector3i(slices[0].get_width(),slices[0].get_height(),slices.size())
 	var grid := location * Vector3(dimensions) - Vector3.ONE * 0.5
 	var cell := Vector3i(grid.floor()); var blend := grid - Vector3(cell)
-	var exposure := 0.0
+	var exposure := Color(0,0,0,0)
 	for dz in range(2):
 		for dy in range(2):
 			for dx in range(2):
 				var sample_cell := cell + Vector3i(dx,dy,dz)
-				var value := light_slices[clampi(sample_cell.z,0,dimensions.z - 1)].get_pixel(clampi(sample_cell.x,0,dimensions.x - 1),clampi(sample_cell.y,0,dimensions.y - 1)).r
+				var value := slices[clampi(sample_cell.z,0,dimensions.z - 1)].get_pixel(clampi(sample_cell.x,0,dimensions.x - 1),clampi(sample_cell.y,0,dimensions.y - 1))
 				var weight := (blend.x if dx else 1.0 - blend.x) * (blend.y if dy else 1.0 - blend.y) * (blend.z if dz else 1.0 - blend.z)
 				exposure += value * weight
-	# Darkness requires a well-enclosed neighbourhood; mixed edge samples
-	# retain outdoor ambient instead of projecting dark bands onto slopes.
-	# Fog fades sooner under a mixed roof edge, without dimming surface light.
-	return light * smoothstep(0.35,0.95,exposure) if fog else light * smoothstep(0.05,0.4,exposure)
+	return exposure
 
 func lighting(environment: Environment, fog_end: float, fog_start: float, fog_curve: float) -> void:
 	var ambient := environment.ambient_light_color
@@ -158,6 +192,7 @@ func attach(node: Node) -> void:
 			if material == null:
 				material = ShaderMaterial.new(); material.shader = preload("res://exterior_canopy.gdshader") if original.get_meta("exterior_canopy",false) else preload("res://natural_surface.gdshader")
 				material.set_shader_parameter("billboard",original.billboard_mode == BaseMaterial3D.BILLBOARD_ENABLED)
+				material.set_shader_parameter("tryton_rock",str(node.get_meta("terrain_texture","")).begins_with("GRAVELL"))
 				if original.get_meta("exterior_canopy",false): material.set_shader_parameter("canopy_original_color",original.get_meta("canopy_original_color",Color(0.28,0.34,0.40)))
 				if original.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA:
 					material.shader = preload("res://exterior_glass.gdshader") if original.get_meta("exterior_canopy",false) else alpha_shader()

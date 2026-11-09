@@ -13,11 +13,12 @@ var cooldown := INTERVAL
 var port := 0
 var shots := 0
 
-func setup(body: RigidBody3D, owner_game: Node, head: Node3D = null) -> void:
+func setup(body: RigidBody3D, owner_game: Node, head: Node3D = null, walker_model: Node3D = null) -> void:
 	hitbox = body; game = owner_game; bubble_trail = game.submarine_traffic.bubbles
+	if head == null and walker_model == null: walker_model = body.appearance
 	# Original numbered frames2/4 correspond to the yaw head and gun atomics.
-	pitch = head.find_child("Frame_1",true,false) if head != null else body.appearance.find_child("Frame_2",true,false)
-	yaw = head.find_child("Frame_0",true,false) if head != null else body.appearance.find_child("Frame_1",true,false)
+	pitch = head.find_child("Frame_1",true,false) if head != null else walker_model.find_child("Frame_2",true,false)
+	yaw = head.find_child("Frame_0",true,false) if head != null else walker_model.find_child("Frame_1",true,false)
 	missile_template = preload("res://clump_loader.gd").load_clump(game.game_folder.path_join("CLUMPS/MISSILE.DFF"))
 	if missile_template != null: add_child(missile_template); missile_template.hide()
 

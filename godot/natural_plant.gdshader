@@ -25,7 +25,7 @@ void fragment() {
 	natural_factor = natural_visibility(air_position);
 	float fog = natural_fog_amount(length(VERTEX));
 	ALBEDO = color.rgb * (1.0 - fog); ROUGHNESS = roughness_value; METALLIC = metallic_value;
-	EMISSION = color.rgb * natural_ambient(natural_factor) * (1.0 - fog) + natural_fog_colour(air_position,INV_VIEW_MATRIX[3].xyz) * fog;
+	EMISSION = color.rgb * natural_ambient(natural_factor,natural_position) * (1.0 - fog) + natural_fog_colour(air_position,INV_VIEW_MATRIX[3].xyz) * fog;
 }
 void light() {
 	DIFFUSE_LIGHT += max(dot(NORMAL,LIGHT),0.0) * ATTENUATION * LIGHT_COLOR * (LIGHT_IS_DIRECTIONAL ? natural_factor : 1.0) / PI;

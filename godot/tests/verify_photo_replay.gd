@@ -37,16 +37,50 @@ func run() -> void:
 	for frame in range(64):
 		if replay.pending.is_empty(): break
 		replay._register_pending()
-	check(replay.pending.is_empty() and replay.tracks.size() == 63,"Budgeted registration drains surviving visuals and ignores removed actors")
+	check(replay.pending.is_empty() and replay.tracks.size() == 63,"Registration drains every surviving visual and ignores removed actors")
 	arriving.free(); replay.clear(); replay.started = true
 	var preparing := Node3D.new(); preparing.set_meta("wildlife_preparing",true); game.world_root.add_child(preparing)
 	var waiting := Actor.new(); preparing.add_child(waiting)
 	var waiting_mesh := MeshInstance3D.new(); waiting_mesh.mesh = shared_mesh; waiting.add_child(waiting_mesh)
 	replay._scan(preparing); replay._register_pending()
 	check(replay.tracks.is_empty(),"Hidden shoals allocate no replay history while being prepared")
+	preparing.remove_meta("wildlife_preparing"); replay._register_pending()
+	check(replay.tracks.has(waiting_mesh.get_instance_id()),"Prepared visuals are retried without depending on another tree-entry signal")
 	preparing.remove_child(waiting); game.world_root.add_child(waiting); replay._register_pending()
 	check(replay.tracks.has(waiting_mesh.get_instance_id()),"A completed shoal joins replay recording when activated")
 	waiting.free(); preparing.free(); replay.clear()
+	var late_actor := Actor.new(); game.world_root.add_child(late_actor)
+	var late_mesh := MeshInstance3D.new(); late_actor.add_child(late_mesh)
+	replay._scan(late_actor); replay._register_pending()
+	check(replay.pending.has(late_mesh.get_instance_id()),"Visuals awaiting mesh setup remain pending")
+	late_mesh.mesh = shared_mesh; replay._register_pending()
+	check(replay.tracks.has(late_mesh.get_instance_id()),"A mesh assigned after tree entry joins recording")
+	late_actor.free(); replay.clear()
+	# The first frame must include all actors, before an immediate rewind.
+	var early := Actor.new(); game.world_root.add_child(early)
+	for index in range(256):
+		var part := MeshInstance3D.new(); part.mesh = shared_mesh; early.add_child(part)
+	replay._start_recording()
+	var initial_complete := true
+	for part in early.get_children():
+		var history: RefCounted = replay.tracks.get(part.get_instance_id())
+		if history == null or history.stamps[0] != 0 or history.data[12] != 1: initial_complete = false
+	check(initial_complete,"Every existing actor has the first sample, including an immediate replay")
+	early.free(); replay.clear()
+	# Recycling an object between samples must retain two separate lifetimes.
+	var recycled := Actor.new(); game.world_root.add_child(recycled)
+	var recycled_mesh := MeshInstance3D.new(); recycled_mesh.mesh = shared_mesh; recycled.add_child(recycled_mesh)
+	replay._scan(recycled); replay.capture(0.05)
+	var previous_life: RefCounted = replay.tracks[recycled_mesh.get_instance_id()]
+	game.world_root.remove_child(recycled); recycled.position.x = 100
+	game.world_root.add_child(recycled); replay._scan(recycled); replay.capture(0.05)
+	var next_life: RefCounted = replay.tracks[recycled_mesh.get_instance_id()]
+	var lifetimes := Node3D.new(); game.world_root.add_child(lifetimes)
+	previous_life.show_at(lifetimes,0,0.5,0.075); next_life.show_at(lifetimes,0,0.5,0.075)
+	check(previous_life != next_life and previous_life.proxy.visible and previous_life.proxy.position.x == 0 and next_life.proxy == null,"Pooled fish retain their earlier history without interpolating across respawns")
+	previous_life.show_at(lifetimes,1,0,0.1); next_life.show_at(lifetimes,1,0,0.1)
+	check(not previous_life.proxy.visible and next_life.proxy.visible and next_life.proxy.position.x == 100,"Reused fish appear only during their own lifetime")
+	recycled.free(); replay.clear(); lifetimes.free()
 	var actor := Actor.new(); game.world_root.add_child(actor)
 	var mesh := MeshInstance3D.new(); mesh.mesh = BoxMesh.new(); actor.add_child(mesh)
 	var material := StandardMaterial3D.new(); material.albedo_color = Color.RED; mesh.material_override = material
@@ -227,6 +261,11 @@ func run() -> void:
 	samples.sort()
 	print("Busy replay profile: tracks=",replay.tracks.size()," wake bubbles=",wake.particles.size()," median usec=",samples[20]," max=",samples[39])
 	check(replay.wakes[wake.get_child(0).get_instance_id()].events.size() >= wake.particles.size(),"Busy replay retains every emitted wake bubble")
+	# Exercise an actual moving player across a complete ring-buffer rollover.
+	var voyage_origin: Vector3 = game.pilot.global_position
+	for index in range(650):
+		game.pilot.global_position = voyage_origin+Vector3(sin(index*0.01)*4,0,cos(index*0.01)*4)
+		replay.capture(0.05)
 	var particle_pose: Transform3D = game.particles.global_transform
 	check(photo.enter(),"Photo mode can replay a busy world")
 	var player_visible := true
@@ -234,6 +273,20 @@ func run() -> void:
 		var history: RefCounted = replay.tracks.get(hull.get_instance_id())
 		if history == null or history.proxy == null or not history.proxy.visible: player_visible = false
 	check(player_visible,"Photo mode reconstructs every player hull part when world recording is busy")
+	var scrub_complete := true
+	for time in [replay.oldest,replay.timeline-0.5,replay.oldest,replay.timeline,replay.timeline-1.0]:
+		replay.seek(time)
+		for hull in game.pilot.visual.find_children("*","MeshInstance3D",true,false):
+			var history: RefCounted = replay.tracks.get(hull.get_instance_id())
+			if history == null or history.proxy == null or not history.proxy.visible: scrub_complete = false
+	check(scrub_complete,"Living player hull survives repeated backward and forward scrubbing to the first recorded frame")
+	replay.seek(replay.timeline)
+	if DisplayServer.get_name() != "headless":
+		photo.view.global_position = game.pilot.global_position+Vector3(2,0.7,2)
+		photo.view.look_at(game.pilot.global_position)
+		for frame in range(3): await process_frame
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png("res://../.local/replay-player-scrub-native.png")
 	var particle_drift: float = game.particles.drift_distance
 	photo.move(Vector3.RIGHT,0,1); photo._process(0.1)
 	check(game.particles.visible and game.particles.global_position.is_equal_approx(photo.view.global_position),"Live ambient motes follow the free camera without a recorded cloud")

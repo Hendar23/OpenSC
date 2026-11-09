@@ -3,6 +3,35 @@ const Pirate = preload("res://pirate_submarine.gd")
 const Document = preload("res://map_document.gd")
 const Projectile = preload("res://player_projectile.gd")
 
+func check_electro_torpedoes(arsenal: Node3D) -> void:
+	var sandbox := SubViewport.new(); sandbox.own_world_3d = true; root.add_child(sandbox)
+	var ocean := Node3D.new(); sandbox.add_child(ocean)
+	var shooter := preload("res://tests/verify_npc_torpedoes.gd").Shooter.new(); ocean.add_child(shooter)
+	var enemy_template := preload("res://clump_loader.gd").load_clump(game.game_folder.path_join("CLUMPS/TMISSILE.DFF"))
+	for kind in ["missile","homers","enemy"]:
+		var torpedo: Node3D
+		if kind == "enemy":
+			torpedo = preload("res://turret_missile.gd").new(); ocean.add_child(torpedo)
+			torpedo.setup(shooter,enemy_template,Vector3(0,10,-1),Vector3.BACK,game.pilot,false)
+			torpedo.get_child(0).show()
+		else:
+			torpedo = Projectile.new(); ocean.add_child(torpedo)
+			torpedo.setup(arsenal,kind,Vector3(0,10,-1),Vector3.BACK)
+		torpedo.set_physics_process(false); torpedo.velocity = Vector3.BACK*10
+		var bolt := Projectile.new(); ocean.add_child(bolt)
+		bolt.setup(arsenal,"electro",Vector3(0,10,1),Vector3.FORWARD)
+		bolt.set_physics_process(false); bolt.velocity = Vector3.FORWARD*10
+		await physics_frame; await physics_frame
+		for step in range(6):
+			bolt.advance(0.04)
+			if kind == "enemy": torpedo._physics_process(0.04)
+			else: torpedo.advance(0.04)
+		check(not bolt.bursting and not bolt.spent and not torpedo.spent and bolt.position.z < torpedo.position.z,"Electro Bolt and torpedo cross without either colliding: "+kind)
+		bolt.position = torpedo.position; bolt.burst_ticks = 20; bolt.pulse()
+		check(not torpedo.spent,"Electro discharge does not destroy torpedoes: "+kind)
+		bolt.free(); torpedo.free()
+	enemy_template.free(); sandbox.free()
+
 func check_fuel_lifecycle(id: String, arsenal: Node3D) -> void:
 	# An isolated sea floor avoids the real map's surface ceiling and avoids
 	# losing sub-millimetre travel precision far from the world origin.
@@ -106,6 +135,7 @@ func run() -> void:
 	shot.free()
 	await physics_frame
 	for id in ["missile","homers"]: await check_fuel_lifecycle(id,arsenal)
+	await check_electro_torpedoes(arsenal)
 	# A real convex fish hull: the bolt globe overlaps its flank while its
 	# centre ray would miss. The whole globe must stop and discharge on contact.
 	var visual := Document.load_model("LIONFISH",game.game_folder,true)

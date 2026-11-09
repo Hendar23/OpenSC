@@ -85,6 +85,7 @@ func attach(node: Node) -> void:
 			if not material.get_meta("caustics_attached",false):
 				var overlay := ShaderMaterial.new(); overlay.shader = preload("res://caustics.gdshader")
 				overlay.set_shader_parameter("is_plant",plant)
+				overlay.set_shader_parameter("tryton_rock",str(node.get_meta("terrain_texture","")).begins_with("GRAVELL"))
 				if plant:
 					for parameter in original.shader.get_shader_uniform_list(): overlay.set_shader_parameter(parameter.name,original.get_shader_parameter(parameter.name))
 				elif source.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR:

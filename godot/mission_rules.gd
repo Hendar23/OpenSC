@@ -3,15 +3,23 @@ extends RefCounted
 const DISTRESS := ["backstab","backstab2","backstab3","backstab4"]
 const CORE := {1:"walktrad2",3:"walktrad",2:"walktech",4:"walktech2"}
 const CORE_FOUR := {1:"canister",3:"canister2",2:"canister3",4:"canister4"}
+const CORE_FIVE := {1:"filters",3:"filters2",2:"filters3",4:"filters4"}
+const CORE_SIX := {1:"aquatraz",3:"aquatraz2",2:"aquatraz3",4:"aquatraz4"}
+const CORE_SEVEN := {1:"endgame",3:"endgame2",2:"endgame3",4:"endgame4"}
 const CORE_THREE := {1:"diptrad",3:"diptrad2",2:"diptech",4:"diptech2"}
 const QUEUES := {1:["stranded","spytrad","escort"],3:["spytrad2","bigherd","escort2","eel"],2:["breakout","fishing","spytech","recontech"],4:["breakout2","spytech2","tagtech","recontech2"]}
 const STAGE_THREE := {1:["minefield","defect","bomb"],2:["disperse","fumehole","miners","aliens"],3:["rovrtn","defect2"],4:["fumehole2","miners2","aliens2"]}
 const STAGE_FOUR := {1:["pwalker","backstab"],2:["puffa","backstab3"],3:["pwalker2","backstab2"],4:["puffa2","backstab4"]}
-const IMPLEMENTED := ["canister","canister2","canister3","canister4","backstab","backstab2","backstab3","backstab4","puffa","puffa2","pwalker","pwalker2","stranded","spytrad","spytrad2","bigherd","fishing","breakout","breakout2","spytech","spytech2","escort","escort2","tagtech","eel","recontech","recontech2","walktrad","walktrad2","walktech","walktech2","minefield","disperse","rovrtn","fumehole","fumehole2","defect","defect2","miners","miners2","bomb","aliens","aliens2","diptrad","diptrad2","diptech","diptech2"]
+const IMPLEMENTED := ["aquatraz","aquatraz2","aquatraz3","aquatraz4","endgame","endgame2","endgame3","endgame4","filters","filters2","filters3","filters4","canister","canister2","canister3","canister4","backstab","backstab2","backstab3","backstab4","puffa","puffa2","pwalker","pwalker2","stranded","spytrad","spytrad2","bigherd","fishing","breakout","breakout2","spytech","spytech2","escort","escort2","tagtech","eel","recontech","recontech2","walktrad","walktrad2","walktech","walktech2","minefield","disperse","rovrtn","fumehole","fumehole2","defect","defect2","miners","miners2","bomb","aliens","aliens2","diptrad","diptrad2","diptech","diptech2"]
 const PAIRED := {"backstab":"backstab2","backstab2":"backstab","backstab3":"backstab4","backstab4":"backstab3","puffa":"puffa2","puffa2":"puffa","pwalker":"pwalker2","pwalker2":"pwalker","breakout":"breakout2","breakout2":"breakout","spytrad":"spytrad2","spytrad2":"spytrad","spytech":"spytech2","spytech2":"spytech","escort":"escort2","escort2":"escort","recontech":"recontech2","recontech2":"recontech","fumehole":"fumehole2","fumehole2":"fumehole","defect":"defect2","defect2":"defect","miners":"miners2","miners2":"miners","aliens":"aliens2","aliens2":"aliens"}
 
+static func core_offers(id: String) -> Dictionary:
+	for cores in [CORE,CORE_THREE,CORE_FOUR,CORE_FIVE,CORE_SIX,CORE_SEVEN]:
+		if id in cores.values(): return cores
+	return {}
+
 static func offering_city(id: String) -> int:
-	for cores in [CORE,CORE_THREE,CORE_FOUR]:
+	for cores in [CORE,CORE_THREE,CORE_FOUR,CORE_FIVE,CORE_SIX,CORE_SEVEN]:
 		for city in cores:
 			if cores[city] == id: return int(city)
 	for city in QUEUES:
@@ -23,6 +31,9 @@ static func offering_city(id: String) -> int:
 	return 0
 
 static func mission_stage(id: String) -> int:
+	if id in CORE_SEVEN.values(): return 7
+	if id in CORE_SIX.values(): return 6
+	if id in CORE_FIVE.values(): return 5
 	if id in CORE_FOUR.values(): return 4
 	for queue in STAGE_FOUR.values():
 		if id in queue: return 4
@@ -33,6 +44,11 @@ static func mission_stage(id: String) -> int:
 
 static func next_offer(progress: Dictionary, city: int) -> String:
 	var stage := int(progress.campaign_stage)
+	if stage in [5,6,7]:
+		var offers: Dictionary = CORE_SEVEN if stage == 7 else CORE_SIX if stage == 6 else CORE_FIVE
+		var core: String = offers.get(city,"")
+		if not progress.missions.completed.has(core) and core not in progress.missions.get("unavailable",[]): return core
+		return ""
 	if stage not in [2,3,4]: return ""
 	if stage == 2 and core_unlocked(progress) and CORE.has(city):
 		var core: String = CORE[city]
