@@ -15,7 +15,7 @@ OpenSC is now a fully playable beta. The complete game can be played from start 
 All that remains before version 1.0 is polish
 
 ## Installation
-Latest release is available [here](https://github.com/Hendar23/OpenSC/releases/tag/v0.9.1).
+Latest release is available [here](https://github.com/Hendar23/OpenSC/releases/tag/v0.9.2).
 - OpenSC does not include the original Sub Culture game assets. You'll need your own copy of the original game files.
 - When you first run the game, it will ask you to point it to the original Sub Culture folder.
 - A controller is recommended for controlling the sub.
