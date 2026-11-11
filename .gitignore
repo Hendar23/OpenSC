@@ -55,6 +55,10 @@ __pycache__/
 .env.*
 !.env.example
 export_credentials.cfg
+# Private encryption material is never source or a distributable sidecar.
+*.gdkey
+*.dpapi
+*.pckkey
 /dist/
 
 # Inactive mods kept locally for storage; only /Mods is release-ready.

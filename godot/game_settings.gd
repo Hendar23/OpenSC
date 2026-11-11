@@ -7,6 +7,7 @@ const MIN_VISIBILITY = preload("res://developer_tools.gd").MIN_VISIBILITY
 const MAX_VISIBILITY = preload("res://developer_tools.gd").MAX_VISIBILITY
 
 var game: Node
+var preview_hour := 10.0
 
 func _init(context: Node) -> void:
 	game = context
@@ -50,9 +51,9 @@ func _load_preferences(path: String = "") -> void:
 		var setting: Variant = config.get_value("view", row[0], row[1].value)
 		if (setting is float or setting is int) and is_finite(float(setting)):
 			row[1].value = clampf(float(setting), row[1].min_value, row[1].max_value)
-	var configured_hour: Variant = config.get_value("view","time_of_day",game.new_game_hour)
+	var configured_hour: Variant = config.get_value("view","time_of_day",preview_hour)
 	if (configured_hour is float or configured_hour is int) and is_finite(float(configured_hour)):
-		game.new_game_hour = fposmod(float(configured_hour),24.0)
+		preview_hour = fposmod(float(configured_hour),24.0)
 	for key in game.daylight_controls:
 		var fallback: Variant = game.daylight_controls[key].button_pressed if key == "cycle_enabled" else game.daylight_controls[key].value
 		var setting: Variant = config.get_value("view", key, fallback)
@@ -155,7 +156,7 @@ func _save_preferences(path: String = "") -> Error:
 	var config := ConfigFile.new(); config.load(path)
 	config.set_value("developer","testing_all_missions",game.developer_enabled and game.mission_runtime.testing_all_missions)
 	var view = game._view_settings()
-	view["time_of_day"] = game.new_game_hour
+	view["time_of_day"] = preview_hour
 	for key in view: config.set_value("view",key,view[key])
 	if config.has_section_key("view","hud_scale"): config.erase_section_key("view","hud_scale")
 	config.set_value("settings","unified",true)

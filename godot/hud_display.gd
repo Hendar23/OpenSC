@@ -26,6 +26,33 @@ var casing_panel: TextureRect
 var camera_feed: Texture2D
 var recording_icon: Texture2D
 var rov_recording := false
+var rov_static: ColorRect
+var rov_static_material: ShaderMaterial
+
+func set_rov_interference(strength: float) -> void:
+	if strength <= 0.0:
+		if rov_static != null: rov_static.hide()
+		return
+	if rov_static == null:
+		rov_static = ColorRect.new()
+		rov_static.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rov_static_material = ShaderMaterial.new()
+		rov_static_material.shader = preload("res://rov_static.gdshader")
+		rov_static.material = rov_static_material
+		add_child(rov_static)
+		if casing_panel != null: move_child(rov_static,casing_panel.get_index())
+	var rect := Rect2(Vector2.ZERO,size) if screen_only else screen
+	rov_static.position = rect.position
+	rov_static.size = rect.size
+	rov_static_material.set_shader_parameter("strength",strength)
+	rov_static_material.set_shader_parameter("clear_recording_indicator",rov_recording and recording_icon != null)
+	if rov_recording and recording_icon != null:
+		var indicator := recording_rect(rect)
+		var start := (indicator.position - rect.position) / rect.size
+		var end := (indicator.end - rect.position) / rect.size
+		rov_static_material.set_shader_parameter("recording_bounds",Vector4(start.x,start.y,end.x,end.y))
+	rov_static.show()
+
 func set_camera_feed(texture: Texture2D) -> void:
 	camera_feed = texture
 	material = null if texture != null else fog_material

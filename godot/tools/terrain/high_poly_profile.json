@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "strength": 0.25,
+  "rounding": 1.0,
+  "pipe_rounding": true,
+  "can_rounding": true,
+  "exploration_aliases": [
+    "terrain-asset-v1:d19706d27172c4b9b7d42ae2e02178b28ca67f5686543cb01c6f734d5e513217"
+  ]
+}

@@ -115,8 +115,9 @@ func run() -> void:
 	check(agent.flee > 0 and is_equal_approx(agent.health.remaining,9.7),"Unarmed trader flees damage with original sustain")
 	agent.take_weapon_damage(100)
 	check(agent.dead and not agent.get_parent().visible and agent.body.collision_layer == 0,"Destroyed trader cannot travel or collide")
+	for hull in get_nodes_in_group("trader_wrecks"): hull._detonate()
 	var wrecks := get_nodes_in_group("trader_wrecks")
-	check(wrecks.size() == 1 and wrecks[0].pieces.size() > 0 and wrecks[0].bubbles.amount == 96,"Civilian destruction produces submarine fragments and bubbles")
+	check(wrecks.size() == 1 and wrecks[0].pieces.size() > 0 and not traffic.bubbles.particles.is_empty(),"Civilian destruction produces submarine fragments and bubbles")
 	var malformed: Dictionary = traffic.snapshot(); malformed.values()[0].destination = 5
 	check(not Traffic.valid_snapshot(malformed),"Aquatraz destinations rejected from saved traffic")
 	malformed = traffic.snapshot(); malformed.values()[0].pose[0] = NAN

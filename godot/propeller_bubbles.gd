@@ -77,6 +77,19 @@ func emit_from(index: int, origin: Vector3, exhaust: Vector3, power: float, rate
 		particles.append({"budget_birth":birth_serial,"replay_id":replay_serial,"position": origin + jitter, "drift": exhaust * signf(power) * random.randf_range(0.06, 0.14),
 			"rise": random.randf_range(0.8, 1.2), "age": 0.0, "size": random.randf_range(0.045, 0.10)})
 
+func emit_blast_cloud(origin: Vector3, diameter: float) -> void:
+	var radius := clampf(diameter * 0.22,0.15,1.2)
+	for index in range(96):
+		if particles.size() >= capacity or bubble_limit == 0 or origin.y >= surface_height: break
+		if bubble_limit > 0:
+			while total_bubbles() >= bubble_limit: _discard_oldest()
+		var spread := Vector3(random.randf_range(-1.0,1.0),random.randf_range(-0.2,0.2),random.randf_range(-1.0,1.0))
+		birth_serial += 1
+		replay_serial += 1
+		particles.append({"budget_birth":birth_serial,"replay_id":replay_serial,"position":origin + spread * radius,
+			"drift":spread * random.randf_range(0.2,0.5),"rise":random.randf_range(0.8,1.2),
+			"age":0.0,"size":random.randf_range(0.045,0.16),"surface_bound":is_finite(surface_height)})
+
 func _physics_process(delta: float) -> void:
 	advance(delta,false)
 
@@ -92,7 +105,7 @@ func advance(delta: float, upload: bool = true) -> void:
 		var age: float = float(particle.age)+delta
 		var drift: Vector3 = particle.drift
 		var point: Vector3 = particle.position+drift*drift_step+Vector3.UP*float(particle.rise)*delta
-		if point.y >= surface_height or age >= float(particle.get("lifetime",120.0)): continue
+		if point.y >= surface_height or (not particle.get("surface_bound",false) and age >= float(particle.get("lifetime",120.0))): continue
 		particle.age = age; particle.position = point; particle.drift = drift*decay
 		particles[count] = particle; count += 1
 	particles.resize(count)

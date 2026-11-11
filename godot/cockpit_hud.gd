@@ -178,6 +178,7 @@ func _refresh_camera_feed() -> void:
 	var texture: Texture2D = bottom_view.get_texture() if selected != null else null
 	if displays[2].camera_feed != texture: displays[2].set_camera_feed(texture)
 	displays[2].rov_recording = rover != null and rover.recording > 0
+	displays[2].set_rov_interference(rover.camera_interference() if rover != null else 0.0)
 	if rover == null: return
 	rov_camera.global_transform = rover.camera_pose()
 	var main_camera := get_viewport().get_camera_3d()

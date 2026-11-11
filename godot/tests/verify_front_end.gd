@@ -7,12 +7,14 @@ var failures := 0
 var update_continued := false
 func update_offer(updates: CanvasLayer) -> void:
 	update_continued = not await updates.offer({"version":"0.8.3","url":"https://github.com/Hendar23/OpenSC/releases/tag/v0.8.3"})
+func load_for_pause_check(game: Node, result: Array[bool]) -> void:
+	result.append(await game._load_saved_game(6))
 func key_event(code: int) -> InputEventKey:
 	var event := InputEventKey.new(); event.keycode = code; event.pressed = true; return event
 func _initialize() -> void:
 	preload("res://asset_cache.gd").enabled = false
 	var storage = preload("res://player_storage.gd")
-	storage.root_override = "res://tests/cache-front-end-fixtures"; storage.ensure_parent(storage.preferences_path())
+	storage.root_override = "user://front-end-fixture-" + str(OS.get_process_id()); storage.ensure_parent(storage.preferences_path())
 	var config := ConfigFile.new(); config.set_value("game","folder",OS.get_environment("OPENSC_TEST_GAME_FOLDER")); config.save(storage.preferences_path())
 	call_deferred("_run")
 func check(condition: bool,message: String) -> void:
@@ -31,18 +33,29 @@ func _run() -> void:
 	game.front_end.update_progress("Loading environment: 1 / 4 sectors")
 	check(game.front_end.progress_bar.value >= progress,"Loading progress never moves backwards")
 	game.front_end.update_progress("Converting assets: environment textures: 1 / 2")
-	check(game.front_end.loading_status.text == "Converting assets" and game.front_end.progress_bar.value >= 48.0,"Cold asset conversion updates both the caption and stage progress")
+	check(game.front_end.loading_status.text == "Converting assets: environment textures: 1 / 2" and game.front_end.progress_bar.value >= 48.0,"Cold asset conversion shows detail/counts and stage progress")
 	game.front_end.update_progress("Loading cached environment")
-	check(game.front_end.loading_status.text == "Loading","Cached loading does not claim to convert assets")
+	check(game.front_end.loading_status.text == "Loading cached environment","Cached loading identifies the current operation")
 	game.front_end.update_progress("Checking cave light: 50%")
-	check(game.front_end.loading_status.text == "Loading","Internal loading details stay out of the caption")
+	check(game.front_end.loading_status.text == "Checking cave light: 50%","Lighting progress remains visible")
 	if DisplayServer.get_name() != "headless":
 		root.mode = Window.MODE_WINDOWED; root.size = Vector2i(1280,720)
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/startup-loading-preview.png")
-	for frame in range(1200):
-		if game.startup_complete: break
+	var saw_dock_defence := false
+	var loading_paused_gameplay := true
+	var startup_deadline := Time.get_ticks_msec() + 60000
+	while not game.startup_complete and Time.get_ticks_msec() < startup_deadline:
+		if is_instance_valid(game.world_root) and game.loading_canvas.visible:
+			var defence := game.world_root.get_node_or_null("DockDefence")
+			if defence != null:
+				saw_dock_defence = true
+				loading_paused_gameplay = loading_paused_gameplay and not defence.can_process()
 		await process_frame
+	if not game.startup_complete:
+		check(false, "Startup timed out during: " + game.front_end.loading_status.text)
+		quit(1); return
+	check(saw_dock_defence and loading_paused_gameplay,"Dock zappers stay paused while the loading screen covers the prepared world")
 	check(game.startup_complete and game.front_end.menu_layer.visible and paused,"Startup finishes at the live menu with gameplay paused")
 	check(game.gameplay_catalogue.tables.equipment.records.size() == 30 and game.gameplay_catalogue.warnings.is_empty(),"Startup imports original gameplay data before opening the menu")
 	check(game.front_end.menu_picture.texture != null and game.front_end.buttons.new_game.text == "New Game" and game.front_end.progress_bar.value == 100.0,"Title artwork and labelled buttons load and startup progress completes")
@@ -169,7 +182,7 @@ func _run() -> void:
 	game._set_map_open(true)
 	Input.parse_input_event(key_event(KEY_ESCAPE)); await process_frame
 	check(not game.map_open and not paused,"Escape closes map without opening main menu")
-	check(absf(game.day_night.hour - game.new_game_hour) < 0.1,"First New Game starts at the authored hour even if the live clock is at night")
+	check(absf(game.day_night.hour - 10.0) < 0.1,"First New Game starts at 10:00 even if the live clock is at night")
 	var pilot_position: Vector3 = game.pilot.global_position
 	var original_world: Node3D = game.world_root
 	var camera_pose: Transform3D = game.camera.global_transform
@@ -222,7 +235,7 @@ func _run() -> void:
 		await process_frame
 	check(not game.world_loading and not paused and game.pilot.global_position.distance_to(game.pilot.spawn) < 0.1,"New Game from the menu resets the submarine to its spawn")
 	check(game.world_root == original_world and game.cockpit_hud.map_data == map and not game.cockpit_hud.map_data.is_explored(distant),"New Game reuses the world and map renderer while clearing exploration")
-	check(absf(game.day_night.hour - game.new_game_hour) < 0.1 and game.day_night.daylight() > 0.99,"Restarting New Game restores the authored starting hour and lighting")
+	check(absf(game.day_night.hour - 10.0) < 0.1 and game.day_night.daylight() > 0.99,"Restarting New Game restores 10:00 and daylight")
 	game._show_main_menu()
 	game.front_end.buttons.mods.pressed.emit()
 	game.mod_panel._apply()
@@ -238,6 +251,19 @@ func _run() -> void:
 		if game.has_started_game: break
 		await process_frame
 	check(game.has_started_game and not paused and not game.front_end.menu_layer.visible,"New Game is playable after applying mods")
+	var port: Dictionary = game.docking.ports[0]
+	game.docking.current = port
+	game.docking.stage = game.Docking.Stage.DOCKED
+	game.pilot.active = false
+	check(game.save_games.write(6,game._save_snapshot("Loading pause fixture")) == OK,"Writes an isolated docked save")
+	var save_load: Array[bool] = []
+	load_for_pause_check(game,save_load)
+	check(game.loading_canvas.visible and paused and not game.world_root.can_process(),"Loading a save pauses the world before showing the loading screen")
+	for frame in range(1200):
+		if not save_load.is_empty(): break
+		await process_frame
+	check(not save_load.is_empty() and save_load[0] and paused and not game.loading_canvas.visible,"Save restoration returns to the paused dock")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.path(6)))
 	# Actual game input must allow GUI mouse clicks through the loading guard.
 	game.world_loading = true; game.front_end.show_loading()
 	game.startup_updates = preload("res://game_updates.gd").new()

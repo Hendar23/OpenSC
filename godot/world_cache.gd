@@ -12,8 +12,11 @@ static func terrain_signature(world: Node3D) -> String:
 	var records: Array = [world.get_meta("bounds", AABB()), world.get_meta("surface_height", 0.0)]
 	for node in world.get_children():
 		if node is MeshInstance3D and node.mesh != null and node.name != "WaterSurface":
-			records.append([node.transform, digest(node.mesh.get_faces())])
+			records.append([node.transform, digest(terrain_source(node).get_faces())])
 	return digest(records)
+
+static func terrain_source(node: MeshInstance3D) -> Mesh:
+	return node.get_meta("terrain_source_mesh", node.mesh)
 
 static func collision_signature(world: Node3D, mask: int) -> String:
 	var records: Array = [world.get_meta("bounds", AABB()), world.get_meta("surface_height", 0.0)]

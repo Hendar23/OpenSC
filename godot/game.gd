@@ -81,7 +81,6 @@ var water_environment: Environment
 var sun: DirectionalLight3D
 var surface_material: ShaderMaterial
 var day_night := DayNight.new()
-var new_game_hour := 10.0
 var daylight_controls := {}
 var clock_label: Label
 var canvas: CanvasLayer
@@ -154,6 +153,7 @@ var map_overlay: CanvasLayer
 var expanded_map: Control
 var map_screen: Control
 var map_open := false
+var first_person_crosshair: Control
 var cockpit_hud: CanvasLayer
 var equipment: Node3D
 var equipment_controls := {}
@@ -210,6 +210,9 @@ func _ready() -> void:
 	particles.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(particles)
 	_build_interface()
+	var crosshair_layer := CanvasLayer.new(); crosshair_layer.layer = 2; add_child(crosshair_layer)
+	first_person_crosshair = preload("res://first_person_crosshair.gd").new()
+	first_person_crosshair.game = self; crosshair_layer.add_child(first_person_crosshair)
 	photo_mode = preload("res://photo_mode.gd").new(); add_child(photo_mode); photo_mode.setup(self)
 	fmv = preload("res://fmv_player.gd").new(); add_child(fmv); fmv.setup(self)
 	_load_preferences()
@@ -336,8 +339,6 @@ func _apply_mods() -> void:
 	front_end.hide_menu()
 	has_started_game = false
 	front_end.can_resume = false
-	# Loading awaits physics frames, which cannot advance in the paused menu.
-	get_tree().paused = false
 	_set_camera_mode(false)
 	await _start_game(game_folder)
 	if is_instance_valid(world_root): _show_main_menu()

@@ -63,6 +63,8 @@ func _run() -> void:
 	press(menu,"menu_down"); check(menu.bubble_button.has_focus(),"Down selects maximum bubbles")
 	press(menu,"menu_left"); check(menu.bubble_limit == 100,"Controller lowers maximum bubbles")
 	press(menu,"menu_right"); check(menu.bubble_limit == 200,"Controller restores default bubble limit")
+	press(menu,"menu_down"); check(menu.crosshair_button.has_focus() and menu.crosshair_enabled,"Crosshair defaults On and is reachable by controller")
+	press(menu,"menu_accept"); check(not menu.crosshair_enabled,"Confirm turns the crosshair Off")
 	press(menu,"menu_down"); check(menu.back.has_focus(),"Down selects Back")
 	press(menu,"menu_accept"); check(not menu.visible and front.buttons.gameplay.has_focus(),"Back restores Gameplay option focus")
 	paused = false
@@ -78,6 +80,7 @@ func _run() -> void:
 	config.set_value("gameplay","enhanced_explosions",false); config.save(path)
 	var restored := Gameplay.new(); restored.settings_path = path; front.add_child(restored)
 	check(restored.bubble_limit == 500,"Bubble limit persists under General settings")
+	check(not restored.crosshair_enabled,"First-person crosshair choice saves and loads")
 	check(restored.zapper_auto_aim,"Gameplay choice loads on next launch")
 	check(restored.wildlife_limit == 100,"Wildlife cap loads on next launch")
 	check(not restored.sun_shafts_enabled,"Sun shafts choice saves and loads")

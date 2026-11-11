@@ -220,6 +220,10 @@ func advance_recording(delta: float) -> void:
 	recording = maxf(0,recording-step)
 	if recording == 0 and jobs != null and jobs.family == "support" and jobs.controller != null: jobs.controller.rov_recorded(exposure/4.0)
 
+func camera_interference() -> float:
+	var distance := global_position.distance_to(tools.equipment.pilot.global_position)
+	return clampf(inverse_lerp(SIGNAL_FADE_DISTANCE,SIGNAL_LOSS_DISTANCE,distance),0.0,1.0)
+
 func camera_pose() -> Transform3D:
 	return get_global_transform_interpolated()*Transform3D(Basis.IDENTITY,Vector3(0,0.04,-0.15))
 

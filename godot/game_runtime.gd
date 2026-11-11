@@ -7,7 +7,6 @@ func _init(context: Node3D) -> void:
 	game = context
 
 const Docking = preload("res://docking_controller.gd")
-const SessionExplosion = preload("res://mine_explosion.gd")
 
 func _process(delta: float) -> void:
 	if game.fmv != null and game.fmv.active: return
@@ -71,16 +70,16 @@ func _submarine_health_changed(remaining: float, capacity: float) -> void:
 
 func _submarine_destroyed() -> void:
 	game.mission_runtime.finish(false)
-	game.mission_runtime.outcome.play_game_over(game.game_folder)
 	game._set_map_open(false)
 	game.weapons.update_fire(false,0)
-	var wreck := preload("res://submarine_death.gd").new(); game.world_root.add_child(wreck)
-	wreck.global_position = game.pilot.global_position
-	var mounts: Array[Node3D] = [game.weapons.muzzle]
-	for item in game.equipment.mounted: mounts.append(item.mount)
-	wreck.setup_submarine(game.pilot,game.submarine_bubble_texture,mounts)
-	var burst := SessionExplosion.new(); game.world_root.add_child(burst); burst.global_position = game.pilot.global_position
-	burst.setup(game.submarine_explosion_frames,maxf(1.0,game.pilot.collision_height() * 3.0),game.submarine_explosion_sound)
+	var sources: Array[Node3D] = [game.pilot.visual,game.weapons.muzzle]
+	for item in game.equipment.mounted: sources.append(item.mount)
+	var wreck := preload("res://falling_submarine.gd").launch(game.submarine_traffic,game.pilot,sources,game.pilot.fatal_momentum,true)
+	wreck.detonated.connect(_show_game_over,CONNECT_ONE_SHOT)
 	game.equipment.reset_towing()
 	game.weapons.hide(); game.equipment.hide()
 	game._set_camera_mode(false)
+
+func _show_game_over() -> void:
+	if is_instance_valid(game.pilot) and game.pilot.dead:
+		game.mission_runtime.outcome.play_game_over(game.game_folder)

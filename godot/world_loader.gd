@@ -1,7 +1,11 @@
 extends RefCounted
 
 const Assets = preload("res://clump_loader.gd")
+const TerrainAsset = preload("res://terrain_asset.gd")
+const WorldCache = preload("res://world_cache.gd")
+const Mods = preload("res://mod_registry.gd")
 const CHUNK_SIZE := 48.0
+const WATER_SURFACE_DROP := 0.75
 
 static func is_natural_ground(texture_name: String) -> bool:
 	var texture := texture_name.to_upper()
@@ -11,11 +15,20 @@ static func is_natural_ground(texture_name: String) -> bool:
 
 # Decode the static atomic sectors in the supplied SCEN1.BSP. Game objects
 # and mission state are stored separately and are not reconstructed here.
-static func load_world(path: String, tree: SceneTree, progress: Callable) -> Node3D:
+static func load_world(path: String, tree: SceneTree, progress: Callable, use_replacement: bool = true) -> Node3D:
 	var disk_cache := preload("res://asset_cache.gd")
+	if use_replacement:
+		Mods.ensure()
+		for entry in Mods.candidates("terrain.scen1"):
+			var replacement := await TerrainAsset.load_asset(entry.path, path.get_base_dir().get_base_dir(), tree, progress, _terrain_material)
+			if replacement != null:
+				replacement.set_meta("terrain_asset_hash", disk_cache.fingerprint(entry.path))
+				return replacement
+			Mods.note("Could not load terrain from %s" % entry.name)
 	var cache_key := Assets.conversion_key("world", path)
 	var cached := disk_cache.load_scene(cache_key)
 	if cached != null:
+		_apply_water_height(cached)
 		progress.call("Loading cached environment")
 		await tree.process_frame
 		return cached
@@ -145,6 +158,7 @@ static func load_world(path: String, tree: SceneTree, progress: Callable) -> Nod
 		instance.name = "Material_%d_%d_%d" % [material_id,buffer.cell.x,buffer.cell.y]
 		instance.set_meta("terrain_material",material_id)
 		instance.set_meta("terrain_texture", str(references[material_id].texture).to_upper())
+		instance.set_meta("terrain_reference", references[material_id])
 		instance.set_meta("terrain_cell",buffer.cell)
 		instance.mesh = mesh
 		root.add_child(instance)
@@ -155,12 +169,24 @@ static func load_world(path: String, tree: SceneTree, progress: Callable) -> Nod
 	# Legacy BSP sectors use positive coordinates; database matrices are relative
 	# to the world origin stored in the BSP header. Keep the existing terrain view.
 	root.set_meta("database_offset", -Assets._vector(data, 28))
-	root.set_meta("surface_height", upper.y)
+	_apply_water_height(root)
 	root.set_meta("triangles", triangle_total)
 	root.set_meta("sectors", sectors.size())
 	root.set_meta("asset_cache_key", cache_key)
 	disk_cache.save_scene(cache_key, root)
 	return root
+
+
+static func _apply_water_height(root: Node3D) -> void:
+	var bounds: AABB = root.get_meta("bounds")
+	var height := bounds.end.y - WATER_SURFACE_DROP
+	root.set_meta("surface_height", height)
+	var ceiling := root.get_node_or_null("WaterSurfaceCollision") as StaticBody3D
+	if ceiling != null:
+		var collider := ceiling.get_child(0) as CollisionShape3D
+		var plane := WorldBoundaryShape3D.new()
+		plane.plane = Plane(Vector3.DOWN, -height)
+		collider.shape = plane
 
 
 static func _terrain_material(reference: Dictionary, folder: String, cache: Dictionary) -> StandardMaterial3D:
@@ -207,12 +233,13 @@ static func add_collision(root: Node3D, tree: SceneTree, progress: Callable) -> 
 	var cells := {}
 	for child in root.get_children():
 		if not child is MeshInstance3D: continue
-		var center: Vector3 = child.mesh.get_aabb().get_center()
+		var mesh := WorldCache.terrain_source(child)
+		var center: Vector3 = mesh.get_aabb().get_center()
 		var cell: Vector2i = child.get_meta("terrain_cell",Vector2i(floori(center.x / CHUNK_SIZE),floori(center.z / CHUNK_SIZE)))
 		if not cells.has(cell): cells[cell] = {"faces":PackedVector3Array(),"solid":PackedVector3Array(),"plantable":PackedByteArray()}
 		var buffer: Dictionary = cells[cell]
-		for surface in range(child.mesh.get_surface_count()):
-			var arrays: Array = child.mesh.surface_get_arrays(surface)
+		for surface in range(mesh.get_surface_count()):
+			var arrays: Array = mesh.surface_get_arrays(surface)
 			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 			var faces := PackedVector3Array()
 			if arrays[Mesh.ARRAY_INDEX] != null and not arrays[Mesh.ARRAY_INDEX].is_empty():
@@ -224,7 +251,7 @@ static func add_collision(root: Node3D, tree: SceneTree, progress: Callable) -> 
 			plantable.fill(1 if is_natural_ground(str(child.get_meta("terrain_texture", ""))) else 0)
 			buffer.plantable.append_array(plantable)
 			# Leaves must not be mistaken for solid cave ceilings by shelter rays.
-			var material := child.mesh.surface_get_material(surface) as StandardMaterial3D
+			var material := mesh.surface_get_material(surface) as StandardMaterial3D
 			if material != null and material.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED: buffer.solid.append_array(faces)
 	var count := 0
 	var plantable_shapes: Array[PackedByteArray] = []
@@ -266,8 +293,9 @@ static func _add_can_base_collision(root: Node3D) -> void:
 	var panels: Array[Dictionary] = []
 	for mesh in root.get_children():
 		if not mesh is MeshInstance3D or str(mesh.get_meta("terrain_texture","")).to_upper() != "CANTOP": continue
-		for surface in range(mesh.mesh.get_surface_count()):
-			var arrays: Array = mesh.mesh.surface_get_arrays(surface)
+		var collision_mesh := WorldCache.terrain_source(mesh)
+		for surface in range(collision_mesh.get_surface_count()):
+			var arrays: Array = collision_mesh.surface_get_arrays(surface)
 			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 			var indices := PackedInt32Array()
 			if arrays[Mesh.ARRAY_INDEX] != null: indices = arrays[Mesh.ARRAY_INDEX]

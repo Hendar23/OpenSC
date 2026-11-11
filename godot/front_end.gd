@@ -3,6 +3,8 @@ const Bindings = preload("res://input_bindings.gd")
 
 const BMP = preload("res://legacy_bmp.gd")
 const Mods = preload("res://mod_registry.gd")
+const DISCORD_URL := "https://discord.gg/drky2beUu"
+var link_opener: Callable = OS.shell_open
 const TITLE_PATH := "res://game_assets/ui/title.png"
 const TITLE_TEXTURE: Texture2D = preload(TITLE_PATH)
 const LegacyAudio = preload("res://legacy_audio.gd")
@@ -81,6 +83,9 @@ func _ready() -> void:
 	loading_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	loading_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	loading_status.add_theme_font_size_override("font_size",12)
+	loading_status.add_theme_color_override("font_shadow_color", Color.BLACK)
+	loading_status.add_theme_constant_override("shadow_outline_size", 2)
+	loading_status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	progress_bar.add_child(loading_status)
 	loading_status.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_menu()
@@ -141,9 +146,14 @@ func _build_menu() -> void:
 		for index in entries.size():
 			if entries[index].get("id") == "back": back = index; break
 		entries.insert(back,{"id":"player_folder","label":"Open Player Folder"})
+	entries = entries.filter(func(entry: Dictionary) -> bool: return entry.get("id") != "discord")
+	var mods_index := -1
+	for index in entries.size():
+		if entries[index].get("id") == "mods": mods_index = index; break
+	entries.insert(mods_index + 1 if mods_index >= 0 else entries.size(),{"id":"discord","label":"Discord"})
 	for entry in entries:
 		var id := str(entry.get("id",""))
-		if id not in ["new_game","load","continue","options","back","controls","mods","audio","graphics","gameplay","player_folder","exit"] or buttons.has(id): continue
+		if id not in ["new_game","load","continue","options","back","controls","mods","audio","graphics","gameplay","player_folder","discord","exit"] or buttons.has(id): continue
 		var button := Button.new(); button.text = str(entry.get("label",id))
 		if id == "gameplay": button.text = "General"
 		button.position = Vector2(rect[0],rect[1] + button_order.size() * float(menu_config.button_spacing))
@@ -153,7 +163,7 @@ func _build_menu() -> void:
 		var hover := normal.duplicate() as StyleBoxFlat; hover.bg_color = Color(0.04,0.23,0.28,0.95)
 		button.add_theme_stylebox_override("normal",normal); button.add_theme_stylebox_override("hover",hover)
 		button.add_theme_stylebox_override("pressed",hover); button.add_theme_stylebox_override("focus",hover)
-		button.set_meta("available",id in ["new_game","options","back","controls","audio","graphics","gameplay","player_folder","mods","exit"])
+		button.set_meta("available",id in ["new_game","options","back","controls","audio","graphics","gameplay","player_folder","mods","discord","exit"])
 		if not button.get_meta("available"): button.tooltip_text = "Not available yet"
 		menu_layout.add_child(button); buttons[id] = button; button_order.append(id)
 		button.mouse_entered.connect(func() -> void: _enter_button(button))
@@ -293,6 +303,7 @@ func _activate_button(id: String) -> void:
 			if result != OK: push_warning("Cannot open player folder: "+error_string(result))
 		"back": _set_menu_page("main")
 		"mods": mods_requested.emit()
+		"discord": link_opener.call(DISCORD_URL)
 		"controls": controls_menu.open_menu()
 		"audio":
 			_set_audio_page_visible(true)
@@ -331,7 +342,7 @@ func show_loading() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func update_progress(message: String) -> void:
-	loading_status.text = "Converting assets" if message.begins_with("Converting assets") else "Loading"
+	loading_status.text = message
 	# Keep conversion and cached-loading captions separate from stage progress.
 	message = message.replace("Converting assets: environment textures", "Loading environment textures").replace("Converting assets: environment:", "Loading environment:")
 	var fraction := 0.0

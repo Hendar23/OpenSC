@@ -468,16 +468,13 @@ func take_weapon_damage(strength: float, source: Vector3 = Vector3.ZERO) -> void
 	if smoke != null: smoke.set_health(health.remaining * 10)
 	if health.remaining > 0: return
 	dead = true; release_port(); get_parent().hide(); set_hull_collision(false)
+	_destroy_visuals()
 	destroyed.emit(preload("res://entity_identity.gd").of(self),preload("res://entity_identity.gd").of(damage_attacker) if is_instance_valid(damage_attacker) else "")
 	respawn = float(tuning.npc_respawn_delay)
-	_destroy_visuals()
 
 func _destroy_visuals() -> void:
-	var wreck := preload("res://submarine_death.gd").new(); system.get_parent().add_child(wreck)
-	wreck.global_position = global_position; wreck.setup_machine(get_parent(),get_parent(),system.bubble_texture,[],body.velocity)
+	var wreck := preload("res://falling_submarine.gd").launch(system,get_parent(),[get_parent()],body.velocity)
 	wreck.add_to_group("trader_wrecks")
-	var effect := preload("res://mine_explosion.gd").new(); system.get_parent().add_child(effect); effect.global_position = global_position
-	effect.setup(system.explosion_frames,maxf(0.4,bounds.size.length()),system.explosion_sound)
 
 func _react_to_damage(source: Vector3) -> void:
 	attacker = source; flee = 8; path.clear(); wait = 0; destination = 0; release_port()

@@ -177,12 +177,7 @@ func _queen_dead() -> void:
 
 func _tether_broken(ship: RigidBody3D) -> void:
 	if resolved or jobs.id.is_empty(): return
-	var traffic: Node = jobs.game.submarine_traffic
-	var fireball := preload("res://mine_explosion.gd").new()
-	jobs.game.world_root.add_child(fireball); fireball.global_position = ship.global_position
-	fireball.setup(traffic.explosion_frames,2.0,traffic.explosion_sound); fireball.name = "CaptorExplosion"
-	var wreck := preload("res://submarine_death.gd").new(); jobs.game.world_root.add_child(wreck); wreck.global_position = ship.global_position
-	wreck.setup_machine(ship,ship.get_child(0),jobs.game.submarine_traffic.bubble_texture,[],ship.linear_velocity)
+	preload("res://falling_submarine.gd").launch(jobs.game.submarine_traffic,ship,[ship.get_child(0)],ship.linear_velocity)
 	ship.hide()
 	# The separate wreck owns the surviving visual fragments. Retire the
 	# invisible live hull too, including its mask (layer zero alone is not enough).

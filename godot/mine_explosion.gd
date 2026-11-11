@@ -5,6 +5,7 @@ var sprite: Sprite3D
 var material: ShaderMaterial
 var audio: AudioStreamPlayer3D
 var age := 0.0
+var lifetime := 3.0
 static var effect_shader: Shader
 static var enhanced_enabled := true
 static var smoke_frames: Array[Texture2D] = []
@@ -23,8 +24,8 @@ static func load_frames(folder: String, cache: Dictionary = {}) -> Array[Texture
 		var texture := Assets._load_texture(folder,"EX%d" % index,"EX%dM" % index,cache)
 		if texture != null: result.append(texture)
 	return result
-func setup(animation: Array[Texture2D], diameter: float, sound: AudioStream) -> void:
-	name = "MineExplosion"; frames = animation; enhanced = enhanced_enabled and get_tree().get_nodes_in_group("enhanced_explosions").size() < 12; size = maxf(0.1,diameter)
+func setup(animation: Array[Texture2D], diameter: float, sound: AudioStream, full_effect: bool = true) -> void:
+	name = "MineExplosion"; frames = animation; enhanced = full_effect and enhanced_enabled and get_tree().get_nodes_in_group("enhanced_explosions").size() < 12; size = maxf(0.1,diameter)
 	if not frames.is_empty():
 		sprite = Sprite3D.new(); sprite.texture = frames[0]; sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		sprite.pixel_size = maxf(0.1,diameter) / maxf(frames[0].get_width(),frames[0].get_height())
@@ -32,7 +33,11 @@ func setup(animation: Array[Texture2D], diameter: float, sound: AudioStream) -> 
 		material = preload("res://natural_light.gd").billboard_material(frames[0])
 		material.set_shader_parameter("emission_color",Color.WHITE); material.set_shader_parameter("has_emission_texture",true); material.set_shader_parameter("emission_texture",frames[0])
 		sprite.material_override = material; add_child(sprite)
+	if not full_effect:
+		lifetime = maxf(0.1,frames.size() / FRAME_RATE)
+		return
 	if enhanced:
+		lifetime = 4.5
 		add_to_group("enhanced_explosions"); _build_layers()
 	for receiver in get_tree().get_nodes_in_group("explosion_camera_shake"):
 		receiver.blast(global_position,size)
@@ -49,7 +54,7 @@ func _process(delta: float) -> void:
 		else:
 			sprite.texture = frames[index]; material.set_shader_parameter("albedo_texture",frames[index]); material.set_shader_parameter("emission_texture",frames[index])
 	if enhanced: _animate_layers()
-	if age >= (4.5 if enhanced else 3.0): queue_free()
+	if age >= lifetime: queue_free()
 
 func _quad(texture: Texture2D, glow: bool) -> MeshInstance3D:
 	var node := MeshInstance3D.new(); node.mesh = QuadMesh.new()

@@ -4,6 +4,7 @@ signal destroyed
 var max_health := 100.0
 var health := 100.0
 var dead := false
+var fatal_momentum := Vector3.ZERO
 var radiation_exposed := false
 var docking_in_progress := false
 const Damage = preload("res://original_damage.gd")
@@ -29,6 +30,7 @@ func take_damage(amount: float, _source: Vector3 = Vector3.ZERO, feedback: bool 
 	if feedback and health > 0.0 and impact_rumble != null: impact_rumble.damage(loss,max_health)
 	health_changed.emit(health,max_health)
 	if health <= 0.0:
+		fatal_momentum = velocity
 		dead = true; controls_enabled = false; active = false
 		velocity = Vector3.ZERO; angular_velocity = Vector3.ZERO
 		collision_layer = 0; collision_mask = 0

@@ -44,9 +44,14 @@ func _start_game(folder: String) -> void:
 	if not Paths.valid_game_folder(folder):
 		game._fail_startup("Could not find CLUMPS/SUB.DFF and DATA/SCEN1.BSP in that folder.")
 		return
+	var tree := game.get_tree()
+	var was_paused := tree.paused
+	tree.paused = true
 	game.world_loading = true
+	if is_instance_valid(game.menu_backdrop): game.menu_backdrop.close()
 	game.front_end.load_art(folder)
 	game.front_end.show_loading()
+	game._progress("Loading gameplay data")
 	await game.get_tree().process_frame
 	game.gameplay_catalogue = OriginalGameData.load_catalogue(folder)
 	for warning in game.gameplay_catalogue.warnings: Mods.note(warning)
@@ -76,13 +81,20 @@ func _start_game(folder: String) -> void:
 	if game.world_root != null:
 		game.world_root.free()
 		game.world_root = null
-	if not await _load_environment(folder): return
-	await _populate_world(folder)
-	await _setup_vehicle(folder)
-	await _setup_actors(folder)
-	await _finish_start(folder)
+	# Terrain and navigation probes need the physics server, while gameplay
+	# callbacks and audio stay paused under the loading screen.
+	PhysicsServer3D.set_active(true)
+	if await _load_environment(folder):
+		await _populate_world(folder)
+		await _setup_vehicle(folder)
+		await _setup_actors(folder)
+		await _finish_start(folder)
+	tree.paused = was_paused
+	PhysicsServer3D.set_active(not was_paused)
 
 func _load_environment(folder: String) -> bool:
+	game._progress("Preparing player submarine")
+	await game.get_tree().process_frame
 	game.model = Assets.load_submarine(folder.path_join("CLUMPS/SUB.DFF"))
 	if game.model == null:
 		game._fail_startup("The submarine model could not be read.")
@@ -102,16 +114,22 @@ func _load_environment(folder: String) -> bool:
 	map_data = MapDocument.load_active() if game.use_map_overrides else {}
 	game.wildlife = null
 	if not map_data.is_empty(): MapDocument.apply_entities(game.world_root, folder, map_data)
-	await preload("res://scenery_scatter.gd").populate(game.world_root, folder, game.get_tree(), game.scenery_seed)
+	game._progress("Placing mod scenery")
+	await game.get_tree().process_frame
+	await preload("res://scenery_scatter.gd").populate(game.world_root, folder, game.get_tree(), game.scenery_seed, game._progress)
 	OriginalGameData.apply_city_names(game.world_root,game.gameplay_catalogue)
 	game.plant_current.attach(game.world_root)
 	game._add_water_surface()
 	await game.get_tree().physics_frame
+	game._progress("Preparing environment lighting")
+	await game.get_tree().process_frame
 	await game.natural_light.build(game.world_root,game._progress,512,true)
 	game.game_lighting.add_cave_background()
 	return true
 
 func _populate_world(folder: String) -> void:
+	game._progress("Preparing wildlife and world objects")
+	await game.get_tree().process_frame
 	if map_data.is_empty():
 		await Creatures.populate(game.world_root, folder, game.get_tree(), game._progress)
 		var stats: Dictionary = game.gameplay_catalogue.tables.creature_stats.records
@@ -155,6 +173,8 @@ func _populate_world(folder: String) -> void:
 		for template in game.wildlife.templates.values(): game.natural_light.attach(template)
 
 func _setup_vehicle(folder: String) -> void:
+	game._progress("Preparing submarine equipment")
+	await game.get_tree().process_frame
 	if game.pilot == null:
 		game.pilot = Pilot.new()
 		game.pilot.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -256,6 +276,8 @@ func _setup_vehicle(folder: String) -> void:
 	game.pilot.active = true
 
 func _setup_actors(folder: String) -> void:
+	game._progress("Preparing ships and missions")
+	await game.get_tree().process_frame
 	if game.docking != null: game.docking.free()
 	game.docking = Docking.new()
 	game.docking.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -264,6 +286,7 @@ func _setup_actors(folder: String) -> void:
 	game.submarine_traffic = preload("res://submarine_traffic.gd").new(); game.submarine_traffic.name = "SubmarineTraffic"; game.world_root.add_child(game.submarine_traffic)
 	game.submarine_traffic.events = game.events
 	game.submarine_traffic.prepare_visual = func(visual: Node3D) -> void: game.water_visuals.attach(visual); game.natural_light.attach(visual)
+	game.submarine_traffic.wreck_blast = game.object_population._exploded
 	game.submarine_traffic.setup(game.world_root,folder,game.docking.ports,game.cockpit_hud.map_data,game.pilot,func(faction: int) -> void:
 		game.player_progress.standing[str(faction)] = "bad"
 		for turret in game.turret_system.turrets:
@@ -303,7 +326,6 @@ func _finish_start(folder: String) -> void:
 	game.pilot_mode = true
 	game.world_root.remove_meta("world_loading")
 	game.ground_traffic.set_simulating(true)
-	game.world_loading = false
 	game.loaded_world_assets = game._world_asset_key()
 	game.export_all_button.disabled = false
 	game.status_label.text = str(game.world_root.get_meta("scenery_summary", "Piloting ready."))
@@ -322,15 +344,19 @@ func _finish_start(folder: String) -> void:
 		game.world_root.add_child(game.sun_shafts); game.sun_shafts.setup(game)
 	game.sun_shafts.brightness = game.sun_shafts_brightness_slider.value / 100.0
 	game.sun_shafts.set_enabled(game.front_end.gameplay_menu.sun_shafts_enabled)
+	PhysicsServer3D.set_active(false)
+	game._progress("Preparing mission assets")
 	await preload("res://mission_assets.gd").prepare(game)
-	game.world_loading = true
 	await game.fmv.prepare(folder,game._progress)
-	game.world_loading = false
 	game.front_end.progress_bar.value = 95.0
+	game._progress("Preparing map")
 	if game.show_start_menu and DisplayServer.get_name() != "headless":
 		for frame in range(600):
 			if game.cockpit_hud.map_data.scenery_baked: break
 			await game.get_tree().process_frame
+	await preload("res://asset_cache.gd").maintain(game.get_tree(), game._progress)
+	game._progress("Ready")
 	game.front_end.progress_bar.value = 100.0
 	if not game.loading_save: game.loading_canvas.visible = false
+	game.world_loading = false
 	game.game_settings.save_player_preferences()

@@ -8,7 +8,10 @@ const ANIMATED := ["PTRAZ","ENDIRIS","SWITCH","BLOWFISH","PWALKER","SILVER","BAD
 static func prepare(game: Node) -> void:
 	var loading: bool = game.world_loading; game.world_loading = true
 	var budget := Time.get_ticks_usec()
+	var prepared := 0
 	for model in MODELS+ANIMATED:
+		prepared += 1
+		game._progress("Preparing mission models: %d / %d" % [prepared, MODELS.size() + ANIMATED.size()])
 		var path: String = game.game_folder.path_join("CLUMPS/"+model+".DFF")
 		if FileAccess.file_exists(path):
 			var visual := Assets.load_clump(path,PackedStringArray(),model in ANIMATED)
@@ -27,12 +30,14 @@ static func prepare(game: Node) -> void:
 		if str(id).begins_with("audio."):
 			for entry in preload("res://mod_registry.gd").candidates(id): sounds.append(entry.path)
 	for path in sounds:
+		game._progress("Preparing mission audio")
 		if FileAccess.file_exists(path): Audio.load_file(path)
 		if Time.get_ticks_usec()-budget > 4000:
 			await game.get_tree().process_frame; budget = Time.get_ticks_usec()
 	var portraits := {}
 	for row in game.gameplay_catalogue.tables.get("radio_messages",{}).get("records",{}).values(): portraits[str(row.get("portrait",""))] = true
 	for portrait in portraits:
+		game._progress("Preparing radio portraits")
 		preload("res://docking_radio.gd").speaker_portrait(game.game_folder,portrait)
 		preload("res://docking_radio.gd").speaker_portrait(game.game_folder,portrait,true)
 		if Time.get_ticks_usec()-budget > 4000:

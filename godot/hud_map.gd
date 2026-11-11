@@ -171,7 +171,7 @@ func bake_world(world: Node3D, tree: SceneTree) -> void:
 			ancestor = ancestor.get_parent()
 		if excluded: continue
 		var copy := MeshInstance3D.new()
-		copy.mesh = source.mesh
+		copy.mesh = preload("res://world_cache.gd").terrain_source(source)
 		copy.transform = world.global_transform.affine_inverse() * source.global_transform
 		for surface in range(source.mesh.get_surface_count()):
 			copy.set_surface_override_material(surface,_map_material(source.get_active_material(surface)))
@@ -287,7 +287,7 @@ func _setup(world: Node3D, clearance: float, tree: SceneTree) -> void:
 		for node in world.get_children():
 			if not node is MeshInstance3D: continue
 			if node.name == "WaterSurface": continue
-			var faces: PackedVector3Array = node.mesh.get_faces()
+			var faces: PackedVector3Array = preload("res://world_cache.gd").terrain_source(node).get_faces()
 			for index in range(0, faces.size(), 3):
 				var a: Vector3 = node.transform * faces[index]
 				var b: Vector3 = node.transform * faces[index + 1]

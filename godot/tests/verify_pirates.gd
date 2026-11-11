@@ -20,7 +20,8 @@ func run() -> void:
 	var traffic := OpenWater.new(); world.add_child(traffic); traffic.navigation_ready = true; traffic.set_physics_process(false)
 	var target := CharacterBody3D.new(); world.add_child(target); target.position = Vector3(0,0,10); target.collision_layer = 2
 	var shape := CollisionShape3D.new(); shape.shape = SphereShape3D.new(); target.add_child(shape); traffic.player = target
-	var folder := ProjectSettings.globalize_path("res://../Original Sub Culture")
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
 	var agents: Array[Node3D] = []
 	for id in Pirate.PIRATE_MODELS:
 		var model := Document.load_model(id,folder); world.add_child(model)

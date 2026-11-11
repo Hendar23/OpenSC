@@ -18,6 +18,7 @@ var routing := false
 var traders: Array[Node3D] = []
 var ports: Array[Dictionary] = []
 var player: Node3D
+var wreck_blast: Callable
 var map: RefCounted
 var graph := AStar3D.new()
 var cells := {}

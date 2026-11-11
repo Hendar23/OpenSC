@@ -103,8 +103,8 @@ func step(delta: float) -> void:
 		if capture_visual.released:
 			jobs.phase = "return"; _route(4,6)
 			if is_instance_valid(boss):
-				var effect := preload("res://base_destruction.gd").new(); jobs.game.world_root.add_child(effect)
-				effect.setup([boss],[],jobs.game.submarine_traffic); jobs.actors.erase(boss)
+				preload("res://falling_submarine.gd").launch_boss(jobs.game.submarine_traffic,boss)
+				jobs.actors.erase(boss)
 	elif freed and not arrived and ship.stage == "berth":
 		arrived = true; jobs.radio("h18",true); later(6,"win")
 

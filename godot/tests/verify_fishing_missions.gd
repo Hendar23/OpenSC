@@ -251,6 +251,7 @@ func run() -> void:
 	var wrecks_before: int = get_nodes_in_group("trader_wrecks").size()
 	var effect_material: Material = state.cone.material_override
 	state.agent.take_weapon_damage_from(10000,game.pilot.global_position,game.pilot)
+	get_nodes_in_group("trader_wrecks").back()._detonate()
 	var wrecks := get_nodes_in_group("trader_wrecks")
 	check(wrecks.size() == wrecks_before+1 and not wrecks.back().pieces.is_empty(),"Destroyed fishing ship still produces real hull debris")
 	check(wrecks.back().pieces.all(func(piece: Dictionary) -> bool: return piece.material == null or not piece.material is StandardMaterial3D or piece.material.albedo_color != effect_material.albedo_color),"Blue vacuum field contributes no fragments to the destroyed ship")

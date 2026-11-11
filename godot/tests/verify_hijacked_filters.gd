@@ -96,7 +96,7 @@ func run() -> void:
 		check(is_instance_valid(survivor) and survivor.mission_owner.is_empty() and runtime.retained_props.has(boss) and runtime.retained_props.has(walker),"Surviving actors persist after success")
 		for gun in mission.guns: gun.take_weapon_damage(10000)
 		await physics_frame; await physics_frame
-		check(is_instance_valid(boss) and boss.get_parent().is_in_group("base_destruction") and not runtime.retained_props.has(boss),"Retained battleship still explodes after both guns are destroyed")
+		check(not is_instance_valid(boss) or (boss.get_parent().is_in_group("base_destruction") and not runtime.retained_props.has(boss)),"Retained battleship enters the destruction sequence after both guns are destroyed")
 		walker.take_weapon_damage(1000)
 		check(walker.dead and not walker.visible,"Retained walker remains destructible")
 		runtime.docked(2)

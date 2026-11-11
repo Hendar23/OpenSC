@@ -7,9 +7,12 @@ const MapDocument = preload("res://map_document.gd")
 const HUD = preload("res://cockpit_hud.gd")
 const SessionDebris = preload("res://creature_death.gd")
 const SessionExplosion = preload("res://mine_explosion.gd")
+const FallingSubmarine = preload("res://falling_submarine.gd")
 const SessionDemolition = preload("res://base_destruction.gd")
 const SessionMissile = preload("res://turret_missile.gd")
 const PlayerProgress = preload("res://player_progress.gd")
+const TerrainAsset = preload("res://terrain_asset.gd")
+const AssetCache = preload("res://asset_cache.gd")
 
 var game: Node
 
@@ -21,17 +24,19 @@ func _begin_new_game() -> void:
 	game.front_end.hide_menu()
 	if game.menu_backdrop != null: game.menu_backdrop.close()
 	if game.dock_interface != null: game.dock_interface.dismiss()
-	game.get_tree().paused = false
+	game.get_tree().paused = true
 	game.scenery_seed = preload("res://scenery_scatter.gd").new_seed(game.scenery_seed)
 	if not game._can_reuse_world():
 		await game._start_game(game.game_folder)
 	else: await _refresh_scenery()
-	if not game.pilot_mode: return
+	if not game.pilot_mode:
+		game.get_tree().paused = false
+		return
 	game._reset_loaded_world()
 	game.object_population.populate_startup()
 	game.cockpit_hud.set_bottom_camera_enabled(false)
 	game.cockpit_hud.set_rear_camera_enabled(false)
-	game.day_night.hour = game.new_game_hour
+	game.day_night.hour = 10.0
 	game.player_progress = PlayerProgress.restore()
 	# Starting a campaign clears testing cheats; loading an existing save does not.
 	game.mission_runtime.set_testing_missions(false,true)
@@ -42,6 +47,7 @@ func _begin_new_game() -> void:
 	game.front_end.can_resume = true
 	game.cockpit_hud.map_data.reset_exploration()
 	game._update_mouse_pointer()
+	game.get_tree().paused = false
 	game.events.session_started.emit(false)
 
 func _world_asset_key() -> String:
@@ -143,18 +149,35 @@ func _reset_loaded_world() -> void:
 
 func _clear_session_effects(node: Node) -> void:
 	for child in node.get_children():
-		if child is SessionDebris or child is SessionExplosion or child is SessionMissile or child is SessionDemolition:
+		if child is SessionDebris or child is SessionExplosion or child is SessionMissile or child is SessionDemolition or child is FallingSubmarine:
 			child.free()
 		else: game._clear_session_effects(child)
 
 func _map_signature() -> String:
 	# Editable placements and type stats are not map identity. The underlying
 	# terrain remains the same when objects, wildlife or spawn points change.
-	return "terrain-v1:" + preload("res://asset_cache.gd").fingerprint(game.game_folder.path_join("DATA/SCEN1.BSP"))
+	if is_instance_valid(game.world_root):
+		if game.world_root.has_meta("terrain_exploration_signature"):
+			return str(game.world_root.get_meta("terrain_exploration_signature"))
+		if game.world_root.has_meta("terrain_asset_hash"):
+			return "terrain-asset-v1:" + str(game.world_root.get_meta("terrain_asset_hash"))
+	return "terrain-v1:" + AssetCache.fingerprint(game.game_folder.path_join("DATA/SCEN1.BSP"))
 
 func _exploration_matches_map(signature: String) -> bool:
 	# This only controls restoration of map exploration, never save validity.
-	return signature == game._map_signature()
+	var current := _map_signature()
+	if signature == current: return true
+	if not signature.begins_with("terrain-asset-v1:"): return false
+	# Earlier terrain-mod saves identified the mesh file. Read the small header
+	# of installed packs so those saves also work after disabling the mod.
+	Mods.ensure()
+	for pack in Mods.packs:
+		if not pack.valid or not pack.assets.has("terrain.scen1"): continue
+		var path: String = pack.assets["terrain.scen1"].path
+		var identity := TerrainAsset.read_exploration_identity(path)
+		if identity.get("signature", "") != current: continue
+		if signature in identity.aliases or signature == "terrain-asset-v1:" + AssetCache.fingerprint(path): return true
+	return false
 
 func _save_snapshot(name: String) -> Dictionary:
 	game.player_progress.suckomat = game.equipment.vacuum.storage.duplicate()
@@ -178,9 +201,10 @@ func _load_saved_game(slot: int) -> bool:
 	var data = game.save_games.read(slot)
 	if data.is_empty(): game.dock_interface.report(game.save_games.error); return false
 	game.loading_save = true
+	if is_instance_valid(game.menu_backdrop): game.menu_backdrop.close()
 	game.front_end.hide_menu(); game.dock_interface.dismiss()
 	game.front_end.show_loading(); game.get_viewport().gui_release_focus()
-	game.get_tree().paused = false
+	game.get_tree().paused = true
 	# Paint the loading artwork before actor creation, scenery or save restore.
 	await game.get_tree().process_frame
 	await game.get_tree().process_frame

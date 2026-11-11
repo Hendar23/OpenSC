@@ -9,7 +9,7 @@ import time
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-CORE = ['script_compilation', 'modern_model_bounds', 'game_updates', 'official_mods', 'npc_torpedoes', 'cache_dependencies', 'loading_cache',
+CORE = ['script_compilation', 'modern_model_bounds', 'game_updates', 'official_mods', 'npc_torpedoes', 'cache_dependencies', 'cache_cleanup', 'loading_cache',
         'npc_navigation_budget', 'local_simulation', 'performance_foundation', 'mission_dispatcher']
 INTEGRATION = ['asset_cache', 'continue_game', 'mission_rewards', 'stage_two_missions', 'stage_three_jobs', 'volcanic_disaster', 'covert_defection', 'stage_three_remaining', 'pirate_stockpile', 'allied_distress', 'nuclear_stockpile', 'rampaging_walker', 'escort_diplomats', 'original_fidelity']
 LOCAL_MOD = ['scenery_scatter', 'scenery_sessions']

@@ -321,7 +321,7 @@ func _build_daylight_controls() -> void:
 		slider.value_changed.connect(func(value: float) -> void:
 			if key == "time_of_day":
 				game.day_night.hour = fposmod(value, 24.0)
-				if not game.loading_preferences: game.new_game_hour = game.day_night.hour
+				if not game.loading_preferences: game.game_settings.preview_hour = game.day_night.hour
 			elif key == "cycle_minutes": game.day_night.cycle_minutes = value
 			else: game.day_night.night_brightness = value
 			label.text = caption if key == "time_of_day" else "%s: %.2f" % [caption, value]

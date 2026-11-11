@@ -125,8 +125,7 @@ func _rock_broken() -> void:
 
 func _lost() -> void:
 	if delivered or jobs.id.is_empty(): return
-	var wreck := preload("res://submarine_death.gd").new(); jobs.game.world_root.add_child(wreck); wreck.global_position = ship.global_position
-	wreck.setup_machine(ship,ship.get_child(0),jobs.game.submarine_traffic.bubble_texture,[],ship.linear_velocity)
+	preload("res://falling_submarine.gd").launch(jobs.game.submarine_traffic,ship,[ship.get_child(0)],ship.linear_velocity)
 	ship.hide(); jobs.radio("m2",true); jobs._resolve(false,0,2)
 
 func release_survivors() -> void:

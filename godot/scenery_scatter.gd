@@ -16,7 +16,7 @@ static func new_seed(previous: int = 0) -> int:
 	while result == previous: result = rng.randi_range(1, 2147483647)
 	return result
 
-static func populate(world: Node3D, folder: String, tree: SceneTree, session_seed: int = 0) -> void:
+static func populate(world: Node3D, folder: String, tree: SceneTree, session_seed: int = 0, progress: Callable = Callable()) -> void:
 	if world.has_node("ModScenery"): return
 	var packs := Mods.scenery_packs()
 	if packs.is_empty(): return
@@ -27,6 +27,8 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, session_see
 	var total := 0
 	for pack in packs:
 		if total >= MAX_TOTAL: break
+		if progress.is_valid(): progress.call("Loading scenery: " + str(pack.name))
+		await tree.process_frame
 		var template := Modern.load_model(pack.scenery.path, {"forward_axis": "+Z", "name": pack.name, "scenery_lods":true})
 		if template == null:
 			Mods.note("%s: could not load scenery GLB." % pack.name); continue
@@ -52,6 +54,7 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, session_see
 		# Zero preserves the original fixed layout for saves without a campaign seed.
 		settings.seed = (int(settings.seed) ^ session_seed) & 0x7fffffff
 		templates.append({"id":pack.id,"name":pack.name,"settings":pack.scenery.duplicate(),"models":models,"weight":weight})
+		if progress.is_valid(): progress.call("Placing scenery: " + str(pack.name))
 		if not models.is_empty(): poses = await _placements(world, settings, models, weight, exclusions, tree, MAX_TOTAL - total)
 		layout.update(var_to_bytes([pack.id, poses]))
 		var group := Node3D.new(); group.name = str(pack.id); parent.add_child(group)

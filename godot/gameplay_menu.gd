@@ -7,6 +7,8 @@ signal auto_aim_changed(enabled: bool)
 signal wildlife_limit_changed(limit: int)
 signal sun_shafts_changed(enabled: bool)
 signal replay_changed(enabled: bool)
+var crosshair_enabled := true
+var crosshair_button: Button
 var replay_button: Button
 var replay_enabled := true
 var fmvs_enabled := true
@@ -32,6 +34,7 @@ func _ready() -> void:
 	if settings_path.is_empty(): settings_path = Storage.preferences_path()
 	var config := ConfigFile.new()
 	if remember_preferences and config.load(settings_path) == OK:
+		crosshair_enabled = bool(config.get_value("gameplay","first_person_crosshair",true))
 		zapper_auto_aim = bool(config.get_value("gameplay","zapper_auto_aim",false))
 		sun_shafts_enabled = bool(config.get_value("gameplay","sun_shafts",true))
 		var saved_limit := int(config.get_value("gameplay","wildlife_limit",80))
@@ -46,12 +49,13 @@ func _ready() -> void:
 	var shade := ColorRect.new(); shade.color = Color.TRANSPARENT
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(shade)
 	layout = Control.new(); layout.size = Vector2(640,480); shade.add_child(layout)
-	toggle = _button(Vector2(196,150),Vector2(248,28)); toggle.pressed.connect(_toggle)
-	wildlife_button = _button(Vector2(196,188),Vector2(248,28)); wildlife_button.pressed.connect(_cycle_wildlife_limit)
-	sun_shafts_button = _button(Vector2(196,226),Vector2(248,28)); sun_shafts_button.pressed.connect(_toggle_sun_shafts)
-	replay_button = _button(Vector2(196,264),Vector2(248,28)); replay_button.pressed.connect(_toggle_replay)
-	fmv_button = _button(Vector2(196,302),Vector2(248,28)); fmv_button.pressed.connect(_toggle_fmvs)
-	bubble_button = _button(Vector2(196,340),Vector2(248,28)); bubble_button.pressed.connect(_cycle_bubble_limit)
+	toggle = _button(Vector2(196,112),Vector2(248,28)); toggle.pressed.connect(_toggle)
+	wildlife_button = _button(Vector2(196,150),Vector2(248,28)); wildlife_button.pressed.connect(_cycle_wildlife_limit)
+	sun_shafts_button = _button(Vector2(196,188),Vector2(248,28)); sun_shafts_button.pressed.connect(_toggle_sun_shafts)
+	replay_button = _button(Vector2(196,226),Vector2(248,28)); replay_button.pressed.connect(_toggle_replay)
+	fmv_button = _button(Vector2(196,264),Vector2(248,28)); fmv_button.pressed.connect(_toggle_fmvs)
+	bubble_button = _button(Vector2(196,302),Vector2(248,28)); bubble_button.pressed.connect(_cycle_bubble_limit)
+	crosshair_button = _button(Vector2(196,340),Vector2(248,28)); crosshair_button.pressed.connect(_toggle_crosshair)
 	back = _button(Vector2(216,388),Vector2(208,28)); back.text = "Back"; back.pressed.connect(close_menu)
 	status = Label.new(); status.position = Vector2(160,424); status.size = Vector2(320,52)
 	status.add_theme_font_size_override("font_size",14); status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; layout.add_child(status)
@@ -68,12 +72,17 @@ func _button(point: Vector2,dimensions: Vector2) -> Button:
 	layout.add_child(button); return button
 
 func _refresh() -> void:
+	crosshair_button.text = "First-person crosshair: %s" % ("On" if crosshair_enabled else "Off")
 	bubble_button.text = "Maximum bubbles: %s" % ("Unlimited" if bubble_limit < 0 else "Off" if bubble_limit == 0 else str(bubble_limit))
 	fmv_button.text = "Play FMVs: %s" % ("On" if fmvs_enabled else "Off")
 	replay_button.text = "Photo mode replay: %s" % ("On" if replay_enabled else "Off")
 	toggle.text = "Zapper auto aim: %s" % ("On" if zapper_auto_aim else "Off")
 	wildlife_button.text = "Active wildlife: %s" % ("Unlimited" if wildlife_limit == 0 else str(wildlife_limit))
 	sun_shafts_button.text = "Sun shafts: %s" % ("On" if sun_shafts_enabled else "Off")
+
+func _toggle_crosshair() -> void:
+	crosshair_enabled = not crosshair_enabled
+	_refresh(); _save()
 
 func _toggle_replay() -> void:
 	replay_enabled = not replay_enabled
@@ -116,6 +125,7 @@ func _save() -> void:
 		config.set_value("gameplay","sun_shafts",sun_shafts_enabled)
 		config.set_value("gameplay","photo_replay",replay_enabled)
 		config.set_value("gameplay","play_fmvs",fmvs_enabled)
+		config.set_value("gameplay","first_person_crosshair",crosshair_enabled)
 		if config.has_section_key("gameplay","enhanced_explosions"): config.erase_section_key("gameplay","enhanced_explosions")
 		result = Storage.ensure_parent(settings_path)
 		if result == OK: result = config.save(settings_path)
@@ -138,7 +148,7 @@ func _input(event: InputEvent) -> void:
 	if not visible: return
 	if Bindings.pressed(event,"menu_cancel"): close_menu()
 	elif Bindings.pressed(event,"menu_up") or Bindings.pressed(event,"menu_down"):
-		var buttons := [toggle,wildlife_button,sun_shafts_button,replay_button,fmv_button,bubble_button,back]
+		var buttons := [toggle,wildlife_button,sun_shafts_button,replay_button,fmv_button,bubble_button,crosshair_button,back]
 		var selected := buttons.find(get_viewport().gui_get_focus_owner())
 		buttons[posmod(selected + (-1 if Bindings.pressed(event,"menu_up") else 1),buttons.size())].grab_focus()
 	elif toggle.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle()
@@ -148,6 +158,7 @@ func _input(event: InputEvent) -> void:
 	elif replay_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_replay()
 	elif bubble_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")):
 		_cycle_bubble_limit(-1 if Bindings.pressed(event,"menu_left") else 1)
+	elif crosshair_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_crosshair()
 	elif fmv_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_fmvs()
 	elif Bindings.pressed(event,"menu_accept"):
 		if toggle.has_focus(): _toggle()
@@ -156,6 +167,7 @@ func _input(event: InputEvent) -> void:
 		elif replay_button.has_focus(): _toggle_replay()
 		elif fmv_button.has_focus(): _toggle_fmvs()
 		elif bubble_button.has_focus(): _cycle_bubble_limit()
+		elif crosshair_button.has_focus(): _toggle_crosshair()
 		elif back.has_focus(): close_menu()
 	else: return
 	get_viewport().set_input_as_handled()

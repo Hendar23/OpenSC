@@ -54,7 +54,9 @@ static func engine_level(distance: float) -> float:
 
 func _update_voice(voice: AudioStreamPlayer3D) -> void:
 	var source: Node3D = voice.get_meta("source").get_ref()
-	if not is_instance_valid(source): return
+	if not is_instance_valid(source) or not source.is_inside_tree():
+		voice.stop()
+		return
 	voice.global_position = source.global_position
 	var factory: bool = voice.stream == streams.get("FACTAMB1")
 	var listener: Vector3 = game.pilot.global_position if factory or voice.get_meta("npc_engine",false) else game.camera.global_position

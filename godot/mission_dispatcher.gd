@@ -431,9 +431,8 @@ func _resolve(success: bool, score: float, response: int) -> void:
 
 func _bacau_destroyed() -> void:
 	if id != "stranded": return
-	var wreck := preload("res://submarine_death.gd").new(); game.world_root.add_child(wreck); wreck.global_position = target.global_position
-	wreck.setup_machine(target,target.appearance,game.submarine_traffic.bubble_texture,[],target.linear_velocity)
-	_burst(target.global_position,1.0); radio("x5",true); _resolve(false,0,2)
+	preload("res://falling_submarine.gd").launch(game.submarine_traffic,target,[target.appearance],target.linear_velocity)
+	target.hide(); radio("x5",true); _resolve(false,0,2)
 
 func _spawn_base() -> void:
 	if not vents.is_empty(): return
