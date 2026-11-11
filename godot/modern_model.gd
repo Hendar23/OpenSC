@@ -2,8 +2,25 @@ extends RefCounted
 const Mods = preload("res://mod_registry.gd")
 const LegacyBMP = preload("res://legacy_bmp.gd")
 
+static func supports(path: String) -> bool:
+	return path.get_extension().to_lower() == "glb" or Mods.protected_model_path(path)
+
 static func load_model(path: String, descriptor: Dictionary = {}) -> Node3D:
 	Mods.ensure()
+	if Mods.protected_model_path(path):
+		# Preconverted scenes remain inside the encrypted PCK. ResourceLoader
+		# retains shared resources in memory without writing a decrypted cache.
+		var packed := ResourceLoader.load(path, "PackedScene") as PackedScene
+		if packed == null: return null
+		var model := packed.instantiate() as Node3D
+		if model == null: return null
+		model.scale = Vector3.ONE * float(descriptor.get("scale", 1.0))
+		var axis := str(descriptor.get("forward_axis", "-Z"))
+		if axis == "-Z" and model.get_child_count() > 0: model.get_child(0).rotation.y += PI
+		model.set_meta("pod_tilt_sign", 1.0 if axis == "-Z" else -1.0)
+		model.set_meta("asset_source", path)
+		model.set_meta("asset_mod", descriptor.get("name", "Opened GLB"))
+		return model
 	var cache := preload("res://asset_cache.gd")
 	var dependencies: Array = []
 	for id in descriptor.get("material_textures", {}).values():

@@ -43,7 +43,7 @@ static func create_refraction(strength: float, tint: float) -> CanvasLayer:
 func setup(context: Node) -> void:
 	game = context; name = "FirstPersonCockpit"; process_mode = Node.PROCESS_MODE_ALWAYS
 	for descriptor in Mods.candidates("cockpit.first_person"):
-		var candidate := Modern.load_model(descriptor.path,descriptor) if str(descriptor.path).get_extension().to_lower() == "glb" else preload("res://clump_loader.gd").load_clump(descriptor.path)
+		var candidate := Modern.load_model(descriptor.path,descriptor) if Modern.supports(str(descriptor.path)) else preload("res://clump_loader.gd").load_clump(descriptor.path)
 		if candidate == null:
 			Mods.note("%s: could not load first-person cockpit; trying the next mod." % descriptor.name); continue
 		if str(descriptor.path).get_extension().to_lower() == "dff": candidate.scale *= float(descriptor.scale)

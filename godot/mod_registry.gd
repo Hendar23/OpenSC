@@ -12,6 +12,37 @@ static var layers := {}
 static var movement := {}
 static var conflicts: Array[String] = []
 static var runtime_warnings: Array[String] = []
+static var _mounted_resource_packs := {}
+
+static func protected_model_path(path: String) -> bool:
+	return path.begins_with("res://_protected_mods/") and path.get_extension().to_lower() == "scn"
+
+static func _resource_root(value: Variant, folder: String, id: String) -> String:
+	if not value is Dictionary: return ""
+	var relative := str(value.get("file", "")).replace("\\", "/")
+	var path := folder.path_join(relative).simplify_path()
+	if relative.is_absolute_path() or relative.get_extension().to_lower() != "pck" or not path.begins_with(folder + "/") or not FileAccess.file_exists(path): return ""
+	var header := FileAccess.open(path, FileAccess.READ)
+	if header == null or header.get_length() < 24: return ""
+	var bytes := header.get_buffer(24)
+	header.close()
+	if bytes.slice(0, 4).get_string_from_ascii() != "GDPC" or (bytes.decode_u32(20) & 1) == 0: return ""
+	var virtual := str(value.get("root", ""))
+	var prefix := "res://_protected_mods/" + id + "/"
+	if not virtual.begins_with(prefix): return ""
+	var suffix := virtual.trim_prefix(prefix)
+	if suffix.length() != 24: return ""
+	for character in suffix:
+		if character not in "0123456789abcdef": return ""
+	var digest := FileAccess.get_sha256(path)
+	if _mounted_resource_packs.has(virtual):
+		# Godot cannot unmount packs. Changed content uses a new namespace; never
+		# silently mix a hot-replaced pack with resources from the old version.
+		return virtual if _mounted_resource_packs[virtual] == digest else ""
+	if not ProjectSettings.load_resource_pack(path, false): return ""
+	if not FileAccess.file_exists(virtual.path_join("proof.txt")): return ""
+	_mounted_resource_packs[virtual] = digest
+	return virtual
 
 static func ensure(read_preferences: bool = true) -> void:
 	if not initialized: initialize(read_preferences)
@@ -89,8 +120,16 @@ static func _read_pack(folder: String) -> Dictionary:
 	pack.name = str(manifest.get("name", pack.id))
 	pack.version = str(manifest.get("version", "1.0"))
 	pack.description = str(manifest.get("description", ""))
+	var asset_folder := folder
+	var protected := manifest.has("resource_pack")
+	if protected:
+		asset_folder = _resource_root(manifest.resource_pack, folder, str(pack.id)) if valid_id else ""
+		if asset_folder.is_empty():
+			pack.valid = false
+			pack.errors.append("Could not mount protected mod assets with this game build; restart after replacing a pack.")
+			return pack
 	if manifest.has("scenery"):
-		var scatter := _read_scenery(manifest.scenery, folder)
+		var scatter := _read_scenery(manifest.scenery, asset_folder, protected)
 		if scatter.is_empty():
 			pack.valid = false
 			pack.errors.append("Invalid scenery settings or missing self-contained GLB.")
@@ -114,10 +153,12 @@ static func _read_pack(folder: String) -> Dictionary:
 		if not entry is Dictionary:
 			pack.errors.append("Invalid asset entry: " + str(key)); continue
 		var relative := str(entry.get("file", "")).replace("\\", "/")
-		var resolved := folder.path_join(relative).simplify_path()
-		if relative.is_empty() or relative.is_absolute_path() or not resolved.begins_with(folder + "/"):
+		var resolved := asset_folder.path_join(relative).simplify_path()
+		if relative.is_empty() or relative.is_absolute_path() or not resolved.begins_with(asset_folder + "/"):
 			pack.errors.append("Asset path must stay inside its mod folder: " + str(key)); continue
 		var extension := relative.get_extension().to_lower()
+		if protected and (not str(key).begins_with("model.") or extension != "scn"):
+			pack.errors.append("Protected assets must be preconverted model scenes: " + str(key)); continue
 		var model := asset_id in ["submarine.player","cockpit.first_person"] or asset_id.begins_with("model.") or asset_id in ["hud.tilt", "hud.equipment", "hud.map", "hud.weapon", "hud.shield"]
 		var texture := asset_id.begins_with("texture.")
 		var audio := asset_id in ["audio.submarine.main_propeller", "audio.submarine.side_pods", "audio.submarine.pod_rotation", "audio.submarine.impact_hit1", "audio.submarine.impact_hit3", "audio.submarine.impact_creaking", "audio.docking.sequence", "audio.docking.doors", "audio.docking.door_stop", "audio.weapon.zapper", "audio.creature.death", "audio.object.mine.explosion"]
@@ -125,7 +166,7 @@ static func _read_pack(folder: String) -> Dictionary:
 		var terrain := asset_id == "terrain.scen1"
 		var gameplay := asset_id in ["data.gameplay", "data.wildlife"]
 		var ui := asset_id in ["ui.dock","ui.saves","ui.main","ui.controls"]
-		if (not model and not texture and not audio and not map and not terrain and not gameplay and not ui) or (model and extension not in ["glb", "dff"]) or (texture and extension not in ["png", "jpg", "jpeg", "webp", "bmp", "ras"]) or (audio and extension not in ["wav", "ogg", "mp3", "raw"]) or ((map or gameplay or ui) and extension != "json") or (terrain and extension != "oscterrain"):
+		if (not model and not texture and not audio and not map and not terrain and not gameplay and not ui) or (model and extension not in (["scn"] if protected else ["glb", "dff"])) or (texture and extension not in ["png", "jpg", "jpeg", "webp", "bmp", "ras"]) or (audio and extension not in ["wav", "ogg", "mp3", "raw"]) or ((map or gameplay or ui) and extension != "json") or (terrain and extension != "oscterrain"):
 			pack.errors.append("Unsupported asset ID or file type: " + str(key)); continue
 		if not FileAccess.file_exists(resolved):
 			pack.errors.append("Missing asset file: " + relative); continue
@@ -146,7 +187,7 @@ static func _read_pack(folder: String) -> Dictionary:
 					pack.errors.append("Ignored invalid material texture binding: " + str(slot)); continue
 				material_textures[str(slot)] = texture_id
 		else: pack.errors.append("material_textures must map GLB material indices to texture IDs.")
-		var axis := str(entry.get("forward_axis", "-Z" if extension == "glb" else "+Z"))
+		var axis := str(entry.get("forward_axis", "-Z" if extension in ["glb", "scn"] else "+Z"))
 		if axis not in ["+Z", "-Z"]:
 			pack.errors.append("forward_axis must be +Z or -Z: " + str(key)); continue
 		var trigger: Variant = entry.get("trigger_distance","")
@@ -168,11 +209,11 @@ static func _read_pack(folder: String) -> Dictionary:
 		if trigger == "model_radius": pack.assets[asset_id].trigger_distance = trigger
 	return pack
 
-static func _read_scenery(value: Variant, folder: String) -> Dictionary:
+static func _read_scenery(value: Variant, folder: String, protected: bool = false) -> Dictionary:
 	if not value is Dictionary: return {}
 	var relative := str(value.get("file", "")).replace("\\", "/")
 	var path := folder.path_join(relative).simplify_path()
-	if relative.is_absolute_path() or relative.get_extension().to_lower() != "glb" or not path.begins_with(folder + "/") or not FileAccess.file_exists(path): return {}
+	if relative.is_absolute_path() or relative.get_extension().to_lower() != ("scn" if protected else "glb") or not path.begins_with(folder + "/") or not FileAccess.file_exists(path): return {}
 	for entry in [["seed", 0, 2147483647], ["count", 1, MAX_SCENERY], ["patch_radius", 1.0, 32.0]]:
 		var number: Variant = value.get(entry[0])
 		if not (number is int or number is float) or not is_finite(float(number)) or float(number) < entry[1] or float(number) > entry[2]: return {}

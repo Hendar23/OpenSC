@@ -423,7 +423,7 @@ func _select_asset(index: int) -> void:
 	frame_button.visible = true
 	auto_rotate.visible = true
 	animation_bar.visible = true
-	var loaded: Node3D = Modern.load_model(entry.path, entry.get("descriptor", {})) if str(entry.path).get_extension().to_lower() == "glb" else Assets.load_clump(entry.path, PackedStringArray(), true)
+	var loaded: Node3D = Modern.load_model(entry.path, entry.get("descriptor", {})) if Modern.supports(str(entry.path)) else Assets.load_clump(entry.path, PackedStringArray(), true)
 	if loaded == null:
 		_update_animation_controls()
 		details.text = "This asset could not be decoded. See the Godot output for details."

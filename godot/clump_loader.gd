@@ -49,9 +49,9 @@ static func load_submarine(path: String) -> Node3D:
 
 # Scenery uses the same legacy frame/atomic format, with varying frame counts.
 static func load_clump(path: String, names: PackedStringArray = PackedStringArray(), include_morphs: bool = false) -> Node3D:
-	if path.get_extension().to_lower() == "glb": return Modern.load_model(path)
+	if Modern.supports(path): return Modern.load_model(path)
 	for replacement in Mods.candidates(Mods.model_id(path)):
-		var loaded: Node3D = Modern.load_model(replacement.path, replacement) if str(replacement.path).get_extension().to_lower() == "glb" else _load_legacy(replacement.path, names, include_morphs)
+		var loaded: Node3D = Modern.load_model(replacement.path, replacement) if Modern.supports(str(replacement.path)) else _load_legacy(replacement.path, names, include_morphs)
 		if loaded != null:
 			if str(replacement.path).get_extension().to_lower() == "dff": loaded.scale *= float(replacement.scale)
 			loaded.set_meta("asset_mod", replacement.name)
