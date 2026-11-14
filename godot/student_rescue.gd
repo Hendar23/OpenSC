@@ -108,9 +108,13 @@ func target_body() -> CollisionObject3D:
 	if is_instance_valid(rock) and not rock.dead and not delivered: return rock
 	return ship if is_instance_valid(ship) and not ship.dead and not delivered else null
 
+func delivery_cities(body: Node3D) -> Variant:
+	if body != ship: return null
+	return [2,4] if not delivered and not ship.dead else []
+
 func delivery(body: Node3D, city: int) -> bool:
 	if body != ship or delivered or ship.dead: return false
-	if city not in [2,4]: jobs.radio("m6"); jobs.game.equipment.magnet.decline_delivery(); return true
+	if city not in delivery_cities(body): jobs.radio("m6"); jobs.game.equipment.magnet.decline_delivery(); return true
 	delivered = true; ship.delivered = true; ship.set_meta("delivery_city",city)
 	jobs.game.equipment.magnet.set_enabled(false)
 	jobs.runtime.active()["resolved_city"] = city; jobs.radio("m5",true); jobs._resolve(true,1.0,1)

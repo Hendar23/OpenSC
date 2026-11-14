@@ -216,9 +216,13 @@ func _backup() -> void:
 	if is_instance_valid(pursuer) and not pursuer.dead:
 		helper.combat_target = pursuer.body; helper.pursue_offscreen = true
 
+func delivery_cities(body: Node3D) -> Variant:
+	if body != head: return null
+	return [1,3] if phase == "head" else []
+
 func delivery(body: Node3D, city: int) -> bool:
 	if body != head or phase != "head": return false
-	if city not in [1,3]:
+	if city not in delivery_cities(body):
 		jobs.game.equipment.magnet.decline_delivery(); return true
 	phase = "handoff"; jobs.phase = "handoff"; delivery_clock = 6.0
 	head.delivered = true; head.set_meta("delivery_city",city); head.set_meta("metal_tow_target",false)

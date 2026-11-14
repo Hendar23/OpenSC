@@ -1,7 +1,7 @@
 extends RefCounted
 ## A visual-only history. Resources are retained, never gameplay nodes/scripts.
 const CAPACITY := 602
-const MATERIAL_FIELDS := ["opacity","albedo_texture","emission_texture","albedo_color","emission_color","uv_offset","strength","beam_length","beam_width","seed","light_color","propeller_bend","drift_distance","cloud_center"]
+const MATERIAL_FIELDS := ["opacity","albedo_texture","emission_texture","albedo_color","emission_color","uv_offset","strength","beam_length","beam_width","seed","light_color","propeller_bend","drift_distance","cloud_center","flare_color","brightness","reach","diameter","cone_cosine","forward_sign","solar"]
 var source: WeakRef
 var detached := false
 var kind := ""

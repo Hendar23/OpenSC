@@ -19,6 +19,9 @@ var lamp: SpotLight3D
 var support_tools: Node3D
 var extra_tools: Node3D
 var bulb_materials: Array[StandardMaterial3D] = []
+var bulb_lenses: Array[MeshInstance3D] = []
+var light_shaft: MeshInstance3D
+var light_shaft_material: ShaderMaterial
 
 func setup(player: Node3D, folder: String) -> void:
 	pilot = player
@@ -55,6 +58,16 @@ func setup(player: Node3D, folder: String) -> void:
 	lamp.shadow_bias = 4.0 if RenderingServer.get_current_rendering_method() == "gl_compatibility" else 0.2
 	lamp.shadow_normal_bias = 1.0
 	mount.add_child(lamp)
+	light_shaft = MeshInstance3D.new(); light_shaft.name = "DeepSeaLightShaft"
+	light_shaft.mesh = BoxMesh.new()
+	light_shaft.rotation.y = PI # The shared volume shader points along +Z; lamps use -Z.
+	light_shaft.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	light_shaft_material = ShaderMaterial.new()
+	light_shaft_material.shader = preload("res://searchlight.gdshader")
+	light_shaft_material.set_shader_parameter("beam_color",Vector3(1.0,0.97,0.9))
+	light_shaft_material.set_shader_parameter("beam_softness",0.7)
+	light_shaft.material_override = light_shaft_material
+	lamp.add_child(light_shaft)
 	var icons: Array[Texture2D] = []
 	for file in ["DEEPWP1", "DEEPWP2"]:
 		icons.append(Assets._load_raster_icon(folder,file))
@@ -119,15 +132,36 @@ func _prepare_bulb(housing: Node3D) -> void:
 			if node.mesh.get_surface_count() != 2: continue
 			var mesh: ArrayMesh = node.mesh.duplicate()
 			var material := StandardMaterial3D.new()
+			# Keep this live on/off material out of the cave-light receiver pass.
+			material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			material.set_meta("equipment_bulb",true)
 			material.cull_mode = BaseMaterial3D.CULL_DISABLED
 			mesh.surface_set_material(1,material)
 			node.mesh = mesh
 			bulb_materials.append(material)
+			# The original face is a deep reflector dish. Cover its recess with
+			# a luminous lens while powered, preserving the original rim outline.
+			var arrays: Array = mesh.surface_get_arrays(1)
+			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX].duplicate()
+			# A replacement DFF may have a different reflector topology.
+			if vertices.size() != 13 or arrays[Mesh.ARRAY_INDEX] != PackedInt32Array([0,12,1,1,12,2,2,12,3,3,12,4,4,12,5,5,12,0]): continue
+			var centre := Vector3.ZERO
+			for index in range(6): centre += vertices[index] / 6.0
+			vertices[12] = centre
+			for index in vertices.size(): vertices[index].z += 0.0005
+			arrays[Mesh.ARRAY_VERTEX] = vertices
+			var lens := MeshInstance3D.new(); lens.name = "IlluminatedLens"
+			var lens_mesh := ArrayMesh.new(); lens_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+			lens.mesh = lens_mesh; lens.material_override = material
+			lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			lens.visible = false; node.add_child(lens); bulb_lenses.append(lens)
 	else:
 		# Modern replacements can supply a separate Bulb or Lens mesh.
 		for node in housing.find_children("*", "MeshInstance3D",true,false):
 			if not str(node.name).to_lower() in ["bulb", "lens"]: continue
 			var material := StandardMaterial3D.new()
+			material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			material.set_meta("equipment_bulb",true)
 			node.material_override = material
 			bulb_materials.append(material)
 func cycle(direction: int) -> void:
@@ -190,6 +224,15 @@ func apply_settings() -> void:
 	lamp.spot_angle = settings.light_angle
 	lamp.rotation_degrees.x = -settings.light_down_angle
 	lamp.visible = mounted.any(func(item: Dictionary) -> bool: return item.id == "deep_sea_lights" and item.enabled)
+	for lens in bulb_lenses: lens.visible = lamp.visible
+	if light_shaft != null:
+		var length := maxf(0.01,lamp.spot_range)
+		var radius := length * tan(deg_to_rad(clampf(lamp.spot_angle,0.1,89.0)))
+		light_shaft.mesh.size = Vector3(radius * 2.0,radius * 2.0,length)
+		light_shaft.position.z = -length * 0.5
+		light_shaft_material.set_shader_parameter("beam_length",length)
+		light_shaft_material.set_shader_parameter("beam_radius",radius)
+		light_shaft_material.set_shader_parameter("beam_brightness",0.16 * maxf(0.0,lamp.light_energy))
 	for material in bulb_materials:
 		material.albedo_color = Color.WHITE if lamp.visible else Color(0.12,0.15,0.16)
 		material.emission_enabled = lamp.visible

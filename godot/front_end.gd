@@ -78,13 +78,11 @@ func _ready() -> void:
 	progress_bar.add_theme_stylebox_override("background",background)
 	progress_bar.add_theme_stylebox_override("fill",fill)
 	loading_layout.add_child(progress_bar)
-	loading_status = Label.new(); loading_status.text = "Loading…"
+	loading_status = Label.new(); loading_status.text = "Loading..."
 	loading_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	loading_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	loading_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	loading_status.add_theme_font_size_override("font_size",12)
-	loading_status.add_theme_color_override("font_shadow_color", Color.BLACK)
-	loading_status.add_theme_constant_override("shadow_outline_size", 2)
 	loading_status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	progress_bar.add_child(loading_status)
 	loading_status.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -101,6 +99,14 @@ func _ready() -> void:
 	version_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	version_label.offset_left = 12; version_label.offset_right = 240
 	version_label.offset_top = -30; version_label.offset_bottom = -10
+	var credit_label := version_label.duplicate() as Label
+	credit_label.name = "OriginalGameCredit"
+	credit_label.text = "Original Sub Culture by Criterion Studios · Ubisoft"
+	credit_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	menu_layout.get_parent().add_child(credit_label)
+	credit_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	credit_label.offset_left = -credit_label.get_minimum_size().x - 12; credit_label.offset_right = -12
+	credit_label.offset_top = -30; credit_label.offset_bottom = -10
 	controls_menu = preload("res://controls_menu.gd").new(); add_child(controls_menu)
 	controls_menu.layout.theme = menu_theme
 	controls_menu.closed.connect(func() -> void: restore_button_focus("controls"))
@@ -338,11 +344,11 @@ func show_loading() -> void:
 	if controls_menu != null: controls_menu.close_menu()
 	menu_layer.hide(); loading_layer.show()
 	active_button = null
-	progress_bar.value = 0.0; loading_status.text = "Loading"
+	progress_bar.value = 0.0; loading_status.text = "Loading..."
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func update_progress(message: String) -> void:
-	loading_status.text = message
+	loading_status.text = "Loading..."
 	# Keep conversion and cached-loading captions separate from stage progress.
 	message = message.replace("Converting assets: environment textures", "Loading environment textures").replace("Converting assets: environment:", "Loading environment:")
 	var fraction := 0.0

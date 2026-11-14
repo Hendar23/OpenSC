@@ -82,6 +82,21 @@ func _delivery_terms(body: RigidBody3D) -> Dictionary:
 	if int(body.get("shard")) != 0: return {"commodity":"","quantity":0}
 	return {"commodity":str(stats.get("delivery_commodity",defaults.commodity)).to_lower(),"quantity":int(stats.get("delivery_quantity",defaults.quantity))}
 
+func delivery_targets() -> Array[Node3D]:
+	var result: Array[Node3D] = []
+	if game.equipment == null: return result
+	var tool: Node3D = game.equipment.towing_tool()
+	if not is_instance_valid(tool) or not tool.enabled or not is_instance_valid(tool.target): return result
+	var body: RigidBody3D = tool.target
+	if body.is_queued_for_deletion() or body.get("dead") == true or body.has_meta("delivery_city"): return result
+	var cities: Variant = game.mission_runtime.side_jobs.delivery_cities(body)
+	if cities == null:
+		var terms := _delivery_terms(body)
+		if terms.commodity.is_empty() or terms.quantity <= 0: return result
+	for point in tool.drop_points:
+		if is_instance_valid(point) and not point.is_queued_for_deletion() and (cities == null or point.city_id in cities): result.append(point)
+	return result
+
 func _answer_delivery(accepted: bool) -> void:
 	if not game._delivery_prompt_active(): return
 	var magnet: Node3D = game.equipment.towing_tool()

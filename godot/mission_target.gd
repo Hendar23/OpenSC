@@ -15,9 +15,22 @@ func target_body() -> CollisionObject3D:
 func target_point() -> Vector2:
 	var target := target_body()
 	if not is_instance_valid(target): return Vector2.INF
-	if get_tree().paused or not game.pilot_mode or not game.pilot.active or game.pilot.dead or game.world_loading or game.dock_interface_active or game.map_open or game.front_end.menu_layer.visible: return Vector2.INF
+	return project_target(target,jobs.target_center(target))
+
+func delivery_target_points() -> Array[Vector2]:
+	var result: Array[Vector2] = []
+	if not guidance_visible(): return result
+	for target in game.game_dock.delivery_targets():
+		var point := project_target(target,Vector3.ZERO)
+		if point.is_finite(): result.append(point)
+	return result
+
+func guidance_visible() -> bool:
+	return not (get_tree().paused or not game.pilot_mode or not game.pilot.active or game.pilot.dead or game.world_loading or game.dock_interface_active or game.map_open or game.front_end.menu_layer.visible)
+
+func project_target(target: CollisionObject3D, center: Vector3) -> Vector2:
+	if not guidance_visible(): return Vector2.INF
 	var camera: Camera3D = game.camera
-	var center: Vector3 = jobs.target_center(target)
 	var point: Vector3 = target.get_global_transform_interpolated() * center
 	if camera.is_position_behind(point) or camera.global_position.distance_to(point) > camera.far: return Vector2.INF
 	var projected := camera.unproject_position(point)
@@ -30,8 +43,12 @@ func _process(_delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
+	var points := delivery_target_points()
 	var point := target_point()
-	if not point.is_finite(): return
+	if point.is_finite(): points.append(point)
+	for marker_point in points: draw_marker(marker_point)
+
+func draw_marker(point: Vector2) -> void:
 	var scale_factor := get_viewport_rect().size.y / 480.0
 	var half := 12.0 * scale_factor
 	var length := 7.0 * scale_factor

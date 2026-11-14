@@ -146,6 +146,11 @@ func _ship_lost() -> void:
 	effect.setup_machine(ship,ship.get_child(0),jobs.game.submarine_traffic.bubble_texture)
 	ship.hide(); jobs.radio("an10",true)
 
+func delivery_cities(body: Node3D) -> Variant:
+	for item in bombs:
+		if item.active and body == item.body: return []
+	return null
+
 func delivery(body: Node3D, _city: int) -> bool:
 	for item in bombs:
 		if item.active and body == item.body: jobs.radio("an16"); jobs.game.equipment.magnet.decline_delivery(); return true

@@ -7,6 +7,7 @@ uniform float beam_radius = 0.45;
 uniform float beam_brightness = 0.55;
 uniform float beam_softness = 0.65;
 uniform float brightness_factor = 1.0;
+uniform vec3 beam_color : source_color = vec3(0.8, 0.92, 1.0);
 varying vec3 beam_position;
 
 void vertex() {
@@ -45,7 +46,7 @@ void fragment() {
 		float edge = 1.0 - smoothstep(1.0 - beam_softness, 1.0, radial);
 		density += edge * pow(1.0 - along, 1.2) * smoothstep(0.0, 0.04, along) * step_size / beam_radius;
 	}
-	ALBEDO = vec3(0.8, 0.92, 1.0);
+	ALBEDO = beam_color;
 	float opacity = clamp(density * beam_brightness * brightness_factor, 0.0, 0.85);
 	// Additive volumes were tuned for Compatibility display-space blending.
 	ALPHA = OUTPUT_IS_SRGB ? opacity : pow(max(opacity,0.0),2.2);

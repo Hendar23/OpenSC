@@ -159,11 +159,15 @@ func step(delta: float) -> void:
 func target_body() -> CollisionObject3D:
 	return filter_body if is_instance_valid(filter_body) and not filter_body.dead else null
 
+func delivery_cities(body: Node3D) -> Variant:
+	if body != filter_body: return null
+	return [1,2,3,4].filter(func(city: int) -> bool: return city not in cities) if not filter_body.dead else []
+
 func delivery(body: Node3D, city: int) -> bool:
 	if body != filter_body or filter_body.dead: return false
 	var magnet: Node3D = jobs.game.equipment.magnet
 	# Each city gets one prototype. No new dialogue for repeat deliveries.
-	if city not in [1,2,3,4] or city in cities:
+	if city not in delivery_cities(body):
 		magnet.decline_delivery(); return true
 	cities.append(city)
 	body.delivered = true; body.set_meta("delivery_city",city)

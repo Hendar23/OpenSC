@@ -396,9 +396,16 @@ func can_attach_pod(body: Node3D) -> bool:
 	if is_instance_valid(controller) and controller.has_method("can_attach_pod"): return controller.can_attach_pod(body)
 	return id in ["breakout","breakout2"] and not passengers and is_instance_valid(target) and not target.dead and body == target.body
 
+func delivery_cities(body: Node3D) -> Variant:
+	# null means ordinary salvage; an empty list means mission cargo which
+	# cannot currently be handed in. This query never advances the mission.
+	if is_instance_valid(controller) and controller.has_method("delivery_cities"): return controller.delivery_cities(body)
+	if id == "stranded" and body == target: return [1,2,3,4] if delivered_city == 0 and not target.dead else []
+	return null
+
 func delivery(body: Node3D, city: int) -> bool:
 	if is_instance_valid(controller) and controller.has_method("delivery"): return controller.delivery(body,city)
-	if id != "stranded" or body != target or city not in [1,2,3,4] or delivered_city != 0: return false
+	if id != "stranded" or body != target or city not in delivery_cities(body): return false
 	delivered_city = city; target.delivered = true; target.set_meta("delivery_city",city)
 	target.set_meta("metal_tow_target",false); game.equipment.magnet.set_enabled(false)
 	runtime.active()["resolved_city"] = city

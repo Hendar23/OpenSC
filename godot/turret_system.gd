@@ -55,7 +55,7 @@ func restore(value: Dictionary) -> void:
 		turret.retaliation = float(state.retaliation); turret.cooldown = float(state.cooldown)
 		turret.dead = turret.health <= 0
 		turret.get_parent().visible = not turret.dead
-		if turret.hitbox != null: turret.hitbox.collision_layer = 0 if turret.dead else 1
+		turret.update_collision()
 func _exit_tree() -> void:
 	for template in templates:
 		if is_instance_valid(template): template.free()

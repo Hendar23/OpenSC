@@ -296,7 +296,7 @@ func _setup_actors(folder: String) -> void:
 		game.submarine_traffic.build_graph(128)
 		await game.get_tree().process_frame
 	game.submarine_traffic.pirate_defeated.connect(game._pirate_bounty)
-	game.submarine_traffic.enable_roaming_pirates(folder,map_data)
+	game.submarine_traffic.enable_roaming_pirates(folder,map_data,game.front_end.gameplay_menu.random_pirate_weapons)
 	game.submarine_traffic.roaming_population.transmission.connect(func(message: Dictionary) -> void:
 		if game.radio_feed != null: game.radio_feed.push_message(message,game.docking.radio_static)
 	)

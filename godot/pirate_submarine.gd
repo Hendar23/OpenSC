@@ -17,6 +17,7 @@ var shot_retry := 0.0
 var acquire_clock := 0.0
 var fallback_probe := 0
 var player_attack_announced := false
+var armament: Node3D # Only random encounter slots install alternative weapons.
 
 static func install_pirate(model: Node3D, values: Dictionary) -> Node3D:
 	var agent = preload("res://trader_submarine.gd").install(model,values,load("res://pirate_submarine.gd"))
@@ -31,10 +32,12 @@ func health_multiplier() -> float:
 
 func reset() -> void:
 	super.reset()
+	if armament != null: armament.reset()
 	victim = null; cooldown = 0; replan = 0; wait = 0; shot_retry = 0; acquire_clock = 0; fallback_probe = 0; attack_run.reset()
 	player_attack_announced = false
 
 func set_local_simulation(on: bool) -> void:
+	if not on and armament != null: armament.reset()
 	if on != local_simulation:
 		victim = null; path.clear(); cooldown = 0; replan = 0; attack_run.reset()
 	super.set_local_simulation(on)
@@ -47,6 +50,7 @@ func configure_resources(folder: String) -> void:
 	bubble_trail = system.bubbles
 
 func _advance_motion(delta: float) -> void:
+	if armament != null: armament.begin_frame(delta)
 	if dead:
 		super._advance_motion(delta); return
 	if _ambient_attacks_suppressed():
@@ -67,6 +71,8 @@ func _advance_motion(delta: float) -> void:
 	if distance > float(tuning.npc_detection) * 1.5:
 		victim = null; path.clear(); _coast(delta); return
 	attack_run.advance(self,victim,delta)
+	if armament != null and armament.weapon_id != "missile":
+		armament.attack(delta,victim); return
 	if distance > float(tuning.npc_attack_range) or cooldown > 0 or shot_retry > 0 or missile_template == null: return
 	var heading: Vector3 = get_parent().global_basis.z.normalized()
 	var muzzle: Vector3 = get_parent().to_global(Vector3(0,-0.05,1))
@@ -86,6 +92,9 @@ func _advance_motion(delta: float) -> void:
 	missile.setup(self,missile_template,muzzle,shot_direction,victim,false)
 	missile.get_child(0).show()
 	cooldown = float(tuning.npc_fire_interval) * random.randf_range(0.8,1.2)
+
+func preferred_attack_distance() -> float:
+	return minf(5.5,armament.weapon_range() * 0.5) if armament != null and armament.weapon_id in ["zapper","zapperup"] else 5.5
 
 func _continuous_route() -> bool:
 	return roaming or is_instance_valid(victim) or super._continuous_route()

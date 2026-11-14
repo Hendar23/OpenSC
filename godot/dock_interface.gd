@@ -219,8 +219,8 @@ func _skin_button(node: DockButton, action: String, payload: Dictionary) -> void
 		_piece(node,node.highlight_art,"ENGLISH/" + goods_prefix + "DONG",Vector2(82,434))
 		_piece(node,node.held_art,goods_prefix + "POPL",Vector2(22,418))
 	elif page == "save" and action == "home":
-		_piece(node,node.highlight_art,"ENGLISH/" + prefix + "STEXT1",Vector2(94,427))
-		_piece(node,node.held_art,prefix + "SLIT2",Vector2(20,395))
+		_piece(node,node.highlight_art,"ENGLISH/DONETEX" if dock_race == 4 else "ENGLISH/" + prefix + "STEXT1",Vector2(94,427))
+		_piece(node,node.held_art,"BUTLIT3" if dock_race == 4 else prefix + "SLIT2",Vector2(20,395))
 	# Keep original overlays attached when a mod moves a navigation button.
 	for entry in DEFAULT_PAGES.get(page,{}).get("buttons",[]):
 		if entry.action != action: continue
@@ -294,7 +294,7 @@ func rebuild(new_page: bool = false) -> void:
 		"equipment": artwork = "TRADE" if race == 4 else "TP-1" if race == 2 else "TB-1"
 		"goods": artwork = prefix + "GOODSCR"
 		"missions": artwork = "MIS" + prefix + "1"
-		"save","load": artwork = "LOADSCR" if page == "load" else "PSAVE" if race == 2 else "BSAVE"
+		"save","load": artwork = "LOADSCR" if page == "load" else "PSAVE" if race == 2 else "SAVESCR" if race == 4 else "BSAVE"
 	background = TextureRect.new(); background.size = Vector2(640,480); background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	background.texture = texture(str(pages[page].get("background","texture.ui_dock_" + page)),"INTROTEX/ENGLISH/" + artwork + ".BMP")
 	layout.add_child(background)
@@ -391,6 +391,8 @@ func _mail_panel(data: Dictionary) -> void:
 		for pair in [[mail_button.highlight_art,"MAILL"],[mail_button.held_art,"MAILL2"]]:
 			var image := _mail_texture("ENGLISH/" + prefix + pair[1])
 			if image != null: pair[0].append({"texture":image,"rect":Rect2(Vector2.ZERO,image.get_size())})
+		if not mail_button.highlight_art.is_empty():
+			for state in ["hover","focus","pressed"]: mail_button.add_theme_stylebox_override(state,StyleBoxEmpty.new())
 	mail_button.focus_neighbor_bottom = mail_button.get_path_to(button_nodes[0])
 	button_nodes[0].focus_neighbor_top = button_nodes[0].get_path_to(mail_button)
 	var unread := 0

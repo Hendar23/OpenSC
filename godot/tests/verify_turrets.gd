@@ -115,7 +115,7 @@ func run() -> void:
 	preload("res://entity_identity.gd").assign_id(victim,"player")
 	turret.mission_owner = "turret_objective"
 	turret.take_weapon_damage_from(100,Vector3.ZERO,victim)
-	check(turret.dead and not model.visible and turret.hitbox.collision_layer == 0,"Destroyed turret stops rendering and colliding")
+	check(turret.dead and not model.visible and turret.hitbox.collision_layer == 0 and turret.hitbox.collision_mask == 0,"Destroyed turret stops rendering and clears both collision filters")
 	var wreck: Node3D = fixture.get_node("TurretWreck")
 	check(wreck.pieces.size() > 1 and wreck.gore.is_empty(),"Turret breaks into its own metal model pieces without blood")
 	check(wreck.bubbles != null and wreck.bubbles.amount == 96,"Turret destruction releases submarine-style bubbles")
@@ -126,7 +126,7 @@ func run() -> void:
 	check(System.valid_snapshot(saved),"Turret state serializes without engine references")
 	system.reset(); check(not turret.dead and model.visible and turret.health == 8,"New game restores destroyed turrets")
 	check(get_nodes_in_group("turret_wrecks").is_empty(),"New game clears old turret pieces")
-	system.restore(saved); check(turret.dead and not model.visible,"Saved destruction restores correctly")
+	system.restore(saved); check(turret.dead and not model.visible and turret.hitbox.collision_mask == 0,"Saved destruction restores correctly without collision")
 	check(turret.mission_owner == "turret_objective","Turret mission ownership survives save restoration")
 	var invalid := saved.duplicate(true); invalid[invalid.keys()[0]].health = -1
 	check(not System.valid_snapshot(invalid),"Invalid turret saves are rejected")
@@ -210,6 +210,8 @@ func run() -> void:
 		if int(row.index) == 91:
 			check(Vector2(original.position.x,original.position.z).is_equal_approx(Vector2(pose.origin.x,pose.origin.z)) and original.basis.get_scale().is_equal_approx(pose.basis.get_scale()),"Levelled Velcova turret retains its original horizontal position and scale")
 			check(original.basis.z.normalized().is_equal_approx(Vector3(pose.basis.z.x,0,pose.basis.z.z).normalized()),"Levelled Velcova turret retains its horizontal heading")
+		elif int(row.index) == 83:
+			check(Vector2(original.position.x,original.position.z).is_equal_approx(Vector2(pose.origin.x,pose.origin.z)) and original.basis.get_scale().is_equal_approx(pose.basis.get_scale()),"Grounded pirate-pipe turret retains its horizontal position and scale")
 		else:
 			check(original.basis.is_equal_approx(pose.basis) and Vector2(original.position.x,original.position.z).is_equal_approx(Vector2(pose.origin.x,pose.origin.z)),"Startup turret %d retains its original orientation, scale and horizontal position" % int(row.index))
 	check(not game.world_root.has_node("Scenery/TURRET_124"),"Mission-only turrets remain dormant")

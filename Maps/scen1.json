@@ -11041,6 +11041,7 @@
       "kind": "model",
       "model": "TURRET",
       "name": "TURRET_83",
+      "ground_turret": true,
       "solid": true,
       "transform": [
         1.0,

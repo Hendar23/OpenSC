@@ -178,6 +178,7 @@ func _ready() -> void:
 	# Keep menus, settings and market quotes responsive while the physical
 	# world is paused. Gameplay subtrees explicitly use PAUSABLE below.
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	var lens_flares := preload("res://lens_flares.gd").new(); lens_flares.name = "LensFlares"; add_child(lens_flares)
 	preload("res://input_bindings.gd").install()
 	capture_overlay = CaptureOverlay.new(); add_child(capture_overlay)
 	# Only the physics-driven submarine interpolates; camera and scenery keep
@@ -225,6 +226,8 @@ func _build_interface() -> void:
 	front_end.player_graphics.changed.connect(func() -> void: _update_hud_settings(); _update_daylight())
 	front_end.gameplay_menu.auto_aim_changed.connect(func(enabled: bool) -> void:
 		if weapons != null: weapons.auto_aim_enabled = enabled)
+	front_end.gameplay_menu.pirate_weapons_changed.connect(func(enabled: bool) -> void:
+		if is_instance_valid(submarine_traffic) and is_instance_valid(submarine_traffic.roaming_population): submarine_traffic.roaming_population.set_random_weapons(enabled))
 	front_end.gameplay_menu.wildlife_limit_changed.connect(func(limit: int) -> void:
 		if wildlife != null: wildlife.set_active_limit(limit))
 	front_end.gameplay_menu.sun_shafts_changed.connect(func(enabled: bool) -> void:

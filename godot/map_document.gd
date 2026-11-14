@@ -235,7 +235,9 @@ static func capture(world: Node3D, catalogue: Dictionary = {}) -> Dictionary:
 			record.light_source_position = array(node.get_meta("light_source_position"))
 		if node is PulseLight or node is Searchlight or node is SmokeEmitter or node is BubbleStream: record.merge(node.settings())
 		elif node is OmniLight3D: record.merge({"energy": node.light_energy, "range": node.omni_range})
-		if node.has_node("GunTurret"): record.merge(node.get_node("GunTurret").tuning)
+		if node.has_node("GunTurret"):
+			record.merge(node.get_node("GunTurret").tuning)
+			if node.get_meta("ground_turret",false): record.ground_turret = true
 		if node.has_node("Trader"):
 			record.merge(node.get_node("Trader").tuning)
 			if node.get_node("Trader") is Patrol: record.family = "patrol"
@@ -340,7 +342,9 @@ static func apply_entities(world: Node3D, folder: String, data: Dictionary) -> v
 		preload("res://entity_identity.gd").assign_id(node,preload("res://entity_identity.gd").authored("map/" + str(key),0))
 		if entry.kind == "model" and str(entry.get("model","")).to_upper() == "TURRET":
 			if not node.has_node("SceneryCollision"): Scenery._add_prop_collision(node)
-			GunTurret.install(node,entry)
+			var turret := GunTurret.install(node,entry)
+			node.set_meta("ground_turret",entry.get("ground_turret",false) == true)
+			if node.get_meta("ground_turret"): turret.ground_base()
 		if node is PulseLight or node is Searchlight or node is SmokeEmitter or node is BubbleStream:
 			node.configure(folder, entry)
 		elif entry.kind == "model" and str(entry.get("model","")).to_upper() in GroundVehicle.MODELS:

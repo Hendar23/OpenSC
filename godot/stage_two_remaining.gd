@@ -419,9 +419,13 @@ func _step_tag() -> void:
 	if not flags.get("collected",false) and jobs.game.equipment.magnet.target == cargo:
 		flags["found"] = true; flags["collected"] = true; radio("ii3"); _mark(cargo)
 
+func delivery_cities(body: Node3D) -> Variant:
+	if family != "tagtech" or body != cargo: return null
+	return [2,4]
+
 func delivery(body: Node3D, city: int) -> bool:
 	if family != "tagtech" or body != cargo: return false
-	if city not in [2,4]:
+	if city not in delivery_cities(body):
 		radio("ii6" if city == 6 else "ii5"); jobs.game.equipment.magnet.decline_delivery(); return true
 	cargo.delivered = true; jobs.game.equipment.magnet.set_enabled(false); jobs.runtime.active()["resolved_city"] = city
 	radio("ii4",true); finish(true); return true

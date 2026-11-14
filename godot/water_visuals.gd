@@ -76,6 +76,9 @@ func attach(node: Node) -> void:
 			# Spawned models may already have the natural-light shader wrapper.
 			# Keep that shader and its uniforms, reading surface flags from its source.
 			var source: Material = original.get_meta("natural_original",original)
+			# A lamp's on/off material must remain live and self-lit. Cloning it
+			# here freezes the visible lens in its initial switched-off colour.
+			if source.get_meta("equipment_bulb",false): continue
 			var plant: bool = original is ShaderMaterial and original.shader == PlantShader
 			if not source is StandardMaterial3D and not plant: continue
 			if source is StandardMaterial3D and source.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA: continue

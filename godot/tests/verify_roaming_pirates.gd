@@ -25,6 +25,9 @@ func run() -> void:
 	for agent in traffic.traders: agent.set_local_simulation(true)
 	await physics_frame
 	var population = traffic.roaming_population
+	var distribution := {"missile":0,"zapper":0,"zapperup":0,"electro":0}
+	for roll in range(100): distribution[population.weapon_for_roll(roll)] += 1
+	check(distribution == {"missile":40,"zapper":30,"zapperup":20,"electro":10},"Weapon probabilities are exactly 40/30/20/10")
 	check(population != null and population.ships.size() == 2,"Two random pirate slots created")
 	check(population.ships.all(func(agent: Node3D) -> bool: return not agent.dead),"Two pirates spawn alive")
 	check(population.ships.all(func(agent: Node3D) -> bool: return str(agent.get_parent().get_meta("asset_id",str(agent.get_parent().get_meta("asset_source","")).get_file().get_basename())).trim_prefix("model.").to_upper() == "PIRATE"),"Random pirates use only the yellow hull")
@@ -41,9 +44,10 @@ func run() -> void:
 	Damage.weapon(pirate.body,10000,ordinary.global_position,ordinary)
 	check(pirate.dead and game.player_progress.status.credits == credits,"NPC kills earn no player bounty")
 	check(population.replace(pirate) and not pirate.dead,"Destroyed pirate is replaced in safe water")
-	check(is_equal_approx(pirate.health.remaining,60.0),"Roaming pirate resets to the doubled combat-sub health")
+	check(is_equal_approx(pirate.health.remaining,float(pirate.tuning.npc_health)),"Roaming pirate resets to the map-authored combat-sub health")
+	var full_health: float = pirate.health.remaining
 	Damage.weapon(pirate.body,2.5,game.pilot.global_position,game.pilot)
-	check(not pirate.dead and is_equal_approx(pirate.health.remaining,59.25),"Single standard zapper tick applies sustain once")
+	check(not pirate.dead and is_equal_approx(pirate.health.remaining,full_health-0.75),"Single standard zapper tick applies sustain once")
 	Damage.weapon(pirate.body,10000,ordinary.global_position,ordinary)
 	check(pirate.dead and game.player_progress.status.credits == credits,"Player damage followed by NPC killing blow earns no bounty")
 	check(population.replace(pirate),"Reset pirate after shared combat")
@@ -70,11 +74,23 @@ func run() -> void:
 		pirate._physics_process(1.0)
 		if not pirate.path.is_empty(): break
 	check(not pirate.path.is_empty(),"Idle pirate chooses a map-wide roaming route")
+	pirate.armament.select_weapon("zapperup")
 	var snapshot: Dictionary = traffic.snapshot(); var position: Vector3 = pirate.global_position
 	snapshot["population/pirates/2"] = snapshot["population/pirates/0"].duplicate(true)
 	check(traffic.valid_snapshot(snapshot),"Published-beta snapshot with a third pirate remains valid")
 	pirate.get_parent().position += Vector3.ONE
 	traffic.restore(snapshot)
+	check(pirate.armament.weapon_id == "zapperup","Save/restore preserves a pirate's assigned weapon")
+	population.set_random_weapons(false)
+	check(population.ships.all(func(ship: Node3D) -> bool: return ship.armament.weapon_id == "missile"),"Disabling random weapons restores existing pirates to torpedoes")
+	traffic.restore(snapshot)
+	check(pirate.armament.weapon_id == "missile","Disabled preference takes precedence over a saved random weapon")
+	population.set_random_weapons(true)
+	var legacy_weapons := snapshot.duplicate(true)
+	for entry in legacy_weapons.values(): entry.erase("pirate_weapon")
+	check(traffic.valid_snapshot(legacy_weapons),"Published beta saves without weapon fields remain valid")
+	traffic.restore(legacy_weapons)
+	check(pirate.armament.weapon_id == "missile","Older saves retain their original torpedo weapons")
 	check(pirate.global_position.is_equal_approx(position),"Random pirate poses survive save restore")
 	check(population.ships.size() == 2,"Loading old third-pirate data preserves new two-pirate cap")
 	var map = game.cockpit_hud.map_data

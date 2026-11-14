@@ -75,7 +75,64 @@ func reset() -> void:
 	get_parent().show()
 	if head != null: head.transform = rest_head
 	sync_collision()
-	if hitbox != null: hitbox.collision_layer = 1
+	update_collision()
+
+func update_collision() -> void:
+	if hitbox == null: return
+	hitbox.collision_layer = 0 if dead else 1
+	hitbox.collision_mask = 0 if dead else 2
+	for shape in collision_shapes: shape.set_deferred("disabled",dead)
+
+func ground_base() -> void:
+	# Opt-in map placement: fit the base to the currently loaded terrain,
+	# including replacement terrain, without changing other authored mounts.
+	var model := get_parent() as Node3D
+	var query := PhysicsRayQueryParameters3D.create(model.global_position + Vector3.UP * 2,model.global_position - Vector3.UP * 2,16)
+	query.hit_back_faces = true
+	var space := get_world_3d().direct_space_state
+	var hit := space.intersect_ray(query)
+	if hit.is_empty(): return
+	var up: Vector3 = hit.normal
+	if up.y < 0: up = -up
+	# Average the whole footprint: a replacement terrain triangle's normal
+	# alone can tilt the base away from the surrounding seabed relief.
+	var contacts: Array[Vector3] = []
+	for mesh in collision_meshes:
+		if head != null and (head == mesh or head.is_ancestor_of(mesh)): continue
+		var bottom := mesh.mesh.get_aabb().position.y
+		for vertex in mesh.mesh.get_faces():
+			if vertex.y > bottom + 0.001: continue
+			var point: Vector3 = mesh.global_transform * vertex
+			query.from = point + Vector3.UP * 2; query.to = point - Vector3.UP * 2
+			hit = space.intersect_ray(query)
+			if not hit.is_empty() and not contacts.has(hit.position): contacts.append(hit.position)
+	if contacts.size() >= 3:
+		var centre := Vector3.ZERO
+		for point in contacts: centre += point
+		centre /= contacts.size()
+		var xx := 0.0; var xz := 0.0; var zz := 0.0; var xy := 0.0; var zy := 0.0
+		for point in contacts:
+			var relative := point - centre
+			xx += relative.x * relative.x; xz += relative.x * relative.z; zz += relative.z * relative.z
+			xy += relative.x * relative.y; zy += relative.z * relative.y
+		var determinant := xx * zz - xz * xz
+		if absf(determinant) > 0.000001:
+			up = Vector3(-(xy * zz - zy * xz) / determinant,1,-(zy * xx - xy * xz) / determinant).normalized()
+	var forward := model.global_basis.z.slide(up).normalized()
+	if forward.is_zero_approx(): return
+	model.global_basis = Basis(up.cross(forward).normalized(),up,forward).scaled_local(model.global_basis.get_scale())
+	var adjustment := -INF
+	for mesh in collision_meshes:
+		if head != null and (head == mesh or head.is_ancestor_of(mesh)): continue
+		var bottom := mesh.mesh.get_aabb().position.y
+		for vertex in mesh.mesh.get_faces():
+			if vertex.y > bottom + 0.001: continue
+			var point: Vector3 = mesh.global_transform * vertex
+			query.from = point + Vector3.UP * 2; query.to = point - Vector3.UP * 2
+			hit = space.intersect_ray(query)
+			if not hit.is_empty(): adjustment = maxf(adjustment,hit.position.y - point.y)
+	if is_finite(adjustment): model.global_position.y += adjustment + 0.005
+	sync_collision()
 
 func take_weapon_damage(strength: float, _source: Vector3 = Vector3.ZERO) -> void:
 	if dead or not is_finite(strength) or strength <= 0: return
@@ -84,7 +141,7 @@ func take_weapon_damage(strength: float, _source: Vector3 = Vector3.ZERO) -> voi
 	if health <= 0:
 		dead = true; get_parent().hide()
 		destroyed.emit(preload("res://entity_identity.gd").of(self),preload("res://entity_identity.gd").of(damage_attacker) if is_instance_valid(damage_attacker) else "")
-		if hitbox != null: hitbox.collision_layer = 0
+		update_collision()
 		var wreck := preload("res://submarine_death.gd").new()
 		get_parent().get_parent().add_child(wreck); wreck.global_position = global_position
 		wreck.setup_machine(get_parent(),get_parent(),bubble_texture)

@@ -85,6 +85,17 @@ func _animate_propellers() -> void:
 	for part in pass_propellers:
 		if part.node.is_visible_in_tree(): part.node.basis = part.rest * Basis(Vector3.BACK,angle)
 
+func _emit_wake(direction: Vector3, delta: float) -> void:
+	var outlets: Array[Node3D] = []
+	for part in pass_propellers:
+		if is_instance_valid(part.node) and part.node.is_visible_in_tree(): outlets.append(part.node)
+	if outlets.is_empty():
+		# Hulls without articulated propellers retain their existing wake.
+		wake.emit_from(0,submarine.global_position - direction * 0.4,-direction,1,16,delta)
+		return
+	for outlet in outlets:
+		wake.emit_from(outlet.get_instance_id(),outlet.global_position - direction * 0.04,-direction,1,16.0 / outlets.size(),delta)
+
 func _position_camera() -> void:
 	var document := preload("res://map_document.gd").load_active() if game.use_map_overrides else {}
 	if document.has("menu_camera"):
@@ -172,7 +183,7 @@ func _process(delta: float) -> void:
 		submarine.global_basis = Basis.looking_at(direction)
 		_update_propeller_audio()
 		_animate_propellers()
-		wake.emit_from(0,submarine.global_position - direction * 0.4,-direction,1,16,delta)
+		_emit_wake(direction,delta)
 		if pass_time > 15:
 			pass_time = -1; next_pass = random.randf_range(18,40); submarine.hide()
 			propeller_audio.stop()

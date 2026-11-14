@@ -125,6 +125,9 @@ func _destroyed() -> void:
 		# RESPONSE2 is an unused developer placeholder in the shipped text.
 		finished = true; jobs.radio("ab15",true); jobs._resolve(false,0,0)
 
+func delivery_cities(body: Node3D) -> Variant:
+	return [] if body == ship else null
+
 func delivery(body: Node3D, _city: int) -> bool:
 	if body != ship: return false
 	jobs.radio("ab14"); jobs.game.equipment.magnet.decline_delivery(); return true

@@ -22,7 +22,7 @@ func advance(agent: Node3D, victim: Node3D, delta: float) -> void:
 	if target_id != victim.get_instance_id():
 		reset(); target_id = victim.get_instance_id(); agent.path.clear()
 		turn_sign = -1.0 if agent.random.randf() < 0.5 else 1.0
-		lane_width = agent.random.randf_range(2.5,3.5); altitude = agent.random.randf_range(-0.7,0.7)
+		lane_width = minf(agent.random.randf_range(2.5,3.5),agent.preferred_attack_distance()); altitude = agent.random.randf_range(-0.7,0.7)
 	elapsed += delta; decision_clock -= delta; route_clock -= delta
 	var offset := victim.global_position-agent.global_position
 	if decision_clock <= 0:
@@ -40,7 +40,7 @@ func advance(agent: Node3D, victim: Node3D, delta: float) -> void:
 			side = heading.cross(Vector3.UP).normalized()
 			if side.is_zero_approx(): side = Vector3.RIGHT
 			side *= turn_sign
-			goal = predicted-heading*5.5
+			goal = predicted-heading*agent.preferred_attack_distance()
 			if offset.length() < 9:
 				phase = "pass"; elapsed = 0; passes += 1
 				goal = predicted+heading*5.0+side*lane_width

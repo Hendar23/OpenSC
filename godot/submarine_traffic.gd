@@ -75,9 +75,10 @@ func register_vessel(agent: Node3D, world: Node3D, folder: String, alert: Callab
 	agent.get_parent().physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON if simulating else Node.PHYSICS_INTERPOLATION_MODE_OFF
 	if map.get("actor_markers") != null: map.actor_markers.append(agent.body)
 
-func enable_roaming_pirates(folder: String, document: Dictionary) -> void:
+func enable_roaming_pirates(folder: String, document: Dictionary, random_weapons: bool = true) -> void:
 	if is_instance_valid(roaming_population): return
 	roaming_population = preload("res://pirate_population.gd").new(); roaming_population.name = "RoamingPirates"
+	roaming_population.random_weapons = random_weapons
 	get_parent().add_child(roaming_population); roaming_population.setup(self,folder,document)
 
 func replenish_docked(delta: float) -> void:
@@ -322,6 +323,7 @@ func snapshot() -> Dictionary:
 		result[Identity.of(agent)].route = Array(agent.path).map(func(point: Vector3) -> Array: return [point.x,point.y,point.z])
 		result[Identity.of(agent)].health_capacity = agent.health.capacity
 		if agent.get("player_attack_announced") is bool: result[Identity.of(agent)]["player_attack_announced"] = agent.player_attack_announced
+		if agent.get("armament") != null: result[Identity.of(agent)]["pirate_weapon"] = agent.armament.weapon_id
 		if agent.has_meta(Survivors.TAG):
 			result[Identity.of(agent)][Survivors.TAG] = agent.get_meta(Survivors.TAG)
 			result[Identity.of(agent)]["survivor_hostile"] = agent.engage_player
@@ -343,6 +345,7 @@ static func valid_snapshot(value: Variant) -> bool:
 			var capacity: Variant = entry.health_capacity
 			if not (capacity is float or capacity is int) or not is_finite(capacity) or capacity <= 0 or capacity > 20000: return false
 		if entry.has("player_attack_announced") and not entry.player_attack_announced is bool: return false
+		if entry.has("pirate_weapon") and entry.pirate_weapon not in ["missile","zapper","zapperup","electro"]: return false
 		if entry.has(Survivors.TAG) and entry[Survivors.TAG] not in Survivors.MODELS: return false
 		if entry.has("survivor_hostile") and not entry.survivor_hostile is bool: return false
 		if entry.has("survivor_retiring") and not entry.survivor_retiring is bool: return false
@@ -382,6 +385,8 @@ func restore(value: Dictionary) -> void:
 		agent.set_local_simulation(true)
 		agent.mission_owner = entry.get("mission_owner","")
 		if agent.get("player_attack_announced") is bool: agent.player_attack_announced = entry.get("player_attack_announced",false)
+		if agent.get("armament") != null:
+			agent.armament.select_weapon(str(entry.get("pirate_weapon","missile")) if roaming_population.random_weapons else "missile")
 		agent.get_parent().global_transform = preload("res://map_document.gd").decode(entry.pose)
 		agent.get_parent().reset_physics_interpolation()
 		agent.motion.velocity = Vector3.ZERO; agent.motion.bank = 0.0; agent.speed = 0.0; agent.body.velocity = Vector3.ZERO

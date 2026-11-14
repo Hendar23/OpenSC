@@ -52,7 +52,9 @@ func setup(context: Node3D, id: String, point: Vector3, heading: Vector3, victim
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON
 	add_to_group("player_projectiles")
 	global_position = point
-	velocity = arsenal.weapons.pilot.linear_velocity * (0.1 if kind == "electro" else 1.0)
+	var launcher: Node3D = arsenal.weapons.pilot
+	var inherited_velocity: Vector3 = launcher.linear_velocity if launcher is RigidBody3D else launcher.velocity if launcher is CharacterBody3D else Vector3.ZERO
+	velocity = inherited_velocity * (0.1 if kind == "electro" else 1.0)
 	if kind == "electro":
 		var sprite := Sprite3D.new(); sprite.texture = arsenal.bolt_frames[0]
 		sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED; sprite.no_depth_test = false

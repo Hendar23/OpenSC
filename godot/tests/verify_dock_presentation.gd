@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const UI = preload("res://dock_interface.gd")
 var checks := 0
 var failures := 0
@@ -15,6 +15,8 @@ func capture(name: String) -> void:
 func run() -> void:
  preload("res://input_bindings.gd").install()
  var folder := preload("res://asset_paths.gd").find_game_folder()
+ if not OS.get_environment("OPENSC_TEST_GAME_FOLDER").is_empty(): folder = OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+ preload("res://player_storage.gd").root_override = "res://tests/cache-dock-presentation-fixtures"
  var ui := UI.new(); root.add_child(ui)
  var race := 1
  var state := {"race":race,"city":"Touka Reef","status":{"credits":10000},"offers":{},"hold":{},"installed":{},"commodity_offers":{"thorium":{"name":"Thorium","buy_price":1000,"sell_price":724,"stock":20}},"cargo":{"thorium":3},"slots":[]}
@@ -120,9 +122,11 @@ func run() -> void:
    done = ui.layout.get_node("home")
    check(done.held_art[0].texture == ui._button_texture("MR-B1"),"Refinery missions use their own green Done artwork")
   ui.open("save")
+  var expected_save: Image = preload("res://legacy_bmp.gd").load_image(folder.path_join("INTROTEX/ENGLISH/" + {1:"BSAVE",2:"PSAVE",4:"SAVESCR"}[race] + ".BMP"))
+  check(ui.background.texture.get_image().get_data() == expected_save.get_data(),"Race %d save uses its original background" % race)
   done = ui.layout.get_node("home")
   var save_prefix := "P" if race == 2 else "B"
-  check(done.highlight_art[0].texture == ui._button_texture("ENGLISH/" + save_prefix + "STEXT1") and done.held_art[0].texture == ui._button_texture(save_prefix + "SLIT2"),"Save Done uses its own artwork for race %d" % race)
+  check(done.highlight_art[0].texture == ui._button_texture("ENGLISH/DONETEX" if race == 4 else "ENGLISH/" + save_prefix + "STEXT1") and done.held_art[0].texture == ui._button_texture("BUTLIT3" if race == 4 else save_prefix + "SLIT2"),"Save Done uses its own artwork for race %d" % race)
   check(done.highlight_art[0].rect.position + done.position == Vector2(94,427) and done.held_art[0].rect.position + done.position == Vector2(20,395),"Save Done artwork aligns with the original button")
   done.mouse_entered.emit(); done.button_down.emit()
   await capture("save-done-%d" % race)
