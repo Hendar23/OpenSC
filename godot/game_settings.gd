@@ -18,6 +18,10 @@ func _load_preferences(path: String = "") -> void:
 	var config := ConfigFile.new()
 	if config.load(path) != OK: return
 	var developer: Variant = config.get_value("developer","enabled",game.developer_enabled)
+	if not explicit_import and game.remember_preferences:
+		var personal := ConfigFile.new()
+		if personal.load(preload("res://player_storage.gd").preferences_path()) == OK:
+			developer = personal.get_value("developer","enabled",developer)
 	game.developer_enabled = developer is bool and developer
 	if not game.developer_enabled and game.developer_ui_visible: game._toggle_developer_ui()
 	# Developer overrides belong to this installation, not campaign save data.
@@ -170,6 +174,8 @@ func save_player_preferences(hud_index: int = -1) -> void:
 	var path := storage.preferences_path()
 	var config := ConfigFile.new()
 	config.load(path)
+	if not config.has_section_key("developer","enabled"):
+		config.set_value("developer","enabled",game.developer_enabled)
 	if hud_index >= 0:
 		config.set_value("hud",str(HUD.DEFINITIONS[hud_index].id),game.cockpit_hud.enabled[hud_index])
 	elif not game.game_folder.is_empty():

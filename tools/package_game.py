@@ -66,6 +66,10 @@ def build(destination: Path, archive_output: bool = True, excluded_mods: set[str
         uid = source.with_name(source.name + ".uid")
         if uid.is_file():
             shutil.copy2(uid, target.with_name(target.name + ".uid"))
+        # Font import settings are authored rendering data (including MSDF).
+        font_import = source.with_name(source.name + ".import")
+        if source.suffix.lower() in {".ttf", ".otf"} and font_import.is_file():
+            shutil.copy2(font_import, target.with_name(target.name + ".import"))
     (destination / "Maps").mkdir()
     shutil.copy2(ROOT / "Maps" / "scen1.json", destination / "Maps" / "scen1.json")
     bundled_mods = []
@@ -189,6 +193,20 @@ texture_format/etc2_astc=false
     (stage / "godot/export_presets.cfg").write_text(preset, encoding="utf-8")
     flags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
     common = [str(engine), "--headless", "--audio-driver", "Dummy", "--path", str(stage / "godot")]
+    # Godot loads the global theme before its first filesystem import. Bootstrap
+    # with that setting withheld, then validate the actual release configuration.
+    project_file = stage / "godot/project.godot"
+    project_text = project_file.read_text(encoding="utf-8")
+    if re.search(r'^theme/custom_font=', project_text, re.MULTILINE):
+        try:
+            project_file.write_text(re.sub(r'^theme/custom_font=.*$', '', project_text, flags=re.MULTILINE), encoding="utf-8")
+            with (stage / "bootstrap-import.log").open("w", encoding="utf-8") as log:
+                subprocess.run(common + ["--editor", "--import"], stdout=log, stderr=subprocess.STDOUT,
+                               check=True, timeout=180, creationflags=flags)
+            if "ERROR:" in (stage / "bootstrap-import.log").read_text(encoding="utf-8", errors="replace"):
+                raise SystemExit("Godot reported errors during bootstrap import")
+        finally:
+            project_file.write_text(project_text, encoding="utf-8")
     for label, args in [("import", ["--editor", "--import"]),
                         ("export", ["--export-release", "Windows Desktop", str(destination / "OpenSC.exe")])]:
         with (stage / (label + ".log")).open("w", encoding="utf-8") as log:
