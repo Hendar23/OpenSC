@@ -35,7 +35,7 @@ func run() -> void:
 	check(screen.fields.hold.text.contains("3") and not screen.fields.hold.text.contains("Empty"),"Cargo quantities shown")
 	check(screen.fields.hold.text.contains("Depth Charges") and screen.fields.hold.text.contains("12"),"Hold uses source equipment names and individual ammo count")
 	check(screen.fields.hold.get_theme_color("font_color") == preload("res://map_screen.gd").GOLD,"Panel inherits game gold text")
-	check(screen.fields.hold.get_theme_font("font") == ThemeDB.fallback_font,"Panel uses existing game font")
+	check(screen.fields.hold.get_theme_font("font") == preload("res://game_assets/fonts/exo2_medium.tres"),"Panel uses Exo 2 Medium")
 	progress.status.credits += 3500; progress.status.shields = 57; progress.cargo.thorium = 4
 	screen._process(0.21)
 	check(screen.credits.text == "Credits: 126956" and screen.fields.hold.text.contains("4"),"Credits and hold contents refresh while map stays open")

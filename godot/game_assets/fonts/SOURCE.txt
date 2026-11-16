@@ -1,0 +1,5 @@
+Exo 2 variable font (upright), used at Medium weight 500.
+Source: https://github.com/google/fonts/tree/main/ofl/exo2
+Font: https://raw.githubusercontent.com/google/fonts/main/ofl/exo2/Exo2%5Bwght%5D.ttf
+Downloaded 16 November 2026. Original font binary is unmodified.
+Copyright and SIL Open Font License 1.1: OFL.txt in this directory.

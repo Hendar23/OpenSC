@@ -2,6 +2,7 @@ extends CanvasLayer
 ## Double-size, modal playback. Conversion only runs in prepare(), at startup.
 const Library = preload("res://fmv_library.gd")
 const Bindings = preload("res://input_bindings.gd")
+const Mods = preload("res://mod_registry.gd")
 const DISPLAY_SCALE := 2.0
 signal completed(id: String)
 signal idle
@@ -21,6 +22,7 @@ var focus: WeakRef
 var finishing := false
 var terminal_playback := false
 var prepared_folder := ""
+var prepared_mods := ""
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS; layer = 200
@@ -38,7 +40,13 @@ func _docked(_city: int) -> void:
 	request("dock",0,int(game.docking.current.get("race",0)))
 
 func prepare(folder: String, progress: Callable = Callable(), decoder: String = "") -> void:
-	if prepared_folder == folder: return
+	Mods.ensure()
+	var signature := []
+	for id in Library.FILES:
+		for entry in Mods.candidates("video."+id):
+			signature.append([entry.path,Library.Cache.fingerprint(entry.path)])
+	var mod_signature := JSON.stringify(signature)
+	if prepared_folder == folder and prepared_mods == mod_signature: return
 	for entry in movies.values(): entry.player.free()
 	movies.clear(); warnings.clear(); conversions = 0
 	if decoder.is_empty(): decoder = Library.decoder_path()
@@ -50,7 +58,13 @@ func prepare(folder: String, progress: Callable = Callable(), decoder: String = 
 		if progress.is_valid(): progress.call("Preparing FMV: "+id)
 		await get_tree().process_frame
 		var output := Library.cache_path(source)
-		if not Library.Cache._valid(output):
+		var replacement := false
+		for entry in Mods.candidates("video."+id):
+			var replacement_info := Library.theora_info(str(entry.path))
+			if replacement_info.is_empty() or int(replacement_info.width)*int(info.height) != int(replacement_info.height)*int(info.width):
+				Mods.note("Invalid FMV replacement: "+str(entry.path)); continue
+			output = str(entry.path); replacement = true; break
+		if not replacement and not Library.Cache._valid(output):
 			if decoder.is_empty(): warnings.append("FMV conversion requires FFmpeg: "+id); continue
 			worker = Thread.new()
 			var error := worker.start(Library.convert.bind(decoder,source,output))
@@ -69,6 +83,7 @@ func prepare(folder: String, progress: Callable = Callable(), decoder: String = 
 		# Open the decoder and prime the first frame behind the loading screen.
 		video.play(); await get_tree().process_frame; video.paused = true; video.hide()
 	prepared_folder = folder
+	prepared_mods = mod_signature
 	_layout()
 	if not warnings.is_empty(): push_warning("FMVs: "+"; ".join(warnings))
 

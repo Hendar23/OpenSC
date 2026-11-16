@@ -31,6 +31,10 @@ window/size/viewport_height=720
 window/size/mode=4
 window/stretch/mode="canvas_items"
 
+[gui]
+
+theme/custom_font="res://game_assets/fonts/exo2_medium.tres"
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

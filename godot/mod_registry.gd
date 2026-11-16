@@ -166,7 +166,8 @@ static func _read_pack(folder: String) -> Dictionary:
 		var terrain := asset_id == "terrain.scen1"
 		var gameplay := asset_id in ["data.gameplay", "data.wildlife"]
 		var ui := asset_id in ["ui.dock","ui.saves","ui.main","ui.controls"]
-		if (not model and not texture and not audio and not map and not terrain and not gameplay and not ui) or (model and extension not in (["scn"] if protected else ["glb", "dff"])) or (texture and extension not in ["png", "jpg", "jpeg", "webp", "bmp", "ras"]) or (audio and extension not in ["wav", "ogg", "mp3", "raw"]) or ((map or gameplay or ui) and extension != "json") or (terrain and extension != "oscterrain"):
+		var video := asset_id.begins_with("video.") and asset_id.trim_prefix("video.") in preload("res://fmv_library.gd").FILES
+		if (not model and not texture and not audio and not map and not terrain and not gameplay and not ui and not video) or (model and extension not in (["scn"] if protected else ["glb", "dff"])) or (texture and extension not in ["png", "jpg", "jpeg", "webp", "bmp", "ras"]) or (audio and extension not in ["wav", "ogg", "mp3", "raw"]) or ((map or gameplay or ui) and extension != "json") or (terrain and extension != "oscterrain") or (video and extension != "ogv"):
 			pack.errors.append("Unsupported asset ID or file type: " + str(key)); continue
 		if not FileAccess.file_exists(resolved):
 			pack.errors.append("Missing asset file: " + relative); continue

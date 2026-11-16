@@ -59,10 +59,7 @@ func _ready() -> void:
 	loading_layout = _screen(loading_layer)
 	menu_layout = _screen(menu_layer)
 	menu_theme = Theme.new()
-	var font := ThemeDB.fallback_font.duplicate() as FontFile
-	if font != null:
-		font.multichannel_signed_distance_field = true
-		menu_theme.default_font = font
+	menu_theme.default_font = preload("res://game_assets/fonts/exo2_medium.tres")
 	menu_layout.theme = menu_theme
 	menu_layout.get_parent().color = Color.TRANSPARENT
 	loading_picture = _picture(loading_layout)

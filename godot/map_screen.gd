@@ -30,10 +30,9 @@ func setup(player: Node3D, data: RefCounted, catalogue: Dictionary, source: Call
 	map.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	map.mouse_filter = Control.MOUSE_FILTER_IGNORE; row.add_child(map)
 	panel = PanelContainer.new(); row.add_child(panel)
-	panel.theme = Theme.new(); panel.theme.default_font = ThemeDB.fallback_font
+	panel.theme = Theme.new(); panel.theme.default_font = preload("res://game_assets/fonts/exo2_medium.tres")
 	panel.theme.set_color("font_color","Label",GOLD)
 	var style := StyleBoxFlat.new(); style.bg_color = Color(0.015,0.025,0.035)
-	style.border_color = Color(0.28,0.24,0.12); style.set_border_width_all(1)
 	panel.add_theme_stylebox_override("panel",style)
 	var column := VBoxContainer.new(); panel.add_child(column)
 	credits = _label(""); credits.name = "Credits"; column.add_child(credits)

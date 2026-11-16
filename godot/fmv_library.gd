@@ -14,6 +14,20 @@ static func smacker_info(path: String) -> Dictionary:
 	var width := file.get_32(); var height := file.get_32(); var frames := file.get_32()
 	return {"width":width,"height":height,"frames":frames}
 
+static func theora_info(path: String) -> Dictionary:
+	var file := FileAccess.open(path,FileAccess.READ)
+	if file == null or file.get_length() < 80: return {}
+	var bytes := file.get_buffer(mini(file.get_length(),65536))
+	if bytes.slice(0,4).get_string_from_ascii() != "OggS": return {}
+	# The identification packet may follow another stream's first Ogg page.
+	for offset in range(28,bytes.size()-42):
+		if bytes[offset] != 128 or bytes.slice(offset+1,offset+7).get_string_from_ascii() != "theora": continue
+		var width := (int(bytes[offset+14])<<16) | (int(bytes[offset+15])<<8) | int(bytes[offset+16])
+		var height := (int(bytes[offset+17])<<16) | (int(bytes[offset+18])<<8) | int(bytes[offset+19])
+		if width > 0 and height > 0 and width <= 4096 and height <= 4096:
+			return {"width":width,"height":height}
+	return {}
+
 static func movie(cue: String, city: int = 0, race: int = 0) -> String:
 	match cue:
 		"intro": return "intro"

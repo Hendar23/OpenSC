@@ -74,7 +74,5 @@ func _draw() -> void:
 	var factor := maxf(1.0,get_viewport_rect().size.y / 720.0)
 	var center := (get_viewport_rect().size * 0.5).round()
 	var tint := RED if on_target else GREEN
-	for x in [-1.0,1.0]:
-		for y in [-1.0,1.0]:
-			var corner := center + Vector2(x,y) * 7.0 * factor
-			draw_polyline(PackedVector2Array([corner - Vector2(x * 4.0 * factor,0),corner,corner - Vector2(0,y * 4.0 * factor)]),tint,1.2 * factor,true)
+	for direction in [Vector2.LEFT,Vector2.RIGHT,Vector2.UP,Vector2.DOWN]:
+		draw_line(center + direction * 3.0 * factor,center + direction * 7.0 * factor,tint,1.2 * factor,true)

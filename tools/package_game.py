@@ -172,7 +172,7 @@ name="Windows Desktop"
 platform="Windows Desktop"
 runnable=true
 export_filter="all_resources"
-include_filter="*.cfg"
+include_filter="*.cfg,game_assets/fonts/OFL.txt"
 exclude_filter=""
 script_export_mode=2
 

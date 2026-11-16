@@ -158,7 +158,7 @@ func _draw() -> void:
 		draw_rect(rect, Color(0.0, 0.18, 0.2))
 		var item: Dictionary = weapons.current() if weapons != null else {}
 		if not item.is_empty() and item.icon != null: draw_texture_rect(item.icon,rect,false)
-		else: draw_string(ThemeDB.fallback_font, rect.position + Vector2(17, 25), "—", HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 34, 16, Color(0.4, 0.7, 0.7))
+		else: draw_string(preload("res://game_assets/fonts/exo2_medium.tres"), rect.position + Vector2(17, 25), "—", HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 34, 16, Color(0.4, 0.7, 0.7))
 		if show_weapon_counter: _draw_counter(weapon_counter_rect(),weapon_count())
 	elif kind == "shield":
 		var centre := rect.get_center()
@@ -261,10 +261,10 @@ func _draw_city_markers() -> void:
 			var text_position := position + Vector2(4, -3) * marker_scale
 			var text_width := rect.end.x - text_position.x - 2.0
 			if text_width > 12.0 and map_data.city_known(marker):
-				city_markers.draw_string(ThemeDB.fallback_font, text_position, str(marker.name).to_upper().left(18), HORIZONTAL_ALIGNMENT_LEFT, text_width, maxi(6, int(6 * marker_scale)), Color(0.15,0.85,0.2))
+				city_markers.draw_string(preload("res://game_assets/fonts/exo2_medium.tres"), text_position, str(marker.name).to_upper().left(18), HORIZONTAL_ALIGNMENT_LEFT, text_width, maxi(6, int(6 * marker_scale)), Color(0.15,0.85,0.2))
 
 	# Retail landmarks are centred, multiline names rather than city dots.
-	var font := ThemeDB.fallback_font
+	var font := preload("res://game_assets/fonts/exo2_medium.tres")
 	var font_size := maxi(6,int((4.5 if full_world else 6.0)*marker_scale))
 	var landmark_colour := Color(0.12,0.55,0.16) if full_world else Color(0.15,0.85,0.2)
 	for marker in map_data.landmarks.markers:

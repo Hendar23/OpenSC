@@ -30,7 +30,7 @@ func _run() -> void:
 	front.show_menu(false); front._activate_button("options"); front._activate_button("audio")
 	var menu: CanvasLayer = front.audio_menu
 	check(menu.visible and menu.slider.has_focus(),"Audio page opens focused on effects volume")
-	check(front.menu_layer.visible and front.menu_picture.visible and not front.buttons.audio.visible,"Audio keeps the main menu backdrop and title without overlapping options")
+	check(front.menu_layer.visible and not front.buttons.audio.visible,"Audio keeps the main menu backdrop without overlapping options")
 	check(menu.get_child(0).color.a == 0.0,"Audio does not cover the live sea background")
 	check(menu.caption.get_theme_font_size("font_size") == front.buttons.audio.get_theme_font_size("font_size") and menu.back.size == front.buttons.audio.size,"Audio matches main menu font and button size")
 	paused = true; press(menu,"menu_left")

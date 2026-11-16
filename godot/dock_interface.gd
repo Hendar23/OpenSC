@@ -116,11 +116,21 @@ func rect(values: Variant, fallback: Rect2 = Rect2(0,0,100,30)) -> Rect2:
 	if not preload("res://map_document.gd").finite_array(values,4): return fallback
 	return Rect2(values[0],values[1],maxf(1,values[2]),maxf(1,values[3]))
 func texture(id: String, relative: String) -> Texture2D:
-	for candidate in Mods.candidates(id):
-		var image := preload("res://clump_loader.gd")._replacement_image(candidate.path)
-		if image != null: return ImageTexture.create_from_image(image)
+	# A screen ID historically covered all three factions. Prefer an artwork-
+	# specific override while retaining that shared ID for existing mods.
+	var ids := [id + "_" + relative.get_file().get_basename().to_lower(),id] if id.begins_with("texture.ui_dock_") and not id.begins_with("texture.ui_dock_button_") else [id]
+	for asset_id in ids:
+		for candidate in Mods.candidates(asset_id):
+			var image := preload("res://clump_loader.gd")._replacement_image(candidate.path)
+			if image != null:
+				var replacement := ImageTexture.create_from_image(image)
+				var original := BMP.load_image(folder.path_join(relative))
+				if original != null: replacement.set_meta("menu_size",Vector2(original.get_size()))
+				return replacement
 	var image := BMP.load_image(folder.path_join(relative))
 	return ImageTexture.create_from_image(image) if image != null else null
+func _art_size(image: Texture2D) -> Vector2:
+	return image.get_meta("menu_size",image.get_size())
 func label(text: String, area: Rect2, font_size: int = 13, centre: bool = false) -> Label:
 	var node := Label.new(); node.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; node.text = text
 	node.add_theme_font_size_override("font_size",font_size); node.add_theme_color_override("font_color",text_colour)
@@ -171,7 +181,7 @@ func _button_texture(relative: String) -> Texture2D:
 
 func _piece(node: Button, target: Array, relative: String, position: Vector2) -> void:
 	var image := _button_texture(relative)
-	if image != null: target.append({"texture":image,"rect":Rect2(position - node.position,image.get_size())})
+	if image != null: target.append({"texture":image,"rect":Rect2(position - node.position,_art_size(image))})
 
 func _skin_button(node: DockButton, action: String, payload: Dictionary) -> void:
 	var procha := dock_race == 2
@@ -336,10 +346,11 @@ func rebuild(new_page: bool = false) -> void:
 	if page == "home" and not data.get("can_save",true):
 		var image := _button_texture(prefix + "NOSAVE")
 		if image != null:
-			var patch := TextureRect.new(); patch.name = "NoSavePanel"; patch.texture = image
+			var patch := TextureRect.new(); patch.name = "NoSavePanel"; patch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; patch.texture = image
 			# Both original covers start here; their different bitmap dimensions
 			# must not shift the Procha border and diagonal divider.
 			patch.position = Vector2(463,266); patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			patch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; patch.size = _art_size(image)
 			layout.add_child(patch); layout.move_child(patch,background.get_index() + 1)
 	if page == "load":
 		var area := rect(pages[page].get("slots"))
@@ -371,6 +382,7 @@ func _mail_texture(name: String) -> Texture2D:
 				var colour := image.get_pixel(x,y)
 				if colour.r > 0.95 and colour.g < 0.05 and colour.b < 0.05: image.set_pixel(x,y,Color.TRANSPARENT)
 		art_cache[key] = ImageTexture.create_from_image(image)
+		art_cache[key].set_meta("menu_size",_art_size(source))
 	return art_cache[key]
 
 func _mail_panel(data: Dictionary) -> void:
@@ -387,10 +399,10 @@ func _mail_panel(data: Dictionary) -> void:
 	var normal := _mail_texture("ENGLISH/" + prefix + "MAILN")
 	if normal != null:
 		mail_button.text = ""
-		mail_button.normal_art.append({"texture":normal,"rect":Rect2(Vector2.ZERO,normal.get_size())})
+		mail_button.normal_art.append({"texture":normal,"rect":Rect2(Vector2.ZERO,_art_size(normal))})
 		for pair in [[mail_button.highlight_art,"MAILL"],[mail_button.held_art,"MAILL2"]]:
 			var image := _mail_texture("ENGLISH/" + prefix + pair[1])
-			if image != null: pair[0].append({"texture":image,"rect":Rect2(Vector2.ZERO,image.get_size())})
+			if image != null: pair[0].append({"texture":image,"rect":Rect2(Vector2.ZERO,_art_size(image))})
 		if not mail_button.highlight_art.is_empty():
 			for state in ["hover","focus","pressed"]: mail_button.add_theme_stylebox_override(state,StyleBoxEmpty.new())
 	mail_button.focus_neighbor_bottom = mail_button.get_path_to(button_nodes[0])
@@ -702,10 +714,10 @@ func _show_item_info(offer: Dictionary, item_id: String) -> void:
 	art_clip.clip_contents = true; art_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE; content.add_child(art_clip)
 	var artwork := texture("texture.ui_equipment_info_" + item_id,str(offer.get("info_bitmap",""))) if not str(offer.get("info_bitmap","")).is_empty() else null
 	if artwork != null:
-		var image := TextureRect.new(); image.name = "Artwork"; image.texture = artwork; image.size = artwork.get_size()
+		var image := TextureRect.new(); image.name = "Artwork"; image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; image.texture = artwork; image.size = _art_size(artwork)
 		image.mouse_filter = Control.MOUSE_FILTER_IGNORE; art_clip.add_child(image)
 	var prefix := "TP" if dock_race in [2,4] else "TB"
-	var frame := TextureRect.new(); frame.name = "Frame"; frame.size = content.size; frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var frame := TextureRect.new(); frame.name = "Frame"; frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; frame.size = content.size; frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var frame_texture := texture("texture.ui_dock_info_r" if dock_race == 4 else "texture.ui_dock_info_" + prefix.to_lower(),"INTROTEX/ENGLISH/TRADEPOP.BMP" if dock_race == 4 else "INTROTEX/ENGLISH/" + prefix + "-POP1.BMP")
 	if frame_texture != null:
 		var frame_image := frame_texture.get_image(); frame_image.convert(Image.FORMAT_RGBA8)
@@ -718,7 +730,7 @@ func _show_item_info(offer: Dictionary, item_id: String) -> void:
 	if not square_path.is_empty():
 		var square := texture("texture.ui_equipment_square_" + item_id,square_path)
 		if square != null:
-			var icon := TextureRect.new(); icon.name = "Icon"; icon.texture = square; icon.position = Vector2(30,31); icon.size = square.get_size()
+			var icon := TextureRect.new(); icon.name = "Icon"; icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; icon.texture = square; icon.position = Vector2(30,31); icon.size = _art_size(square)
 			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE; content.add_child(icon)
 	for row in [["ItemName",str(offer.get("name","")),Rect2(29,82,218,20),Color.WHITE],
 		["Description",str(offer.get("description","")).replace("@",","),Rect2(29,102,218,180),Color.YELLOW]]:
