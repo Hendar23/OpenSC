@@ -1,18 +1,13 @@
 <img width="1920" height="1080" alt="OpenSC 2026-10-04 16-48-09" src="https://github.com/user-attachments/assets/8025017f-1d10-4db0-b224-4bb7c3b5346d" />
 
 # OpenSC
-OpenSC is an open-source game remake for playing Criterion Games' [Sub Culture](https://en.wikipedia.org/wiki/Sub_Culture). Built with [Godot](https://godotengine.org/)
+OpenSC is an open-source game remake for playing Criterion Games' [Sub Culture](https://en.wikipedia.org/wiki/Sub_Culture).
 
-[Watch some gameplay footage here.](https://www.youtube.com/watch?v=PmRX3hcQxC8)
+[Watch the trailer here.](https://www.youtube.com/watch?v=_cgAMurOpoc)
 
 [Join the Discord](https://discord.gg/56ESd7m8w)
 
-The aim is to bring this forgotten little gem of a game to modern systems, preserve the original experience, and expand on it with improved gameplay, new features and modding support. 
-
-## Current Progress
-OpenSC is now a fully playable beta. The complete game can be played from start to finish. 
-
-All that remains before version 1.0 is polish
+OpenSC brings this true forgotten gem to modern systems and expands on it with improved gameplay, new features and modding support. 
 
 ## Installation
 Latest release is available [here](https://github.com/Hendar23/OpenSC/releases/tag/v1.0.0).
@@ -51,6 +46,54 @@ OpenSC offers a few enhancements over the original:
   - Compact multi-message radio stack
   - Credits and hold inventory displayed next to full screen map
 
+## Controls
+
+Default bindings use Xbox button names. Controls can be changed in the **Controls** menu.
+
+| Control | Action |
+|---|---|
+| Right trigger (RT) | Forward thrust |
+| Left trigger (LT) | Reverse thrust |
+| Left stick left / right | Turn left / right |
+| Left stick back / forward | Pitch nose up / down |
+| Right stick up / down | Thrust vertically up / down |
+| X | Fire selected weapon |
+| D-pad up / down | Select previous / next weapon |
+| D-pad left / right | Select previous / next equipment |
+| B | Activate or deactivate selected equipment |
+| A | Accept docking or delivery prompt |
+| B | Decline docking or delivery prompt |
+| Y | Switch between cockpit and external view |
+| Hold LB, then press Y | Open or close the map |
+| Hold RB, then press Y | Toggle bottom camera |
+| Hold RB, then press B | Toggle rear camera |
+| View / Back | Enter photo and replay mode |
+| Menu / Start | Open the pause menu |
+
+When a docking or delivery prompt is active, **B** declines the prompt instead of toggling equipment.
+
+### Menus
+
+| Control | Action |
+|---|---|
+| D-pad | Navigate |
+| A | Select or confirm |
+| B | Back or cancel |
+
+### Photo and replay mode
+
+| Control | Action |
+|---|---|
+| Left stick | Move camera forward, backward and sideways |
+| Right stick | Look around |
+| RT / LT | Raise / lower camera |
+| Hold RB | Move faster |
+| Hold LB | Move slower |
+| D-pad up | Play or pause replay |
+| D-pad down | Switch between normal and quarter speed |
+| D-pad left / right | Scrub backward / forward |
+| View / Back, Menu / Start, or B | Exit photo and replay mode |
+ 
 ## Credits
 - Screenshot shutter sound: [“camera” by irinairinafomicheva](https://pixabay.com/sound-effects/technology-camera-13695/), from Pixabay. Used under the Pixabay Content License.
 
