@@ -20,8 +20,10 @@ func _process(delta: float) -> void:
 			game.market_ui_elapsed = 0.0
 			if game.dock_interface_active and game.dock_interface.visible and game.dock_interface.page == "goods": game.dock_interface.refresh_market()
 	game._update_mouse_pointer()
-	if game.radio_feed != null: game.radio_feed.visible = game.pilot_mode and not game.world_loading and not game.get_tree().paused and not game.front_end.menu_layer.visible
+	game.game_radio.set_docked(game.docking != null and game.docking.stage == Docking.Stage.DOCKED)
+	if game.radio_feed != null: game.radio_feed.visible = not game.game_radio.docked and game.pilot_mode and not game.world_loading and not game.get_tree().paused and not game.front_end.menu_layer.visible
 	if game.get_tree().paused or game.world_loading or game.loading_save: return
+	if game.docking != null and game.docking.stage != Docking.Stage.DOCKED: game.game_dock.view.close(game)
 	game.particles.active = game.pilot_mode and not game.world_loading
 	if game.pilot_mode and not game.world_loading and not game.developer_ui_visible: game.day_night.step(delta)
 	if not game.pilot_mode:
@@ -29,18 +31,20 @@ func _process(delta: float) -> void:
 		return
 	if not game.world_loading: game.plant_current.update_wash(game.pilot,delta)
 	if game.docked_screen != null:
-		game.docked_screen.visible = game.docking.stage == Docking.Stage.DOCKED
-		if game.docked_screen.visible and not game.front_end.menu_layer.visible:
+		game.docked_screen.visible = false
+		if game.docking.stage == Docking.Stage.DOCKED and not game.front_end.menu_layer.visible:
 			if not game.dock_interface_active:
 				game.equipment.vacuum.transfer_to(game.player_progress.cargo)
 				game._collect_city_deliveries(int(game.docking.current.node.get_meta("city_id")))
 				game.dock_interface.open("home"); game.dock_interface_active = true
 				game._autosave_docked()
 			elif not game.dock_interface.visible: game.dock_interface.show()
-			game.get_tree().paused = true
 		elif game.docking.stage != Docking.Stage.DOCKED and game.dock_interface_active:
 			game.dock_interface.dismiss(); game.dock_interface_active = false
-	if game.docking != null and game.docking.camera_frozen():
+	if game.docking != null and game.docking.stage == Docking.Stage.DOCKED:
+		game.game_dock.view.update(game)
+		game.camera_was_frozen = true
+	elif game.docking != null and game.docking.camera_frozen():
 		game.camera.global_position = game.docking.cinematic_camera
 		var target: Vector3 = game.pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.35
 		if game.camera.global_position.distance_to(target) > 0.01: game.camera.look_at(target, Vector3.UP)
@@ -59,6 +63,7 @@ func _process(delta: float) -> void:
 func _request_docking() -> void:
 	if game.pilot.dead: return
 	var launching: bool = game.docking.stage == Docking.Stage.DOCKED
+	if launching and is_instance_valid(game.submarine_traffic): game.submarine_traffic.clear_player_exit(game.docking.current)
 	if game.docking.request_docking():
 		if game.first_person:
 			game._set_camera_mode(false)

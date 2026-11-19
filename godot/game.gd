@@ -223,9 +223,11 @@ func _ready() -> void:
 func _build_interface() -> void:
 	developer_tools._build_interface()
 	front_end = FrontEnd.new(); front_end.remember_preferences = remember_preferences; add_child(front_end)
-	front_end.player_graphics.changed.connect(func() -> void: _update_hud_settings(); _update_daylight())
+	front_end.player_graphics.changed.connect(func() -> void: _update_hud_settings(); _update_water_environment())
 	front_end.gameplay_menu.auto_aim_changed.connect(func(enabled: bool) -> void:
 		if weapons != null: weapons.auto_aim_enabled = enabled)
+	front_end.gameplay_menu.random_pirates_changed.connect(func(disabled: bool) -> void:
+		if is_instance_valid(submarine_traffic) and is_instance_valid(submarine_traffic.roaming_population): submarine_traffic.roaming_population.set_disabled(disabled))
 	front_end.gameplay_menu.pirate_weapons_changed.connect(func(enabled: bool) -> void:
 		if is_instance_valid(submarine_traffic) and is_instance_valid(submarine_traffic.roaming_population): submarine_traffic.roaming_population.set_random_weapons(enabled))
 	front_end.gameplay_menu.wildlife_limit_changed.connect(func(limit: int) -> void:
@@ -304,7 +306,7 @@ func _show_main_menu() -> void:
 	front_end.buttons.load.tooltip_text = "" if front_end.is_button_available("load") else "No saved games yet"
 	front_end.show_menu(has_started_game and (pilot == null or not pilot.dead),not has_started_game and has_save)
 	if menu_backdrop != null:
-		menu_backdrop.open(); _update_daylight()
+		menu_backdrop.open()
 	get_tree().paused = true
 
 func _choose_game_folder(folder: String) -> void:
@@ -333,7 +335,6 @@ func _resume_game() -> void:
 	get_tree().paused = false
 	if docking != null and docking.stage == Docking.Stage.DOCKED:
 		dock_interface.open("home"); dock_interface_active = true
-		get_tree().paused = true
 	_update_daylight()
 	_update_mouse_pointer()
 

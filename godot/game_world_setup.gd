@@ -36,6 +36,7 @@ func _start_game(folder: String) -> void:
 	if game.photo_mode != null: game.photo_mode.replay.clear()
 	if game.menu_backdrop != null:
 		game.menu_backdrop.close(); game.menu_backdrop.free(); game.menu_backdrop = null
+	game.game_dock.view.close(game)
 	if game.dock_interface != null: game.dock_interface.dismiss(); game.dock_interface_active = false
 	game._set_map_open(false)
 	if game.map_overlay != null:
@@ -296,7 +297,7 @@ func _setup_actors(folder: String) -> void:
 		game.submarine_traffic.build_graph(128)
 		await game.get_tree().process_frame
 	game.submarine_traffic.pirate_defeated.connect(game._pirate_bounty)
-	game.submarine_traffic.enable_roaming_pirates(folder,map_data,game.front_end.gameplay_menu.random_pirate_weapons)
+	game.submarine_traffic.enable_roaming_pirates(folder,map_data,game.front_end.gameplay_menu.random_pirate_weapons,game.front_end.gameplay_menu.disable_random_pirates)
 	game.submarine_traffic.roaming_population.transmission.connect(func(message: Dictionary) -> void:
 		if game.radio_feed != null: game.radio_feed.push_message(message,game.docking.radio_static)
 	)
@@ -339,6 +340,7 @@ func _finish_start(folder: String) -> void:
 	if game.menu_backdrop == null:
 		game.menu_backdrop = preload("res://menu_backdrop.gd").new()
 		game.add_child(game.menu_backdrop); game.menu_backdrop.setup(game)
+		game.menu_backdrop.active_changed.connect(game._update_water_environment)
 	if not is_instance_valid(game.sun_shafts):
 		game.sun_shafts = preload("res://sun_shafts.gd").new()
 		game.world_root.add_child(game.sun_shafts); game.sun_shafts.setup(game)

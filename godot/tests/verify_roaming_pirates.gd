@@ -93,6 +93,17 @@ func run() -> void:
 	check(pirate.armament.weapon_id == "missile","Older saves retain their original torpedo weapons")
 	check(pirate.global_position.is_equal_approx(position),"Random pirate poses survive save restore")
 	check(population.ships.size() == 2,"Loading old third-pirate data preserves new two-pirate cap")
+	var ordinary_health: float = ordinary.health.remaining
+	game.front_end.gameplay_menu._toggle_random_pirates()
+	check(population.disabled and population.ships.all(func(ship: Node3D) -> bool: return ship.dead and not ship.get_parent().visible and ship.body.collision_layer == 0 and ship.body.collision_mask == 0),"Menu immediately hides and disables collision for random pirates")
+	check(ordinary.health.remaining == ordinary_health,"Disabling random pirates preserves ordinary traffic")
+	check(not population.replace(pirate),"Disabled random pirates cannot be replaced")
+	traffic.reset(); traffic.replenish_docked(2.0)
+	check(population.ships.all(func(ship: Node3D) -> bool: return ship.dead),"New-game reset and dock replenishment respect disabled random pirates")
+	traffic.restore(snapshot)
+	check(population.ships.all(func(ship: Node3D) -> bool: return ship.dead and not ship.get_parent().visible),"Loading existing beta pirate snapshots respects current preference")
+	game.front_end.gameplay_menu._toggle_random_pirates()
+	check(not population.disabled and population.ships.all(func(ship: Node3D) -> bool: return not ship.dead),"Turning the option off restores random pirates")
 	var map = game.cockpit_hud.map_data
 	map.discovered_cities.clear()
 	var marker: Dictionary = map.markers[0]

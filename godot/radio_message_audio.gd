@@ -7,6 +7,7 @@ var tuning: RefCounted
 var playback_allowed := Callable()
 
 func setup(folder: String, feed: Control, sound_tuning: RefCounted, allowed: Callable = Callable()) -> void:
+	add_to_group("dock_radio_audio")
 	process_mode = Node.PROCESS_MODE_PAUSABLE
 	playback_allowed = allowed
 	tuning = sound_tuning; stop(); stream = load_notification(folder)

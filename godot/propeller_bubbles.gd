@@ -38,7 +38,6 @@ func _ready() -> void:
 	instances.transform_format = MultiMesh.TRANSFORM_3D
 	instances.use_colors = true
 	instances.mesh = quad
-	instances.instance_count = capacity
 	instances.visible_instance_count = 0
 	var renderer := MultiMeshInstance3D.new()
 	renderer.multimesh = instances
@@ -120,6 +119,12 @@ func _update_instances() -> void:
 	var camera := get_viewport().get_camera_3d()
 	var camera_point := camera.global_position if camera != null else Vector3.ZERO
 	var has_surface := is_finite(surface_height)
+	# MultiMesh uploads the entire allocation, even when only one bubble is
+	# visible. Leave room for new particles and shrink after a burst subsides.
+	var count := particles.size()
+	var allocated := instances.instance_count
+	if count > allocated or (allocated > 16 and count * 4 <= allocated):
+		instances.instance_count = mini(capacity,maxi(16,nearest_po2(count)))
 	if render_buffer.size() != instances.instance_count*16:
 		render_buffer.resize(instances.instance_count*16)
 		render_buffer.fill(0.0)

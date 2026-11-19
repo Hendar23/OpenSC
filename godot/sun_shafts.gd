@@ -83,4 +83,4 @@ func _physics_process(delta: float) -> void:
 	patch.material.set_shader_parameter("surface_height",surface)
 	patch.material.set_shader_parameter("depth_start",float(game.natural_light.settings.sun_depth))
 	patch.material.set_shader_parameter("depth_end",depth_limit)
-	patch.material.set_shader_parameter("view_range",minf(view.far,game.fog_visibility))
+	patch.material.set_shader_parameter("view_range",minf(view.far,game.water_environment.fog_depth_end))

@@ -322,7 +322,9 @@ func _contact_impact(state: PhysicsDirectBodyState3D) -> Dictionary:
 	var greatest_damage := 0.0
 	for index in range(state.get_contact_count()):
 		var body := state.get_contact_collider_object(index) as CollisionObject3D
-		# Feedback includes harmless wildlife/water contacts and gentle impacts,
+		# The water ceiling only limits movement; it is never a hull impact.
+		if body != null and body.collision_layer & 4 != 0 and body.collision_layer & 1 == 0: continue
+		# Feedback includes harmless wildlife contacts and gentle impacts,
 		# independently of damage and sound thresholds or sound cooldown.
 		var rumble_id := state.get_contact_collider_id(index)
 		var rumble_normal := state.get_contact_local_normal(index)
@@ -339,8 +341,6 @@ func _contact_impact(state: PhysicsDirectBodyState3D) -> Dictionary:
 				if contact_damage > 0: take_damage.call_deferred(contact_damage,body.global_position)
 			body.call_deferred("receive_sub_push",previous_velocity if previous_velocity.length_squared() > state.linear_velocity.length_squared() else state.linear_velocity,collision_height() * 0.5)
 			continue
-		# The water ceiling still blocks motion, but is not a solid hull impact.
-		if body != null and body.collision_layer & 4 != 0 and body.collision_layer & 1 == 0: continue
 		var collider := state.get_contact_collider_id(index)
 		var normal := state.get_contact_local_normal(index)
 		if not contacts.has(collider): contacts[collider] = []

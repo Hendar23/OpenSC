@@ -39,7 +39,7 @@ func service() -> CanvasLayer:
 	return updates
 
 func offer(updates: CanvasLayer) -> void:
-	var exiting: bool = await updates.offer({"version":"0.8.3","url":Updates.RELEASE_PAGE + "v0.8.3"})
+	var exiting: bool = await updates.offer({"version":"1.0.0","url":Updates.RELEASE_PAGE + "v1.0.0"})
 	continued = not exiting
 
 func key(code: Key) -> void:
@@ -53,6 +53,8 @@ func pad(button: JoyButton) -> void:
 	await process_frame
 
 func _run() -> void:
+	# Keep the HTTP fixture independent of the current project release.
+	ProjectSettings.set_setting("application/config/version","0.8.2")
 	Bindings.bindings = Bindings.defaults(); Bindings.apply_all()
 	root.size = Vector2i(1280,720)
 	var releases := JSON.stringify([
@@ -87,7 +89,7 @@ func _run() -> void:
 	updates.queue_free(); await process_frame
 	updates = service(); offer(updates); await process_frame
 	check(updates.continue_button.has_focus(),"Continue initially selected")
-	check(updates.message.text == "OpenSC Beta v0.8.3 is available. Would you like to open the download page?","Agreed prompt wording")
+	check(updates.message.text == "OpenSC v1.0.0 is available. Would you like to open the download page?","Update prompt does not assume the offered release is a beta")
 	await key(KEY_ESCAPE)
 	check(continued and opened.is_empty() and not closed,"Esc continues without browser or quit")
 	updates.queue_free(); await process_frame
@@ -99,7 +101,7 @@ func _run() -> void:
 	await key(KEY_LEFT)
 	check(updates.download_button.has_focus(),"Keyboard navigation selects Download update")
 	await pad(JOY_BUTTON_A)
-	check(opened == Updates.RELEASE_PAGE + "v0.8.3" and closed and not continued,"Controller confirmation opens exact release then closes game")
+	check(opened == Updates.RELEASE_PAGE + "v1.0.0" and closed and not continued,"Controller confirmation opens exact release then closes game")
 	updates.queue_free(); await process_frame
 	closed = false; continued = false; updates = service()
 	updates.browser_open = func(_url: String) -> int: return ERR_CANT_OPEN

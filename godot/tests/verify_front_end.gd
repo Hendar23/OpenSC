@@ -262,7 +262,7 @@ func _run() -> void:
 	for frame in range(1200):
 		if not save_load.is_empty(): break
 		await process_frame
-	check(not save_load.is_empty() and save_load[0] and paused and not game.loading_canvas.visible,"Save restoration returns to the paused dock")
+	check(not save_load.is_empty() and save_load[0] and not paused and not game.loading_canvas.visible and game.dock_interface.visible,"Save restoration returns to the live dock")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.path(6)))
 	# Actual game input must allow GUI mouse clicks through the loading guard.
 	game.world_loading = true; game.front_end.show_loading()

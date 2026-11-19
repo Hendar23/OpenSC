@@ -77,7 +77,8 @@ void fragment() {
 	vec3 glow = emission_color.rgb;
 	if (has_emission_texture) glow *= texture(emission_texture,uv).rgb;
 	if (self_illuminated) glow = color.rgb * surface_emission_strength;
-	EMISSION = (glow + color.rgb * natural_ambient(natural_factor,natural_position)) * natural_transmission + natural_fog_colour(air_position,INV_VIEW_MATRIX[3].xyz) * fog;
+	vec3 fog_light = fog > 0.0 ? natural_fog_colour(air_position,INV_VIEW_MATRIX[3].xyz) * fog : vec3(0.0);
+	EMISSION = (glow + color.rgb * natural_ambient(natural_factor,natural_position)) * natural_transmission + fog_light;
 #ifdef EXTERIOR_CANOPY
 	if (osc_exterior_enabled && osc_exterior_ready) {
 		vec3 reflected_ray = normalize(mat3(INV_VIEW_MATRIX) * reflect(-normalize(VIEW),normalize(NORMAL)));

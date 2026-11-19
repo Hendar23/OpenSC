@@ -1,6 +1,8 @@
 extends "res://tests/test_scene_tree.gd"
 const Progress = preload("res://player_progress.gd")
 const Rules = preload("res://mission_rules.gd")
+const FallingSubmarine = preload("res://falling_submarine.gd")
+const Explosion = preload("res://mine_explosion.gd")
 var game: Node
 var runtime: Node
 var jobs: Node
@@ -267,11 +269,27 @@ func run() -> void:
 		check(heard("q1") and mission.guard.engage_player,"Original guard warning and hostility")
 		game.pilot.global_position = mission.queen.global_position+Vector3.UP*4; mission.step(0.2)
 		check(heard("q2") and mission.queen.provoked,"Queen enrages when approached")
-		var explosions_before: int = game.world_root.find_children("CaptorExplosion*","Node3D",true,false).size()
+		var existing_wrecks: Array = game.world_root.get_children().filter(func(node: Node) -> bool: return node is FallingSubmarine)
+		var explosions_before: int = game.world_root.get_children().filter(func(node: Node) -> bool: return node is Explosion).size()
 		for pair in mission.tethers: pair.ship.take_weapon_damage(1000)
-		check(game.world_root.find_children("CaptorExplosion*","Node3D",true,false).size() == explosions_before+3,"Each destroyed captor produces a fireball")
+		var wrecks: Array = game.world_root.get_children().filter(func(node: Node) -> bool: return node is FallingSubmarine and node not in existing_wrecks)
+		check(wrecks.size() == 3,"Each destroyed captor creates a separate destruction sequence")
+		var detonations := {}
+		for wreck in wrecks:
+			var identity: int = wreck.get_instance_id()
+			wreck.detonated.connect(func() -> void: detonations[identity] = int(detonations.get(identity,0)) + 1)
+			wreck.set_physics_process(false)
+			# Exercise the actual wreck visuals without blast damage changing the
+			# queen/guard behaviour that the rest of this mission fixture checks.
+			wreck.blast = Callable()
 		await physics_frame; await process_frame
 		check(mission.tethers.all(func(pair: Dictionary) -> bool: return pair.ship.freeze and pair.ship.collision_layer == 0 and pair.ship.collision_mask == 0),"Destroyed captor hulls stop simulating while their separate wrecks remain")
+		for tick in range(160):
+			for wreck in wrecks:
+				if is_instance_valid(wreck) and not wreck.is_queued_for_deletion(): wreck._physics_process(0.04)
+			if detonations.size() == 3: break
+		check(detonations.size() == 3 and detonations.values().all(func(count: int) -> bool: return count == 1),"All three captor wrecks detonate exactly once within the bounded fall time")
+		check(game.world_root.get_children().filter(func(node: Node) -> bool: return node is Explosion).size() >= explosions_before+3,"Captor destruction sequences produce real explosion effects")
 		mission.step(0.2)
 		check(not mission.queen.queen_held and mission.queen.damage_sustain == 0.05,"Queen becomes vulnerable after chains lose their ships")
 		var passive: Node3D = mission.fish.filter(func(a: Node3D) -> bool: return not a.queen)[0]

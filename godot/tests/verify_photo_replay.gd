@@ -219,7 +219,7 @@ func run() -> void:
 	var flash_track := Visual.new(); flash_track.setup(flash,0); flash_track.record(0,0,appearance)
 	var peer := flash.duplicate() as MeshInstance3D; actor.add_child(peer)
 	var peer_track := Visual.new(); peer_track.setup(peer,0); peer_track.record(0,0,appearance)
-	check(appearance.size() == 1 and peer_track.material_values == flash_track.material_values,"Shared materials use one uniform snapshot per recording sample")
+	check(appearance.size() == 1 and is_same(peer_track.versions[0].state.material.values,flash_track.versions[0].state.material.values),"Shared materials use one uniform snapshot per recording sample")
 	peer_track.dispose(); peer.free()
 	flash.material_override.set_shader_parameter("opacity",0.2); flash.material_override.set_shader_parameter("albedo_texture",game.submarine_explosion_frames[1]); flash_track.record(1,0.05)
 	var flash_view := Node3D.new(); actor.add_child(flash_view); flash_track.show_at(flash_view,0,0,0)

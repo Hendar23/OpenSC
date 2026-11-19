@@ -39,6 +39,7 @@ func setup(context: Node) -> void:
 	add_to_group("mission_runtime")
 	process_mode = Node.PROCESS_MODE_PAUSABLE
 	speech = AudioStreamPlayer.new(); speech.name = "MissionSpeech"; add_child(speech)
+	speech.add_to_group("dock_radio_audio")
 	speech.volume_db = preload("res://docking_radio.gd").SPEECH_VOLUME_DB
 	game.events.city_docked.connect(docked)
 	game.events.city_docking_started.connect(docking_started)
@@ -326,8 +327,10 @@ func _radio(code: String, portrait: String, terminal: bool = false) -> void:
 	# Mission text is displayed immediately, including beside a drop-off prompt.
 	# Play its speech at the same time; completion cleanup removes queued mission
 	# messages and must not discard the final voice before it has even started.
-	if stream != null:
+	var defer_radio: bool = game.docking.stage == game.docking.Stage.DOCKED
+	if defer_radio: message["deferred"] = true
+	if stream != null and not defer_radio:
 		speech.stop(); speech.stream = stream; speech.play(); message["voice_played"] = true
 	game.bounty_radio_queue.append(message)
 	if terminal: message["terminal"] = true
-	if game.radio_feed != null: game.radio_feed.push_message(message,game.docking.radio_static)
+	if game.radio_feed != null and not defer_radio: game.radio_feed.push_message(message,game.docking.radio_static)

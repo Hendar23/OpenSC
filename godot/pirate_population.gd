@@ -29,7 +29,7 @@ const TAUNTS := [
 	"That salvage belongs to us!",
 	"Fresh meat!",
 	"Wrong part of the ocean, pal!",
-	"You’re in our water now!",
+	"Youâ€™re in our water now!",
 	"Another sucker!",
 ]
 var traffic: Node
@@ -39,6 +39,20 @@ var random := RandomNumberGenerator.new()
 var portrait: Texture2D
 var distorted_portrait: Texture2D
 var random_weapons := true
+var disabled := false
+
+func set_disabled(value: bool) -> void:
+	disabled = value
+	if disabled: suspend_population()
+	else: reset_population()
+
+func suspend_population() -> void:
+	for agent in ships:
+		agent.release_port(); agent.dead = true; agent.get_parent().hide()
+		agent.set_hull_collision(false); agent.body.velocity = Vector3.ZERO
+		agent.motion.velocity = Vector3.ZERO
+		agent.armament.reset()
+		if is_instance_valid(agent.smoke): agent.smoke.clear()
 
 static func weapon_for_roll(roll: int) -> String:
 	if roll < 40: return "missile"
@@ -77,7 +91,7 @@ func setup(manager: Node, folder: String, document: Dictionary) -> void:
 	reset_population()
 
 func _taunt(agent: Node3D) -> void:
-	if attacks_suppressed(): return
+	if disabled or attacks_suppressed(): return
 	var line: String = TAUNTS[random.randi_range(0,TAUNTS.size()-1)]
 	transmission.emit({"speaker":preload("res://entity_identity.gd").of(agent),"text":"PIRATE : "+line,"portrait":portrait,"distorted_portrait":distorted_portrait})
 
@@ -93,14 +107,15 @@ func reset_population() -> void:
 	for agent in ships: replace(agent)
 
 func replenish_docked(delta: float) -> void:
-	# Called by the game only while the docked UI hides the world.
-	if not traffic.navigation_ready: return
+	# Dock visits remain the existing population replacement opportunity.
+	if disabled or not traffic.navigation_ready: return
 	retry = maxf(0,retry - delta)
 	if retry > 0: return
 	for agent in ships:
 		if agent.dead and agent.mission_owner.is_empty() and not replace(agent): retry = 1.0
 
 func replace(agent: Node3D) -> bool:
+	if disabled: return false
 	var ids: PackedInt64Array = traffic.graph.get_point_ids()
 	if ids.is_empty(): return false
 	var camera := get_viewport().get_camera_3d()

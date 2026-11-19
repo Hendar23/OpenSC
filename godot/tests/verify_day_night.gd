@@ -4,7 +4,17 @@ const Cycle = preload("res://day_night_cycle.gd")
 const Mods = preload("res://mod_registry.gd")
 var checks := 0
 var failures := 0
-func _initialize() -> void: call_deferred("_run")
+func _initialize() -> void:
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = preload("res://asset_paths.gd").find_game_folder()
+	var storage = preload("res://player_storage.gd")
+	storage.root_override = "res://../.local/day-night-fixture-player"
+	storage.ensure_parent(storage.preferences_path())
+	var config := ConfigFile.new()
+	config.set_value("game","folder",folder)
+	config.save(storage.preferences_path())
+	preload("res://asset_cache.gd").enabled = false
+	call_deferred("_run")
 func check(ok: bool, message: String) -> void:
 	checks += 1
 	if not ok: failures += 1; push_error(message)
@@ -36,6 +46,34 @@ func _run() -> void:
 	check(game.startup_complete, "Game loads with daylight controls")
 	if not game.startup_complete: quit(1); return
 	check(game.water_environment.fog_mode == Environment.FOG_MODE_DEPTH and game.water_environment.fog_depth_begin == game.fog_start_slider.value and game.water_environment.fog_depth_end == game.fog_visibility and game.water_environment.fog_density == 1.0, "Fog starts beyond clear-water distance and builds to configured visibility")
+	var graphics_menu: CanvasLayer = game.front_end.graphics_menu
+	graphics_menu.open_menu()
+	var fog_distance: HSlider = graphics_menu.controls.fog_distance
+	var fog_curve: float = game.water_environment.fog_depth_curve
+	fog_distance.value = fog_distance.min_value
+	check(is_equal_approx(game.water_environment.fog_depth_begin,game.fog_start_slider.value * 0.2) and is_equal_approx(game.water_environment.fog_depth_end,game.fog_visibility * 0.2),"Minimum fog distance moves both fade endpoints to 20% live")
+	check(is_equal_approx(game.water_environment.fog_depth_curve,fog_curve) and is_equal_approx(game.camera.far,game.fog_visibility),"Fog distance preserves the build-up curve and camera clipping range")
+	game.fog_button.button_pressed = false
+	check(not game.water_environment.fog_enabled,"Developer fog toggle still disables fog at minimum distance")
+	game.fog_button.button_pressed = true
+	check(is_equal_approx(game.water_environment.fog_depth_end,game.fog_visibility * 0.2),"Re-enabling fog uses the selected distance")
+	fog_distance.value = fog_distance.max_value
+	check(game.water_environment.fog_depth_begin == game.fog_start_slider.value and game.water_environment.fog_depth_end == game.fog_visibility,"Maximum restores the authored fog distances immediately")
+	graphics_menu.close_menu()
+	game.has_started_game = true
+	game._show_main_menu()
+	check(game.menu_backdrop.active and is_equal_approx(game.water_environment.fog_depth_begin,game.fog_start_slider.value * 0.8) and is_equal_approx(game.water_environment.fog_depth_end,game.fog_visibility * 0.8),"Opening the main menu applies its fixed 80% fog immediately")
+	graphics_menu.open_menu()
+	fog_distance.value = fog_distance.min_value
+	check(is_equal_approx(game.water_environment.fog_depth_end,game.fog_visibility * 0.8),"The graphics slider leaves the menu backdrop at 80%")
+	game.fog_button.button_pressed = false
+	check(game.water_environment.fog_enabled,"The menu backdrop keeps fog when gameplay fog is disabled")
+	game.fog_button.button_pressed = true
+	graphics_menu.close_menu()
+	game._resume_game()
+	check(not game.menu_backdrop.active and is_equal_approx(game.water_environment.fog_depth_end,game.fog_visibility * 0.2),"Resuming restores the selected gameplay fog immediately")
+	game.has_started_game = false
+	fog_distance.value = fog_distance.max_value
 	game.fog_start_slider.value = 7.0; game.fog_curve_slider.value = 2.25
 	check(game.water_environment.fog_depth_begin == 7.0 and is_equal_approx(game.water_environment.fog_depth_curve, 2.25), "Clear-water and build-up controls apply live")
 	game.daylight_controls.cycle_enabled.button_pressed = false

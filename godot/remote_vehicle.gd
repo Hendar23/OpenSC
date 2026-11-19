@@ -35,6 +35,7 @@ func setup(owner_tools: Node3D) -> void:
 	var lamp := SpotLight3D.new(); lamp.position = Vector3(0,0.04,-0.15); lamp.spot_range = 5; lamp.spot_angle = 45; lamp.light_energy = 1.5; add_child(lamp)
 	var fill := OmniLight3D.new(); fill.omni_range = 4; fill.light_energy = 0.3; add_child(fill)
 	speech = AudioStreamPlayer.new(); speech.volume_db = Radio.SPEECH_VOLUME_DB; add_child(speech)
+	speech.add_to_group("dock_radio_audio")
 	hide(); set_physics_process(false)
 
 func set_deployed(on: bool) -> void:

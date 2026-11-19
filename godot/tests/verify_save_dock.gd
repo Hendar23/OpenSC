@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Game = preload("res://game.gd")
 const Thorium = preload("res://thorium_body.gd")
 var failures := 0
@@ -13,6 +13,12 @@ func capture(name: String) -> void:
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png("res://tests/dock-ui-" + name + ".png")
 func run() -> void:
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = preload("res://asset_paths.gd").find_game_folder()
+	var storage = preload("res://player_storage.gd")
+	storage.root_override = "res://tests/cache-save-dock-fixtures"; storage.ensure_parent(storage.preferences_path())
+	var ignore := FileAccess.open(storage.root_override.path_join(".gdignore"),FileAccess.WRITE); ignore.store_string("")
+	var config := ConfigFile.new(); config.set_value("game","folder",folder); config.save(storage.preferences_path())
 	var game := Game.new(); game.remember_preferences = false; root.add_child(game)
 	for frame in range(2400):
 		if game.startup_complete: break
@@ -35,7 +41,7 @@ func run() -> void:
 	check(game.market_speed_slider.value == 10,"Market speed persists after reloading settings")
 	game.market_speed_slider.value = 50
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(speed_path))
-	game._begin_new_game(); game.pilot.set_physics_process(false); game.docking.set_physics_process(false)
+	await game._begin_new_game(); game.pilot.set_physics_process(false); game.docking.set_physics_process(false)
 	check((-game.pilot.global_basis.z).is_equal_approx(Vector3.LEFT),"New game faces 90 degrees right of the previous positive-Z heading")
 	check(game.pilot.global_basis.is_equal_approx(game.world_root.get_meta("player_spawn_basis")),"New game uses the editable spawn rotation")
 	check(game.radio_feed.anchor_left == 0.0 and game.radio_feed.offset_left == 20.0 and game.radio_feed.offset_bottom == -20.0,"Unified radio stack uses the bottom-left HUD position")
@@ -65,16 +71,16 @@ func run() -> void:
 	check(game.save_games.read(-1).progress.status.credits == automatic.progress.status.credits,"Dock autosave writes once per arrival, not every paused frame")
 	game.player_progress.status.credits -= 1
 	check(game.player_progress.cargo.get("ore",0) == 3 and game.equipment.vacuum.storage.is_empty(),"Entering dock transfers Suck-O-Matic storage into cargo")
-	check(paused and not game.world_root.can_process() and not game.pilot.can_process() and not game.docking.can_process(),"Dock menus pause gameplay processing and world physics")
-	check(game.dock_interface.can_process() and game.can_process(),"Dock controls and the market remain responsive while paused")
+	check(not paused and game.world_root.can_process() and game.docking.can_process(),"Dock menus keep world physics and traffic processing")
+	check(game.dock_interface.can_process() and game.can_process(),"Dock controls and the market remain responsive")
 	var pause_probe := RigidBody3D.new(); game.world_root.add_child(pause_probe)
 	pause_probe.global_position = port.entry; pause_probe.linear_velocity = Vector3(2,0,0)
 	var probe_position := pause_probe.global_position
 	var paused_hour := float(game.day_night.hour)
 	var sound_probe := AudioStreamPlayer.new(); pause_probe.add_child(sound_probe)
-	check(not sound_probe.can_process(),"Outside-world audio inherits the dock pause")
+	check(sound_probe.can_process(),"Outside-world audio continues while docked")
 	for frame in range(4): await physics_frame
-	check(pause_probe.global_position.is_equal_approx(probe_position) and is_equal_approx(game.day_night.hour,paused_hour),"Dock pause freezes physical objects and the world clock")
+	check(not pause_probe.global_position.is_equal_approx(probe_position) and game.day_night.hour > paused_hour,"Physical objects and the world clock continue while docked")
 	pause_probe.free()
 	game.market_speed_slider.value = 0
 	var clock_before: Dictionary = game.player_progress.economy.duplicate(true)
@@ -100,7 +106,7 @@ func run() -> void:
 	game._show_main_menu(); game._process(1.0)
 	check(game.player_progress.economy == economy_before_menu,"Main menu pauses the market as well as the outside world")
 	game._resume_game()
-	check(paused and game.dock_interface.visible and game.dock_interface.page == "home","Resuming a docked game restores dock menus without resuming the world")
+	check(not paused and game.dock_interface.visible and game.dock_interface.page == "home","Resuming a docked game restores live dock menus")
 	game.day_night.hour = 18.25
 	var crystal_stats := preload("res://object_definitions.gd").THORIUM.duplicate(true)
 	var intact: RigidBody3D = game.object_population._create_thorium(crystal_stats,0,Transform3D(Basis.IDENTITY,port.entry + Vector3.UP))
@@ -211,7 +217,7 @@ func run() -> void:
 	check(game.equipment.mounted[0].enabled,"Restores headlight state")
 	check(game.cockpit_hud.map_data.explored.get_pixel(100,101).r > 0.99 and game.cockpit_hud.map_data.explored.get_pixel(99,101).r < 0.01,"Restores explored fog mask")
 	check(game.dock_interface.visible and not game.pilot.visual.visible,"Dock UI displayed with docked sub hidden")
-	check(paused and not game.world_root.can_process(),"Loading a docked save also pauses the outside world")
+	check(not paused and game.world_root.can_process(),"Loading a docked save resumes the outside world")
 	var launch_camera: Vector3 = game.docking.cinematic_camera
 	var launch_basis: Basis = game.Docking.upright_basis(game.pilot.global_basis)
 	var launch_offset: Vector3 = launch_camera - game.docking.current.entry
@@ -274,7 +280,7 @@ func run() -> void:
 		for part in game.pilot.visual.find_children("*","Node3D",true,false):
 			check(part.get_global_transform_interpolated().is_equal_approx(part.global_transform),"Saved slot %d launches with the current display position and angle for %s" % [slot,part.name])
 	for slot in [0,1,2,6]: DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.path(slot)))
-	game._begin_new_game()
+	await game._begin_new_game()
 	check(is_equal_approx(game.day_night.hour,10.0),"New Game starts at 10:00")
 	var fixed_count: int = game.object_population.initial_thorium.size()
 	check(game.object_population.snapshot().size() > fixed_count and game.object_population.snapshot().size() <= fixed_count + 72,"New Game adds its startup batch to authored objects")

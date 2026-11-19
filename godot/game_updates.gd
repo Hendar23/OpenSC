@@ -80,7 +80,7 @@ func _build_prompt(version: String) -> void:
 	heading.add_theme_font_size_override("font_size",26)
 	column.add_child(heading)
 	message = Label.new()
-	message.text = "OpenSC Beta v%s is available. Would you like to open the download page?" % version
+	message.text = "OpenSC v%s is available. Would you like to open the download page?" % version
 	message.custom_minimum_size.x = 480
 	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(message)

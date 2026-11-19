@@ -75,14 +75,15 @@ func register_vessel(agent: Node3D, world: Node3D, folder: String, alert: Callab
 	agent.get_parent().physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON if simulating else Node.PHYSICS_INTERPOLATION_MODE_OFF
 	if map.get("actor_markers") != null: map.actor_markers.append(agent.body)
 
-func enable_roaming_pirates(folder: String, document: Dictionary, random_weapons: bool = true) -> void:
+func enable_roaming_pirates(folder: String, document: Dictionary, random_weapons: bool = true, disabled: bool = false) -> void:
 	if is_instance_valid(roaming_population): return
 	roaming_population = preload("res://pirate_population.gd").new(); roaming_population.name = "RoamingPirates"
 	roaming_population.random_weapons = random_weapons
+	roaming_population.disabled = disabled
 	get_parent().add_child(roaming_population); roaming_population.setup(self,folder,document)
 
 func replenish_docked(delta: float) -> void:
-	# Game calls this only once the player's docked UI hides the outside world.
+	# Existing population replacement remains tied to visits to a dock.
 	if not navigation_ready or not simulating: return
 	for agent in traders:
 		if not agent.dead or not agent.mission_owner.is_empty(): continue
@@ -90,6 +91,48 @@ func replenish_docked(delta: float) -> void:
 		if is_instance_valid(roaming_population) and roaming_population.ships.has(agent): continue
 		agent.reset()
 	if is_instance_valid(roaming_population): roaming_population.replenish_docked(delta)
+
+func clear_player_exit(port: Dictionary) -> void:
+	if port.is_empty(): return
+	var corridor := AABB(port.inside,Vector3.ZERO).expand(port.entry + Vector3.UP * 2.0).grow(player.COLLIDER_RADIUS + 0.6)
+	for agent in traders:
+		if not is_instance_valid(agent) or agent.dead: continue
+		var hull: AABB = agent.body.global_transform * agent.bounds
+		if Access.owner(port) != agent and (agent.stage == "berth" or not corridor.intersects(hull)): continue
+		# Mission vessels and released survivors keep all their authored state.
+		if agent.get_script() != Trader or not agent.mission_owner.is_empty() or agent.has_meta(Survivors.TAG):
+			_move_exit_obstruction(agent,corridor)
+		else:
+			# No damage, destruction signal, debris, bounty, or mission callback.
+			agent.release_port(); agent.dead = true; agent.get_parent().hide()
+			agent.set_hull_collision(false); agent.body.velocity = Vector3.ZERO
+			agent.motion.velocity = Vector3.ZERO; agent.respawn = float(agent.tuning.npc_respawn_delay)
+			if is_instance_valid(agent.smoke): agent.smoke.clear()
+
+func _move_exit_obstruction(agent: Node3D, corridor: AABB) -> bool:
+	var radius := maxf(0.75,(agent.body.global_basis * agent.bounds.size).length() * 0.5)
+	var candidates: Array[Vector3] = []
+	for id in graph.get_point_ids():
+		var point := graph.get_point_position(id)
+		point.y = minf(point.y,map.surface_height - radius - 0.3)
+		if not corridor.grow(radius).has_point(point): candidates.append(point)
+	candidates.sort_custom(func(a: Vector3,b: Vector3) -> bool: return a.distance_squared_to(agent.global_position) < b.distance_squared_to(agent.global_position))
+	var shape := SphereShape3D.new(); shape.radius = radius
+	var query := PhysicsShapeQueryParameters3D.new(); query.shape = shape; query.collision_mask = 1 | 2 | 8
+	query.exclude = [agent.body.get_rid(),player.get_rid()]
+	for point in candidates:
+		query.transform.origin = point
+		if not water_clear(point) or point.y + radius >= map.surface_height: continue
+		if space != null and not space.intersect_shape(query,1).is_empty(): continue
+		agent.release_port()
+		# Translate the model/body together and retain routes, goals and callbacks.
+		agent.get_parent().global_position += point - agent.body.to_global(agent.bounds.get_center())
+		agent.body.velocity = Vector3.ZERO; agent.motion.velocity = Vector3.ZERO
+		agent.path.clear(); agent.stage = "travel"; agent.elapsed = 0.0; agent.wait = 0.5
+		agent.set_hull_collision(agent.local_simulation); agent.get_parent().visible = agent.local_simulation
+		agent.get_parent().reset_physics_interpolation()
+		return true
+	return false
 
 func _exit_tree() -> void:
 	for agent in traders:
@@ -417,6 +460,8 @@ func restore(value: Dictionary) -> void:
 		agent.get_parent().visible = not agent.dead and agent.stage != "berth"
 		agent._update_dock_audio()
 		if agent.smoke != null: agent.smoke.set_health(agent.health.remaining * 10)
+
+	if is_instance_valid(roaming_population) and roaming_population.disabled: roaming_population.suspend_population()
 
 static func describe_ports(world: Node3D) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []

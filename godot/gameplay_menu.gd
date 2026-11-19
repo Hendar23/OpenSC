@@ -7,6 +7,9 @@ signal auto_aim_changed(enabled: bool)
 signal wildlife_limit_changed(limit: int)
 signal sun_shafts_changed(enabled: bool)
 signal replay_changed(enabled: bool)
+signal random_pirates_changed(disabled: bool)
+var disable_random_pirates := false
+var random_pirates_button: Button
 signal pirate_weapons_changed(enabled: bool)
 var random_pirate_weapons := true
 var pirate_weapons_button: Button
@@ -39,6 +42,7 @@ func _ready() -> void:
 	if settings_path.is_empty(): settings_path = Storage.preferences_path()
 	var config := ConfigFile.new()
 	if remember_preferences and config.load(settings_path) == OK:
+		disable_random_pirates = bool(config.get_value("gameplay","disable_random_pirates",false))
 		random_pirate_weapons = bool(config.get_value("gameplay","random_pirate_weapons",true))
 		crosshair_enabled = bool(config.get_value("gameplay","first_person_crosshair",true))
 		zapper_auto_aim = bool(config.get_value("gameplay","zapper_auto_aim",false))
@@ -57,17 +61,18 @@ func _ready() -> void:
 	var shade := ColorRect.new(); shade.color = Color.TRANSPARENT
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(shade)
 	layout = Control.new(); layout.size = Vector2(640,480); shade.add_child(layout)
-	toggle = _button(Vector2(196,74),Vector2(248,28)); toggle.pressed.connect(_toggle)
-	wildlife_button = _button(Vector2(196,112),Vector2(248,28)); wildlife_button.pressed.connect(_cycle_wildlife_limit)
-	sun_shafts_button = _button(Vector2(196,150),Vector2(248,28)); sun_shafts_button.pressed.connect(_toggle_sun_shafts)
-	lens_flares_button = _button(Vector2(196,188),Vector2(248,28)); lens_flares_button.pressed.connect(_toggle_lens_flares)
-	replay_button = _button(Vector2(196,226),Vector2(248,28)); replay_button.pressed.connect(_toggle_replay)
-	fmv_button = _button(Vector2(196,264),Vector2(248,28)); fmv_button.pressed.connect(_toggle_fmvs)
-	bubble_button = _button(Vector2(196,302),Vector2(248,28)); bubble_button.pressed.connect(_cycle_bubble_limit)
-	crosshair_button = _button(Vector2(196,340),Vector2(248,28)); crosshair_button.pressed.connect(_toggle_crosshair)
-	pirate_weapons_button = _button(Vector2(196,378),Vector2(248,28)); pirate_weapons_button.pressed.connect(_toggle_pirate_weapons)
-	back = _button(Vector2(216,416),Vector2(208,28)); back.text = "Back"; back.pressed.connect(close_menu)
-	status = Label.new(); status.position = Vector2(160,448); status.size = Vector2(320,32)
+	toggle = _button(Vector2(196,52),Vector2(248,28)); toggle.pressed.connect(_toggle)
+	wildlife_button = _button(Vector2(196,86),Vector2(248,28)); wildlife_button.pressed.connect(_cycle_wildlife_limit)
+	sun_shafts_button = _button(Vector2(196,120),Vector2(248,28)); sun_shafts_button.pressed.connect(_toggle_sun_shafts)
+	lens_flares_button = _button(Vector2(196,154),Vector2(248,28)); lens_flares_button.pressed.connect(_toggle_lens_flares)
+	replay_button = _button(Vector2(196,188),Vector2(248,28)); replay_button.pressed.connect(_toggle_replay)
+	fmv_button = _button(Vector2(196,222),Vector2(248,28)); fmv_button.pressed.connect(_toggle_fmvs)
+	bubble_button = _button(Vector2(196,256),Vector2(248,28)); bubble_button.pressed.connect(_cycle_bubble_limit)
+	crosshair_button = _button(Vector2(196,290),Vector2(248,28)); crosshair_button.pressed.connect(_toggle_crosshair)
+	pirate_weapons_button = _button(Vector2(196,324),Vector2(248,28)); pirate_weapons_button.pressed.connect(_toggle_pirate_weapons)
+	random_pirates_button = _button(Vector2(196,358),Vector2(248,28)); random_pirates_button.pressed.connect(_toggle_random_pirates)
+	back = _button(Vector2(216,392),Vector2(208,28)); back.text = "Back"; back.pressed.connect(close_menu)
+	status = Label.new(); status.position = Vector2(160,430); status.size = Vector2(320,32)
 	status.add_theme_font_size_override("font_size",14); status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; layout.add_child(status)
 	get_viewport().size_changed.connect(_layout); _layout(); _refresh(); hide()
 
@@ -82,6 +87,7 @@ func _button(point: Vector2,dimensions: Vector2) -> Button:
 	layout.add_child(button); return button
 
 func _refresh() -> void:
+	random_pirates_button.text = "Disable random pirates: %s" % ("On" if disable_random_pirates else "Off")
 	lens_flares_button.text = "Lens flares: %s" % ("On" if lens_flares_enabled else "Off")
 	pirate_weapons_button.text = "Random pirate weapons: %s" % ("On" if random_pirate_weapons else "Off")
 	crosshair_button.text = "First-person crosshair: %s" % ("On" if crosshair_enabled else "Off")
@@ -95,6 +101,10 @@ func _refresh() -> void:
 func _toggle_crosshair() -> void:
 	crosshair_enabled = not crosshair_enabled
 	_refresh(); _save()
+
+func _toggle_random_pirates() -> void:
+	disable_random_pirates = not disable_random_pirates
+	_refresh(); random_pirates_changed.emit(disable_random_pirates); _save()
 
 func _toggle_pirate_weapons() -> void:
 	random_pirate_weapons = not random_pirate_weapons
@@ -139,6 +149,7 @@ func _save() -> void:
 	if not remember_preferences: return
 	var config := ConfigFile.new(); var result := config.load(settings_path)
 	if result == OK or result == ERR_FILE_NOT_FOUND:
+		config.set_value("gameplay","disable_random_pirates",disable_random_pirates)
 		config.set_value("gameplay","random_pirate_weapons",random_pirate_weapons)
 		config.set_value("gameplay","zapper_auto_aim",zapper_auto_aim)
 		config.set_value("gameplay","wildlife_limit",wildlife_limit)
@@ -171,7 +182,7 @@ func _input(event: InputEvent) -> void:
 	if not visible: return
 	if Bindings.pressed(event,"menu_cancel"): close_menu()
 	elif Bindings.pressed(event,"menu_up") or Bindings.pressed(event,"menu_down"):
-		var buttons := [toggle,wildlife_button,sun_shafts_button,lens_flares_button,replay_button,fmv_button,bubble_button,crosshair_button,pirate_weapons_button,back]
+		var buttons := [toggle,wildlife_button,sun_shafts_button,lens_flares_button,replay_button,fmv_button,bubble_button,crosshair_button,pirate_weapons_button,random_pirates_button,back]
 		var selected := buttons.find(get_viewport().gui_get_focus_owner())
 		buttons[posmod(selected + (-1 if Bindings.pressed(event,"menu_up") else 1),buttons.size())].grab_focus()
 	elif toggle.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle()
@@ -184,6 +195,7 @@ func _input(event: InputEvent) -> void:
 		_cycle_bubble_limit(-1 if Bindings.pressed(event,"menu_left") else 1)
 	elif crosshair_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_crosshair()
 	elif pirate_weapons_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_pirate_weapons()
+	elif random_pirates_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_random_pirates()
 	elif fmv_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_fmvs()
 	elif Bindings.pressed(event,"menu_accept"):
 		if toggle.has_focus(): _toggle()
@@ -195,6 +207,7 @@ func _input(event: InputEvent) -> void:
 		elif bubble_button.has_focus(): _cycle_bubble_limit()
 		elif crosshair_button.has_focus(): _toggle_crosshair()
 		elif pirate_weapons_button.has_focus(): _toggle_pirate_weapons()
+		elif random_pirates_button.has_focus(): _toggle_random_pirates()
 		elif back.has_focus(): close_menu()
 	else: return
 	get_viewport().set_input_as_handled()

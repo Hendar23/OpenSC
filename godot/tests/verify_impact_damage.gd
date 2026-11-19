@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Pilot = preload("res://submarine_controller.gd")
 class FakeJoy extends RefCounted:
 	var calls := 0
@@ -10,7 +10,14 @@ var failures := 0
 func check(ok: bool, message: String) -> void:
 	checks += 1
 	if not ok: failures += 1; push_error(message)
-func _initialize() -> void: call_deferred("run")
+func _initialize() -> void:
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = preload("res://asset_paths.gd").find_game_folder()
+	var storage = preload("res://player_storage.gd")
+	storage.root_override = "res://tests/cache-verify-impact-damage-fixtures"; storage.ensure_parent(storage.preferences_path())
+	var ignore := FileAccess.open(storage.root_override.path_join(".gdignore"),FileAccess.WRITE); ignore.store_string("")
+	var config := ConfigFile.new(); config.set_value("game","folder",folder); config.save(storage.preferences_path())
+	call_deferred("run")
 func run() -> void:
 	var pilot := Pilot.new(); pilot.remember_settings = false; pilot.active = true; root.add_child(pilot)
 	pilot.visual = Node3D.new(); pilot.add_child(pilot.visual)
@@ -42,8 +49,16 @@ func run() -> void:
 	var water := StaticBody3D.new(); water.collision_layer = 4; water.collision_mask = 2; water.position = Vector3(0,1.5,0)
 	var water_shape := CollisionShape3D.new(); var water_box := BoxShape3D.new(); water_box.size = Vector3(10,0.5,10); water_shape.shape = water_box; water.add_child(water_shape); root.add_child(water)
 	pilot.velocity = Vector3.UP * 3
+	var before_water := joy.calls
 	for frame in range(60): await physics_frame
 	check(pilot.health == 100,"The water surface causes no collision damage")
+	check(joy.calls == before_water,"Real water-surface contacts produce no controller rumble")
+	pilot.surface_height = 1.5; pilot.reset_at(Vector3.ZERO); pilot.velocity = Vector3.UP * 15
+	before_water = joy.calls
+	for frame in range(60): await physics_frame
+	check(pilot.health == 100 and joy.calls == before_water,"High-speed surface height limiting causes neither damage nor rumble")
+	check(pilot.position.y + pilot.surface_clearance(pilot.global_basis) <= 1.5,"The harmless water surface still blocks ascent")
+	pilot.surface_height = INF
 	water.free(); pilot.restore_health(); pilot.reset_at(Vector3.ZERO)
 	var before_fish := joy.calls
 	var fish := preload("res://fish_controller.gd").new()

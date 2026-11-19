@@ -88,6 +88,8 @@ func run() -> void:
 		mission.walker.take_typed_weapon_damage(200,mission.walker.global_position+Vector3.UP*2,game.pilot,"missile")
 		await process_frame; await physics_frame
 		check(mission.phase == "head" and is_instance_valid(mission.head),"Destroyed legs release original WALKHEAD even when the firing source is above them")
+		check(mission.walker.collision_layer == 0 and mission.walker.collision_mask == 0 and mission.walker.find_children("*","CollisionShape3D",true,false).all(func(shape: CollisionShape3D) -> bool: return shape.disabled),"Hidden walker chassis has no remaining collision after releasing its head")
+		check(mission.head.collision_layer != 0 and mission.head.collision_mask != 0,"Released head retains its own salvage collision")
 		check(runtime.target_marker.target_body() == mission.head and mission.head.get_meta("metal_tow_target"),"HUD transfers to the live magnet-compatible head")
 		check(mission.head.health == 1.0 and mission.head.damage_sustain == 0.1,"Original fragile head shield/sustain values retained")
 		check(mission.warning == 6,"Released head switches to second cooling-failure warning sequence")

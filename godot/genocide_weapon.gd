@@ -149,7 +149,7 @@ func detach_head() -> void:
 	wreck.global_position = walker.global_position
 	wreck.setup_machine(walker,walker.appearance,jobs.game.submarine_traffic.bubble_texture)
 	jobs.burst(walker.global_position,1.2)
-	walker.hide(); walker.collision_layer = 0
+	walker.hide(); walker.disable_chassis_collision()
 	jobs.game.cockpit_hud.map_data.actor_markers.erase(walker)
 	phase = "head"; jobs.phase = "head"; warning = 6
 	_mark(head)

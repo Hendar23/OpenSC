@@ -19,6 +19,9 @@ var page := "home"
 var model: Callable
 var layout: Control
 var background: TextureRect
+var backdrop: ColorRect
+var live_window := false
+const WINDOW_MASKS := {1:preload("res://game_assets/ui/dock_window_b.svg"),2:preload("res://game_assets/ui/dock_window_p.svg"),4:preload("res://game_assets/ui/dock_window_r.svg")}
 var pages := DEFAULT_PAGES.duplicate(true)
 var text_colour := Color(1,0.8,0.15)
 var custom_colour: Variant = null
@@ -77,7 +80,7 @@ class DialogInput extends Node:
 	func _input(event: InputEvent) -> void: handler.call(event)
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS; layer = 20
-	var backdrop := ColorRect.new(); backdrop.color = Color.BLACK; add_child(backdrop); backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	backdrop = ColorRect.new(); backdrop.color = Color.BLACK; add_child(backdrop); backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layout = Control.new(); backdrop.add_child(layout); layout.size = Vector2(640,480)
 	name_dialog = ConfirmationDialog.new(); name_dialog.title = "Name saved game"; add_child(name_dialog)
 	name_field = LineEdit.new(); name_field.max_length = 64; name_field.custom_minimum_size = Vector2(360,38); name_dialog.add_child(name_field)
@@ -112,6 +115,19 @@ func _resize() -> void:
 	var size := get_viewport().get_visible_rect().size
 	var factor := minf(size.x / 640,size.y / 480)
 	layout.scale = Vector2.ONE * factor; layout.position = (size - Vector2(640,480) * factor) * 0.5
+	_update_window_layout()
+
+func _update_window_layout() -> void:
+	if backdrop == null or backdrop.material == null: return
+	backdrop.material.set_shader_parameter("layout_origin",layout.position)
+	backdrop.material.set_shader_parameter("layout_size",layout.size * layout.scale)
+	backdrop.material.set_shader_parameter("viewport_size",get_viewport().get_visible_rect().size)
+
+func _window_material(is_backdrop: bool) -> ShaderMaterial:
+	var result := ShaderMaterial.new(); result.shader = preload("res://dock_window.gdshader")
+	result.set_shader_parameter("window_mask",WINDOW_MASKS.get(dock_race,WINDOW_MASKS[1]))
+	result.set_shader_parameter("backdrop",is_backdrop)
+	return result
 func rect(values: Variant, fallback: Rect2 = Rect2(0,0,100,30)) -> Rect2:
 	if not preload("res://map_document.gd").finite_array(values,4): return fallback
 	return Rect2(values[0],values[1],maxf(1,values[2]),maxf(1,values[3]))
@@ -131,6 +147,22 @@ func texture(id: String, relative: String) -> Texture2D:
 	return ImageTexture.create_from_image(image) if image != null else null
 func _art_size(image: Texture2D) -> Vector2:
 	return image.get_meta("menu_size",image.get_size())
+
+func _title_texture(id: String, relative: String) -> Texture2D:
+	var key := "title:" + id + ":" + relative
+	if not art_cache.has(key):
+		var source := texture(id,relative)
+		if source == null: return null
+		var image := source.get_image(); image.convert(Image.FORMAT_RGBA8)
+		# Original name plates use black as the transparent colour key. Keeping
+		# it opaque draws a rectangle over the curved frame around the name.
+		for y in range(image.get_height()):
+			for x in range(image.get_width()):
+				var colour := image.get_pixel(x,y)
+				if colour.r == 0 and colour.g == 0 and colour.b == 0: image.set_pixel(x,y,Color.TRANSPARENT)
+		art_cache[key] = ImageTexture.create_from_image(image)
+		art_cache[key].set_meta("menu_size",_art_size(source))
+	return art_cache[key]
 func label(text: String, area: Rect2, font_size: int = 13, centre: bool = false) -> Label:
 	var node := Label.new(); node.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; node.text = text
 	node.add_theme_font_size_override("font_size",font_size); node.add_theme_color_override("font_color",text_colour)
@@ -308,9 +340,19 @@ func rebuild(new_page: bool = false) -> void:
 	background = TextureRect.new(); background.size = Vector2(640,480); background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	background.texture = texture(str(pages[page].get("background","texture.ui_dock_" + page)),"INTROTEX/ENGLISH/" + artwork + ".BMP")
 	layout.add_child(background)
+	live_window = page == "home" and bool(data.get("live_view",false))
+	backdrop.material = _window_material(true) if live_window else null
+	background.material = _window_material(false) if live_window else null
+	_update_window_layout()
+	if live_window:
+		var panel := Panel.new(); panel.name = "LiveWindowTextPanel"
+		var style := StyleBoxFlat.new(); style.bg_color = Color(0.015,0.035,0.09,0.78) if race == 2 else Color(0.005,0.025,0.03,0.78)
+		style.border_color = Color(0.4,0.5,0.5,0.6); style.set_border_width_all(1)
+		panel.add_theme_stylebox_override("panel",style); panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.position = Vector2(76,72); panel.size = Vector2(489,164); layout.add_child(panel)
 	if pages[page].has("title"):
 		var title_texture: Texture2D = null
-		if not str(data.get("title_bitmap","")).is_empty(): title_texture = texture("texture.ui_dock_title_" + str(data.get("city_id","")),data.title_bitmap)
+		if not str(data.get("title_bitmap","")).is_empty(): title_texture = _title_texture("texture.ui_dock_title_" + str(data.get("city_id","")),data.title_bitmap)
 		if title_texture != null:
 			var title := TextureRect.new(); title.texture = title_texture
 			title.name = "CityTitle"; title.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; title.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED

@@ -56,6 +56,7 @@ var yaw := 0.0
 var pitch := -0.15
 var export_dialog: FileDialog
 var models: Array[String] = []
+var menu_view_slot: OptionButton
 func _ready() -> void:
 	Bindings.install_editor()
 	add_theme_constant_override("separation", 12)
@@ -94,8 +95,12 @@ func _ready() -> void:
 	var toolbar := HFlowContainer.new(); main.add_child(toolbar)
 	button(toolbar, "Frame selection (F)", frame_selection)
 	button(toolbar, "Snap to seabed", snap_to_floor)
+	menu_view_slot = OptionButton.new(); menu_view_slot.name = "MenuViewSlot"
+	for index in Document.MENU_CAMERA_COUNT: menu_view_slot.add_item("Menu view %d" % (index + 1))
+	toolbar.add_child(menu_view_slot)
 	button(toolbar, "Use current view for menu", capture_menu_camera)
 	button(toolbar, "View menu camera", view_menu_camera)
+	button(toolbar, "Clear menu view", clear_menu_camera)
 	var preview := CheckButton.new(); preview.text = "Simulate wildlife / NPCs"
 	preview.toggled.connect(func(on: bool) -> void:
 		simulating = on
@@ -151,15 +156,33 @@ func button(parent: Node, text: String, action: Callable) -> Button:
 func capture_menu_camera() -> void:
 	if not loaded: return
 	var before := document.duplicate(true)
-	document.menu_camera = {"transform":Document.encode(camera.transform),"fov":camera.fov}
+	var slots := Document.menu_camera_slots(document)
+	slots[menu_view_slot.selected] = {"transform":Document.encode(camera.transform),"fov":camera.fov}
+	_store_menu_cameras(slots)
 	_remember(before)
-	status.text = "Menu camera captured. Save map to keep this view."
+	status.text = "Menu view %d captured. Save map to keep this view." % (menu_view_slot.selected + 1)
+
+func _store_menu_cameras(slots: Array[Dictionary]) -> void:
+	document.menu_cameras = slots
+	# Keep View 1 readable by earlier versions and existing map tools.
+	if not slots[0].is_empty(): document.menu_camera = slots[0].duplicate(true)
+	else: document.erase("menu_camera")
+
+func clear_menu_camera() -> void:
+	if not loaded: return
+	var before := document.duplicate(true)
+	var slots := Document.menu_camera_slots(document)
+	if slots[menu_view_slot.selected].is_empty(): return
+	slots[menu_view_slot.selected] = {}; _store_menu_cameras(slots); _remember(before)
+	status.text = "Menu view %d cleared. Save map to keep changes." % (menu_view_slot.selected + 1)
+
 func view_menu_camera() -> void:
 	if not loaded: return
-	if not document.has("menu_camera"):
-		status.text = "No menu camera has been captured."
+	var saved: Dictionary = Document.menu_camera_slots(document)[menu_view_slot.selected]
+	if saved.is_empty():
+		status.text = "Menu view %d has not been captured." % (menu_view_slot.selected + 1)
 		return
-	camera.transform = Document.decode(document.menu_camera.transform); camera.fov = float(document.menu_camera.fov)
+	camera.transform = Document.decode(saved.transform); camera.fov = float(saved.fov)
 	yaw = camera.rotation.y; pitch = camera.rotation.x
 func open(game_folder: String) -> void:
 	if loading or loaded: return

@@ -171,7 +171,7 @@ func _mine(point: Vector3) -> void:
 	mine.exploded.connect(jobs.game.object_population._exploded.bind(600.0))
 
 func _destroyed() -> void:
-	resolved = true; walker.dead = true; walker.hide(); walker.collision_layer = 0
+	resolved = true; walker.dead = true; walker.hide(); walker.disable_chassis_collision()
 	if armament != null: armament.set_physics_process(false)
 	jobs.burst(walker.global_position,3.0); jobs.radio("d10",true); victory_clock = 8.0
 	# Retail releases an intact WALKERHEAD with .2 shields, rather than

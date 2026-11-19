@@ -8,22 +8,29 @@ func _init(context: Node3D) -> void:
 	game = context
 
 const World = preload("res://world_loader.gd")
+const MENU_FOG_DISTANCE_SCALE := 0.8
 
 func _update_water_environment() -> void:
 	game.camera.far = game.fog_visibility if game.fog_button.button_pressed else 4000.0
 	if game.menu_backdrop != null: game.menu_backdrop.view.far = game.camera.far
 	if game.cockpit_hud != null and game.cockpit_hud.bottom_camera != null: game.cockpit_hud.bottom_camera.far = game.camera.far
 	if game.wildlife != null: game.wildlife.visibility_range = game.fog_visibility if game.fog_button.button_pressed else game.camera.far
-	game.water_environment.fog_enabled = game.fog_button.button_pressed
+	var menu_active: bool = game.menu_backdrop != null and game.menu_backdrop.active
+	game.water_environment.fog_enabled = menu_active or game.fog_button.button_pressed
 	game.water_environment.fog_mode = Environment.FOG_MODE_DEPTH
 	game.water_environment.fog_density = 1.0
+	var distance_scale := 1.0
+	if menu_active:
+		distance_scale = MENU_FOG_DISTANCE_SCALE
+	elif game.water_environment.fog_enabled and game.front_end != null and game.front_end.player_graphics != null:
+		distance_scale = float(game.front_end.player_graphics.settings.fog_distance) / 100.0
 	if game.fog_start_slider != null:
 		game.fog_start_slider.max_value = game.fog_visibility - 0.5
-		game.water_environment.fog_depth_begin = game.fog_start_slider.value
+		game.water_environment.fog_depth_begin = game.fog_start_slider.value * distance_scale
 		game.water_environment.fog_depth_curve = game.fog_curve_slider.value
 		game.fog_start_label.text = "Fade start distance: %.1f units" % game.fog_start_slider.value
 		game.fog_curve_label.text = "Fog build-up curve: %.1f" % game.fog_curve_slider.value
-	game.water_environment.fog_depth_end = game.fog_visibility
+	game.water_environment.fog_depth_end = game.fog_visibility * distance_scale
 	game.water_environment.fog_sun_scatter = 0.0
 	game.fog_label.text = "Absolute view distance: %.1f units" % game.fog_visibility
 	game._update_daylight()
@@ -37,7 +44,7 @@ func _update_daylight() -> void:
 	# sheltered background blue even after its cave exposure was applied.
 	game.water_environment.fog_sky_affect = 0.0
 	if game.fog_slider != null:
-		game.natural_light.lighting(game.water_environment,game.fog_visibility,game.fog_start_slider.value,game.fog_curve_slider.value)
+		game.natural_light.lighting(game.water_environment,game.water_environment.fog_depth_end,game.water_environment.fog_depth_begin,game.fog_curve_slider.value)
 	var menu_active: bool = game.menu_backdrop != null and game.menu_backdrop.active
 	var lighting_camera: Camera3D = game.menu_backdrop.view if menu_active else game.camera
 	var sub_lighting := has_sub_ambient(menu_active)
@@ -45,7 +52,7 @@ func _update_daylight() -> void:
 	game.natural_light.set_ambient_source(point,sub_lighting)
 	update_background(lighting_camera,sub_lighting)
 	game.water_visuals.lighting(float(game.world_root.get_meta("surface_height")) if is_instance_valid(game.world_root) and game.world_root.has_meta("surface_height") else 0.0,lighting_cycle.sun_direction())
-	if game.fog_slider != null: game.water_visuals.fog(game.fog_visibility if game.fog_button.button_pressed else 1000000.0,game.fog_start_slider.value,game.fog_curve_slider.value)
+	if game.fog_slider != null: game.water_visuals.fog(game.water_environment.fog_depth_end if game.water_environment.fog_enabled else 1000000.0,game.water_environment.fog_depth_begin,game.fog_curve_slider.value)
 	if game.clock_label != null:
 		var minutes := int(game.day_night.hour * 60.0) % 1440
 		game.clock_label.text = "World time: %02d:%02d" % [minutes / 60, minutes % 60]

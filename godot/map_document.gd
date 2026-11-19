@@ -48,15 +48,31 @@ static func finite_array(value: Variant, length: int) -> bool:
 	for component in value:
 		if not (component is float or component is int) or not is_finite(float(component)): return false
 	return true
+const MENU_CAMERA_COUNT := 4
+
+static func valid_menu_camera(value: Variant) -> bool:
+	if not value is Dictionary or not finite_array(value.get("transform"),12): return false
+	var pose := decode(value.transform)
+	return pose.basis.is_equal_approx(pose.basis.orthonormalized()) and pose.basis.determinant() >= 0.99 and finite_array([value.get("fov")],1) and float(value.fov) >= 1.0 and float(value.fov) <= 179.0
+
+static func menu_camera_slots(data: Dictionary) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for index in MENU_CAMERA_COUNT: result.append({})
+	if data.has("menu_cameras"):
+		for index in mini(data.menu_cameras.size(),MENU_CAMERA_COUNT): result[index] = data.menu_cameras[index].duplicate(true)
+	elif data.has("menu_camera"): result[0] = data.menu_camera.duplicate(true)
+	return result
+
 static func valid(data: Variant) -> bool:
 	if not data is Dictionary or data.get("schema_version") != 1: return false
 	if not ObjectDefinitions.valid(data): return false
 	if not data.get("entities") is Dictionary or not EntityTypes.valid(data): return false
 	if data.has("menu_camera"):
-		if not data.menu_camera is Dictionary or not finite_array(data.menu_camera.get("transform"),12): return false
-		var menu_pose := decode(data.menu_camera.transform)
-		if not menu_pose.basis.is_equal_approx(menu_pose.basis.orthonormalized()) or menu_pose.basis.determinant() < 0.99: return false
-		if not finite_array([data.menu_camera.get("fov")],1) or float(data.menu_camera.fov) < 1.0 or float(data.menu_camera.fov) > 179.0: return false
+		if not valid_menu_camera(data.menu_camera): return false
+	if data.has("menu_cameras"):
+		if not data.menu_cameras is Array or data.menu_cameras.size() > MENU_CAMERA_COUNT: return false
+		for camera in data.menu_cameras:
+			if not camera is Dictionary or (not camera.is_empty() and not valid_menu_camera(camera)): return false
 	if not data.get("entities") is Dictionary or not data.get("species") is Array or not data.get("groups") is Array: return false
 	if data.entities.size() > 5000 or data.species.size() > 256 or data.groups.size() > 256: return false
 	if not finite_array([data.get("seed", 8675309)], 1): return false

@@ -145,7 +145,7 @@ func _check_wakes(world: Node3D) -> void:
 	check(wake.particles[0].position.is_equal_approx(expected) and is_equal_approx(wake.particles[0].age,0.2),"Deferred rendering retains every physics tick of bubble travel and age")
 	check(wake.instances.visible_instance_count == 0,"Catch-up ticks do not submit intermediate render buffers")
 	wake._update_instances()
-	check(wake.instances.visible_instance_count == 2 and wake.render_buffer.size() == wake.capacity*16,"One frame upload includes every surviving bubble")
+	check(wake.instances.visible_instance_count == 2 and wake.render_buffer.size() == wake.instances.instance_count*16 and wake.instances.instance_count < wake.capacity,"Small wake uploads all survivors without a full-capacity buffer")
 	var size := 0.08*(1.0+0.2/6.0*0.45)
 	check(is_equal_approx(wake.render_buffer[0],size) and Vector3(wake.render_buffer[3],wake.render_buffer[7],wake.render_buffer[11]).is_equal_approx(expected),"Bulk buffer preserves original scale/translation layout")
 	var point: Vector3 = wake.particles[1].position
@@ -158,4 +158,6 @@ func _check_wakes(world: Node3D) -> void:
 	for index in wake.capacity: wake.particles.append(normal.duplicate())
 	wake.advance(0.01)
 	check(wake.particles.size() == wake.capacity and wake.instances.visible_instance_count == wake.capacity,"Full original wake capacity remains available without quality reduction")
+	wake.particles.resize(2); wake._update_instances()
+	check(wake.instances.visible_instance_count == 2 and wake.render_buffer.size() < wake.capacity*16 and Vector3(wake.render_buffer[3],wake.render_buffer[7],wake.render_buffer[11]).is_equal_approx(wake.particles[0].position),"After a burst the upload shrinks and retains survivor transforms")
 	wake.free();camera.free()

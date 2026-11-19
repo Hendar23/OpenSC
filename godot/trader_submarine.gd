@@ -237,7 +237,7 @@ func advance(delta: float) -> void:
 
 func _advance_motion(delta: float) -> void:
 	if dead:
-		# The traffic manager replaces destroyed subs only behind the docked UI.
+		# The traffic manager replaces destroyed civilian slots during dock visits.
 		return
 	escape_replan = maxf(0.0,escape_replan-delta)
 	if stage != "travel": _dock_step(delta); return

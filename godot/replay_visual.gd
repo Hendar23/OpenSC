@@ -1,6 +1,7 @@
 extends RefCounted
 ## A visual-only history. Resources are retained, never gameplay nodes/scripts.
 const CAPACITY := 602
+const NO_MATERIAL_VALUES: Array = []
 const MATERIAL_FIELDS := ["opacity","albedo_texture","emission_texture","albedo_color","emission_color","uv_offset","strength","beam_length","beam_width","seed","light_color","propeller_bend","drift_distance","cloud_center","flare_color","brightness","reach","diameter","cone_cosine","forward_sign","solar"]
 var source: WeakRef
 var detached := false
@@ -17,7 +18,6 @@ var mutable_mesh := false
 static var shader_fields := {}
 var multimesh_copy: MultiMesh
 var material_templates := {}
-var material_values := {}
 var last_prune := 0.0
 
 func setup(node: Node3D, time: float) -> void:
@@ -43,22 +43,12 @@ func _prune(tick: int, time: float) -> void:
 		for id in material_templates.keys():
 			if material_templates[id].get_ref() == null: material_templates.erase(id)
 
-func _signature(value: Variant) -> Variant:
-	if value is Resource:
-		return value.get_instance_id()
-	if value is Array:
-		var result: Array = []
-		for entry in value: result.append(_signature(entry))
-		return result
-	return value
-
 func record(tick: int, time: float, appearances: Dictionary = {}) -> void:
 	var node: Node3D = null if detached else source.get_ref()
 	var slot := tick%CAPACITY; var offset := slot*stride
 	stamps[slot] = tick
 	data[offset+12] = 0
 	_prune(tick,time)
-	material_values.clear()
 	if node == null or not node.is_inside_tree() or not node.is_visible_in_tree(): return
 	# Procedural beams acquire this flag on their first geometry build, which
 	# can happen after replay discovers the initially hidden mesh.
@@ -72,7 +62,7 @@ func record(tick: int, time: float, appearances: Dictionary = {}) -> void:
 	data[offset+9] = p.x; data[offset+10] = p.y; data[offset+11] = p.z
 	var values := _values(node,appearances)
 	if versions.is_empty() or values != previous or mutable_mesh or kind == "multi":
-		var state := _state(node)
+		var state := _state(node,appearances)
 		previous = values
 		versions.append({"tick":tick,"time":time,"state":state})
 	last_seen = time; data[offset+12] = 1
@@ -81,7 +71,6 @@ func record(tick: int, time: float, appearances: Dictionary = {}) -> void:
 		for index in range(stride-14): data[offset+14+index] = node.get_blend_shape_value(index)
 	# Keep one preceding appearance for interpolation across the buffer edge.
 	while versions.size() > 1 and (versions[1].tick <= tick-CAPACITY+1 or versions[1].time <= time-30.0): _drop_version()
-	material_values.clear()
 
 func _values(node: Node3D, appearances: Dictionary) -> Array:
 	var result: Array = []
@@ -116,30 +105,30 @@ func _fields(material: ShaderMaterial) -> Array:
 	return shader_fields[id]
 
 func _material_values(material: Material, appearances: Dictionary) -> Array:
-	var values: Array = []
-	if material == null: return values
+	if material == null: return NO_MATERIAL_VALUES
 	var id := material.get_instance_id()
-	# Many hull parts/fish share a material. Read its uniforms once per sample,
-	# without carrying the snapshot into the next frame or missing animation.
-	if appearances.has(id):
-		material_values[id] = appearances[id].values; return appearances[id].signature
+	# The snapshot itself detects changes. Resource uniforms compare by identity,
+	# and the same array can supply every track that needs a playback version.
+	if appearances.has(id): return appearances[id]
+	var values: Array = []
 	if material is ShaderMaterial:
-		for field in _fields(material): values.append(material.get_shader_parameter(field))
+		for field in _fields(material):
+			var value: Variant = material.get_shader_parameter(field)
+			values.append(value.duplicate(true) if value is Array else value)
 	elif material is StandardMaterial3D: values = [material.albedo_color,material.albedo_texture,material.emission_texture]
-	var signature: Array = _signature(values)
-	appearances[id] = {"values":values,"signature":signature}; material_values[id] = values
-	return signature
+	appearances[id] = values
+	return values
 
-func _state(node: Node3D) -> Dictionary:
+func _state(node: Node3D, appearances: Dictionary) -> Dictionary:
 	var state := {}
 	if node is GeometryInstance3D:
-		state = {"layers":node.layers,"shadow":node.cast_shadow,"transparency":node.transparency,"material":_material(node.material_override)}
+		state = {"layers":node.layers,"shadow":node.cast_shadow,"transparency":node.transparency,"material":_material(node.material_override,appearances)}
 	if node is MeshInstance3D:
 		state["mesh"] = _mesh_copy(node.mesh,node.get_meta("replay_mesh_arrays",[])) if mutable_mesh and node.mesh != null else node.mesh
 		state["bounds"] = node.custom_aabb
 		state["surfaces"] = []
 		if node.mesh != null:
-			for index in node.mesh.get_surface_count(): state.surfaces.append(_material(node.get_surface_override_material(index)))
+			for index in node.mesh.get_surface_count(): state.surfaces.append(_material(node.get_surface_override_material(index),appearances))
 	elif node is Sprite3D:
 		state.merge({"texture":node.texture,"modulate":node.modulate,"pixel_size":node.pixel_size,"billboard":node.billboard,"double_sided":node.double_sided,"no_depth_test":node.no_depth_test})
 	elif node is MultiMeshInstance3D:
@@ -160,13 +149,13 @@ func _state(node: Node3D) -> Dictionary:
 		state = {"mesh":node.mesh,"count":node.amount,"lifetime":node.lifetime,"radius":node.emission_sphere_radius if node.emission_shape == CPUParticles3D.EMISSION_SHAPE_SPHERE else 0.0,"speed_min":node.initial_velocity_min,"speed_max":node.initial_velocity_max,"gravity":node.gravity,"size_min":node.scale_amount_min,"size_max":node.scale_amount_max,"spread":node.spread,"seed":node.get_instance_id()}
 	return state
 
-func _material(material: Material) -> Dictionary:
+func _material(material: Material, appearances: Dictionary) -> Dictionary:
 	if material == null: return {}
 	var id := material.get_instance_id()
 	var base: Material = material_templates[id].get_ref() if material_templates.has(id) else null
 	if base == null:
 		base = material.duplicate(); material_templates[id] = weakref(base)
-	return {"base":base,"fields":_fields(material) if material is ShaderMaterial else ["albedo_color","albedo_texture","emission_texture"],"values":material_values.get(id,[]),"shader":material is ShaderMaterial}
+	return {"base":base,"fields":_fields(material) if material is ShaderMaterial else ["albedo_color","albedo_texture","emission_texture"],"values":appearances[id],"shader":material is ShaderMaterial}
 
 func _apply_material(state: Dictionary, current: Material) -> Material:
 	if state.is_empty(): return null
@@ -260,4 +249,4 @@ func dispose() -> void:
 	if is_instance_valid(proxy): proxy.free()
 	while not versions.is_empty(): _drop_version()
 	proxy = null; previous.clear()
-	data.clear(); stamps.clear(); multimesh_copy = null; material_templates.clear(); material_values.clear()
+	data.clear(); stamps.clear(); multimesh_copy = null; material_templates.clear()

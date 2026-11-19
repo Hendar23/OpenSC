@@ -1,7 +1,9 @@
 extends Node
 
 const Storage = preload("res://player_storage.gd")
-const DEFAULTS := {"display_mode":0,"resolution":Vector2i.ZERO,"limit_resolutions":false,"vsync":true,"frame_limit":0,"anti_aliasing":0,"shadows":2,"reflective_canopies":true,"brightness":100.0}
+const MIN_FOG_DISTANCE := 20.0
+const MAX_FOG_DISTANCE := 100.0
+const DEFAULTS := {"display_mode":0,"resolution":Vector2i.ZERO,"limit_resolutions":false,"vsync":true,"frame_limit":0,"anti_aliasing":0,"shadows":2,"reflective_canopies":true,"brightness":100.0,"fog_distance":MAX_FOG_DISTANCE}
 const FRAME_LIMITS := [0,30,60,90,120,144,165,240]
 const RESOLUTIONS := [
 	Vector2i(1280,720),Vector2i(1600,900),Vector2i(1920,1080),Vector2i(1920,1200),
@@ -61,9 +63,10 @@ func _validate() -> void:
 	if not settings.resolution is Vector2i: settings.resolution = desktop_size()
 	settings.resolution = settings.resolution.clamp(Vector2i(1050,600),RESOLUTIONS.back().max(desktop_size()))
 	if settings.limit_resolutions: settings.resolution = settings.resolution.min(desktop_size())
-	for key in ["brightness"]:
-		var value := float(settings[key])
-		settings[key] = clampf(value,50.0,150.0) if is_finite(value) else 100.0
+	var brightness := float(settings.brightness)
+	settings.brightness = clampf(brightness,50.0,150.0) if is_finite(brightness) else DEFAULTS.brightness
+	var fog_distance: Variant = settings.fog_distance
+	settings.fog_distance = clampf(float(fog_distance),MIN_FOG_DISTANCE,MAX_FOG_DISTANCE) if (fog_distance is float or fog_distance is int) and is_finite(float(fog_distance)) else DEFAULTS.fog_distance
 
 func set_value(key: String,value: Variant) -> Error:
 	if not settings.has(key): return ERR_INVALID_PARAMETER

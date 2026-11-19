@@ -41,7 +41,7 @@ func run() -> void:
 	check(stream.renderer.particles.size() > 0 and is_equal_approx(stream.renderer.particles[0].size,0.2),"Edited emitter settings affect actual bubbles")
 	stream.renderer.advance(1.0)
 	check(stream.renderer.particles.is_empty(),"Bubbles obey configured lifetime")
-	check(stream.renderer.capacity == 128 and stream.renderer.instances.instance_count == 128,"Emitter storage remains bounded")
+	check(stream.renderer.capacity == 128 and stream.renderer.instances.instance_count <= 128,"Emitter storage remains bounded")
 	# Explicitly exercise local combat/docking; visibility has its own regression.
 	game.world_root.get_node("ActorActivity").set_physics_process(false)
 	for agent in game.submarine_traffic.traders: agent.set_local_simulation(true)

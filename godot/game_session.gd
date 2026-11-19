@@ -85,6 +85,7 @@ func _refresh_scenery() -> void:
 
 func _reset_loaded_world() -> void:
 	if game.menu_backdrop != null: game.menu_backdrop.close()
+	game.game_dock.view.close(game)
 	game.dock_interface.dismiss(); game.dock_interface_active = false
 	game._set_map_open(false)
 	game.docking.cancel()
@@ -276,7 +277,7 @@ func _load_saved_game(slot: int) -> bool:
 	game.pilot.radiation_rating = float(game.player_progress.status.radiation_shield)
 	game.pilot.restore_health(100.0,float(game.player_progress.status.shields))
 	game.dock_interface.open("home"); game.dock_interface_active = true
-	game.get_tree().paused = true
+	game.get_tree().paused = false
 	game.loading_canvas.hide(); game.loading_save = false; game._update_mouse_pointer()
 	game.events.session_started.emit(true)
 	return true

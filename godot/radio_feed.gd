@@ -7,8 +7,18 @@ const LIFETIME := 18.0
 const Portrait = preload("res://radio_portrait.gd")
 var entries: Array[Dictionary] = []
 var prompt: Dictionary = {}
+var suspended := false
+var pending: Array[Dictionary] = []
+
+func set_suspended(on: bool) -> void:
+	if on == suspended: return
+	suspended = on
+	if not on:
+		var waiting := pending; pending = []
+		for entry in waiting: push_message(entry.message,entry.noise)
 
 func clear() -> void:
+	pending.clear()
 	for entry in entries: entry.row.free()
 	entries.clear()
 	if not prompt.is_empty(): prompt.row.free()
@@ -16,6 +26,8 @@ func clear() -> void:
 	cleared.emit()
 
 func push_message(message: Dictionary, noise: Array[Texture2D] = []) -> void:
+	if suspended:
+		pending.append({"message":message.duplicate(),"noise":noise}); return
 	if str(message.get("text","")).is_empty(): return
 	var speaker := str(message.get("speaker",""))
 	if not speaker.is_empty():
@@ -110,6 +122,7 @@ func _place(entry: Dictionary, bottom: float, delta: float) -> float:
 	return bottom - 6
 
 func _process(delta: float) -> void:
+	if suspended: return
 	for entry in entries: _advance_entry(entry,maxf(0,delta))
 	for index in range(entries.size() - 1,-1,-1):
 		if entries[index].closing and entries[index].exit_age >= Portrait.OUTRO_SECONDS:

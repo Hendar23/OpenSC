@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Document = preload("res://map_document.gd")
 const Population = preload("res://object_population.gd")
 const Thorium = preload("res://thorium_body.gd")
@@ -9,7 +9,14 @@ class DamageBody extends StaticBody3D:
 	func take_damage(amount: float, _source: Vector3) -> void: health -= amount
 var checks := 0
 var failures := 0
-func _initialize() -> void: call_deferred("run")
+func _initialize() -> void:
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = preload("res://asset_paths.gd").find_game_folder()
+	var storage = preload("res://player_storage.gd")
+	storage.root_override = "res://tests/cache-objects-fixtures"; storage.ensure_parent(storage.preferences_path())
+	var ignore := FileAccess.open(storage.root_override.path_join(".gdignore"),FileAccess.WRITE); ignore.store_string("")
+	var config := ConfigFile.new(); config.set_value("game","folder",folder); config.save(storage.preferences_path())
+	call_deferred("run")
 func check(ok: bool, message: String) -> void:
 	checks += 1
 	if not ok: failures += 1; push_error(message)
@@ -25,6 +32,7 @@ func run() -> void:
 	if not map.loaded: quit(1); return
 	# Use an isolated in-memory map; the user's authored groups may change between runs.
 	map.document.erase("menu_camera")
+	map.document.erase("menu_cameras")
 	map.document.object_groups = []
 	map.document.object_types = [preload("res://object_definitions.gd").FLOATING_MINE.duplicate(true)]
 	map._sync()

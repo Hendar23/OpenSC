@@ -72,6 +72,10 @@ func _run() -> void:
 	press(menu,"menu_accept"); check(not menu.crosshair_enabled,"Confirm turns the crosshair Off")
 	press(menu,"menu_down"); check(menu.pirate_weapons_button.has_focus() and menu.random_pirate_weapons,"Random pirate weapons default On and are reachable by controller")
 	press(menu,"menu_accept"); check(not menu.random_pirate_weapons,"Confirm restores torpedo-only pirates")
+	press(menu,"menu_down"); check(menu.random_pirates_button.has_focus() and not menu.disable_random_pirates and menu.random_pirates_button.text == "Disable random pirates: Off","Random pirate disabling defaults Off and is reachable by controller")
+	press(menu,"menu_accept"); check(menu.disable_random_pirates,"Confirm disables random pirates")
+	press(menu,"menu_left"); check(not menu.disable_random_pirates,"Left re-enables random pirates")
+	press(menu,"menu_right"); check(menu.disable_random_pirates,"Right disables random pirates")
 	press(menu,"menu_down"); check(menu.back.has_focus(),"Down selects Back")
 	press(menu,"menu_accept"); check(not menu.visible and front.buttons.gameplay.has_focus(),"Back restores Gameplay option focus")
 	paused = false
@@ -88,6 +92,7 @@ func _run() -> void:
 	var restored := Gameplay.new(); restored.settings_path = path; front.add_child(restored)
 	check(restored.bubble_limit == 500,"Bubble limit persists under General settings")
 	check(not restored.crosshair_enabled,"First-person crosshair choice saves and loads")
+	check(restored.disable_random_pirates,"Random pirate disabling preference persists on next launch")
 	check(not restored.random_pirate_weapons,"Pirate weapons preference persists on the next launch")
 	check(restored.zapper_auto_aim,"Gameplay choice loads on next launch")
 	check(restored.wildlife_limit == 100,"Wildlife cap loads on next launch")

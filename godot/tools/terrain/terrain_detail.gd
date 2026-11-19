@@ -6,6 +6,7 @@ const OtherCaves = preload("res://other_cave_daylight.gd")
 const Docking = preload("res://docking_controller.gd")
 const Rounding = preload("res://tools/terrain/terrain_rounding.gd")
 const Pipe = preload("res://tools/terrain/terrain_pipe.gd")
+const Outlets = preload("res://tools/terrain/terrain_outlets.gd")
 const TinCan = preload("res://tools/terrain/terrain_tin_can.gd")
 const STEPS := 4
 const LOD_ERROR := 0.12
@@ -26,6 +27,7 @@ func round_world(world: Node3D, folder: String, tree: SceneTree, progress: Calla
 	if profile.rounding > 0.0:
 		await Rounding.new().apply(world, folder, tree, progress, profile, _cave_bounds())
 	if profile.pipe_rounding: Pipe.apply(world, _pattern)
+	if profile.pipe_rounding: Outlets.apply(world, _pattern)
 	if profile.can_rounding: TinCan.apply(world, _pattern)
 
 func add_detail(world: Node3D, tree: SceneTree, progress: Callable, profile: Dictionary) -> void:

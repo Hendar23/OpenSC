@@ -1,4 +1,7 @@
 extends Node3D
+
+signal active_changed
+
 const PulseLight = preload("res://pulse_light.gd")
 const Searchlight = preload("res://searchlight.gd")
 
@@ -14,6 +17,7 @@ var group_count := 0
 var generation := 0
 var hidden: Array[Dictionary] = []
 var animated_lights: Array[Dictionary] = []
+var plants: Array[Node3D] = []
 const PASS_MODELS := ["TRADSHUT","TECHSHUT","TRAD-SUB","TECH-SUB","TRAD2","TECH2SUB","PRISON","PIRATE","PIRATE2"]
 var pass_visuals: Array[Node3D] = []
 var pass_propellers: Array[Dictionary] = []
@@ -75,7 +79,6 @@ func setup(owner_game: Node3D) -> void:
 	propeller_audio.volume_db = -80.0
 	submarine.add_child(propeller_audio)
 	submarine.hide()
-	_add_plants()
 
 func _register_propellers(visual: Node3D, model_id: String) -> void:
 	for node in preload("res://trader_submarine.gd").rotor_nodes(visual,model_id): pass_propellers.append({"node":node,"rest":node.get_meta("rest_basis",node.basis)})
@@ -98,11 +101,14 @@ func _emit_wake(direction: Vector3, delta: float) -> void:
 
 func _position_camera() -> void:
 	var document := preload("res://map_document.gd").load_active() if game.use_map_overrides else {}
-	if document.has("menu_camera"):
-		view.transform = preload("res://map_document.gd").decode(document.menu_camera.transform)
-		view.fov = float(document.menu_camera.fov); view.far = game.camera.far
+	var choices := preload("res://map_document.gd").menu_camera_slots(document).filter(func(saved: Dictionary) -> bool: return not saved.is_empty())
+	if not choices.is_empty():
+		var saved: Dictionary = choices[random.randi_range(0,choices.size() - 1)]
+		view.transform = preload("res://map_document.gd").decode(saved.transform)
+		view.fov = float(saved.fov); view.far = game.camera.far
 		return
 	# Scenic framing is independent of the editable New Game spawn.
+	view.fov = 65
 	var config: Dictionary = game.front_end.menu_config
 	var anchor := Vector3(config.camera_anchor[0],config.camera_anchor[1],config.camera_anchor[2])
 	view.position = anchor + Vector3(config.camera_offset[0],config.camera_offset[1],config.camera_offset[2])
@@ -111,6 +117,9 @@ func _position_camera() -> void:
 	view.far = game.camera.far
 
 func _add_plants() -> void:
+	for plant in plants:
+		if is_instance_valid(plant): plant.free()
+	plants.clear()
 	var templates: Array[Node3D] = []
 	for node in game.world_root.find_children("*","Node3D",true,false):
 		if str(node.get_meta("editor_model","")).to_upper() in ["BUSH1","BUSH2","BUSH3","BUSH4"]:
@@ -125,6 +134,7 @@ func _add_plants() -> void:
 		var plant := templates[index].duplicate(0) as Node3D
 		_remove_collisions(plant)
 		add_child(plant); plant.global_position = floor_hit.position
+		plants.append(plant)
 
 func _remove_collisions(node: Node) -> void:
 	for child in node.get_children():
@@ -134,6 +144,10 @@ func _remove_collisions(node: Node) -> void:
 
 func open() -> void:
 	if active: return
+	_position_camera()
+	_add_plants()
+	wake.clear(); submarine.hide(); propeller_audio.stop()
+	pass_time = -1; next_pass = 4.0
 	_refresh_wildlife()
 	active = true; show(); hidden.clear()
 	for light in game.world_root.find_children("*", "Node3D", true, false):
@@ -150,6 +164,7 @@ func open() -> void:
 		hidden.append({"node":node,"visible":node.visible}); node.hide()
 	for actor in actors: actor.node.set_physics_process(true)
 	view.make_current()
+	active_changed.emit()
 
 func close() -> void:
 	if not active: return
@@ -163,6 +178,7 @@ func close() -> void:
 		if is_instance_valid(entry.node): entry.node.visible = entry.visible
 	hidden.clear()
 	if is_instance_valid(game.camera): game.camera.make_current()
+	active_changed.emit()
 
 func _process(delta: float) -> void:
 	if not active: return

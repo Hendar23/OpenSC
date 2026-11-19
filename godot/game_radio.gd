@@ -2,6 +2,13 @@ extends RefCounted
 ## Radio HUD messages, greetings, and bounty announcements.
 
 var game: Node3D
+var docked := false
+
+func set_docked(on: bool) -> void:
+	docked = on
+	if game.radio_feed != null: game.radio_feed.set_suspended(on)
+	for audio in game.get_tree().get_nodes_in_group("dock_radio_audio"):
+		audio.stream_paused = on
 
 func _init(context: Node3D) -> void:
 	game = context
@@ -37,7 +44,7 @@ func _radio_audio_allowed() -> bool:
 	return not game.world_loading and not game.loading_save and (game.loading_canvas == null or not game.loading_canvas.visible)
 
 func _update_radio_messages(delta: float) -> void:
-	if game.radio_feed == null or not _radio_audio_allowed(): return
+	if docked or game.radio_feed == null or not _radio_audio_allowed(): return
 	if game.docking.greeting_remaining > 0 and not game.docking.greeting_text.is_empty():
 		if game.radio_greeting != game.docking.greeting_text:
 			game.radio_greeting = game.docking.greeting_text
@@ -60,8 +67,10 @@ func _update_radio_messages(delta: float) -> void:
 	if game.docking.stage == game.docking.Stage.IDLE and game.docking.nearby.is_empty() and not game._delivery_prompt_active() and not rov_prompt:
 		if game.bounty_remaining <= 0 and not game.bounty_radio_queue.is_empty():
 			game.bounty_port = game.bounty_radio_queue.pop_front(); game.bounty_remaining = 7.0
+			if game.bounty_port.get("deferred",false): game.radio_feed.push_message(game.bounty_port,game.docking.radio_static)
 			if game.bounty_port.get("voice") != null and not game.bounty_port.get("voice_played",false):
 				var voice := AudioStreamPlayer.new(); voice.stream = game.bounty_port.voice; voice.volume_db = preload("res://docking_radio.gd").SPEECH_VOLUME_DB; game.add_child(voice)
+				voice.add_to_group("dock_radio_audio")
 				voice.finished.connect(voice.queue_free); voice.play()
 
 func _age_radio(delta: float) -> void:
@@ -69,7 +78,7 @@ func _age_radio(delta: float) -> void:
 	# indefinitely and announce it beside a later, unrelated pirate death.
 	game.bounty_remaining = maxf(0,game.bounty_remaining - maxf(0,delta))
 	for entry in game.bounty_radio_queue:
-		if entry.has("ttl"): entry.ttl -= maxf(0,delta)
+		if entry.has("ttl") and not entry.get("deferred",false): entry.ttl -= maxf(0,delta)
 	game.bounty_radio_queue = game.bounty_radio_queue.filter(func(entry: Dictionary) -> bool: return not entry.has("ttl") or float(entry.ttl) > 0)
 
 func _pirate_bounty(point: Vector3) -> void:
@@ -87,5 +96,6 @@ func _pirate_bounty(point: Vector3) -> void:
 	announcement.distorted_portrait = nearest.get("greeting_distorted_portrait",nearest.distorted_portrait)
 	announcement.ttl = 12.0
 	game.bounty_radio_queue.append(announcement)
-	if game.radio_feed != null: game.radio_feed.push_message(announcement,game.docking.radio_static)
+	if game.docking.stage == game.docking.Stage.DOCKED: announcement["deferred"] = true
+	elif game.radio_feed != null: game.radio_feed.push_message(announcement,game.docking.radio_static)
 	if game.dock_interface_active: game.dock_interface.rebuild()

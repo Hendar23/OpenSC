@@ -8,6 +8,13 @@ var impact_velocity := Vector3.ZERO
 var contacts := {}
 var raw_impact_mass := 75.0
 
+func disable_chassis_collision() -> void:
+	# Retired chassis must never participate in contacts with the loose head
+	# or player, including through retained masks or shape state.
+	collision_layer = 0; collision_mask = 0
+	for node in find_children("*","CollisionShape3D",true,false):
+		node.set_deferred("disabled",true)
+
 func set_towing_attached(on: bool) -> void:
 	if not detached: return
 	# Apply the retail mass change before the magnet calculates cable/engine

@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Pilot = preload("res://submarine_controller.gd")
 const Paths = preload("res://asset_paths.gd")
 const Mods = preload("res://mod_registry.gd")
@@ -12,7 +12,14 @@ class FakeJoyInput extends RefCounted:
 	func stop_joy_vibration(device: int) -> void: stops.append(device)
 var checks := 0
 var failures := 0
-func _initialize() -> void: call_deferred("_run")
+func _initialize() -> void:
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = preload("res://asset_paths.gd").find_game_folder()
+	var storage = preload("res://player_storage.gd")
+	storage.root_override = "res://tests/cache-verify-impact-rumble-fixtures"; storage.ensure_parent(storage.preferences_path())
+	var ignore := FileAccess.open(storage.root_override.path_join(".gdignore"),FileAccess.WRITE); ignore.store_string("")
+	var config := ConfigFile.new(); config.set_value("game","folder",folder); config.save(storage.preferences_path())
+	call_deferred("_run")
 func check(condition: bool, description: String) -> void:
 	checks += 1
 	if not condition: failures += 1; push_error(description)

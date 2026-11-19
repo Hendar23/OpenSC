@@ -24,6 +24,10 @@ func run() -> void:
 	if not game.startup_complete: quit(1); return
 	await game._begin_new_game()
 	game.front_end.hide_menu(); paused = false
+	# Manual ship stepping does not advance loose cargo/mines. Exclude those
+	# dynamic bodies from this navigation fixture; retain terrain and buildings.
+	for body in game.object_population.find_children("*","CollisionObject3D",true,false):
+		body.collision_layer = 0; body.collision_mask = 0; body.set_physics_process(false)
 	var traffic: Node = game.submarine_traffic
 	# This fixture exercises detailed journeys manually, independently of visibility.
 	game.world_root.get_node("ActorActivity").set_physics_process(false)
@@ -45,9 +49,12 @@ func run() -> void:
 	check(civilians.size() == 6,"Six civilian submarines spawn")
 	check(traffic.graph.get_point_count() > 1000 and traffic.navigation_ready,"Shared water routes finish before loading completes")
 	check(traffic.destinations(1) == [1,3,6] and traffic.destinations(2) == [2,4,6],"Own faction and Factory only; Aquatraz excluded")
+	var authored := Document.load_active()
 	for agent in civilians:
 		check(traffic.water_clear(agent.home.origin),"Trader starts in clear water: " + str(agent.get_parent().name))
-		check(agent.health.remaining == 10 and agent.tuning.npc_sustain == 0.3,"Recovered civilian shield and sustain values")
+		var key := str(game.world_root.get_path_to(agent.get_parent()))
+		var entry := Document.EntityTypes.effective(authored,authored.entities[key])
+		check(is_equal_approx(agent.health.remaining,float(entry.npc_health)) and is_equal_approx(agent.tuning.npc_sustain,float(entry.npc_sustain)),"Civilian shields and sustain match current authored NPC type")
 		check(agent.body.is_in_group("npc_submarines") and preload("res://wildlife_combat.gd").alive(agent.body),"Wildlife can discover and attack each civilian sub")
 	for faction in [1,2]:
 		for first in traffic.destinations(faction):
@@ -100,14 +107,14 @@ func run() -> void:
 	traffic.reset()
 	var fish := preload("res://fish_controller.gd").new()
 	fish.setup(Node3D.new(),agent.global_position + Vector3.FORWARD * 0.9,game.cockpit_hud.map_data.bounds,game.pilot.surface_height,0.2,42)
-	fish.configure_combat({"food_role":"neutral","has_zapper":false}); fish.population = game.wildlife
+	fish.configure_combat({"food_role":"neutral","has_zapper":false,"bite_damage":5.0}); fish.population = game.wildlife
 	game.wildlife.add_child(fish); fish.set_physics_process(false); fish.response = "attack"; fish.swim_speed = 0
 	fish.direction = Vector3.BACK; fish.combat.target = agent.body
 	await physics_frame; await physics_frame
 	var before_health: float = agent.health.remaining
 	fish.combat.attack(0.1)
 	check(agent.health.remaining < before_health and agent.flee > 0,"Wildlife bites a civilian submarine and makes it flee")
-	check(is_equal_approx(before_health - agent.health.remaining,0.5),"Wildlife bite points convert to raw civilian shields once")
+	check(is_equal_approx(before_health - agent.health.remaining,1.5),"Wildlife bite points convert to raw civilian shields once")
 	fish.response = "flee"; fish.startle_timer = 0; fish.startle_cooldown = 0
 	fish._physics_process(0.1)
 	check(fish.fleeing,"Prey flees civilian submarines using its flee range")

@@ -106,7 +106,9 @@ func run() -> void:
 	check(mission.operational and heard("bb8") and mission.ship.tracking and mission.encounter_clock == 8,"Tracker activates and schedules first interception eight seconds later")
 	check(not game.equipment.support_tools.passengers,"Fuel delivery never invents rescued passengers in the pod")
 	mission.encounter_clock = -1
-	mission.ship.get_parent().global_transform = Transform3D(Basis.IDENTITY,Vector3(10000,120,10000)); mission.ship.motion.velocity = Vector3.ZERO
+	# Keep the free-water motion probe below the ceiling: surface avoidance
+	# would otherwise dominate the horizontal following vector under test.
+	mission.ship.get_parent().global_transform = Transform3D(Basis.IDENTITY,Vector3(10000,game.pilot.surface_height-10,10000)); mission.ship.motion.velocity = Vector3.ZERO
 	game.pilot.global_position = mission.ship.global_position+Vector3.BACK*10
 	var start: Vector3 = mission.ship.global_position
 	for tick in range(60): mission.ship._advance_motion(1.0/60.0)

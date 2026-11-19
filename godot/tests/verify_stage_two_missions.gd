@@ -115,8 +115,9 @@ func run() -> void:
 	game.player_progress.missions.completed["stranded"] = {"success":true}
 	game.player_progress.missions["unavailable"] = ["breakout","breakout2"]
 	unlock.button_pressed = true
-	check(runtime.testing_all_missions and runtime.testing_missions().size() == 43,"Dev button unlocks all missions globally")
+	check(runtime.testing_all_missions and runtime.testing_missions().size() == 63,"Dev button unlocks all missions globally")
 	var origins := {"puffa":2,"puffa2":4,"pwalker":1,"pwalker2":3,"tradetrad":1,"tradetrad2":3,"tradetech":2,"tradetech2":4,"stranded":1,"spytrad":1,"spytrad2":3,"breakout":2,"breakout2":4,"fishing":2,"bigherd":3,"spytech":2,"spytech2":4,"escort":1,"escort2":3,"tagtech":4,"eel":3,"recontech":2,"recontech2":4,"walktrad":3,"walktrad2":1,"walktech":2,"walktech2":4,"minefield":1,"disperse":2,"rovrtn":3,"fumehole":2,"fumehole2":4,"defect":1,"defect2":3,"miners":2,"miners2":4,"bomb":1,"aliens":2,"aliens2":4,"diptrad":1,"diptrad2":3,"diptech":2,"diptech2":4}
+	origins.merge({"backstab":1,"backstab2":3,"backstab3":2,"backstab4":4,"canister":1,"canister2":3,"canister3":2,"canister4":4,"filters":1,"filters2":3,"filters3":2,"filters4":4,"aquatraz":1,"aquatraz2":3,"aquatraz3":2,"aquatraz4":4,"endgame":1,"endgame2":3,"endgame3":2,"endgame4":4})
 	for city in [1,2,3,4,5,6]:
 		var expected: Array = origins.keys().filter(func(id: String) -> bool: return origins[id] == city)
 		var offered: Array = runtime.board(city).offers.map(func(entry: Dictionary) -> String: return entry.id)
