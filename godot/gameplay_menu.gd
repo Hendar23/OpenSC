@@ -41,7 +41,8 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS; layer = 12
 	if settings_path.is_empty(): settings_path = Storage.preferences_path()
 	var config := ConfigFile.new()
-	if remember_preferences and config.load(settings_path) == OK:
+	if remember_preferences:
+		config = preload("res://option_defaults.gd").load_preferences(settings_path)
 		disable_random_pirates = bool(config.get_value("gameplay","disable_random_pirates",false))
 		random_pirate_weapons = bool(config.get_value("gameplay","random_pirate_weapons",true))
 		crosshair_enabled = bool(config.get_value("gameplay","first_person_crosshair",true))

@@ -8,20 +8,20 @@ func _init(context: Node3D) -> void:
 	game = context
 
 const World = preload("res://world_loader.gd")
-const MENU_FOG_DISTANCE_SCALE := 0.8
+const SCENIC_FOG_DISTANCE_SCALE := 0.8
 
 func _update_water_environment() -> void:
 	game.camera.far = game.fog_visibility if game.fog_button.button_pressed else 4000.0
 	if game.menu_backdrop != null: game.menu_backdrop.view.far = game.camera.far
 	if game.cockpit_hud != null and game.cockpit_hud.bottom_camera != null: game.cockpit_hud.bottom_camera.far = game.camera.far
 	if game.wildlife != null: game.wildlife.visibility_range = game.fog_visibility if game.fog_button.button_pressed else game.camera.far
-	var menu_active: bool = game.menu_backdrop != null and game.menu_backdrop.active
-	game.water_environment.fog_enabled = menu_active or game.fog_button.button_pressed
+	var fixed_fog: bool = (game.menu_backdrop != null and game.menu_backdrop.active) or game.game_dock.view.active
+	game.water_environment.fog_enabled = fixed_fog or game.fog_button.button_pressed
 	game.water_environment.fog_mode = Environment.FOG_MODE_DEPTH
 	game.water_environment.fog_density = 1.0
 	var distance_scale := 1.0
-	if menu_active:
-		distance_scale = MENU_FOG_DISTANCE_SCALE
+	if fixed_fog:
+		distance_scale = SCENIC_FOG_DISTANCE_SCALE
 	elif game.water_environment.fog_enabled and game.front_end != null and game.front_end.player_graphics != null:
 		distance_scale = float(game.front_end.player_graphics.settings.fog_distance) / 100.0
 	if game.fog_start_slider != null:

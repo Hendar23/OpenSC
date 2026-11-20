@@ -20,7 +20,8 @@ func _ready() -> void:
 	get_tree().node_added.connect(_route)
 	_scan(scope)
 	var config := ConfigFile.new()
-	if remember_preferences and config.load(settings_path) == OK:
+	if remember_preferences:
+		config = preload("res://option_defaults.gd").load_preferences(settings_path)
 		volume = clampf(float(config.get_value("audio","effects_volume",100.0)),0.0,MAX_VOLUME)
 	_apply()
 

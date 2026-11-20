@@ -7,13 +7,16 @@ var active := false
 var hud_was_visible := true
 
 func close(game: Node3D) -> void:
-	if active and is_instance_valid(game.cockpit_hud): game.cockpit_hud.visible = hud_was_visible
+	if not active: return
+	if is_instance_valid(game.cockpit_hud): game.cockpit_hud.visible = hud_was_visible
 	active = false; port_node = null
+	game._update_water_environment()
 
 func update(game: Node3D) -> void:
 	var port: Dictionary = game.docking.current
 	if port.is_empty(): return
-	if not active:
+	var opening := not active
+	if opening:
 		active = true; hud_was_visible = game.cockpit_hud.visible
 	game.cockpit_hud.hide()
 	if port_node != port.node:
@@ -35,3 +38,4 @@ func update(game: Node3D) -> void:
 	var screen_point := ui.position + Vector2(320,150) * ui.scale
 	var ray: Vector3 = game.camera.project_ray_normal(screen_point)
 	game.camera.global_basis = Basis(Quaternion(ray,(target-eye).normalized())) * game.camera.global_basis
+	if opening: game._update_water_environment()

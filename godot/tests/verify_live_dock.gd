@@ -40,6 +40,8 @@ func run() -> void:
 	game.pilot.freeze = true; game.docking.set_physics_process(false)
 	game.save_games.folder = storage.saves_path()
 	game.day_night.hour = 10
+	var graphics: Node = game.front_end.player_graphics
+	graphics.set_value("fog_distance",30.0)
 	if DisplayServer.get_name() != "headless":
 		root.mode = Window.MODE_WINDOWED; root.size = Vector2i(1280,960)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://../.local/live-dock"))
@@ -49,6 +51,7 @@ func run() -> void:
 		game.docking._transition(game.Docking.Stage.DOCKED)
 		game.dock_interface_active = false; game._process(0)
 		check(not paused and game.dock_interface.live_window,"City %s has a live picture window" % port.name)
+		check(is_equal_approx(game.water_environment.fog_depth_begin,game.fog_start_slider.value * 0.8) and is_equal_approx(game.water_environment.fog_depth_end,game.fog_visibility * 0.8),"City %s uses the fixed 80%% fog distance" % port.name)
 		var title: TextureRect = game.dock_interface.layout.get_node("CityTitle")
 		check(title.texture.get_image().get_pixel(0,0).a == 0,"City %s title corners are transparent" % port.name)
 		check(not game.cockpit_hud.visible and not game.radio_feed.visible and not game.docked_screen.visible,"City %s window contains no piloting HUD or opaque dock backdrop" % port.name)
@@ -65,6 +68,8 @@ func run() -> void:
 			game.dock_interface.open(page)
 			check(not game.dock_interface.live_window and game.dock_interface.backdrop.material == null,"%s retains its original solid %s screen" % [port.name,page])
 		game.dock_interface.open("home")
+	graphics.set_value("fog_distance",60.0)
+	check(is_equal_approx(game.water_environment.fog_depth_end,game.fog_visibility * 0.8),"Changing the gameplay fog distance leaves the dock view at 80%")
 	# Timers and radio pause independently of outside-world processing.
 	var jobs: Node = game.mission_runtime.side_jobs
 	game.player_progress.missions.active = {"id":"fixture"}; jobs.id = "fixture"; jobs.phase = "fixture"
@@ -110,10 +115,12 @@ func run() -> void:
 	check(game.docking.stage == game.Docking.Stage.EXIT_OPEN and not paused,"Launch acquires the cleared hatch immediately")
 	game._process(0)
 	check(game.cockpit_hud.visible and not game.game_radio.docked,"Piloting HUD and radio resume for launch")
+	check(is_equal_approx(game.water_environment.fog_depth_begin,game.fog_start_slider.value * 0.6) and is_equal_approx(game.water_environment.fog_depth_end,game.fog_visibility * 0.6),"Launching restores both selected gameplay fog distances")
 	# A new session from a dock must not retain the hidden piloting HUD or view.
 	game.docking._transition(game.Docking.Stage.DOCKED); game._process(0)
 	check(not game.cockpit_hud.visible,"Re-entering a dock hides the HUD")
 	game._reset_loaded_world()
 	check(game.cockpit_hud.visible and not game.game_dock.view.active,"Session reset restores the HUD and clears the fixed dock camera")
+	check(is_equal_approx(game.water_environment.fog_depth_end,game.fog_visibility * 0.6),"Session reset clears the fixed dock fog")
 	game.queue_free(); await process_frame
 	print("Live dock: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

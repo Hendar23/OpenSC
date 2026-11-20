@@ -34,10 +34,9 @@ func _ready() -> void:
 	apply_rendering()
 
 func load_preferences() -> void:
-	var config := ConfigFile.new()
-	if config.load(settings_path) == OK:
-		for key in DEFAULTS:
-			if config.has_section_key("graphics",key): settings[key] = config.get_value("graphics",key)
+	var config := preload("res://option_defaults.gd").load_preferences(settings_path)
+	for key in DEFAULTS:
+		if config.has_section_key("graphics",key): settings[key] = config.get_value("graphics",key)
 	_validate()
 
 func desktop_size() -> Vector2i:
