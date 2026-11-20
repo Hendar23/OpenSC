@@ -10,7 +10,7 @@ OpenSC is an open-source game remake for playing Criterion Games' [Sub Culture](
 OpenSC brings this true forgotten gem to modern systems and expands on it with improved gameplay, new features and modding support. 
 
 ## Installation
-Latest release is available [here](https://github.com/Hendar23/OpenSC/releases/tag/v1.0.0).
+Latest release is available [here](https://github.com/Hendar23/OpenSC/releases).
 - OpenSC does not include the original Sub Culture game assets. You'll need your own copy of the original game files.
 - When you first run the game, it will ask you to point it to the original Sub Culture folder.
 - A controller is recommended for controlling the sub.
