@@ -3,7 +3,7 @@ extends CanvasLayer
 const Bindings = preload("res://input_bindings.gd")
 const Graphics = preload("res://player_graphics.gd")
 signal closed
-const ROW_START := 155
+const ROW_START := 128
 const ROW_SPACING := 27
 var graphics: Node
 var layout: Control
@@ -23,7 +23,7 @@ func _ready() -> void:
 	normal = StyleBoxFlat.new(); normal.bg_color = Color(0.01,0.05,0.07,0.82)
 	normal.border_color = Color(0.24,0.55,0.6,0.7); normal.set_border_width_all(1); normal.set_corner_radius_all(5)
 	hover = normal.duplicate(); hover.bg_color = Color(0.04,0.23,0.28,0.95)
-	for entry in [["display_mode","Display mode"],["resolution","Resolution"],["limit_resolutions","Limit to display"],["vsync","VSync"],["frame_limit","Frame-rate limit"],["anti_aliasing","Anti-aliasing"],["shadows","Shadow quality"],["reflective_canopies","Reflective canopies"],["brightness","Brightness"],["fog_distance","Fog distance"]]:
+	for entry in [["display_mode","Display mode"],["resolution","Resolution"],["limit_resolutions","Limit to display"],["vsync","VSync"],["frame_limit","Frame-rate limit"],["anti_aliasing","Anti-aliasing"],["shadows","Shadow quality"],["reflective_canopies","Reflective canopies"],["brightness","Brightness"],["contrast","Contrast"],["fog_distance","Fog distance"]]:
 		_add_row(entry[0],entry[1])
 	status = Label.new(); status.position = Vector2(120,457); status.size = Vector2(400,23)
 	status.add_theme_font_size_override("font_size",12); layout.add_child(status)
@@ -45,10 +45,18 @@ func _add_row(key: String,title: String) -> void:
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; label.text = title
 	label.add_theme_font_size_override("font_size",14); layout.add_child(label); labels[key] = label
 	var control: Control
-	if key in ["brightness","fog_distance"]:
+	if key in ["brightness","contrast","fog_distance"]:
 		var slider := HSlider.new()
-		slider.min_value = Graphics.MIN_FOG_DISTANCE if key == "fog_distance" else 50.0
-		slider.max_value = Graphics.MAX_FOG_DISTANCE if key == "fog_distance" else 150.0
+		match key:
+			"fog_distance":
+				slider.min_value = Graphics.MIN_FOG_DISTANCE
+				slider.max_value = Graphics.MAX_FOG_DISTANCE
+			"contrast":
+				slider.min_value = Graphics.MIN_CONTRAST
+				slider.max_value = Graphics.MAX_CONTRAST
+			"brightness":
+				slider.min_value = 50.0
+				slider.max_value = 150.0
 		slider.step = 1; slider.scrollable = false
 		slider.value_changed.connect(func(value: float) -> void: _change(key,value))
 		control = slider
@@ -80,7 +88,7 @@ func _refresh() -> void:
 		var value: Variant = graphics.settings[key]
 		if controls[key] is HSlider:
 			controls[key].set_value_no_signal(value)
-			var title := "Fog distance" if key == "fog_distance" else "Brightness"
+			var title := "Fog distance" if key == "fog_distance" else String(key).capitalize()
 			labels[key].text = "%s: %d%%" % [title,roundi(value)]
 		else:
 			var text := ""
