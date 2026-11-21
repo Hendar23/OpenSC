@@ -16,7 +16,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="OpenSC"
 config/version="1.1.0"
-config/release_stage=""
+config/release_stage="Linux Beta 1"
 run/main_scene="res://game.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 

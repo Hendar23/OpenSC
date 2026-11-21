@@ -67,7 +67,12 @@ func update_background(lighting_camera: Camera3D, sub_lighting: bool) -> void:
 		var exposure: float = game.natural_light.visibility(eye,true)
 		if is_instance_valid(cave_background):
 			var cave = game.natural_light.CaveDaylight
-			cave_background.visible = cave.REGION.has_point(eye) or eye.distance_squared_to(cave.MOUTH) < cave.VIEW_RADIUS * cave.VIEW_RADIUS or game.natural_light.OtherCaveDaylight.near_view(eye)
+			var menu_active: bool = game.menu_backdrop != null and game.menu_backdrop.active
+			# A menu cut can jump between differently sheltered viewpoints. Render
+			# empty water with the same camera/exposure shader as fully fogged
+			# surfaces, rather than exposing a separately sampled clear colour.
+			cave_background.material_override.set_shader_parameter("fill_open_water",menu_active)
+			cave_background.visible = menu_active or cave.REGION.has_point(eye) or eye.distance_squared_to(cave.MOUTH) < cave.VIEW_RADIUS * cave.VIEW_RADIUS or game.natural_light.OtherCaveDaylight.near_view(eye)
 		# Empty space behind cave geometry must match sheltered water, while
 		# the actual surface keeps its daylight material through cave exits.
 		var cave_ambient := 0.0 if sub_lighting else minf(float(game.natural_light.settings.cave_ambient),game.water_environment.ambient_light_energy)
