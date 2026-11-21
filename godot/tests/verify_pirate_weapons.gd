@@ -59,6 +59,10 @@ func run() -> void:
 	check(agent.health.remaining == agent.health.capacity,"Electro discharge excludes the launching hull")
 	agent.dead = true; agent.armament._process(0)
 	check(agent.armament.arcs.all(func(arc: Node3D) -> bool: return not arc.firing) and not agent.armament.zap_audio.playing,"Death stops zapper visuals and loop audio")
+	var surviving_shot := Node3D.new(); world.add_child(surviving_shot)
+	agent.armament.shots.append(surviving_shot)
+	bolt.free(); agent.armament._process(0)
+	check(agent.armament.shots.size() == 1 and agent.armament.shots[0] == surviving_shot,"Freed Electro Bolts are removed without erasing surviving projectiles or validating freed references")
 	world.queue_free(); await process_frame
 	print("Pirate weapons: ",checks," checks, ",failures," failures")
 	quit(1 if failures else 0)

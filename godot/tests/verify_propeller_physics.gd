@@ -78,6 +78,17 @@ func _run() -> void:
 	model.tilt = PI / 2
 	model.step(0.01, Basis.IDENTITY, 0, 1, 1)
 	check(absf(model.angular_velocity.z) > 0.001 and absf(model.angular_velocity.y) < 0.00001, "Vertical pods roll the hull instead of yawing")
+	model.classic_sub_physics = true
+	model.reset_motion()
+	model.step(1.0 / 60.0, Basis.IDENTITY, 0, 0.25, 1)
+	check(model.pods_aligned and is_equal_approx(model.tilt, PI / 2.0), "Classic pods snap fully up with partial stick")
+	check(is_equal_approx(model.thrust_force.y, model.settings.side_thrust * 0.5) and is_zero_approx(model.thrust_force.z), "Partial Classic input controls vertical thrust without forward drift")
+	check(model.thrust_torque.y > 0.0 and is_zero_approx(model.thrust_torque.z), "Classic steering yaws during ascent")
+	model.step(1.0 / 60.0, Basis.IDENTITY, 0, -0.25, -1)
+	check(model.pods_aligned and is_equal_approx(model.tilt, -PI / 2.0) and model.thrust_force.y < 0.0 and model.thrust_torque.y < 0.0, "Classic pods reverse instantly and steering yaws during descent")
+	model.step(1.0 / 60.0, Basis.IDENTITY, 0, 0, 0)
+	check(model.pods_aligned and is_zero_approx(model.tilt), "Classic pods snap back to horizontal on release")
+	model.classic_sub_physics = false
 	model.reset_motion()
 	var rolled := integrate(model, Basis(Vector3.BACK, PI * 0.75), Vector4.ZERO, 600)
 	check(rolled.y.dot(Vector3.UP) > 0.995 and model.angular_velocity.length() < 0.01, "Released rolled hull settles upright without snapping")
@@ -161,6 +172,14 @@ func _run() -> void:
 	check(roll_rate > 1.0, "Live vertical pods produce deliberate barrel roll")
 	for frame in range(600): await physics_frame
 	check(pilot.global_basis.y.dot(Vector3.UP) > 0.99, "Live hull settles upright after releasing barrel roll")
+	pilot.movement.classic_sub_physics = true
+	pilot.reset_at(Vector3(0, 10, 0))
+	key(KEY_E, true)
+	key(KEY_A, true)
+	for frame in range(45): await physics_frame
+	key(KEY_E, false)
+	key(KEY_A, false)
+	check(pilot.position.y > 10.25 and absf(pilot.angular_velocity.y) > 0.5 and pilot.global_basis.y.dot(Vector3.UP) > 0.995, "Live Classic pilot ascends and steers without rolling")
 	world.queue_free()
 	await process_frame
 	print("Propeller physics verification: %d checks, %d failures" % [checks, failures])

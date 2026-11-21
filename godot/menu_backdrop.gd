@@ -9,6 +9,7 @@ const Searchlight = preload("res://searchlight.gd")
 const Fish = preload("res://fish_controller.gd")
 const Creatures = preload("res://creature_loader.gd")
 const Bubbles = preload("res://propeller_bubbles.gd")
+const Trader = preload("res://trader_submarine.gd")
 var game: Node3D
 var view: Camera3D
 var actors: Array[Dictionary] = []
@@ -157,12 +158,20 @@ func open() -> void:
 	for node in [game.pilot,game.cockpit_hud,game.canvas,game.particles,game.world_root.get_node_or_null("AmbientFish")]:
 		if node != null:
 			hidden.append({"node":node,"visible":node.visible}); node.hide()
+	# Gameplay is paused here. Only the separate menu ships should be visible;
+	# retain each real hull's visibility so resuming restores its exact state.
+	for node in game.world_root.find_children("*","Node3D",true,false):
+		if node is Trader:
+			var hull := node.get_parent() as Node3D
+			if hull != null:
+				hidden.append({"node":hull,"visible":hull.visible}); hull.hide()
 	if game.docked_screen != null:
 		var dock_hud: CanvasLayer = game.docked_screen.get_parent()
 		hidden.append({"node":dock_hud,"visible":dock_hud.visible}); dock_hud.hide()
 	for node in game.find_children("CreatureBurst*","Node3D",true,false):
 		hidden.append({"node":node,"visible":node.visible}); node.hide()
 	for actor in actors: actor.node.set_physics_process(true)
+	view.reset_physics_interpolation()
 	view.make_current()
 	active_changed.emit()
 

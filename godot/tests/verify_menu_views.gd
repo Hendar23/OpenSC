@@ -19,6 +19,8 @@ class Context extends Node3D:
 	var docked_screen: Control
 class Wake extends Node3D:
 	func clear() -> void: pass
+	func advance(_delta: float) -> void: pass
+	func emit_from(_key: int, _origin: Vector3, _direction: Vector3, _power: float, _rate: float, _delta: float) -> void: pass
 class Backdrop extends "res://menu_backdrop.gd":
 	func _add_plants() -> void: pass
 	func _refresh_wildlife() -> void: generation += 1
@@ -69,14 +71,21 @@ func run() -> void:
 	var context := Context.new(); root.add_child(context)
 	context.camera = Camera3D.new(); context.add_child(context.camera); context.camera.far = 500
 	context.world_root = Node3D.new(); context.add_child(context.world_root); context.world_root.set_meta("surface_height",100)
+	var real_ship := Node3D.new(); context.world_root.add_child(real_ship)
+	var agent := preload("res://trader_submarine.gd").new(); real_ship.add_child(agent); agent.set_physics_process(false)
+	var hidden_ship := Node3D.new(); context.world_root.add_child(hidden_ship); hidden_ship.hide()
+	var hidden_agent := preload("res://trader_submarine.gd").new(); hidden_ship.add_child(hidden_agent); hidden_agent.set_physics_process(false)
+	var ship_pose := real_ship.transform
 	var menu := Backdrop.new(); context.add_child(menu); menu.game = context; menu.set_process(false)
 	menu.wake = Wake.new(); menu.add_child(menu.wake)
 	menu.submarine = Node3D.new(); menu.add_child(menu.submarine)
 	menu.propeller_audio = AudioStreamPlayer3D.new(); menu.add_child(menu.propeller_audio)
 	menu.random.seed = 91823
 	var seen := {}; var eligible := true; var stable := true
+	var real_ships_hidden := true; var real_ships_restored := true
 	for iteration in range(128):
 		menu.open()
+		real_ships_hidden = real_ships_hidden and not real_ship.visible and not hidden_ship.visible
 		var index := -1
 		for slot in range(4):
 			if menu.view.transform.is_equal_approx(Document.decode(all_views.menu_cameras[slot].transform)): index = slot
@@ -85,9 +94,17 @@ func run() -> void:
 		var pose := menu.view.transform; menu.open()
 		stable = stable and menu.view.transform.is_equal_approx(pose)
 		menu.close()
+		real_ships_restored = real_ships_restored and real_ship.visible and not hidden_ship.visible and real_ship.transform == ship_pose
+	check(real_ships_hidden,"Paused gameplay submarines stay invisible in every main-menu view")
+	check(real_ships_restored,"Repeated menu toggles restore exact ship visibility and preserve gameplay poses")
 	check(eligible and seen.size() == 4,"Opening the menu randomly uses all four saved views with their own FOVs")
 	check(stable,"An already-open menu retains its chosen camera")
 	check(menu.generation == 128,"Each menu opening refreshes its camera-local population once")
+	menu.open(); menu.pass_time = 0; menu.submarine.show()
+	menu._process(0.5); var pass_position := menu.submarine.global_position
+	menu._process(0.5)
+	check(not menu.submarine.global_position.is_equal_approx(pass_position) and not real_ship.visible,"Separate menu traffic keeps moving while real gameplay ships stay hidden")
+	menu.close()
 	var sparse := Document.empty(); sparse.menu_cameras = [{},{},first,{}]
 	Document.save(sparse,fixture.path_join("map.json")); menu.open()
 	check(menu.view.transform.is_equal_approx(Document.decode(first.transform)),"Empty slots are excluded from random selection")

@@ -7,9 +7,11 @@ const Mods = preload("res://mod_registry.gd")
 # are converted using the previous implicit 100 kg reference mass.
 const REFERENCE_MASS := 100.0
 const POD_ARM := 0.4
+const CLASSIC_VERTICAL_STEERING_RATIO := 0.5 / (2.0 * 0.27)
 const PITCH_LIMIT := PI / 4.0
 const DEFAULTS := {
 	"main_forward": 500.0, "main_reverse": 200.0, "side_thrust": 200.0,
+	"horizontal_pod_thrust_scale": 1.0, "yaw_torque_scale": 1.0, "yaw_drag": 0.0,
 	"forward_speed": 4.6, "reverse_speed": 2.3, "vertical_speed": 5.0,
 	"forward_drag": 0.65, "lateral_drag": 0.95, "vertical_drag": 0.95,
 	"turn_acceleration": 138.0, "turn_speed": 144.0,
@@ -36,6 +38,7 @@ var thrust_force := Vector3.ZERO
 var thrust_torque := Vector3.ZERO
 var cargo_mass := 0.0
 var boost_multiplier := 1.0
+var classic_sub_physics := false
 var tilt := 0.0
 var pods_aligned := true
 var main_power := 0.0
@@ -59,13 +62,23 @@ func step(delta: float, basis: Basis, throttle: float, vertical: float, turn: fl
 	turn = clampf(turn, -1.0, 1.0)
 	pitch = clampf(pitch, -1.0, 1.0)
 	var desired_tilt := vertical * PI * 0.5
-	tilt = move_toward(tilt, desired_tilt, deg_to_rad(float(settings["tilt_speed"])) * delta)
+	var vertical_requested := not is_zero_approx(vertical)
+	var classic_vertical := classic_sub_physics and vertical_requested
+	if classic_sub_physics:
+		desired_tilt = signf(vertical) * PI * 0.5 if classic_vertical else 0.0
+		tilt = desired_tilt
+	else:
+		tilt = move_toward(tilt, desired_tilt, deg_to_rad(float(settings["tilt_speed"])) * delta)
 	pods_aligned = is_equal_approx(tilt,desired_tilt)
 	main_power = throttle
 	# Vertical thrust remains available when the main propeller is idle.
-	var common := throttle if is_zero_approx(vertical) else maxf(absf(throttle), absf(vertical))
-	left_power = common - turn
-	right_power = common + turn
+	var common := maxf(absf(throttle), absf(vertical)) if vertical_requested else throttle
+	if classic_vertical:
+		left_power = absf(vertical)
+		right_power = left_power
+	else:
+		left_power = common - turn
+		right_power = common + turn
 	var divisor := maxf(1.0, maxf(absf(left_power), absf(right_power)))
 	left_power /= divisor
 	right_power /= divisor
@@ -73,17 +86,26 @@ func step(delta: float, basis: Basis, throttle: float, vertical: float, turn: fl
 	if not pods_aligned:
 		left_power = 0.0
 		right_power = 0.0
-	var pod_direction := Vector3(0.0, sin(tilt), -cos(tilt))
+	var pod_direction := Vector3.UP * signf(vertical) if classic_vertical else Vector3(0.0, sin(tilt), -cos(tilt))
 	var left_force := pod_direction * left_power * float(settings.side_thrust)
 	var right_force := pod_direction * right_power * float(settings.side_thrust)
 	var main_force := Vector3.FORWARD * throttle * float(settings.main_forward if throttle >= 0.0 else settings.main_reverse)
-	thrust_force = basis * (main_force + left_force + right_force)
+	var pod_force := left_force + right_force
+	# Fit forward and reverse thrust independently of the vertical pod force.
+	if not vertical_requested:
+		pod_force *= float(settings.horizontal_pod_thrust_scale)
+	thrust_force = basis * (main_force + pod_force)
 	if boost_multiplier > 1.0:
 		var local_thrust := basis.inverse()*thrust_force
 		local_thrust.z *= boost_multiplier
 		thrust_force = basis*local_thrust
 	# Forces at separate pod mounts naturally produce yaw, roll, or both.
-	thrust_torque = basis * (Vector3(-POD_ARM, 0, 0).cross(left_force) + Vector3(POD_ARM, 0, 0).cross(right_force))
+	var pod_torque := Vector3(-POD_ARM, 0, 0).cross(left_force) + Vector3(POD_ARM, 0, 0).cross(right_force)
+	if classic_vertical:
+		# The original applies a separate steering torque while the pods point vertically.
+		pod_torque.y = 2.0 * POD_ARM * float(settings.side_thrust) * turn * CLASSIC_VERTICAL_STEERING_RATIO
+	pod_torque.y *= float(settings.yaw_torque_scale)
+	thrust_torque = basis * pod_torque
 	var body_mass := maxf(1.0, float(settings.mass) + cargo_mass)
 	var local := basis.inverse() * velocity
 	var resistance := float(settings.water_resistance)
@@ -108,21 +130,25 @@ func step(delta: float, basis: Basis, throttle: float, vertical: float, turn: fl
 	velocity.y = clampf(velocity.y, -float(settings.vertical_speed), float(settings.vertical_speed))
 	var local_spin := basis.inverse() * angular_velocity
 	local_spin *= exp(-float(settings.turn_drag) * delta)
+	var forward := -basis.z
+	var pitch_axis := basis.inverse() * forward.cross(Vector3.UP).normalized()
+	# Damp heading changes without slowing the pitch or roll response.
+	var yaw_axis := Vector3.BACK.cross(pitch_axis)
+	var yaw_spin := yaw_axis * local_spin.dot(yaw_axis)
+	local_spin += yaw_spin * (exp(-float(settings.yaw_drag) * delta) - 1.0)
 	var inertia := rotational_inertia()
 	var torque_accel := basis.inverse() * thrust_torque / inertia
 	var turn_accel := deg_to_rad(float(settings.turn_acceleration))
 	if torque_accel.length() > turn_accel: torque_accel = torque_accel.normalized() * turn_accel
 	local_spin += torque_accel * delta
-	var forward := -basis.z
 	var elevation := asin(clampf(forward.y, -1.0, 1.0))
-	var pitch_axis := basis.inverse() * forward.cross(Vector3.UP).normalized()
 	var pitch_target := pitch * PITCH_LIMIT
 	var pitch_rate := local_spin.dot(pitch_axis)
 	var pitch_accel := (pitch_target - elevation) * float(settings.upright_strength) - pitch_rate * float(settings.upright_damping)
 	var pitch_cap := deg_to_rad(float(settings.pitch_acceleration))
 	local_spin += pitch_axis * clampf(pitch_accel, -pitch_cap, pitch_cap) * delta
 	# Release roll assistance during deliberate rolling; restore upright on release.
-	if not pods_aligned or absf(turn * sin(tilt)) < 0.05:
+	if classic_sub_physics or not pods_aligned or absf(turn * sin(tilt)) < 0.05:
 		var upright := (Vector3.UP - forward * forward.y).normalized()
 		var roll_error := -atan2(forward.dot(basis.y.cross(upright)), basis.y.dot(upright))
 		var restore := roll_error * float(settings.upright_strength) - local_spin.z * float(settings.upright_damping)

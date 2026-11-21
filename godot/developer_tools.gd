@@ -10,9 +10,6 @@ const Weapons = preload("res://submarine_weapons.gd")
 const PlantCurrent = preload("res://plant_current.gd")
 const WaterVisuals = preload("res://water_visuals.gd")
 const NaturalLight = preload("res://natural_light.gd")
-const DEFAULT_VISIBILITY := 35.0
-const MIN_VISIBILITY := 1.0
-const MAX_VISIBILITY := 2000.0
 
 var game: Node
 
@@ -145,41 +142,12 @@ func _build_interface() -> void:
 	game.fog_button.button_pressed = true
 	game.fog_button.focus_mode = Control.FOCUS_NONE
 	game.graphics_controls.add_child(game.fog_button)
-	game.fog_label = Label.new()
-	game.graphics_controls.add_child(game.fog_label)
-	game.fog_slider = HSlider.new(); game.fog_slider.scrollable = false
-	game.fog_slider.min_value = MIN_VISIBILITY
-	game.fog_slider.max_value = MAX_VISIBILITY
-	game.fog_slider.step = 0.5
-	game.fog_slider.value = DEFAULT_VISIBILITY
-	game.fog_slider.focus_mode = Control.FOCUS_NONE
-	game.graphics_controls.add_child(game.fog_slider)
-	var hint := Label.new()
-	hint.text = "Spread fade start and view distance apart for a longer, gentler fade."
-	hint.add_theme_font_size_override("font_size", 12)
-	game.graphics_controls.add_child(hint)
-	game.fog_slider.value_changed.connect(func(value: float) -> void:
-		game.fog_visibility = value
-		game._update_water_environment()
-	)
-	game.fog_slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 	game.fog_button.toggled.connect(func(_enabled: bool) -> void:
 		game._update_water_environment()
 		game._save_preferences()
 	)
-	var presets := HBoxContainer.new()
-	game.graphics_controls.add_child(presets)
-	for preset in [["Original feel", DEFAULT_VISIBILITY], ["Clearer water", 100.0]]:
-		var button := Button.new()
-		button.text = preset[0]
-		button.focus_mode = Control.FOCUS_NONE
-		button.pressed.connect(func() -> void:
-			game.fog_slider.value = float(preset[1])
-			game._save_preferences()
-		)
-		presets.add_child(button)
 	game.fog_start_label = Label.new(); game.graphics_controls.add_child(game.fog_start_label)
-	game.fog_start_slider = HSlider.new(); game.fog_start_slider.scrollable = false; game.fog_start_slider.min_value = 0.0; game.fog_start_slider.max_value = MAX_VISIBILITY - 0.5
+	game.fog_start_slider = HSlider.new(); game.fog_start_slider.scrollable = false; game.fog_start_slider.min_value = 0.0; game.fog_start_slider.max_value = game.fog_visibility - 0.5
 	game.fog_start_slider.step = 0.5; game.fog_start_slider.value = 5.0; game.fog_start_slider.focus_mode = Control.FOCUS_NONE
 	game.graphics_controls.add_child(game.fog_start_slider)
 	game.fog_curve_label = Label.new(); game.graphics_controls.add_child(game.fog_curve_label)

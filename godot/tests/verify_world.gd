@@ -124,11 +124,13 @@ func _run() -> void:
 	viewer._update_water_environment()
 	check(not viewer.water_environment.fog_enabled, "Fog can be disabled for inspection")
 	viewer.fog_button.button_pressed = true
-	var old_visibility := viewer.water_environment.fog_depth_end
-	viewer.fog_slider.value = 150.0
-	check(viewer.water_environment.fog_depth_end > old_visibility, "Longer visibility pushes distant fog back immediately")
-	viewer.fog_slider.value = 10.0
-	check(viewer.water_environment.fog_depth_end < old_visibility, "Shorter visibility brings distant fog closer immediately")
+	var graphics: Node = viewer.front_end.player_graphics
+	graphics.set_value("fog_distance",20.0)
+	var near_fog := viewer.water_environment.fog_depth_end
+	graphics.set_value("fog_distance",100.0)
+	check(viewer.water_environment.fog_depth_end > near_fog, "Longer fog distance pushes distant fog back immediately")
+	graphics.set_value("fog_distance",20.0)
+	check(is_equal_approx(viewer.water_environment.fog_depth_end,near_fog), "Shorter fog distance brings distant fog closer immediately")
 	viewer.developer_enabled = true
 	viewer._toggle_tuning()
 	check(viewer.canvas.visible and viewer.tuning_panel.visible, "T reveals developer UI and movement tuning")
@@ -140,11 +142,11 @@ func _run() -> void:
 	viewer.set_physics_process(true)
 	viewer._physics_process(0.0)
 	check(viewer.pilot.controls_enabled, "Hidden developer controls do not block piloting")
-	viewer.fog_slider.value = 70.0
+	viewer.fog_visibility = 70.0
 	viewer.remember_preferences = true
 	viewer._save_preferences("res://tests/visibility-test.cfg")
 	viewer.remember_preferences = false
-	viewer.fog_slider.value = 35.0
+	viewer.fog_visibility = 35.0
 	viewer._load_preferences("res://tests/visibility-test.cfg")
 	check(is_equal_approx(viewer.fog_visibility, 70.0), "Visibility settings save and reload")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("res://tests/visibility-test.cfg"))

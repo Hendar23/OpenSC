@@ -24,11 +24,15 @@ func _run() -> void:
 	var key := InputEventKey.new()
 	key.pressed = true
 	key.keycode = KEY_F1
-	check(not game.developer_enabled,"Developer tools default to disabled")
+	var flag_path := "res://tests/developer-flag-test.cfg"
+	var flag_config := ConfigFile.new()
+	flag_config.set_value("developer","enabled",false)
+	flag_config.save(flag_path)
+	game._load_preferences(flag_path)
+	check(not game.developer_enabled,"Developer tools respect the disabled setting")
 	game._input(key); game._toggle_developer_ui(); game._toggle_tuning(); game._toggle_sound_tuning()
 	check(not game.developer_ui_visible and not game.canvas.visible,"Disabled developer flag blocks F1 and tuning entry points")
-	var flag_path := "res://tests/developer-flag-test.cfg"
-	var flag_config := ConfigFile.new(); flag_config.set_value("developer","enabled",true); flag_config.save(flag_path)
+	flag_config.set_value("developer","enabled",true); flag_config.save(flag_path)
 	game._load_preferences(flag_path)
 	check(game.developer_enabled,"Developer flag can explicitly enable the menu through settings")
 	game._input(key)
@@ -39,7 +43,6 @@ func _run() -> void:
 	flag_config.set_value("developer","enabled","true"); flag_config.save(flag_path); game._load_preferences(flag_path)
 	check(not game.developer_enabled and not game.developer_ui_visible,"Developer flag requires an actual boolean and rejects malformed enabled settings")
 	flag_config.set_value("developer","enabled",true); flag_config.save(flag_path); game._load_preferences(flag_path)
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(flag_path))
 	game._input(key)
 	game._unhandled_input(start_button)
 	check(game.developer_ui_visible,"Controller Start does not close the developer menu")
@@ -47,13 +50,23 @@ func _run() -> void:
 	for index in range(game.developer_tabs.get_tab_count()):
 		if not game.developer_tabs.is_tab_hidden(index): visible_tabs.append(game.developer_tabs.get_tab_title(index))
 	check(visible_tabs.size() == 6 and "Mods" not in visible_tabs and not game.mod_panel.embedded, "Developer tabs exclude inactive canopy controls; mod management is a main-menu popup")
-	check(game.fog_slider.max_value == 2000 and game.fog_start_slider.min_value == 0,"Visibility controls support a wide distance range")
-	game.fog_slider.value = 500; game.fog_start_slider.value = 100
-	check(game.fog_label.text.contains("Absolute view distance") and game.fog_start_label.text.contains("Fade start distance"),"Visibility controls identify both fade endpoints")
-	check(is_equal_approx(game.camera.far,500) and is_equal_approx(game.water_environment.fog_depth_begin,100),"Both distance endpoints update the renderer live")
-	game.fog_slider.value = 80
+	check(game.graphics_controls.find_children("*","Label",true,false).all(func(label: Label) -> bool: return not label.text.begins_with("Absolute view distance")),"F1 has no absolute view distance slider")
+	check(game.graphics_controls.find_children("*","Button",true,false).all(func(button: Button) -> bool: return button.text not in ["Original feel", "Clearer water"]),"F1 has no view distance presets")
+	game.front_end.player_graphics.set_value("fog_distance",100.0)
+	flag_config.set_value("view","fog_visibility",500.0)
+	flag_config.set_value("view","fog_start",100.0)
+	flag_config.save(flag_path)
+	game._load_preferences(flag_path)
+	check(game.fog_start_label.text.contains("Fade start distance") and game.fog_start_slider.min_value == 0,"F1 still exposes the fade start")
+	check(is_equal_approx(game.camera.far,500) and is_equal_approx(game.water_environment.fog_depth_begin,100) and is_equal_approx(game.water_environment.fog_depth_end,500),"Importing authored distance and fade start updates the renderer live")
+	flag_config.set_value("view","fog_visibility",80.0)
+	flag_config.save(flag_path)
+	game._load_preferences(flag_path)
 	check(game.fog_start_slider.value < 80 and game.fog_start_slider.max_value < 80,"Fade start stays below the absolute view limit")
-	game.fog_slider.value = 500; game.fog_start_slider.value = 100
+	flag_config.set_value("view","fog_visibility",500.0)
+	flag_config.save(flag_path)
+	game._load_preferences(flag_path)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(flag_path))
 	game.pilot.global_position = game.docking.ports[0].entry + Vector3.RIGHT * 3.0
 	game.pilot.velocity = Vector3.ZERO
 	game.docking_radius_slider.value = 2.0
@@ -72,7 +85,7 @@ func _run() -> void:
 	game._load_preferences(radius_path)
 	check(is_equal_approx(game.docking.approach_radius, 4.0) and is_equal_approx(game._view_settings().docking_radius, 4.0), "Docking radius reloads from exported settings")
 	check(is_equal_approx(game.equipment.vacuum.intake_radius,0.4) and is_equal_approx(game.equipment.vacuum.range_metres,1.5), "Suction settings survive export and reload")
-	check(game.fog_start_slider.value == 100 and game.fog_slider.value == 500,"Wide fade endpoints survive settings export and reload")
+	check(game.fog_start_slider.value == 100 and game.fog_visibility == 500,"Wide fade endpoints survive settings export and reload")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(radius_path))
 	game._physics_process(0.0)
 	check(not game.pilot.controls_enabled, "Menu prevents steering while adjusting settings")

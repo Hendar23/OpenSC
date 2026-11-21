@@ -69,7 +69,7 @@ var has_started_game := false
 var menu_backdrop: Node3D
 var sun_shafts: Node3D
 var sun_shafts_brightness_slider: HSlider
-const DEFAULT_VISIBILITY = preload("res://developer_tools.gd").DEFAULT_VISIBILITY
+const DEFAULT_VISIBILITY = preload("res://game_settings.gd").DEFAULT_VISIBILITY
 
 var pilot: RigidBody3D
 var model: Node3D
@@ -107,8 +107,6 @@ var bounty_port: Dictionary = {}
 var bounty_remaining := 0.0
 var export_all_message: Label
 var fog_button: CheckButton
-var fog_slider: HSlider
-var fog_label: Label
 var fog_start_slider: HSlider
 var docking_radius_slider: HSlider
 var docking_radius_label: Label
@@ -226,6 +224,8 @@ func _build_interface() -> void:
 	front_end.player_graphics.changed.connect(func() -> void: _update_hud_settings(); _update_water_environment())
 	front_end.gameplay_menu.auto_aim_changed.connect(func(enabled: bool) -> void:
 		if weapons != null: weapons.auto_aim_enabled = enabled)
+	front_end.gameplay_menu.classic_sub_physics_changed.connect(func(enabled: bool) -> void:
+		if is_instance_valid(pilot): pilot.movement.classic_sub_physics = enabled)
 	front_end.gameplay_menu.random_pirates_changed.connect(func(disabled: bool) -> void:
 		if is_instance_valid(submarine_traffic) and is_instance_valid(submarine_traffic.roaming_population): submarine_traffic.roaming_population.set_disabled(disabled))
 	front_end.gameplay_menu.pirate_weapons_changed.connect(func(enabled: bool) -> void:

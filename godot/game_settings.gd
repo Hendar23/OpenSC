@@ -3,8 +3,9 @@ extends RefCounted
 
 const Docking = preload("res://docking_controller.gd")
 const HUD = preload("res://cockpit_hud.gd")
-const MIN_VISIBILITY = preload("res://developer_tools.gd").MIN_VISIBILITY
-const MAX_VISIBILITY = preload("res://developer_tools.gd").MAX_VISIBILITY
+const DEFAULT_VISIBILITY := 35.0
+const MIN_VISIBILITY := 1.0
+const MAX_VISIBILITY := 2000.0
 
 var game: Node
 var preview_hour := 10.0
@@ -46,9 +47,12 @@ func _load_preferences(path: String = "") -> void:
 	var reflection: Variant = config.get_value("view","crt_reflection_strength",game.crt_reflection_slider.value / 100.0)
 	if (reflection is float or reflection is int) and is_finite(float(reflection)):
 		game.crt_reflection_slider.value = clampf(float(reflection) * 100.0,0.0,100.0)
-	var value: Variant = config.get_value("view", "fog_visibility", game.fog_slider.value)
+	var value: Variant = config.get_value("view", "fog_visibility", game.fog_visibility)
 	if (value is float or value is int) and is_finite(float(value)):
-		game.fog_slider.value = clampf(float(value), MIN_VISIBILITY, MAX_VISIBILITY)
+		var visibility := snappedf(clampf(float(value), MIN_VISIBILITY, MAX_VISIBILITY), 0.5)
+		if visibility != game.fog_visibility:
+			game.fog_visibility = visibility
+			game._update_water_environment()
 	var enabled: Variant = config.get_value("view", "fog_enabled", game.fog_button.button_pressed)
 	if enabled is bool: game.fog_button.button_pressed = enabled
 	for row in [["dock_zapper_damage_per_tick", game.dock_zapper_damage_slider, preload("res://dock_defence.gd").DAMAGE], ["fog_start", game.fog_start_slider, 5.0], ["fog_curve", game.fog_curve_slider, 1.8], ["docking_radius", game.docking_radius_slider, Docking.APPROACH_RADIUS]]:

@@ -378,6 +378,7 @@ func _contact_impact(state: PhysicsDirectBodyState3D) -> Dictionary:
 
 func _update_animation(delta: float) -> void:
 	if visual == null: return
+	var snapped_pods := active and movement.classic_sub_physics and not is_equal_approx(movement.tilt, last_pod_tilt)
 	pod_rotation_power = clampf(absf(movement.tilt - last_pod_tilt) / maxf(delta, 0.0001) / maxf(0.01, deg_to_rad(float(movement.settings.tilt_speed))), 0.0, 1.0)
 	last_pod_tilt = movement.tilt
 	# Roles describe physical left/right after the +Z source faces Godot -Z.
@@ -393,6 +394,7 @@ func _update_animation(delta: float) -> void:
 		var pose := pod.transform
 		pose.basis = rest * Basis(Vector3.RIGHT, movement.tilt * float(visual.get_meta("pod_tilt_sign", -1.0)))
 		pod.transform = pose
+		if snapped_pods: pod.reset_physics_interpolation()
 	var targets := Vector3(movement.main_power, movement.left_power, movement.right_power)
 	var stop_time := float(movement.settings.propeller_spin_down)
 	for i in range(3):

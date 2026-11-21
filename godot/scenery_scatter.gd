@@ -4,6 +4,9 @@ const Mods = preload("res://mod_registry.gd")
 const Modern = preload("res://modern_model.gd")
 const Scenery = preload("res://scenery_loader.gd")
 const CELL_SIZE := 32.0
+const DENSE_BATCH_CELL_SIZE := 8.0
+const DENSE_BATCH_MIN_INSTANCES := 12
+const BATCH_VISIBILITY_DISTANCE := 100.0
 const MAX_TOTAL := Mods.MAX_SCENERY
 const BUILDING_MARGIN := 0.35
 const WORK_SLICE_USEC := 4000
@@ -250,27 +253,50 @@ static func _batch(parent: Node3D, models: Array[Dictionary], poses: Array[Dicti
 		if not batches.has(key): batches[key] = {"model": int(item.model), "cell": cell, "poses": []}
 		batches[key].poses.append(pose)
 	for batch in batches.values():
-		var multi := MultiMesh.new(); multi.transform_format = MultiMesh.TRANSFORM_3D
-		multi.mesh = models[batch.model].mesh
-		multi.instance_count = batch.poses.size()
-		# Keep the instance origin beside its geometry. Distance visibility also
-		# uses this origin, including the paused main-menu camera.
-		var bounds: AABB = batch.poses[0] * multi.mesh.get_aabb()
-		for pose: Transform3D in batch.poses: bounds = bounds.merge(pose * multi.mesh.get_aabb())
-		var anchor := bounds.get_center()
-		multi.custom_aabb = AABB(bounds.position - anchor, bounds.size)
-		for index in batch.poses.size():
-			var pose: Transform3D = batch.poses[index]; pose.origin -= anchor
-			multi.set_instance_transform(index, pose)
-		var node := MultiMeshInstance3D.new(); node.multimesh = multi
-		node.set_meta("scenery_model", str(models[batch.model].get("name", "")))
-		node.set_meta("marine_plant", bool(models[batch.model].get("sway", false)))
-		node.position = anchor
-		node.visibility_range_end = 100.0; node.visibility_range_end_margin = 12.0
-		# Reuse the existing lights and Graphics shadow quality/distance limits.
-		# The spatial batches remain culled at their normal visibility range.
-		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-		parent.add_child(node)
-		if tree != null and Time.get_ticks_usec() - slice_start >= WORK_SLICE_USEC:
-			await tree.process_frame
-			slice_start = Time.get_ticks_usec()
+		var model := models[batch.model]
+		var mesh_bounds: AABB = model.mesh.get_aabb()
+		var original_bounds := _batch_bounds(batch.poses, mesh_bounds)
+		var groups: Array = [batch.poses]
+		if batch.poses.size() >= DENSE_BATCH_MIN_INSTANCES:
+			var cells := {}
+			for pose: Transform3D in batch.poses:
+				var cell := Vector3i((pose.origin / DENSE_BATCH_CELL_SIZE).floor())
+				if not cells.has(cell): cells[cell] = []
+				cells[cell].append(pose)
+			groups = cells.values()
+		for group: Array in groups:
+			var bounds := original_bounds if groups.size() == 1 else _batch_bounds(group, mesh_bounds)
+			_add_batch(parent, model, group, bounds, original_bounds.get_center())
+			if tree != null and Time.get_ticks_usec() - slice_start >= WORK_SLICE_USEC:
+				await tree.process_frame
+				slice_start = Time.get_ticks_usec()
+
+static func _batch_bounds(poses: Array, mesh_bounds: AABB) -> AABB:
+	var bounds: AABB = poses[0] * mesh_bounds
+	for index in range(1, poses.size()):
+		var pose: Transform3D = poses[index]
+		bounds = bounds.merge(pose * mesh_bounds)
+	return bounds
+
+static func _add_batch(parent: Node3D, model: Dictionary, poses: Array, bounds: AABB, original_center: Vector3) -> void:
+	var anchor := bounds.get_center()
+	var multi := MultiMesh.new()
+	multi.transform_format = MultiMesh.TRANSFORM_3D
+	multi.mesh = model.mesh
+	multi.instance_count = poses.size()
+	multi.custom_aabb = AABB(bounds.position - anchor, bounds.size)
+	for index in poses.size():
+		var pose: Transform3D = poses[index]
+		pose.origin -= anchor
+		multi.set_instance_transform(index, pose)
+	var node := MultiMeshInstance3D.new()
+	node.multimesh = multi
+	node.set_meta("scenery_model", str(model.get("name", "")))
+	node.set_meta("marine_plant", bool(model.get("sway", false)))
+	node.position = anchor
+	# Distance culling uses the new bounds centre. Cover the old batch's range
+	# from every direction, including when the camera's distance fog is off.
+	node.visibility_range_end = BATCH_VISIBILITY_DISTANCE + anchor.distance_to(original_center)
+	node.visibility_range_end_margin = 12.0
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	parent.add_child(node)

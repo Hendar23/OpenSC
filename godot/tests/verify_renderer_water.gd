@@ -23,7 +23,18 @@ func run() -> void:
    env.environment.background_color = Natural.background_colour(colour); env.environment.fog_light_color = colour; natural.lighting(env.environment,10,1,1)
    var frame := await snapshot(view); var fog := frame.get_pixel(80,128); var background := frame.get_pixel(180,128)
    check(Vector3(fog.r,fog.g,fog.b).distance_to(Vector3(background.r,background.g,background.b)) < 0.015,"Fully fogged geometry matches clear water by day, night and in caves")
- wall.free(); camera.position.z = 6; env.environment.background_color = Color.BLACK; env.environment.fog_enabled = false; natural.lighting(env.environment,1000000,0,1)
+ var backdrop := MeshInstance3D.new(); backdrop.mesh = QuadMesh.new(); backdrop.mesh.size = Vector2(2,2); backdrop.custom_aabb = AABB(Vector3.ONE * -500,Vector3.ONE * 1000); world.add_child(backdrop)
+ var water := ShaderMaterial.new(); water.shader = preload("res://cave_water_background.gdshader"); water.set_shader_parameter("fill_open_water",true); backdrop.material_override = water
+ if DisplayServer.get_name() != "headless":
+  for index in range(12):
+   var point := Vector3(100 if index % 2 else 0,0,100 if index % 2 else 0)
+   camera.position = point; wall.position = point + Vector3(-10,0,-20)
+   env.environment.background_color = Color.RED # Deliberately stale CPU clear colour.
+   env.environment.fog_light_color = Color(0.005,0.48,0.56) if index % 3 else Color(0.006,0.02,0.055)
+   natural.lighting(env.environment,10,1,1)
+   var frame := await snapshot(view); var fog := frame.get_pixel(80,128); var background := frame.get_pixel(180,128)
+   check(Vector3(fog.r,fog.g,fog.b).distance_to(Vector3(background.r,background.g,background.b)) < 0.015,"Menu camera cuts keep opaque fog and empty water identical despite stale clear colour")
+ backdrop.free(); wall.free(); camera.position = Vector3(0,0,6); env.environment.background_color = Color.BLACK; env.environment.fog_enabled = false; natural.lighting(env.environment,1000000,0,1)
  var beam := MeshInstance3D.new(); beam.mesh = BoxMesh.new(); beam.mesh.size = Vector3(3,3,4); world.add_child(beam)
  var shader := ShaderMaterial.new(); shader.shader = preload("res://sun_shafts.gdshader"); shader.set_shader_parameter("beam_width",3.0); shader.set_shader_parameter("beam_length",4.0); shader.set_shader_parameter("strength",5.0); shader.set_shader_parameter("surface_height",10.0); shader.set_shader_parameter("view_range",100.0); beam.material_override = shader
  var blocker := MeshInstance3D.new(); blocker.mesh = BoxMesh.new(); blocker.mesh.size = Vector3(4,4,0.2); blocker.position.z = 3; world.add_child(blocker)

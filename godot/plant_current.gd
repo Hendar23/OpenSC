@@ -44,6 +44,7 @@ func _prepare_batch(node: MultiMeshInstance3D) -> void:
 	var material: ShaderMaterial = batch_materials.get(id)
 	if material == null:
 		material = ShaderMaterial.new(); material.shader = preload("res://plant_current.gdshader")
+		material.set_shader_parameter("sway_uniform_basis", true)
 		var bounds := preload("res://modern_model.gd").source_bounds(mesh)
 		material.set_shader_parameter("albedo_color", original.albedo_color)
 		material.set_shader_parameter("has_texture", original.albedo_texture != null)

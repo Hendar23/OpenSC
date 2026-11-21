@@ -185,6 +185,7 @@ func _setup_vehicle(folder: String) -> void:
 		game.pilot.health_changed.connect(game._submarine_health_changed)
 		game.pilot.destroyed.connect(game._submarine_destroyed)
 	else: game.pilot.movement.load_settings(false,"",preload("res://current_settings.gd").path("submarine_tuning.cfg",game.defaults_directory))
+	game.pilot.movement.classic_sub_physics = game.front_end.gameplay_menu.classic_sub_physics
 	game.turret_system = preload("res://turret_system.gd").new(); game.turret_system.name = "TurretSystem"
 	game.world_root.add_child(game.turret_system)
 	preload("res://entity_identity.gd").assign_id(game.pilot,"player")

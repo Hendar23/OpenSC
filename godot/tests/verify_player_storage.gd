@@ -14,7 +14,9 @@ func check(ok: bool, message: String) -> void:
 	if not ok: failures += 1; push_error(message)
 func _initialize() -> void: call_deferred("run")
 func run() -> void:
-	check(Storage.root_path() == OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS).path_join("OpenSC"),"Uses the OS Documents directory")
+	var documents := OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS)
+	var expected := documents.path_join("OpenSC") if documents.is_absolute_path() else ProjectSettings.globalize_path("user://player")
+	check(Storage.root_path() == expected,"Uses Documents when available and app data otherwise")
 	Storage.root_override = "res://tests/storage-fixtures"
 	var preferences := Storage.preferences_path()
 	check(Saves.new().folder == Storage.saves_path(),"Save games use the new savegame directory")

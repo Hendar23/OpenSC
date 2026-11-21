@@ -17,12 +17,13 @@ func _run() -> void:
 	if not game.startup_complete: quit(1); return
 	game._load_preferences("res://view_defaults.cfg")
 	var defaults := ConfigFile.new(); defaults.load("res://view_defaults.cfg")
-	check(is_equal_approx(game.fog_slider.value,defaults.get_value("view","fog_visibility")) and is_equal_approx(game.fog_start_slider.value,defaults.get_value("view","fog_start")) and is_equal_approx(game.fog_curve_slider.value,defaults.get_value("view","fog_curve")), "Preferred fog defaults load")
+	check(is_equal_approx(game.fog_visibility,defaults.get_value("view","fog_visibility")) and is_equal_approx(game.fog_start_slider.value,defaults.get_value("view","fog_start")) and is_equal_approx(game.fog_curve_slider.value,defaults.get_value("view","fog_curve")), "Preferred fog defaults load")
 	check(is_equal_approx(game.docking.approach_radius,defaults.get_value("view","docking_radius")) and is_equal_approx(game.day_night.night_brightness,defaults.get_value("view","night_brightness")) and is_equal_approx(game.day_night.cycle_minutes,defaults.get_value("view","cycle_minutes")), "Preferred docking and day/night defaults load")
 	game.pilot.movement.settings.camera_distance = 0.55
 	game.pilot.movement.settings.bubble_rate = 9.0
 	game.pilot.submarine_audio.tuning.settings.master_volume = -13.0
-	game.fog_slider.value = 48.0
+	game.fog_visibility = 48.0
+	game._update_water_environment()
 	game.particle_controls.count.value = 900
 	game.particle_controls.enabled.button_pressed = false
 	game.crt_reflection_slider.value = 55.0

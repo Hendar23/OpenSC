@@ -87,8 +87,8 @@ func attack(delta: float, victim: Node3D) -> void:
 func _process(_delta: float) -> void:
 	if is_instance_valid(agent) and (agent.dead or not agent.local_simulation or not agent.get_parent().is_visible_in_tree()): reset()
 	if zap_audio != null and not arcs.any(func(arc: Node3D) -> bool: return arc.firing): zap_audio.stop()
-	for shot in shots.duplicate():
-		if not is_instance_valid(shot): shots.erase(shot)
+	for index in range(shots.size() - 1,-1,-1):
+		if not is_instance_valid(shots[index]): shots.remove_at(index)
 	# Free-flying bolts can outlive their launching pirate or its firing burst.
 	if is_instance_valid(agent) and agent.system != null: camera = get_viewport().get_camera_3d()
 

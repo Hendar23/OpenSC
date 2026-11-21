@@ -8,13 +8,16 @@ const ROWS := [
 	["main_forward", "Main forward thrust", 0.0, 2000.0, 10.0, "N"],
 	["main_reverse", "Main reverse thrust", 0.0, 2000.0, 10.0, "N"],
 	["side_thrust", "Each side propeller thrust", 0.0, 1500.0, 10.0, "N"],
+	["horizontal_pod_thrust_scale", "Side propeller thrust in forward/reverse", 0.0, 4.0, 0.05, "x"],
 	["forward_speed", "Maximum forward speed", 0.0, 40.0, 0.1, "units/s"],
 	["reverse_speed", "Maximum reverse speed", 0.0, 20.0, 0.1, "units/s"],
 	["vertical_speed", "Maximum ascent/descent speed", 0.0, 20.0, 0.1, "units/s"],
 	["forward_drag", "Forward drag", 0.0, 4.0, 0.05, "/s"],
 	["lateral_drag", "Sideways drag", 0.0, 6.0, 0.05, "/s"],
 	["vertical_drag", "Vertical drag", 0.0, 6.0, 0.05, "/s"],
-	["turn_acceleration", "Turning acceleration", 0.0, 360.0, 1.0, "°/s²"],
+	["yaw_torque_scale", "Yaw torque multiplier", 0.0, 5.0, 0.05, "x"],
+	["yaw_drag", "Additional yaw drag", 0.0, 12.0, 0.05, "/s"],
+	["turn_acceleration", "Turning acceleration", 0.0, 1800.0, 1.0, "°/s²"],
 	["turn_speed", "Maximum turning speed", 0.0, 180.0, 1.0, "°/s"],
 	["turn_drag", "Turning drag", 0.0, 8.0, 0.05, "/s"],
 	["tilt_speed", "Pod tilt speed", 5.0, 360.0, 1.0, "°/s"],
@@ -89,7 +92,7 @@ func setup(state: RefCounted, in_tabs: bool = false, graphics_rows: VBoxContaine
 		slider.focus_mode = Control.FOCUS_NONE
 		row_parent.add_child(slider)
 		sliders[key] = slider
-		_update_label(row, slider.value)
+		_update_label(row, float(movement.settings[key]))
 		slider.value_changed.connect(func(value: float) -> void:
 			movement.settings[key] = value
 			_update_label(row, value)

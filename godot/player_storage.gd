@@ -2,10 +2,16 @@ extends RefCounted
 
 # Personal files use the OS Documents location, including redirected Documents.
 static var root_override := ""
+static var _default_root := ""
 
 static func root_path() -> String:
 	if not root_override.is_empty(): return root_override
-	return OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS).path_join("OpenSC")
+	if _default_root.is_empty():
+		# On Linux this may start xdg-user-dir. Resolve it once, and use the
+		# app data folder if the OS cannot resolve an absolute Documents path.
+		var documents := OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS)
+		_default_root = documents.path_join("OpenSC") if documents.is_absolute_path() else ProjectSettings.globalize_path("user://player")
+	return _default_root
 
 static func preferences_path() -> String:
 	return root_path().path_join("preferences.cfg")

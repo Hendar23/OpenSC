@@ -32,7 +32,6 @@ func _update_water_environment() -> void:
 		game.fog_curve_label.text = "Fog build-up curve: %.1f" % game.fog_curve_slider.value
 	game.water_environment.fog_depth_end = game.fog_visibility * distance_scale
 	game.water_environment.fog_sun_scatter = 0.0
-	game.fog_label.text = "Absolute view distance: %.1f units" % game.fog_visibility
 	game._update_daylight()
 
 func _update_daylight() -> void:
@@ -43,7 +42,7 @@ func _update_daylight() -> void:
 	# Materials already own distance fog. Engine sky fog would recolour the
 	# sheltered background blue even after its cave exposure was applied.
 	game.water_environment.fog_sky_affect = 0.0
-	if game.fog_slider != null:
+	if game.fog_curve_slider != null:
 		game.natural_light.lighting(game.water_environment,game.water_environment.fog_depth_end,game.water_environment.fog_depth_begin,game.fog_curve_slider.value)
 	var menu_active: bool = game.menu_backdrop != null and game.menu_backdrop.active
 	var lighting_camera: Camera3D = game.menu_backdrop.view if menu_active else game.camera
@@ -52,7 +51,7 @@ func _update_daylight() -> void:
 	game.natural_light.set_ambient_source(point,sub_lighting)
 	update_background(lighting_camera,sub_lighting)
 	game.water_visuals.lighting(float(game.world_root.get_meta("surface_height")) if is_instance_valid(game.world_root) and game.world_root.has_meta("surface_height") else 0.0,lighting_cycle.sun_direction())
-	if game.fog_slider != null: game.water_visuals.fog(game.water_environment.fog_depth_end if game.water_environment.fog_enabled else 1000000.0,game.water_environment.fog_depth_begin,game.fog_curve_slider.value)
+	if game.fog_curve_slider != null: game.water_visuals.fog(game.water_environment.fog_depth_end if game.water_environment.fog_enabled else 1000000.0,game.water_environment.fog_depth_begin,game.fog_curve_slider.value)
 	if game.clock_label != null:
 		var minutes := int(game.day_night.hour * 60.0) % 1440
 		game.clock_label.text = "World time: %02d:%02d" % [minutes / 60, minutes % 60]
@@ -67,7 +66,12 @@ func update_background(lighting_camera: Camera3D, sub_lighting: bool) -> void:
 		var exposure: float = game.natural_light.visibility(eye,true)
 		if is_instance_valid(cave_background):
 			var cave = game.natural_light.CaveDaylight
-			cave_background.visible = cave.REGION.has_point(eye) or eye.distance_squared_to(cave.MOUTH) < cave.VIEW_RADIUS * cave.VIEW_RADIUS or game.natural_light.OtherCaveDaylight.near_view(eye)
+			var menu_active: bool = game.menu_backdrop != null and game.menu_backdrop.active
+			# A menu cut can jump between differently sheltered viewpoints. Render
+			# empty water with the same camera/exposure shader as fully fogged
+			# surfaces, rather than exposing a separately sampled clear colour.
+			cave_background.material_override.set_shader_parameter("fill_open_water",menu_active)
+			cave_background.visible = menu_active or cave.REGION.has_point(eye) or eye.distance_squared_to(cave.MOUTH) < cave.VIEW_RADIUS * cave.VIEW_RADIUS or game.natural_light.OtherCaveDaylight.near_view(eye)
 		# Empty space behind cave geometry must match sheltered water, while
 		# the actual surface keeps its daylight material through cave exits.
 		var cave_ambient := 0.0 if sub_lighting else minf(float(game.natural_light.settings.cave_ambient),game.water_environment.ambient_light_energy)
