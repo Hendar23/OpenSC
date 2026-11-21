@@ -63,6 +63,19 @@ func _run() -> void:
 	menu._change("frame_limit",0); check(Engine.max_fps == 0,"Unlimited removes the cap")
 	menu._change("vsync",false); check(not graphics.settings.vsync,"VSync toggles independently")
 	check(not graphics.resolutions().is_empty() and graphics.settings.resolution in graphics.resolutions(),"Resolution list includes the current monitor size")
+	check(root.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_EXPAND,"Startup canvas expands to the window aspect ratio")
+	root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
+	graphics.set_value("display_mode",2)
+	check(root.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_EXPAND,"Applying display settings preserves aspect expansion")
+	if DisplayServer.get_name() == "headless":
+		for dimensions in [Vector2i(1280,720),Vector2i(1280,800),Vector2i(1920,1200),Vector2i(2560,1080)]:
+			root.size = dimensions
+			await process_frame
+			var viewport := root.get_visible_rect()
+			var physical := root.get_screen_transform() * viewport
+			check(physical.position.is_zero_approx() and physical.size.is_equal_approx(Vector2(dimensions)),"Canvas fills %s without bars" % dimensions)
+			var menu_rect: Rect2 = menu.layout.get_global_rect()
+			check(viewport.encloses(menu_rect) and menu_rect.get_center().is_equal_approx(viewport.get_center()),"Graphics menu fits and stays centred at %s" % dimensions)
 	if DisplayServer.get_name() != "headless":
 		graphics.set_value("resolution",Vector2i(1280,720)); graphics.set_value("display_mode",2)
 		await process_frame; await process_frame

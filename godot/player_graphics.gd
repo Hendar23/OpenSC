@@ -98,7 +98,7 @@ func apply_display() -> void:
 	# uses the selected render resolution, so reducing it cannot blur text.
 	window.content_scale_size = Vector2i(1280,720)
 	window.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
-	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
+	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	_apply_resolution()
 
 func _apply_resolution() -> void:
