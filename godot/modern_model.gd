@@ -44,6 +44,8 @@ static func load_model(path: String, descriptor: Dictionary = {}) -> Node3D:
 	var state := GLTFState.new()
 	if document.append_from_file(path, state) != OK: return null
 	_apply_material_textures(state, descriptor)
+	if descriptor.get("id", "") == "submarine.player":
+		_tag_exterior_canopy(state, json)
 	if descriptor.get("scenery_lods",false) or str(descriptor.get("id","")) in ["model.reed","model.bush1","model.bush2","model.bush3","model.bush4"]:
 		# Runtime GLTF loading does not run the editor's automatic LOD import.
 		# Keep the full-detail surface and add distance-only index buffers once,
@@ -75,6 +77,23 @@ static func load_model(path: String, descriptor: Dictionary = {}) -> Node3D:
 	root.set_meta("submarine_parts", mapped)
 	cache.save_scene(cache_key, root)
 	return root
+
+static func _tag_exterior_canopy(state: GLTFState, source: Dictionary) -> void:
+	# Allow player models to use the same live reflections as the retail glass.
+	# Material extras are an explicit opt-in, so hull paint and other GLBs retain
+	# their imported material behavior.
+	var descriptions: Variant = source.get("materials", [])
+	if not descriptions is Array: return
+	var materials := state.get_materials()
+	for index in mini(materials.size(), descriptions.size()):
+		var entry: Variant = descriptions[index]
+		if not entry is Dictionary: continue
+		var extras: Variant = entry.get("extras", {})
+		if not extras is Dictionary or extras.get("osc_exterior_canopy", false) != true: continue
+		var material := materials[index] as StandardMaterial3D
+		if material == null: continue
+		material.set_meta("exterior_canopy", true)
+		material.set_meta("canopy_original_color", material.albedo_color)
 
 static func _apply_source_bounds(state: GLTFState, json: Dictionary) -> void:
 	# Offline simplification may drop extreme vertices. Retain the source bounds
