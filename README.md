@@ -25,12 +25,11 @@ OpenSC offers a few enhancements over the original:
   - Download all the official mods directly from the game.
 
 ### Missions & NPCs
-- **Mission Improvements**
   - Lots and lots of little enhancements. Things like mission related subs and items not just vanishing into thin air. More dramatic explosions for buildings and big subs.
-- **NPCs**
   - NPCs use docks.
   - Random Pirates (and bounties for killing them).
   - Reworked NPC movement.
+  - and more....
 
 ### Interface & Quality of Life
 - **New main menu**
@@ -38,9 +37,7 @@ OpenSC offers a few enhancements over the original:
 - **Photo and Action Replay Modes**
   - Pauses the game and gives full camera control for taking screenshots.
   - Replay the last 30 seconds of action from any angle.
-- **UI**
-  - Compact multi-message radio stack
-  - Credits and hold inventory displayed next to full screen map
+- and more....
 
 ## Why are the cutscenes not playing?
 
