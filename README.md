@@ -24,10 +24,6 @@ OpenSC offers a few enhancements over the original:
 - **Built in mod manager**
   - Download all the official mods directly from the game.
 
-### Gameplay & Physics
-- **Player Sub**
-  - Reworked and enhanced player sub physics.
-
 ### Missions & NPCs
 - **Mission Improvements**
   - Lots and lots of little enhancements. Things like mission related subs and items not just vanishing into thin air. More dramatic explosions for buildings and big subs.
@@ -45,6 +41,14 @@ OpenSC offers a few enhancements over the original:
 - **UI**
   - Compact multi-message radio stack
   - Credits and hold inventory displayed next to full screen map
+
+## Why are the cutscenes not playing?
+
+There is a bad copy of Sub Culture going about that has the FMV files replaced with single frame placeholders. This was probably done at some point in the past to make the install size smaller. The game checks for this and gives a warning if it detects this bad copy. (The game will play fine, you just don't get video cutscenes.)
+
+If you are not sure, check the file sizes in the FMV folder of the original game install. If they look like [this](https://private-user-images.githubusercontent.com/270592230/715133378-1c050a7f-060e-4759-94a3-0dd9dfe23e80.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3OTUzNzUxMDksIm5iZiI6MTc5NTM3NDgwOSwicGF0aCI6Ii8yNzA1OTIyMzAvNzE1MTMzMzc4LTFjMDUwYTdmLTA2MGUtNDc1OS05NGEzLTBkZDlkZmUyM2U4MC5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjYxMTIyJTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI2MTEyMlQxOTEzMjlaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT1hMTk3N2NjZWQxZTQ2M2MyYjE5YzBkMTBjNDY3MDc3YThkOTA5N2MzZGNjMmY5MjQzYjIxODk5OGFjZDQ1YTAwJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCZyZXNwb25zZS1jb250ZW50LXR5cGU9aW1hZ2UlMkZwbmcifQ.GPRRSbo7BhfGJdwsxqXKZp2IDb1lgwq9s03gGLQ9ewo) you have a bad copy. A good copy looks like [this](https://private-user-images.githubusercontent.com/270592230/715133478-428295f8-4e2b-48ee-840a-4b504b2ea052.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3OTUzNzUxMDksIm5iZiI6MTc5NTM3NDgwOSwicGF0aCI6Ii8yNzA1OTIyMzAvNzE1MTMzNDc4LTQyODI5NWY4LTRlMmItNDhlZS04NDBhLTRiNTA0YjJlYTA1Mi5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjYxMTIyJTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI2MTEyMlQxOTEzMjlaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT0wYzMzOTQ0YjdlOTQ3M2E1NTZlMmQyYzQ5YTEyYTVmYzhjMDMxYmMwYjI2ODMwOTQwN2E1MWJhNzhiYjY1M2VhJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCZyZXNwb25zZS1jb250ZW50LXR5cGU9aW1hZ2UlMkZwbmcifQ.OhpoTXmFF7NTCjubKm6ZXrmbzf1f_QLvTpH7M_5juTA).
+
+Of course I'm sure none of you will have this problem, because you are all using a legit copy of your original CD-ROM.
 
 ## Controls
 
