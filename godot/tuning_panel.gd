@@ -134,6 +134,12 @@ func _resize() -> void:
 func _update_label(row: Array, value: float) -> void:
 	labels[str(row[0])].set_message("%s: %.2f %s",[row[1],value,row[5]])
 
+func refresh_settings() -> void:
+	for row in ROWS:
+		var value: float = movement.settings[row[0]]
+		sliders[row[0]].set_value_no_signal(value)
+		_update_label(row, value)
+
 func set_camera_distance(value: float) -> void:
 	var distance := clampf(value, FollowCamera.MIN_DISTANCE, FollowCamera.MAX_DISTANCE)
 	movement.settings.camera_distance = distance

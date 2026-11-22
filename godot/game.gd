@@ -324,7 +324,7 @@ func _build_options_dialogs() -> void:
 	restore_defaults_prompt = ConfirmationDialog.new()
 	restore_defaults_prompt.title = "Restore Defaults"
 	restore_defaults_prompt.ok_button_text = "Restore Defaults"
-	restore_defaults_prompt.dialog_autowrap = true
+	restore_defaults_prompt.dialog_text = "Are you sure?"
 	restore_defaults_prompt.confirmed.connect(_restore_defaults)
 	restore_defaults_prompt.canceled.connect(func() -> void: front_end.restore_button_focus("restore_defaults"))
 	add_child(restore_defaults_prompt)
@@ -352,10 +352,7 @@ func _can_restore_defaults() -> bool:
 
 func _request_restore_defaults() -> void:
 	if not _can_restore_defaults() or world_loading or loading_save: return
-	var message := tr("Restore this release’s default settings, including F1 settings and mod selection? OpenSC will restart. Your saves, installed mods, game folder and language will be kept.")
-	if has_started_game: message += "\n\n" + tr("Unsaved progress will be lost.")
-	restore_defaults_prompt.dialog_text = message
-	restore_defaults_prompt.popup_centered(Vector2i(500, 180 if has_started_game else 145))
+	restore_defaults_prompt.popup_centered(Vector2i(300, 95))
 	restore_defaults_prompt.get_cancel_button().grab_focus()
 
 func _restore_defaults() -> void:
@@ -367,16 +364,7 @@ func _restore_defaults() -> void:
 		front_end.restore_button_focus("restore_defaults")
 		options_notice.popup_centered(Vector2i(450, 135))
 		return
-	_restart_after_restore()
-
-func _restart_after_restore() -> void:
-	var arguments := OS.get_cmdline_args()
-	var user_arguments := OS.get_cmdline_user_args()
-	if not user_arguments.is_empty():
-		arguments.append("--")
-		arguments.append_array(user_arguments)
-	OS.set_restart_on_exit(true, arguments)
-	get_tree().quit()
+	front_end.restore_button_focus("restore_defaults")
 
 func _bootstrap() -> void:
 	world_loading = true

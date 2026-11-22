@@ -168,6 +168,13 @@ func _row(parent: VBoxContainer, row: Array) -> void:
 	# Rebuild once on release rather than restarting loops every drag tick.
 	if key == "loop_blend_ms": slider.drag_ended.connect(func(_changed: bool) -> void: audio.rebuild_loops())
 
+func refresh_settings() -> void:
+	for key in sliders:
+		var value: float = audio.tuning.settings[key]
+		sliders[key].set_value_no_signal(value)
+		var label = labels[key]
+		label.set_message(label.message, [label.arguments[0], sliders[key].value, label.arguments[2]])
+
 func _resize() -> void:
 	if not embedded: offset_bottom = minf(800.0, get_viewport_rect().size.y - 18.0)
 func stop_preview() -> void:

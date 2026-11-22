@@ -1999,11 +1999,8 @@ msgstr "Die Standardeinstellungen konnten nicht wiederhergestellt werden (%s)."
 msgid "Restore Defaults"
 msgstr "Standardeinstellungen wiederherstellen"
 
-msgid "Restore this release’s default settings, including F1 settings and mod selection? OpenSC will restart. Your saves, installed mods, game folder and language will be kept."
-msgstr "Die Standardeinstellungen dieser Version einschließlich der F1-Einstellungen und der Mod-Auswahl wiederherstellen? OpenSC wird neu gestartet. Spielstände, installierte Mods, Spielordner und Sprache bleiben erhalten."
-
-msgid "Unsaved progress will be lost."
-msgstr "Nicht gespeicherter Fortschritt geht verloren."
+msgid "Are you sure?"
+msgstr "Bist du sicher?"
 
 msgid "Placeholder FMV files found"
 msgstr "Platzhalter für Zwischensequenzen gefunden"

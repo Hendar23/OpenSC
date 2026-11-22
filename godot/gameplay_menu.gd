@@ -45,6 +45,12 @@ var status: Label
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS; layer = 12
 	if settings_path.is_empty(): settings_path = Storage.preferences_path()
+	_load_preferences()
+	# Older installations may have selected Classic; enhanced effects now stay on.
+	preload("res://mine_explosion.gd").enhanced_enabled = true
+	_build_menu()
+
+func _load_preferences() -> void:
 	var config := ConfigFile.new()
 	if remember_preferences:
 		config = preload("res://option_defaults.gd").load_preferences(settings_path)
@@ -56,15 +62,29 @@ func _ready() -> void:
 		sun_shafts_enabled = bool(config.get_value("gameplay","sun_shafts",true))
 		lens_flares_enabled = bool(config.get_value("gameplay","lens_flares",true))
 		var saved_limit := int(config.get_value("gameplay","wildlife_limit",80))
-		if saved_limit in WILDLIFE_LIMITS: wildlife_limit = saved_limit
+		wildlife_limit = saved_limit if saved_limit in WILDLIFE_LIMITS else 80
 		replay_enabled = bool(config.get_value("gameplay","photo_replay",true))
 		fmvs_enabled = bool(config.get_value("gameplay","play_fmvs",true))
 		var saved_bubbles := int(config.get_value("gameplay","bubble_limit",config.get_value("graphics","bubble_limit",200)))
-		if saved_bubbles in BUBBLE_LIMITS: bubble_limit = saved_bubbles
+		bubble_limit = saved_bubbles if saved_bubbles in BUBBLE_LIMITS else 200
 	preload("res://propeller_bubbles.gd").set_limit(bubble_limit)
 	preload("res://lens_flare.gd").set_enabled(lens_flares_enabled)
-	# Older installations may have selected Classic; enhanced effects now stay on.
-	preload("res://mine_explosion.gd").enhanced_enabled = true
+func reload_preferences() -> void:
+	var live_options := {
+		"zapper_auto_aim": auto_aim_changed, "classic_sub_physics": classic_sub_physics_changed,
+		"disable_random_pirates": random_pirates_changed, "random_pirate_weapons": pirate_weapons_changed,
+		"wildlife_limit": wildlife_limit_changed, "sun_shafts_enabled": sun_shafts_changed,
+		"replay_enabled": replay_changed,
+	}
+	var previous := {}
+	for key in live_options: previous[key] = get(key)
+	_load_preferences()
+	for key in live_options:
+		var value: Variant = get(key)
+		if value != previous[key]: live_options[key].emit(value)
+	_refresh()
+
+func _build_menu() -> void:
 	var shade := ColorRect.new(); shade.color = Color.TRANSPARENT
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(shade)
 	layout = Control.new(); layout.size = Vector2(640,480); shade.add_child(layout)

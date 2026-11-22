@@ -1999,11 +1999,8 @@ msgstr "Impossible de rétablir les paramètres par défaut (%s)."
 msgid "Restore Defaults"
 msgstr "Rétablir les paramètres par défaut"
 
-msgid "Restore this release’s default settings, including F1 settings and mod selection? OpenSC will restart. Your saves, installed mods, game folder and language will be kept."
-msgstr "Rétablir les paramètres par défaut de cette version, y compris les réglages F1 et la sélection des mods ? OpenSC redémarrera. Vos sauvegardes, les mods installés, le dossier du jeu et la langue seront conservés."
-
-msgid "Unsaved progress will be lost."
-msgstr "La progression non sauvegardée sera perdue."
+msgid "Are you sure?"
+msgstr "Êtes-vous sûr ?"
 
 msgid "Placeholder FMV files found"
 msgstr "Fichiers vidéo de remplacement détectés"
