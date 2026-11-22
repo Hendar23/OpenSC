@@ -29,7 +29,7 @@ const TAUNTS := [
 	"That salvage belongs to us!",
 	"Fresh meat!",
 	"Wrong part of the ocean, pal!",
-	"Youâ€™re in our water now!",
+	"You're in our water now!",
 	"Another sucker!",
 ]
 var traffic: Node
@@ -93,7 +93,7 @@ func setup(manager: Node, folder: String, document: Dictionary) -> void:
 func _taunt(agent: Node3D) -> void:
 	if disabled or attacks_suppressed(): return
 	var line: String = TAUNTS[random.randi_range(0,TAUNTS.size()-1)]
-	transmission.emit({"speaker":preload("res://entity_identity.gd").of(agent),"text":"PIRATE : "+line,"portrait":portrait,"distorted_portrait":distorted_portrait})
+	transmission.emit({"speaker":preload("res://entity_identity.gd").of(agent),"text":tr("PIRATE : %s") % tr(line),"portrait":portrait,"distorted_portrait":distorted_portrait})
 
 func attacks_suppressed() -> bool:
 	# Derive this from the active encounter so completion, failure and session

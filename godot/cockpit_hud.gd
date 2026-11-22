@@ -297,7 +297,7 @@ func _model_instrument(definition: Dictionary, display: Control) -> Control:
 		for mesh in model.find_children("*", "MeshInstance3D", true, false):
 			if mesh.name in ["Screen_Display","Dial_Display"]: screen_mesh = mesh; break
 		if screen_mesh == null:
-			Mods.note("%s: HUD instrument needs a Screen_Display or Dial_Display mesh; using original sprites." % descriptor.name)
+			Mods.note(String(TranslationServer.translate("%s: HUD instrument needs a Screen_Display or Dial_Display mesh; using original sprites.")) % descriptor.name)
 			model.free()
 			continue
 		var container := Control.new()

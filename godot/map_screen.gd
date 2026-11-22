@@ -21,7 +21,9 @@ func setup(player: Node3D, data: RefCounted, catalogue: Dictionary, source: Call
 	for id in tables.get("equipment_text",{}).get("records",{}):
 		item_names[str(id)] = str(tables.equipment_text.records[id].get("name",str(id).capitalize()))
 	item_names["deep_sea_lights"] = item_names.get("lights","Deep Sea Lights")
-	item_names.merge(preload("res://equipment_shop.gd").TORPEDO_NAMES,true)
+	item_names["night_vision"] = tr(preload("res://equipment_shop.gd").NIGHT_VISION_NAME)
+	if catalogue.get("provenance",{}).get("locale","en") == "en":
+		item_names.merge(preload("res://equipment_shop.gd").TORPEDO_NAMES,true)
 	for id in tables.get("commodity_text",{}).get("records",{}):
 		commodity_names[str(id).to_lower()] = str(tables.commodity_text.records[id].get("Display name",str(id).capitalize()))
 	row = HBoxContainer.new(); add_child(row)
@@ -77,7 +79,7 @@ func refresh() -> void:
 	var data: Dictionary = model.call()
 	if data == previous: return
 	previous = data.duplicate(true)
-	credits.text = "Credits: %d" % int(data.get("credits",0))
+	credits.text = tr("Credits: %d") % int(data.get("credits",0))
 	var goods := _contents(data.get("cargo",{}),commodity_names)
 	var equipment := _contents(data.get("hold",{}),item_names)
 	fields.hold.text = "\n".join([goods,equipment]) if not goods.is_empty() and not equipment.is_empty() else goods + equipment
@@ -88,7 +90,7 @@ func _contents(items: Dictionary, names: Dictionary) -> String:
 	var ids := items.keys(); ids.sort()
 	for id in ids:
 		if int(items[id]) <= 0: continue
-		var title := str(names.get(id,str(id).capitalize()))
+		var title := tr(str(names.get(id,str(id).capitalize())))
 		lines.append("%s ×%d" % [title,int(items[id])])
 	return "\n".join(lines)
 

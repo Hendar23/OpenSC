@@ -8,6 +8,7 @@ var source: Node3D
 var flare_material: ShaderMaterial
 var previous_state: Array = []
 var aperture: MeshInstance3D
+var lunar := false
 
 static func set_enabled(on: bool) -> void:
 	effects_enabled = on
@@ -26,9 +27,10 @@ static func attach(light: Node3D) -> MeshInstance3D:
 	return flare
 
 func _ready() -> void:
-	preload("res://natural_light.gd").ensure_globals()
+	preload("res://water_visuals.gd").ensure_globals()
 	set_enabled(effects_enabled)
 	source = get_parent() if get_parent() is Light3D else get_parent().get_parent()
+	lunar = source.get_meta("lunar", false)
 	if source.name == "DeepSeaBeam":
 		var lenses := source.get_parent().find_children("IlluminatedLens","MeshInstance3D",true,false)
 		if not lenses.is_empty(): aperture = lenses[0]
@@ -38,6 +40,8 @@ func _ready() -> void:
 	extra_cull_margin = 2.0
 	if source is DirectionalLight3D: custom_aabb = AABB(Vector3.ONE*-10000.0,Vector3.ONE*20000.0)
 	flare_material = ShaderMaterial.new(); flare_material.shader = FlareShader
+	flare_material.set_shader_parameter("lunar", lunar)
+	if lunar: flare_material.set_shader_parameter("ripple_normals",preload("res://water_ripples.tres"))
 	material_override = flare_material
 	update_light()
 
@@ -66,9 +70,9 @@ func update_light() -> void:
 	var state := [energy,reach,tint,directional,cone,forward,solar]
 	if state == previous_state: return
 	previous_state = state
-	visible = energy > 0.25
+	visible = energy > (0.001 if lunar else 0.25)
 	flare_material.set_shader_parameter("flare_color",Vector3(tint.r,tint.g,tint.b))
-	flare_material.set_shader_parameter("brightness",clampf(energy-0.1,0.0,1.0))
+	flare_material.set_shader_parameter("brightness",clampf(energy*10.0 if lunar else energy-0.1,0.0,1.0))
 	flare_material.set_shader_parameter("reach",maxf(1.0,reach*4.0))
 	flare_material.set_shader_parameter("diameter",clampf(reach*0.16,0.4,2.0))
 	flare_material.set_shader_parameter("cone_cosine",cone if directional else -1.0)

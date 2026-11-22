@@ -47,11 +47,11 @@ func close_menu() -> void:
 
 func _changed(value: float) -> void:
 	var result: Error = effects.set_volume(value)
-	status.text = "" if result == OK else "Could not automatically save audio settings: %s" % error_string(result)
+	status.text = "" if result == OK else tr("Could not automatically save audio settings: %s") % error_string(result)
 	_update_caption()
 
 func _update_caption() -> void:
-	caption.text = "Effects volume: %d%%" % roundi(slider.value)
+	caption.text = tr("Effects volume: %d%%") % roundi(slider.value)
 
 func _layout() -> void:
 	var viewport := get_viewport().get_visible_rect().size

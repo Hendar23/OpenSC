@@ -23,7 +23,7 @@ static func restore(value: Variant) -> Dictionary:
 			if id is String and not result.available.has(id) and result.available.size() < 128: result.available.append(id.left(64))
 	return result
 
-static func import_messages(text: String, availability: Array) -> Dictionary:
+static func import_messages(text: String, availability: Array, mission_source: String = "Original LANGUAGE.ENC:ENGLISH.TXT") -> Dictionary:
 	var messages := {}; var id := ""; var lines: Array[String] = []
 	for raw in (text + "\n#end").split("\n"):
 		var line := raw.strip_edges()
@@ -37,7 +37,7 @@ static func import_messages(text: String, availability: Array) -> Dictionary:
 	for row in availability:
 		if row.size() < 6 or not messages.has(str(row[0])): continue
 		messages[str(row[0])].rules.append({"cities":CITY_GROUPS.get(str(row[1]),[]),"type":str(row[2]),"dependency":str(row[3]),"low":float(row[4]),"high":float(row[5])})
-	return {"source":"Original LANGUAGE.ENC:ENGLISH.TXT bulletins and DATA.ENC:MISSION1.CSV","records":messages}
+	return {"source":mission_source + " bulletins and DATA.ENC:MISSION1.CSV","records":messages}
 
 static func _paragraphs(lines: Array[String]) -> String:
 	# Blank source lines are formatting; <p> is the original paragraph delimiter.

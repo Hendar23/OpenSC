@@ -53,7 +53,7 @@ func _begin_new_game() -> void:
 func _world_asset_key() -> String:
 	var scenery := []
 	for pack in Mods.scenery_packs(): scenery.append([pack.id, pack.scenery])
-	return JSON.stringify([game.game_folder,Mods.layers,Mods.movement,scenery])
+	return JSON.stringify([game.game_folder,game.game_language,Mods.layers,Mods.movement,scenery])
 
 func _can_reuse_world() -> bool:
 	return game.pilot_mode and is_instance_valid(game.world_root) and game.loaded_world_assets == game._world_asset_key()
@@ -212,9 +212,9 @@ func _load_saved_game(slot: int) -> bool:
 	var port_exists: bool = game.docking.ports.any(func(port: Dictionary) -> bool: return int(port.node.get_meta("city_id")) == int(data.dock.id))
 	if not port_exists: return _load_failed("The saved dock is not present in this map.")
 	for item in data.equipment:
-		if not game.equipment.available.any(func(mounted: Dictionary) -> bool: return mounted.id == item.id): return _load_failed("Required equipment is unavailable: " + item.id)
+		if not game.equipment.available.any(func(mounted: Dictionary) -> bool: return mounted.id == item.id): return _load_failed(tr("Required equipment is unavailable: %s") % item.id)
 	for id in data.weapons:
-		if not game.weapons.available.any(func(mounted: Dictionary) -> bool: return mounted.id == id): return _load_failed("Required weapon is unavailable: " + id)
+		if not game.weapons.available.any(func(mounted: Dictionary) -> bool: return mounted.id == id): return _load_failed(tr("Required weapon is unavailable: %s") % id)
 	game._set_camera_mode(false)
 	game.scenery_seed = int(data.get("scenery_seed", 0))
 	if not game._can_reuse_world(): await game._start_game(game.game_folder)

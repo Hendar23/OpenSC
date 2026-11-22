@@ -55,7 +55,7 @@ func _update_radio_messages(delta: float) -> void:
 	if game.docking.greeting_remaining > 0 and text == game.docking.greeting_text: text = ""
 	var rov_prompt: bool = game._rov_prompt_active()
 	var delivery: bool = not rov_prompt and game._delivery_prompt_active()
-	if delivery: text = "CITY DROP POINT : Do you want attached object to be automatically retrieved? (Y/N)"
+	if delivery: text = tr("CITY DROP POINT : Do you want attached object to be automatically retrieved? (Y/N)")
 	var pinned: bool = rov_prompt or delivery or (game.docking.stage == game.docking.Stage.IDLE and not game.docking.nearby.is_empty())
 	var transmission := {"speaker":"dock/" + str(game.docking._portrait_port().get("name","")),"text":text,"portrait":game.docking.portrait_texture(),"distorted_portrait":game.docking.distorted_portrait_texture()}
 	if rov_prompt:
@@ -90,7 +90,7 @@ func _pirate_bounty(point: Vector3) -> void:
 	if nearest.is_empty(): return
 	game.player_progress.status.credits += 1000
 	var announcement := nearest.duplicate()
-	announcement.text = "%s: CITY RELAY BEACON : Thank you for your assistance. 1000 credit bounty paid." % nearest.name
+	announcement.text = tr("%s: CITY RELAY BEACON : Thank you for your assistance. 1000 credit bounty paid.") % nearest.name
 	announcement.speaker = "relay/" + str(nearest.name)
 	announcement.portrait = nearest.get("greeting_portrait",nearest.portrait)
 	announcement.distorted_portrait = nearest.get("greeting_distorted_portrait",nearest.distorted_portrait)

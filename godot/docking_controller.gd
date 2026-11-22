@@ -48,10 +48,9 @@ func setup(player: RigidBody3D, world: Node3D, folder: String = "", follow_view:
 	add_child(audio)
 	audio.setup(pilot.submarine_audio, folder)
 	view_camera = follow_view
-	radio_messages = Radio.messages(folder)
 	if catalogue.is_empty(): catalogue = preload("res://original_game_data.gd").load_catalogue(folder)
 	preload("res://original_game_data.gd").apply_city_names(world,catalogue)
-	if catalogue.tables.has("radio_messages"): radio_messages.clear()
+	radio_messages = Radio.messages(folder) if not catalogue.tables.has("radio_messages") else {}
 	for id in catalogue.tables.get("radio_messages",{}).get("records",{}):
 		radio_messages[id] = str(catalogue.tables.radio_messages.records[id].get("text",""))
 	var portraits := {}
@@ -137,10 +136,10 @@ func update_approach() -> void:
 		nearby = {}
 		message = ""
 	elif Access.owner(nearby) != null and Access.owner(nearby) != self:
-		message = "%s: CITY DOCKING PAD : Dock currently in use. Please wait." % nearby.name
+		message = tr("%s: CITY DOCKING PAD : Dock currently in use. Please wait.") % nearby.name
 	elif pilot.velocity.length() > maximum_docking_speed():
-		message = _radio_line(nearby, "warning", "CITY DOCKING PAD : Approach too fast to dock. Slow down.")
-	else: message = _radio_line(nearby, "prompt", "CITY DOCKING PAD : Do you want to dock? (Y/N)")
+		message = _radio_line(nearby, "warning", tr("CITY DOCKING PAD : Approach too fast to dock. Slow down."))
+	else: message = _radio_line(nearby, "prompt", tr("CITY DOCKING PAD : Do you want to dock? (Y/N)"))
 
 func _update_greeting() -> void:
 	var nearest: Dictionary = {}
@@ -196,7 +195,7 @@ func towing_cargo() -> bool:
 func request_docking() -> bool:
 	if stage == Stage.DOCKED:
 		if not Access.acquire(current,self):
-			launch_pending = true; message = "Dock currently in use. Please wait."; return false
+			launch_pending = true; message = tr("Dock currently in use. Please wait."); return false
 		launch_pending = false
 		_prepare_transit_settings()
 		# Reveal behind the closed hatch before it starts opening.
@@ -209,15 +208,15 @@ func request_docking() -> bool:
 	current = nearby
 	_prepare_transit_settings()
 	if minf(float(transit_settings.forward_speed), float(transit_settings.reverse_speed)) <= 0.0 or float(transit_settings.vertical_speed) <= 0.0 or float(transit_settings.side_thrust) <= 0.0:
-		message = "Docking requires movement speed and vertical thrust."
+		message = tr("Docking requires movement speed and vertical thrust.")
 		current = {}
 		return false
 	if pilot.angular_velocity.length() > 0.00001 and float(transit_settings.turn_acceleration) <= 0.0 and float(transit_settings.turn_drag) <= 0.0:
-		message = "Stop turning before docking with turning acceleration and drag disabled."
+		message = tr("Stop turning before docking with turning acceleration and drag disabled.")
 		current = {}
 		return false
 	if not pilot.global_basis.is_equal_approx(approach_basis(pilot.global_basis, pilot.global_position, current.entry)) and (float(transit_settings.turn_acceleration) <= 0.0 or float(transit_settings.turn_speed) <= 0.0):
-		message = "Face the docking position and level the submarine before docking with turning disabled."
+		message = tr("Face the docking position and level the submarine before docking with turning disabled.")
 		current = {}
 		return false
 	if not Access.acquire(current,self): current = {}; return false
@@ -260,20 +259,20 @@ func _transition(next_stage: Stage) -> void:
 		var door_stages := [Stage.OPEN, Stage.CLOSE, Stage.EXIT_OPEN, Stage.EXIT_CLOSE]
 		audio.set_phase(stage not in [Stage.IDLE, Stage.DOCKED], stage in door_stages, previous in door_stages and stage != previous)
 	match stage:
-		Stage.SETTLE: message = "Preparing to dock…"
-		Stage.ALIGN: message = "Aligning with %s…" % current.name
-		Stage.APPROACH: message = "Approaching %s…" % current.name
-		Stage.OPEN, Stage.EXIT_OPEN: message = "Opening docking port…"
-		Stage.DESCEND: message = "Docking at %s…" % current.name
-		Stage.CLOSE, Stage.EXIT_CLOSE: message = "Closing docking port…"
+		Stage.SETTLE: message = tr("Preparing to dock…")
+		Stage.ALIGN: message = tr("Aligning with %s…") % current.name
+		Stage.APPROACH: message = tr("Approaching %s…") % current.name
+		Stage.OPEN, Stage.EXIT_OPEN: message = tr("Opening docking port…")
+		Stage.DESCEND: message = tr("Docking at %s…") % current.name
+		Stage.CLOSE, Stage.EXIT_CLOSE: message = tr("Closing docking port…")
 		Stage.DOCKED:
 			Access.release(current,self)
-			message = "Docked at %s — Press Y to undock" % current.name
-		Stage.ASCEND: message = "Leaving %s…" % current.name
+			message = tr("Docked at %s — Press Y to undock") % current.name
+		Stage.ASCEND: message = tr("Leaving %s…") % current.name
 	if stage in [Stage.SETTLE, Stage.ALIGN, Stage.APPROACH, Stage.OPEN, Stage.DESCEND, Stage.CLOSE]:
-		message = _radio_line(current, "docking", "CITY DOCKING PAD : Automatic docking in progress")
+		message = _radio_line(current, "docking", tr("CITY DOCKING PAD : Automatic docking in progress"))
 	elif stage in [Stage.EXIT_OPEN, Stage.ASCEND, Stage.EXIT_CLOSE]:
-		message = _radio_line(current, "launch", "CITY DOCKING PAD : Automatic launch in progress")
+		message = _radio_line(current, "launch", tr("CITY DOCKING PAD : Automatic launch in progress"))
 	if stage in [Stage.ALIGN, Stage.APPROACH, Stage.DESCEND, Stage.ASCEND]:
 		pilot.collision_mask = 0
 		travel_start = pilot.global_position
@@ -299,7 +298,7 @@ func _transition(next_stage: Stage) -> void:
 			Access.release(current,self)
 			stage = Stage.IDLE
 			current = {}
-			message = "Face the docking position before docking with turning disabled."
+			message = tr("Face the docking position before docking with turning disabled.")
 			return
 		if acceleration <= 0.0 or speed <= 0.0: angle = 0.0
 		turn_profile = Transit.plan(absf(angle), speed, acceleration)

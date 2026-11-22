@@ -60,9 +60,12 @@ func _run() -> void:
 	check(game.gameplay_catalogue.tables.equipment.records.size() == 30 and game.gameplay_catalogue.warnings.is_empty(),"Startup imports original gameplay data before opening the menu")
 	check(game.front_end.menu_picture.texture != null and game.front_end.buttons.new_game.text == "New Game" and game.front_end.progress_bar.value == 100.0,"Title artwork and labelled buttons load and startup progress completes")
 	check(game.menu_backdrop.view.current and game.pilot != null and game.cockpit_hud != null,"Menu camera works with player and HUD already prepared")
+	var camera_random_state: int = game.menu_backdrop.random.state
+	game.menu_backdrop._position_camera()
 	var menu_pose: Transform3D = game.menu_backdrop.view.transform
 	var saved_spawn: Vector3 = game.world_root.get_meta("player_spawn")
 	game.world_root.set_meta("player_spawn",saved_spawn + Vector3(20,5,20))
+	game.menu_backdrop.random.state = camera_random_state
 	game.menu_backdrop._position_camera()
 	check(game.menu_backdrop.view.transform.is_equal_approx(menu_pose),"Editing the New Game spawn leaves menu framing unchanged")
 	game.world_root.set_meta("player_spawn",saved_spawn)
@@ -70,7 +73,7 @@ func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(camera_fixture))
 	var camera_document := preload("res://map_document.gd").load_active()
 	var captured_pose := menu_pose; captured_pose.origin += Vector3(0.5,0,0)
-	camera_document.menu_camera = {"transform":preload("res://map_document.gd").encode(captured_pose),"fov":57.0}
+	camera_document.menu_cameras = [{"transform":preload("res://map_document.gd").encode(captured_pose),"fov":57.0}]
 	check(preload("res://map_document.gd").save(camera_document,camera_fixture.path_join("map.json")) == OK,"Captured menu camera is valid map data")
 	var camera_manifest := FileAccess.open(camera_fixture.path_join("mod.json"),FileAccess.WRITE)
 	camera_manifest.store_string(JSON.stringify({"schema_version":1,"id":"camera-view-test","name":"Camera view test","assets":{"map.scen1":"map.json"}})); camera_manifest.close()
@@ -131,7 +134,7 @@ func _run() -> void:
 		root.get_texture().get_image().save_png("res://tests/live-menu-submarine-preview.png")
 	var accept := InputEventJoypadButton.new(); accept.pressed = true; accept.button_index = JOY_BUTTON_A
 	game.front_end.buttons.options.grab_focus(); game.front_end._input(accept)
-	check(game.front_end.menu_page == "options" and game.front_end._visible_button_order() == ["controls","graphics","audio","gameplay","player_folder","back"] and not game.front_end.buttons.new_game.visible,"Controller opens settings, player folder and Back")
+	check(game.front_end.menu_page == "options" and game.front_end._visible_button_order() == ["controls","graphics","audio","gameplay","player_folder","choose_game_folder","restore_defaults","back"] and not game.front_end.buttons.new_game.visible,"Controller opens settings, folder selection, restore defaults and Back")
 	var down := InputEventJoypadButton.new(); down.pressed = true; down.button_index = JOY_BUTTON_DPAD_DOWN
 	game.front_end._input(down)
 	check(root.gui_get_focus_owner() == game.front_end.buttons.graphics,"Options navigation reaches Graphics after Controls")

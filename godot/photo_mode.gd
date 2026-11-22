@@ -35,14 +35,17 @@ func enter(controller: int = -1) -> bool:
 	view.cull_mask = (source.cull_mask | game.SUB_RENDER_LAYER | preload("res://remote_vehicle.gd").RENDER_LAYER) & ~preload("res://first_person_cockpit.gd").RENDER_LAYER
 	var angles := view.global_basis.get_euler(); yaw = angles.y; pitch = clampf(angles.x,-PI*0.495,PI*0.495)
 	device = controller; mouse_mode = Input.mouse_mode; saved.clear()
+	game.game_runtime._update_night_vision()
 	active = true
 	_suspend(game)
+	var graphics: Node = game.front_end.player_graphics
+	graphics.scene_filter_layer.visible = graphics.night_vision
 	view.make_current(); get_tree().paused = true
 	particle_state = {"camera":game.particles.camera,"pose":game.particles.global_transform,"drift":game.particles.drift_distance,"visible":game.particles.visible}
 	game.particles.camera = view
 	game.particles._process(0)
 	replay.begin()
-	game.game_lighting.update_background(view,true)
+	_update_camera_lighting()
 	_update_particles()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	return true
@@ -76,8 +79,10 @@ func leave() -> void:
 		node.process_mode = entry.mode
 		if node is CanvasLayer: node.visible = entry.visible
 	saved.clear(); get_tree().paused = false; Input.mouse_mode = mouse_mode
-	if is_instance_valid(game.first_person_cockpit): game.first_person_cockpit.refresh()
-	game._update_daylight()
+	if is_instance_valid(game.pilot) and game.pilot.is_inside_tree():
+		if is_instance_valid(game.first_person_cockpit): game.first_person_cockpit.refresh()
+		game._update_daylight()
+		game.game_runtime._update_night_vision()
 
 func _input(event: InputEvent) -> void:
 	if not active:
@@ -127,8 +132,13 @@ func _process(delta: float) -> void:
 	var slow := Input.is_physical_key_pressed(KEY_CTRL) or (device >= 0 and Input.is_joy_button_pressed(device,JOY_BUTTON_LEFT_SHOULDER))
 	move(direction,rise,delta,0.25 if slow else 4.0 if fast else 1.0)
 	replay.advance(delta,clampf(scrub,-1,1))
-	game.game_lighting.update_background(view,true)
+	_update_camera_lighting()
 	_update_particles()
+
+func _update_camera_lighting() -> void:
+	game.game_lighting.update_background(view,true)
+	if game.front_end.player_graphics.night_vision:
+		game.game_lighting.update_night_vision(view, true)
 
 func _update_particles() -> void:
 	# Evaluate drift from replay time without storing the ambient cloud. Pausing,

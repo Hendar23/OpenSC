@@ -2,28 +2,40 @@ extends RefCounted
 ## Import the player's original data in memory. No extracted content is bundled.
 const Database = preload("res://scenery_loader.gd")
 const Mods = preload("res://mod_registry.gd")
-const INPUTS := ["DATA/DATA.ENC","DATA/ENGLISH/LANGUAGE.ENC","DATA/SCEN1.DDB"]
+const Language = preload("res://game_language.gd")
+const GAMEPLAY := "DATA/DATA.ENC"
+const WORLD := "DATA/SCEN1.DDB"
+const MISSION_TEXT := "ENGLISH.TXT" # The retail French and German archives use this name too.
 const CSV_TABLES := {"OBJECTS.CSV":"objects","WEAPONS.CSV":"equipment","WEAPONS1.CSV":"equipment_prices.1","WEAPONS3.CSV":"equipment_prices.3","WEAPONS4.CSV":"equipment_prices.4","REWARD1.CSV":"mission_rewards","MISSION1.CSV":"mission_availability"}
 static var cached_signature := ""
 static var cached_base := {}
 
-static func load_catalogue(folder: String, with_mods: bool = true) -> Dictionary:
+static func load_catalogue(folder: String, with_mods: bool = true, locale: String = "") -> Dictionary:
+	if locale.is_empty(): locale = Language.preferred(folder, Language.available(folder), "en")
+	var language_path := Language.archive_path(folder, locale)
 	var fingerprints := {}
-	for relative in INPUTS:
+	var paths: Array = []
+	for relative in [GAMEPLAY, language_path, WORLD]:
 		var path := folder.path_join(relative)
 		fingerprints[relative] = FileAccess.get_sha256(path) if FileAccess.file_exists(path) else "missing"
-	var signature := folder + JSON.stringify(fingerprints)
+		paths.append(path)
+	var signature := JSON.stringify([folder, locale, fingerprints])
 	if signature != cached_signature:
 		var cache := preload("res://asset_cache.gd")
-		var paths: Array = []
-		for relative in INPUTS: paths.append(folder.path_join(relative))
-		var cache_key := cache.key("catalogue", paths)
+		var cache_key := cache.key("catalogue", paths, [locale])
 		cached_base = cache.load_data(cache_key)
 		if cached_base.is_empty():
-			cached_base = _import(folder,fingerprints)
+			cached_base = _import(folder, fingerprints, language_path)
 			cache.save_data(cache_key, cached_base)
 		cached_signature = signature
 	var result := cached_base.duplicate(true)
+	for index in result.warnings.size():
+		var warning: String = result.warnings[index]
+		if warning.begins_with("Missing original file: "):
+			result.warnings[index] = Language.text("Missing original file: %s",locale) % warning.trim_prefix("Missing original file: ")
+		else:
+			result.warnings[index] = Language.text(warning,locale)
+	_display_radio_headings(result,locale)
 	if with_mods:
 		_briefing_requirements(result)
 		Mods.ensure()
@@ -33,9 +45,21 @@ static func load_catalogue(folder: String, with_mods: bool = true) -> Dictionary
 			var patch: Variant = JSON.parse_string(FileAccess.get_file_as_string(entry.path))
 			var errors := apply_patch(result,patch)
 			if errors.is_empty(): result.provenance.mods.append(entry.pack)
-			for error in errors: Mods.note("%s gameplay data: %s" % [entry.name,error])
-	_display_terminology(result)
+			for error in errors: Mods.note(String(TranslationServer.translate("%s gameplay data: %s")) % [entry.name,error])
+	result.provenance["locale"] = locale
+	if locale == "en": _display_terminology(result)
 	return result
+
+static func _display_radio_headings(catalogue: Dictionary, locale: String) -> void:
+	if locale == "en": return
+	for record in catalogue.tables.get("radio_messages",{}).get("records",{}).values():
+		var message: String = record.text
+		var separator := message.find(":")
+		if separator < 1: continue
+		var heading := message.left(separator).strip_edges()
+		var localized := Language.text(heading,locale)
+		if localized == heading: continue
+		record.text = localized + (":" if locale == "de" else " :") + message.substr(separator + 1)
 
 static func _briefing_requirements(catalogue: Dictionary) -> void:
 	# Owner-approved corrections to incomplete retail REQUIRE.TXT entries.
@@ -60,21 +84,22 @@ static func _display_terminology(catalogue: Dictionary) -> void:
 			for field in fields[table]:
 				if record.get(field) is String: record[field] = preload("res://display_text.gd").weapons(record[field])
 
-static func _import(folder: String, fingerprints: Dictionary) -> Dictionary:
+static func _import(folder: String, fingerprints: Dictionary, language_path: String) -> Dictionary:
 	var result := {"schema_version":1,"provenance":{"importer_version":1,"files":fingerprints},"tables":{},"warnings":[]}
-	for relative in INPUTS:
+	for relative in fingerprints:
 		if fingerprints[relative] == "missing": result.warnings.append("Missing original file: " + relative)
-	var archive := read_archive(folder.path_join(INPUTS[0]))
-	var language := read_archive(folder.path_join(INPUTS[1]))
+	var archive := read_archive(folder.path_join(GAMEPLAY))
+	var language := read_archive(folder.path_join(language_path))
 	if archive.is_empty(): result.warnings.append("No gameplay archive could be decoded.")
-	if language.is_empty(): result.warnings.append("No English language archive could be decoded.")
+	if language.is_empty(): result.warnings.append("No language archive could be decoded.")
 	var texts := {"source":"Original archives","records":{}}
-	for bundle in [{"files":archive,"source":INPUTS[0]},{"files":language,"source":INPUTS[1]}]:
+	# Preserve the source_texts keys used by existing gameplay-data mods.
+	for bundle in [{"files":archive,"source":GAMEPLAY},{"files":language,"source":language_path}]:
 		for name in bundle.files:
-			texts.records[("data." if bundle.source == INPUTS[0] else "english.") + name.to_lower()] = {"text":bundle.files[name],"source":bundle.source + ":" + name}
+			texts.records[("data." if bundle.source == GAMEPLAY else "english.") + name.to_lower()] = {"text":bundle.files[name],"source":bundle.source + ":" + name}
 	result.tables["source_texts"] = texts
 	for name in CSV_TABLES:
-		if archive.has(name): result.tables[CSV_TABLES[name]] = _csv_table(archive[name],INPUTS[0] + ":" + name)
+		if archive.has(name): result.tables[CSV_TABLES[name]] = _csv_table(archive[name],GAMEPLAY + ":" + name)
 	if archive.has("TRADEDAT.CSV"): _trade_tables(result.tables,archive["TRADEDAT.CSV"])
 	for name in ["REQUIRE.TXT","ROUTES.TXT"]:
 		if archive.has(name): result.tables["mission_requirements" if name == "REQUIRE.TXT" else "mission_routes"] = _lists(archive[name],name)
@@ -89,10 +114,11 @@ static func _import(folder: String, fingerprints: Dictionary) -> Dictionary:
 				records[stage]["core" if row[0] == "#core" else "optional"].append(row.slice(1))
 		result.tables["campaign_stages"] = {"source":"DATA/DATA.ENC:MISSORD.CSV","records":records,"cities":cities}
 	for name in ["WEAPTXT.CSV","TRADETXT.CSV"]:
-		if language.has(name): result.tables["equipment_text" if name == "WEAPTXT.CSV" else "commodity_text"] = _csv_table(language[name],INPUTS[1] + ":" + name)
-	if language.has("ENGLISH.TXT"): result.tables["mission_text"] = _mission_text(language["ENGLISH.TXT"])
-	result.tables["mail_messages"] = preload("res://mailbox.gd").import_messages(str(language.get("ENGLISH.TXT","")),csv_rows(str(archive.get("MISSION1.CSV",""))))
-	var file := FileAccess.open(folder.path_join(INPUTS[2]),FileAccess.READ)
+		if language.has(name): result.tables["equipment_text" if name == "WEAPTXT.CSV" else "commodity_text"] = _csv_table(language[name],language_path + ":" + name)
+	var mission_source := language_path + ":" + MISSION_TEXT
+	if language.has(MISSION_TEXT): result.tables["mission_text"] = _mission_text(language[MISSION_TEXT], mission_source)
+	result.tables["mail_messages"] = preload("res://mailbox.gd").import_messages(str(language.get(MISSION_TEXT,"")),csv_rows(str(archive.get("MISSION1.CSV",""))),mission_source)
+	var file := FileAccess.open(folder.path_join(WORLD),FileAccess.READ)
 	var tables := Database.decode_database(file.get_buffer(file.get_length()),true) if file != null else {}
 	if tables.is_empty(): result.warnings.append("No scenery/mission database could be decoded.")
 	for name in tables:
@@ -107,10 +133,10 @@ static func _import(folder: String, fingerprints: Dictionary) -> Dictionary:
 			if name == "Missions": id += "." + str(row.get("StoryID",0))
 			_put(records,id,row)
 		var table_id: String = "object_types" if name == "objects" else name.to_lower()
-		result.tables["database." + table_id] = {"source":INPUTS[2] + ":" + name,"records":records}
+		result.tables["database." + table_id] = {"source":WORLD + ":" + name,"records":records}
 	# Weapon constants are recovered from SC.EXE; shield and sustain come from OBJECTS.CSV.
-	_import_city_radio(result,language)
-	_import_city_descriptions(result,language)
+	_import_city_radio(result,language,language_path)
+	_import_city_descriptions(result,language,language_path)
 	result.tables["weapon_tuning"] = {"source":"SC.EXE recovered zapper constants","records":{"zapper":preload("res://submarine_weapons.gd").DEFAULTS.duplicate()}}
 	var stats := {}
 	for record in result.tables.get("objects",{}).get("records",{}).values():
@@ -120,29 +146,28 @@ static func _import(folder: String, fingerprints: Dictionary) -> Dictionary:
 	result.tables["creature_stats"] = {"source":"Original raw shield values and damage-sustaining factors","records":stats}
 	return result
 
-static func _import_city_radio(catalogue: Dictionary, language: Dictionary) -> void:
+static func _import_city_radio(catalogue: Dictionary, language: Dictionary, source: String) -> void:
 	var messages := {}
 	for line in str(language.get("MESSAGES.TXT","")).split("\n"):
 		var fields := line.split("\t")
 		if fields.size() >= 5: messages[fields[0].strip_edges()] = {"text":fields[4].strip_edges(),"portrait":fields[3].strip_edges()}
-	catalogue.tables["radio_messages"] = {"source":"DATA/ENGLISH/LANGUAGE.ENC:MESSAGES.TXT","records":messages}
-	var places: Array[Dictionary] = []
+	catalogue.tables["radio_messages"] = {"source":source + ":MESSAGES.TXT","records":messages}
+	var places := {}
 	for line in str(language.get("PLACES.TXT","")).split("\n"):
 		var fields := line.strip_edges().split("\t")
 		if fields.size() < 6: continue
-		places.append({"name":str(fields[1]).replace("_"," ").capitalize(),"radius":float(fields[5])})
+		places[fields[0]] = {"name":str(fields[1]).replace("_"," ").capitalize(),"radius":float(fields[5])}
 	var records := {}
-	# Relay groups follow language-message order; dock IDs follow SCEN1.DDB.
-	var codes := {1:1,2:7,3:4,4:10,5:13,6:16}
+	# Use stable IDs from SCEN1.DDB and PLACES.TXT. A translated greeting need
+	# not use the exact spelling of the city label.
+	var relays := {1:["Touka",1],2:["Velcova",7],3:["Beluga",4],4:["Tryton",10],5:["Aquatraz",13],6:["Refinery",16]}
 	for row in catalogue.tables.get("database.cities",{}).get("records",{}).values():
 		var id := int(row.CityID)
-		if not codes.has(id): continue
-		var code: int = codes[id]
-		var greeting := str(messages.get("city%d" % code,{}).get("text",""))
-		for place in places:
-			if not greeting.to_lower().contains(str(place.name).to_lower()): continue
-			records[str(id)] = {"name":place.name,"legacy_name":str(row.CityName).strip_edges(),"greeting_radius":place.radius,"greeting_neutral":"city%d" % code,"greeting_hostile":"city%d" % (code + 1),"greeting_friendly":"city%d" % (code + 2)}
-			break
+		if not relays.has(id): continue
+		var place: Dictionary = places.get(relays[id][0], {})
+		if place.is_empty(): continue
+		var code: int = relays[id][1]
+		records[str(id)] = {"name":place.name,"legacy_name":str(row.CityName).strip_edges(),"greeting_radius":place.radius,"greeting_neutral":"city%d" % code,"greeting_hostile":"city%d" % (code + 1),"greeting_friendly":"city%d" % (code + 2)}
 	catalogue.tables["city_info"] = {"source":"Original city database, relay messages and place names","records":records}
 
 static func apply_city_names(world: Node, catalogue: Dictionary) -> void:
@@ -156,7 +181,7 @@ static func apply_city_names(world: Node, catalogue: Dictionary) -> void:
 		if current == str(record.get("legacy_name","")) or current.is_empty():
 			node.set_meta("city_name",str(record.name))
 
-static func _import_city_descriptions(catalogue: Dictionary, language: Dictionary) -> void:
+static func _import_city_descriptions(catalogue: Dictionary, language: Dictionary, source: String) -> void:
 	var records := {}
 	var cities: Array[String] = []
 	var standings: Array[String] = []
@@ -177,7 +202,7 @@ static func _import_city_descriptions(catalogue: Dictionary, language: Dictionar
 			if line.begins_with("#"): cities.append(line.substr(1).to_lower())
 			else: standings.append(line.substr(1).to_lower())
 		else: lines.append(line)
-	catalogue.tables["city_descriptions"] = {"source":"DATA/ENGLISH/LANGUAGE.ENC:CITY.TXT","records":records}
+	catalogue.tables["city_descriptions"] = {"source":source + ":CITY.TXT","records":records}
 	var names := {"1":["touka","N-TOU"],"2":["velcova","N-VEL"],"3":["beluga","N-BEL"],"4":["tryton","N-TRY"],"5":["aquatraz","N-AQU"],"6":["refinery","N-REF"]}
 	for id in names:
 		if not catalogue.tables.city_info.records.has(id): continue
@@ -267,7 +292,7 @@ static func _lists(text: String, name: String) -> Dictionary:
 		if not parts.is_empty(): _put(records,parts[0],{"items":parts.slice(1)})
 	return {"source":"DATA/DATA.ENC:" + name,"records":records}
 
-static func _mission_text(text: String) -> Dictionary:
+static func _mission_text(text: String, source: String) -> Dictionary:
 	var records := {}; var id := ""; var section := ""
 	for line in text.split("\n"):
 		if line.begins_with("#mission "):
@@ -275,20 +300,20 @@ static func _mission_text(text: String) -> Dictionary:
 			id = line.trim_prefix("#mission ").strip_edges(); section = ""
 		elif not id.is_empty(): section += line + "\n"
 	if not id.is_empty(): _put(records,id,{"text":section})
-	return {"source":"DATA/ENGLISH/LANGUAGE.ENC:ENGLISH.TXT","records":records}
+	return {"source":source,"records":records}
 
 static func apply_patch(catalogue: Dictionary, patch: Variant) -> Array[String]:
 	var errors: Array[String] = []
 	if not patch is Dictionary or patch.get("schema_version") != 1 or not patch.get("tables") is Dictionary:
-		errors.append("Expected schema_version 1 and a tables object."); return errors
+		errors.append(String(TranslationServer.translate("Expected schema_version 1 and a tables object."))); return errors
 	# Validate the entire patch before making any changes.
 	for table in patch.tables:
 		var definition: Variant = patch.tables[table]
 		if not definition is Dictionary or not definition.get("records") is Dictionary:
-			errors.append("Table %s must contain a records object." % table); continue
+			errors.append(String(TranslationServer.translate("Table %s must contain a records object.")) % table); continue
 		for id in definition.records:
 			var record: Variant = definition.records[id]
-			if not record is Dictionary and record != null: errors.append("Record %s/%s must be an object or null." % [table,id])
+			if not record is Dictionary and record != null: errors.append(String(TranslationServer.translate("Record %s/%s must be an object or null.")) % [table,id])
 	if not errors.is_empty(): return errors
 	for table in patch.tables:
 		if not catalogue.tables.has(table): catalogue.tables[table] = {"source":"mod","records":{}}

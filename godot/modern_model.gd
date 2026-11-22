@@ -111,7 +111,7 @@ static func _apply_material_textures(state: GLTFState, descriptor: Dictionary) -
 	for slot in descriptor.get("material_textures", {}):
 		var index := int(str(slot))
 		if index < 0 or index >= materials.size() or not materials[index] is BaseMaterial3D:
-			Mods.note("%s: GLB material %s is unavailable; keeping embedded textures." % [descriptor.get("name", "GLB"), slot])
+			Mods.note(String(TranslationServer.translate("%s: GLB material %s is unavailable; keeping embedded textures.")) % [descriptor.get("name", "GLB"), slot])
 			continue
 		var id := str(descriptor.material_textures[slot])
 		if not textures.has(id):
@@ -124,6 +124,6 @@ static func _apply_material_textures(state: GLTFState, descriptor: Dictionary) -
 					texture.set_meta("asset_source", replacement.path)
 					textures[id] = texture
 					break
-				Mods.note("%s: could not load %s for GLB material; using the next replacement or embedded texture." % [replacement.name, id])
+				Mods.note(String(TranslationServer.translate("%s: could not load %s for GLB material; using the next replacement or embedded texture.")) % [replacement.name, id])
 		if textures[id] != null:
 			materials[index].albedo_texture = textures[id]

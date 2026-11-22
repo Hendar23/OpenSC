@@ -148,7 +148,7 @@ func _save_all_preferences() -> void:
 		game.settings_save_error = ""
 
 func _report_settings_error(path: String, result: Error) -> void:
-	game.settings_save_error = "Could not save %s: %s" % [path.get_file(),error_string(result)]
+	game.settings_save_error = tr("Could not save %s: %s") % [path.get_file(),error_string(result)]
 	game.status_label.text = game.settings_save_error
 	game.status_label.tooltip_text = ProjectSettings.globalize_path(path)
 	push_warning(game.settings_save_error + " — " + ProjectSettings.globalize_path(path))
@@ -184,10 +184,28 @@ func save_player_preferences(hud_index: int = -1) -> void:
 		config.set_value("hud",str(HUD.DEFINITIONS[hud_index].id),game.cockpit_hud.enabled[hud_index])
 	elif not game.game_folder.is_empty():
 		config.set_value("game","folder",game.game_folder)
+		config.set_value("game","language",game.game_language)
 	else: return
 	var result := storage.ensure_parent(path)
 	if result == OK: result = config.save(path)
 	if result != OK: game._report_settings_error(path,result)
+
+func reset_player_preferences() -> Error:
+	# Keep the original installation selected so the next launch skips setup.
+	# All other preferences fall back to the data packaged with this release.
+	var storage = preload("res://player_storage.gd")
+	var path := storage.preferences_path()
+	var result := storage.ensure_parent(path)
+	if result != OK: return result
+	var setup := ConfigFile.new()
+	setup.set_value("game", "folder", game.game_folder)
+	setup.set_value("game", "language", game.game_language)
+	var temporary := path + ".tmp"
+	result = setup.save(temporary)
+	if result == OK:
+		result = DirAccess.rename_absolute(ProjectSettings.globalize_path(temporary), ProjectSettings.globalize_path(path))
+	if result != OK: DirAccess.remove_absolute(ProjectSettings.globalize_path(temporary))
+	return result
 
 func player_hud_enabled(index: int) -> bool:
 	var config := ConfigFile.new()

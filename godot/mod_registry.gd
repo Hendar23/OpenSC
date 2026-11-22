@@ -10,6 +10,7 @@ static var enabled: Array[String] = []
 static var order: Array[String] = []
 static var layers := {}
 static var movement := {}
+static var moonlight_energy := 0.0
 static var conflicts: Array[String] = []
 static var runtime_warnings: Array[String] = []
 static var _mounted_resource_packs := {}
@@ -53,7 +54,7 @@ static func initialize(read_preferences: bool = true, folder: String = "", prefe
 	root = paths.external(storage.mods_path() if folder.is_empty() else folder).replace("\\", "/").simplify_path().trim_suffix("/")
 	if folder.is_empty():
 		var result := DirAccess.make_dir_recursive_absolute(root)
-		if result != OK: push_warning("Could not create player Mods folder: " + error_string(result))
+		if result != OK: push_warning(String(TranslationServer.translate("Could not create player Mods folder: %s")) % error_string(result))
 	preference_path = preload("res://player_storage.gd").preferences_path() if preferences.is_empty() else preferences
 	enabled.clear()
 	order.clear()
@@ -89,9 +90,9 @@ static func _discover(location: String) -> Array[Dictionary]:
 		if pack.is_empty(): continue
 		if ids.has(pack.id):
 			pack.valid = false
-			pack.errors.append("Duplicate mod ID: " + str(pack.id))
+			pack.errors.append(String(TranslationServer.translate("Duplicate mod ID: %s")) % str(pack.id))
 			ids[pack.id].valid = false
-			ids[pack.id].errors.append("Duplicate mod ID: " + str(pack.id))
+			ids[pack.id].errors.append(String(TranslationServer.translate("Duplicate mod ID: %s")) % str(pack.id))
 		ids[pack.id] = pack
 		found.append(pack)
 	return found
@@ -103,62 +104,69 @@ static func _read_pack(folder: String) -> Dictionary:
 	var parser := JSON.new()
 	if parser.parse(FileAccess.get_file_as_string(path)) != OK or not parser.data is Dictionary:
 		pack.valid = false
-		pack.errors.append("Could not read mod.json: " + parser.get_error_message())
+		pack.errors.append(String(TranslationServer.translate("Could not read mod.json: %s")) % parser.get_error_message())
 		return pack
 	var manifest: Dictionary = parser.data
 	if int(manifest.get("schema_version", 0)) != 1:
 		pack.valid = false
-		pack.errors.append("Unsupported manifest version; expected schema_version 1.")
+		pack.errors.append(TranslationServer.translate("Unsupported manifest version; expected schema_version 1."))
 	var id := str(manifest.get("id", ""))
 	var valid_id := not id.is_empty()
 	for character in id:
 		if not character in "abcdefghijklmnopqrstuvwxyz0123456789._-": valid_id = false
 	if not valid_id:
 		pack.valid = false
-		pack.errors.append("Mod ID must contain lowercase letters, numbers, dots, underscores or hyphens.")
+		pack.errors.append(TranslationServer.translate("Mod ID must contain lowercase letters, numbers, dots, underscores or hyphens."))
 	else: pack.id = id
 	pack.name = str(manifest.get("name", pack.id))
 	pack.version = str(manifest.get("version", "1.0"))
 	pack.description = str(manifest.get("description", ""))
+	if manifest.has("moonlight_energy"):
+		var energy: Variant = manifest.moonlight_energy
+		if (energy is float or energy is int) and is_finite(float(energy)) and float(energy) >= 0.0 and float(energy) <= 0.12:
+			pack.moonlight_energy = float(energy)
+		else:
+			pack.valid = false
+			pack.errors.append(TranslationServer.translate("Moonlight energy must be a number from 0 to 0.12."))
 	var asset_folder := folder
 	var protected := manifest.has("resource_pack")
 	if protected:
 		asset_folder = _resource_root(manifest.resource_pack, folder, str(pack.id)) if valid_id else ""
 		if asset_folder.is_empty():
 			pack.valid = false
-			pack.errors.append("Could not mount protected mod assets with this game build; restart after replacing a pack.")
+			pack.errors.append(TranslationServer.translate("Could not mount protected mod assets with this game build; restart after replacing a pack."))
 			return pack
 	if manifest.has("scenery"):
 		var scatter := _read_scenery(manifest.scenery, asset_folder, protected)
 		if scatter.is_empty():
 			pack.valid = false
-			pack.errors.append("Invalid scenery settings or missing self-contained GLB.")
+			pack.errors.append(TranslationServer.translate("Invalid scenery settings or missing self-contained GLB."))
 		else: pack["scenery"] = scatter
 	var settings: Variant = manifest.get("movement", {})
 	if settings is Dictionary:
 		for key in settings:
 			var value: Variant = settings[key]
 			if key not in MOVEMENT_KEYS or not (value is float or value is int) or not is_finite(float(value)) or float(value) < 0:
-				pack.errors.append("Ignored invalid movement setting: " + str(key))
+				pack.errors.append(String(TranslationServer.translate("Ignored invalid movement setting: %s")) % str(key))
 			else: pack.movement[key] = float(value)
-	else: pack.errors.append("movement must be an object of setting/value pairs.")
+	else: pack.errors.append(TranslationServer.translate("movement must be an object of setting/value pairs."))
 	var assets: Variant = manifest.get("assets", {})
 	if not assets is Dictionary:
-		pack.errors.append("assets must be an object of asset-ID/replacement pairs.")
+		pack.errors.append(TranslationServer.translate("assets must be an object of asset-ID/replacement pairs."))
 		return pack
 	for key in assets:
 		var asset_id := canonical_id(str(key))
 		var entry: Variant = assets[key]
 		if entry is String: entry = {"file": entry}
 		if not entry is Dictionary:
-			pack.errors.append("Invalid asset entry: " + str(key)); continue
+			pack.errors.append(String(TranslationServer.translate("Invalid asset entry: %s")) % str(key)); continue
 		var relative := str(entry.get("file", "")).replace("\\", "/")
 		var resolved := asset_folder.path_join(relative).simplify_path()
 		if relative.is_empty() or relative.is_absolute_path() or not resolved.begins_with(asset_folder + "/"):
-			pack.errors.append("Asset path must stay inside its mod folder: " + str(key)); continue
+			pack.errors.append(String(TranslationServer.translate("Asset path must stay inside its mod folder: %s")) % str(key)); continue
 		var extension := relative.get_extension().to_lower()
 		if protected and (not str(key).begins_with("model.") or extension != "scn"):
-			pack.errors.append("Protected assets must be preconverted model scenes: " + str(key)); continue
+			pack.errors.append(String(TranslationServer.translate("Protected assets must be preconverted model scenes: %s")) % str(key)); continue
 		var model := asset_id in ["submarine.player","cockpit.first_person"] or asset_id.begins_with("model.") or asset_id in ["hud.tilt", "hud.equipment", "hud.map", "hud.weapon", "hud.shield"]
 		var texture := asset_id.begins_with("texture.")
 		var audio := asset_id in ["audio.submarine.main_propeller", "audio.submarine.side_pods", "audio.submarine.pod_rotation", "audio.submarine.impact_hit1", "audio.submarine.impact_hit3", "audio.submarine.impact_creaking", "audio.docking.sequence", "audio.docking.doors", "audio.docking.door_stop", "audio.weapon.zapper", "audio.creature.death", "audio.object.mine.explosion"]
@@ -168,15 +176,15 @@ static func _read_pack(folder: String) -> Dictionary:
 		var ui := asset_id in ["ui.dock","ui.saves","ui.main","ui.controls"]
 		var video := asset_id.begins_with("video.") and asset_id.trim_prefix("video.") in preload("res://fmv_library.gd").FILES
 		if (not model and not texture and not audio and not map and not terrain and not gameplay and not ui and not video) or (model and extension not in (["scn"] if protected else ["glb", "dff"])) or (texture and extension not in ["png", "jpg", "jpeg", "webp", "bmp", "ras"]) or (audio and extension not in ["wav", "ogg", "mp3", "raw"]) or ((map or gameplay or ui) and extension != "json") or (terrain and extension != "oscterrain") or (video and extension != "ogv"):
-			pack.errors.append("Unsupported asset ID or file type: " + str(key)); continue
+			pack.errors.append(String(TranslationServer.translate("Unsupported asset ID or file type: %s")) % str(key)); continue
 		if not FileAccess.file_exists(resolved):
-			pack.errors.append("Missing asset file: " + relative); continue
+			pack.errors.append(String(TranslationServer.translate("Missing asset file: %s")) % relative); continue
 		var terrain_mipmaps: Variant = entry.get("terrain_mipmaps", false)
 		if not terrain_mipmaps is bool or (entry.has("terrain_mipmaps") and not texture):
-			pack.errors.append("terrain_mipmaps must be a boolean on a texture asset: " + str(key)); continue
+			pack.errors.append(String(TranslationServer.translate("terrain_mipmaps must be a boolean on a texture asset: %s")) % str(key)); continue
 		var scale: Variant = entry.get("scale", 1.0)
 		if not (scale is float or scale is int) or not is_finite(float(scale)) or float(scale) <= 0.0:
-			pack.errors.append("Invalid model scale: " + str(key)); continue
+			pack.errors.append(String(TranslationServer.translate("Invalid model scale: %s")) % str(key)); continue
 		var parts: Variant = entry.get("parts", {})
 		if not parts is Dictionary: parts = {}
 		var material_textures := {}
@@ -185,15 +193,15 @@ static func _read_pack(folder: String) -> Dictionary:
 			for slot in bindings:
 				var texture_id := canonical_id(str(bindings[slot]))
 				if not str(slot).is_valid_int() or int(str(slot)) < 0 or not texture_id.begins_with("texture."):
-					pack.errors.append("Ignored invalid material texture binding: " + str(slot)); continue
+					pack.errors.append(String(TranslationServer.translate("Ignored invalid material texture binding: %s")) % str(slot)); continue
 				material_textures[str(slot)] = texture_id
-		else: pack.errors.append("material_textures must map GLB material indices to texture IDs.")
+		else: pack.errors.append(TranslationServer.translate("material_textures must map GLB material indices to texture IDs."))
 		var axis := str(entry.get("forward_axis", "-Z" if extension in ["glb", "scn"] else "+Z"))
 		if axis not in ["+Z", "-Z"]:
-			pack.errors.append("forward_axis must be +Z or -Z: " + str(key)); continue
+			pack.errors.append(String(TranslationServer.translate("forward_axis must be +Z or -Z: %s")) % str(key)); continue
 		var trigger: Variant = entry.get("trigger_distance","")
 		if trigger != "" and (not model or trigger != "model_radius"):
-			pack.errors.append("Model trigger_distance must be model_radius: " + str(key)); continue
+			pack.errors.append(String(TranslationServer.translate("Model trigger_distance must be model_radius: %s")) % str(key)); continue
 		pack.assets[asset_id] = {"id": asset_id, "path": resolved, "relative": relative, "pack": pack.id, "name": pack.name, "scale": float(scale), "forward_axis": axis, "parts": parts.duplicate(), "material_textures": material_textures}
 		if terrain_mipmaps: pack.assets[asset_id]["terrain_mipmaps"] = true
 		if asset_id == "cockpit.first_person":
@@ -204,8 +212,8 @@ static func _read_pack(folder: String) -> Dictionary:
 					var value: Variant = options[option]
 					if option in ["scratch_strength","reflection_strength","edge_tint","grime_strength","refraction_strength"] and (value is float or value is int) and is_finite(float(value)) and float(value) >= 0 and float(value) <= 2:
 						glass[option] = float(value)
-					else: pack.errors.append("Ignored invalid cockpit glass setting: " + str(option))
-			else: pack.errors.append("Cockpit glass settings must be an object.")
+					else: pack.errors.append(String(TranslationServer.translate("Ignored invalid cockpit glass setting: %s")) % str(option))
+			else: pack.errors.append(TranslationServer.translate("Cockpit glass settings must be an object."))
 			pack.assets[asset_id]["glass"] = glass
 		if trigger == "model_radius": pack.assets[asset_id].trigger_distance = trigger
 	return pack
@@ -261,17 +269,19 @@ static func _rebuild() -> void:
 	preload("res://asset_cache.gd").reset_session()
 	layers.clear()
 	movement.clear()
+	moonlight_energy = 0.0
 	conflicts.clear()
 	runtime_warnings.clear()
 	var movement_sources := {}
 	for pack in packs:
 		if not pack.valid or str(pack.id) not in enabled: continue
+		if pack.has("moonlight_energy"): moonlight_energy = pack.moonlight_energy
 		for id in pack.assets:
-			if layers.has(id): conflicts.append("%s: %s overrides %s" % [id, pack.name, layers[id][-1].name])
+			if layers.has(id): conflicts.append(TranslationServer.translate("%s: %s overrides %s") % [id, pack.name, layers[id][-1].name])
 			else: layers[id] = []
 			layers[id].append(pack.assets[id])
 		for key in pack.movement:
-			if movement_sources.has(key): conflicts.append("Movement %s: %s overrides %s" % [key, pack.name, movement_sources[key]])
+			if movement_sources.has(key): conflicts.append(TranslationServer.translate("Movement %s: %s overrides %s") % [key, pack.name, movement_sources[key]])
 			movement[key] = pack.movement[key]
 			movement_sources[key] = pack.name
 

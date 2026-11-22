@@ -44,10 +44,19 @@ static func movie(cue: String, city: int = 0, race: int = 0) -> String:
 static func terminal(cue: String) -> bool:
 	return cue in ["walker_catastrophe","world_destroyed","campaign_escape","antagonist_destroyed"]
 
-static func source_path(folder: String, id: String) -> String:
+static func source_path(folder: String, id: String, locale: String = "en") -> String:
 	var directory := folder.path_join("FMV")
-	if id in NEWS: directory = _child(directory,"ENGLISH")
+	if id in NEWS:
+		var language := preload("res://game_language.gd")
+		var localized := _child(_child(directory,language.DIRECTORIES.get(locale,"ENGLISH")),id+".smk")
+		if FileAccess.file_exists(localized): return localized
 	return _child(directory,id+".smk")
+
+static func has_placeholders(folder: String, locale: String) -> bool:
+	for id in FILES:
+		if smacker_info(source_path(folder, id, locale)).get("frames", 0) == 1:
+			return true
+	return false
 
 static func _child(folder: String, name: String) -> String:
 	var direct := folder.path_join(name)
@@ -99,4 +108,6 @@ static func convert(decoder: String, source: String, output: String) -> Dictiona
 		Cache._finish(temp,output)
 		if Cache._valid(output): return {"ok":true}
 	DirAccess.remove_absolute(temp)
-	return {"ok":false,"error":"\n".join(messages).left(2000)}
+	var details := "\n".join(messages).strip_edges().left(2000)
+	if code == 0: return {"ok":false,"error":"FFmpeg output could not be saved to the cache"}
+	return {"ok":false,"error":"FFmpeg exit code %d%s" % [code, ": " + details if not details.is_empty() else ""]}

@@ -50,7 +50,7 @@ func _window_input(event: InputEvent, window: Window) -> void:
 	_handle_capture_input(event,window)
 
 func _process(delta: float) -> void:
-	if fps_label.visible: fps_label.text = "%d FPS" % Engine.get_frames_per_second()
+	if fps_label.visible: fps_label.text = tr("%d FPS") % Engine.get_frames_per_second()
 	screenshot_label.offset_top = 10 + maxf(24,fps_label.size.y) + 4 if fps_label.visible else 10
 	message_time = maxf(0,message_time - delta)
 	if message_time <= 0: screenshot_label.hide()

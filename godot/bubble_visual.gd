@@ -16,7 +16,7 @@ static func replacement() -> Mesh:
 		var meshes: Array[Dictionary] = []
 		_collect(scene, Transform3D.IDENTITY, meshes)
 		if meshes.size() != 1:
-			Mods.note(descriptor.name + ": bubble model must contain one mesh.")
+			Mods.note(String(TranslationServer.translate("%s: bubble model must contain one mesh.")) % descriptor.name)
 			scene.free(); continue
 		var entry: Dictionary = meshes[0]
 		var result := ArrayMesh.new()

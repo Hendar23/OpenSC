@@ -80,7 +80,7 @@ func setup(state: RefCounted, in_tabs: bool = false, graphics_rows: VBoxContaine
 	for row in ROWS:
 		var key := str(row[0])
 		var row_parent := graphics_rows if key == "bubble_rate" and graphics_rows != null else rows
-		var label := Label.new()
+		var label := preload("res://game_language.gd").LiveLabel.new()
 		label.add_theme_font_size_override("font_size", 13)
 		row_parent.add_child(label)
 		labels[key] = label
@@ -115,11 +115,11 @@ func setup(state: RefCounted, in_tabs: bool = false, graphics_rows: VBoxContaine
 	export_dialog = FileDialog.new()
 	export_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
-	export_dialog.filters = PackedStringArray(["*.cfg ; Movement settings"])
+	export_dialog.filters = PackedStringArray(["*.cfg ; " + tr("Movement settings")])
 	export_dialog.current_file = "submarine_tuning.cfg"
 	export_dialog.file_selected.connect(func(path: String) -> void:
 		var result: Error = movement.save_settings(path)
-		message.text = "Settings exported." if result == OK else "Could not export settings: " + error_string(result)
+		message.text = "Settings exported." if result == OK else tr("Could not export settings: %s") % error_string(result)
 	)
 	add_child(export_dialog)
 	get_viewport().size_changed.connect(_resize)
@@ -132,8 +132,7 @@ func _resize() -> void:
 	offset_bottom = minf(710.0, get_viewport_rect().size.y - 18.0)
 
 func _update_label(row: Array, value: float) -> void:
-	var label: Label = labels[str(row[0])]
-	label.text = "%s: %.2f %s" % [row[1], value, row[5]]
+	labels[str(row[0])].set_message("%s: %.2f %s",[row[1],value,row[5]])
 
 func set_camera_distance(value: float) -> void:
 	var distance := clampf(value, FollowCamera.MIN_DISTANCE, FollowCamera.MAX_DISTANCE)

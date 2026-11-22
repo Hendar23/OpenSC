@@ -1,12 +1,14 @@
 extends RefCounted
 ## Original PLACES.TXT labels, using the same proximity reveal as city names.
 const CITIES := ["Touka","Beluga","Velcova","Tryton","Aquatraz","Refinery"]
+const Language = preload("res://game_language.gd")
 var markers: Array[Dictionary] = []
 var visited := {}
 
 func setup(catalogue: Dictionary) -> void:
 	markers.clear(); reset()
 	var tables: Dictionary = catalogue.get("tables",{})
+	var locale: String = catalogue.get("provenance",{}).get("locale","en")
 	var text: String = tables.get("source_texts",{}).get("records",{}).get("english.places.txt",{}).get("text","")
 	var whitespace := RegEx.new(); whitespace.compile("\\s+")
 	for raw in text.split("\n",false):
@@ -15,7 +17,8 @@ func setup(catalogue: Dictionary) -> void:
 		if not [fields[2],fields[3],fields[4],fields[5]].all(func(value: String) -> bool: return value.is_valid_float() and is_finite(float(value))): continue
 		if float(fields[5]) <= 0: continue
 		# PLACES coordinates are already in BSP space, unlike DDB matrices.
-		markers.append({"id":str(fields[0]),"name":str(fields[1]).replace("_","\n"),"position":Vector3(float(fields[2]),float(fields[3]),float(fields[4])),"radius":float(fields[5])})
+		var name := Language.text(fields[1],locale).replace("_","\n")
+		markers.append({"id":str(fields[0]),"name":name,"position":Vector3(float(fields[2]),float(fields[3]),float(fields[4])),"radius":float(fields[5])})
 
 func reset() -> void:
 	visited.clear()

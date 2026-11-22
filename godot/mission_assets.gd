@@ -11,7 +11,7 @@ static func prepare(game: Node) -> void:
 	var prepared := 0
 	for model in MODELS+ANIMATED:
 		prepared += 1
-		game._progress("Preparing mission models: %d / %d" % [prepared, MODELS.size() + ANIMATED.size()])
+		game._progress(String(TranslationServer.translate("Preparing mission models: %d / %d")) % [prepared, MODELS.size() + ANIMATED.size()])
 		var path: String = game.game_folder.path_join("CLUMPS/"+model+".DFF")
 		if FileAccess.file_exists(path):
 			var visual := Assets.load_clump(path,PackedStringArray(),model in ANIMATED)
@@ -23,7 +23,7 @@ static func prepare(game: Node) -> void:
 	# Known catalogue paths work without directory enumeration or unused languages.
 	var sounds: Array[String] = []
 	for code in game.gameplay_catalogue.tables.get("radio_messages",{}).get("records",{}):
-		sounds.append(game.game_folder.path_join("WAVES/ENGLISH/"+str(code).to_upper()+".RAW"))
+		sounds.append(preload("res://game_language.gd").asset(game.game_folder,"WAVES",str(code).to_upper()+".RAW",game.game_language))
 	for code in ["EXPL","EXPLODE1","EXPLODE2","SPLAT","DCHARGE","DEPTH","MISSILE","HMISSILE","ZAPPER"]:
 		sounds.append(game.game_folder.path_join("WAVES/"+code+".RAW"))
 	for id in preload("res://mod_registry.gd").layers:

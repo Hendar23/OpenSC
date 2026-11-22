@@ -15,9 +15,11 @@ func _ready() -> void:
 func dismiss() -> void:
 	hide(); age = 0
 	if audio != null: audio.stop()
-func play(folder: String, success: bool) -> void:
-	var base := folder.path_join("GAMETEX/ENGLISH")
-	_play(folder+str(success),base.path_join("COMPLL.BMP" if success else "FAILEDL.BMP"),base.path_join("COMPLM.BMP" if success else "FAILEDLM.BMP"),folder.path_join("WAVES/MISSCOMP.RAW" if success else "WAVES/MISSFAIL.RAW"))
+func play(folder: String, success: bool, locale: String = "en") -> void:
+	var language := preload("res://game_language.gd")
+	var image := language.asset(folder,"GAMETEX","COMPLL.BMP" if success else "FAILEDL.BMP",locale)
+	var mask := language.asset(folder,"GAMETEX","COMPLM.BMP" if success else "FAILEDLM.BMP",locale)
+	_play(image,image,mask,folder.path_join("WAVES/MISSCOMP.RAW" if success else "WAVES/MISSFAIL.RAW"))
 
 func play_game_over(folder: String) -> void:
 	var base := folder.path_join("GAMETEX")

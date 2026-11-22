@@ -29,7 +29,7 @@ func set_testing_missions(enabled: bool, persist: bool = false) -> void:
 		var button: Button = game.developer_tabs.get_node_or_null("System/UnlockTestingMissions")
 		if button != null:
 			button.set_pressed_no_signal(enabled)
-			button.text = "All missions for testing: " + ("On" if enabled else "Off")
+			button.text = tr("All missions for testing: %s") % tr("On" if enabled else "Off")
 	_publish_offers()
 	if game.dock_interface != null and game.dock_interface.visible: game.dock_interface.rebuild()
 	if persist: game._schedule_settings_save()
@@ -62,10 +62,10 @@ func text(id: String, response: int = 0) -> String:
 		var marker := "#response %d" % response
 		raw = raw.get_slice(marker,1).get_slice("#response",0)
 	for marker in ["#bulletin","#rem"]: raw = raw.get_slice(marker,0)
-	return _flow_text(raw,response == 0)
+	return _flow_text(raw,response == 0,game.game_language)
 
-static func _flow_text(raw: String, has_title: bool = false) -> String:
-	raw = preload("res://display_text.gd").weapons(raw)
+static func _flow_text(raw: String, has_title: bool = false, locale: String = "en") -> String:
+	if locale == "en": raw = preload("res://display_text.gd").weapons(raw)
 	raw = raw.replace("\r\n","\n").replace("\r","\n").strip_edges()
 	if raw.is_empty(): return ""
 	var title := ""
@@ -113,15 +113,15 @@ func welcome(city: int) -> String:
 	var raw := str(game.gameplay_catalogue.get("tables",{}).get("source_texts",{}).get("records",{}).get("english.default.txt",{}).get("text",""))
 	var faction := "procker" if city in [2,4] else "refinery" if city == 6 else "bohine"
 	raw = raw.get_slice("#" + faction,1).get_slice("#default",1).get_slice("#noweapons",0)
-	return _flow_text(raw)
+	return _flow_text(raw,false,game.game_language)
 
 
 func accept(city: int, selected_id: String = "") -> String:
-	if game.docking.stage != game.Docking.Stage.DOCKED: return "Accept missions while docked."
+	if game.docking.stage != game.Docking.Stage.DOCKED: return tr("Accept missions while docked.")
 	var offer: Dictionary = board(city)
-	if not offer.available: return "This mission is unavailable."
+	if not offer.available: return tr("This mission is unavailable.")
 	var id: String = str(offer.id) if selected_id.is_empty() else selected_id
-	if not offer.offers.any(func(entry: Dictionary) -> bool: return entry.id == id): return "This mission is unavailable at this station."
+	if not offer.offers.any(func(entry: Dictionary) -> bool: return entry.id == id): return tr("This mission is unavailable at this station.")
 	if game.save_games.write(-1,game._save_snapshot("Before " + text(id).get_slice("\n",0))) != OK: return game.save_games.error
 	game.player_progress.missions.active = {"id":id,"city":city,"refinery":false}
 	game.player_progress.mission = text(id).get_slice("\n",0)
@@ -153,7 +153,7 @@ func docking_started(city: int) -> void:
 	# Retail announces success at the start of transit. Deliver passengers and
 	# settle the mission only at berth, preserving the existing rescue contract.
 	active()["outcome_shown"] = true
-	outcome.play(game.game_folder,true)
+	outcome.play(game.game_folder,true,game.game_language)
 
 func docked(city: int) -> void:
 	_clear_retained_props()
@@ -214,7 +214,7 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 		game.player_progress.status.credits += int(rewards.get("credits",0))
 		game.events.mission_completed.emit(id,score)
 	else:
-		if response == 0: last_response = "Mission failed." if side_job or core else "Mission failed. You can accept the prospecting job again at a city."
+		if response == 0: last_response = tr("Mission failed.") if side_job or core else tr("Mission failed. You can accept the prospecting job again at a city.")
 		if side_job: preload("res://mailbox.gd").mission_completed(game.player_progress,id,score)
 		game.events.mission_failed.emit(id)
 	# Retain reward reputation deltas separately from the existing coarse standing labels.
@@ -228,7 +228,7 @@ func finish(success: bool, score: float = -1.0, response: int = 0) -> void:
 	side_jobs.release_survivors(success)
 	_cleanup(true)
 	_publish_offers()
-	if not outcome_shown or not success: outcome.play(game.game_folder,success)
+	if not outcome_shown or not success: outcome.play(game.game_folder,success,game.game_language)
 	if game.dock_interface_active: game.dock_interface.rebuild()
 	# Original news table: walker success selects entries 1/2 (peace),
 	# diplomat success selects entries 3/4 (flat), despite the filenames.
@@ -322,7 +322,8 @@ func _radio(code: String, portrait: String, terminal: bool = false) -> void:
 	if active().is_empty(): return
 	var row: Dictionary = game.gameplay_catalogue.tables.get("radio_messages",{}).get("records",{}).get(code,{})
 	var face: Texture2D = preload("res://docking_radio.gd").speaker_portrait(game.game_folder,portrait)
-	var stream: AudioStream = preload("res://legacy_audio.gd").load_file(game.game_folder.path_join("WAVES/ENGLISH/" + code.to_upper() + ".RAW"))
+	var path := preload("res://game_language.gd").asset(game.game_folder,"WAVES",code.to_upper()+".RAW",game.game_language)
+	var stream: AudioStream = preload("res://legacy_audio.gd").load_file(path)
 	var message := {"speaker":"ship" if portrait.to_upper() == "SHIP" else "mission/" + str(active().id) + "/" + portrait.to_lower(),"name":"","text":str(row.get("text","")),"portrait":face,"distorted_portrait":preload("res://docking_radio.gd").speaker_portrait(game.game_folder,portrait,true),"voice":stream,"mission":str(active().id)}
 	# Mission text is displayed immediately, including beside a drop-off prompt.
 	# Play its speech at the same time; completion cleanup removes queued mission

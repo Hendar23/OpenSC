@@ -2,6 +2,7 @@ extends RefCounted
 ## Developer control construction and panel navigation. Live world state stays in the game context.
 
 const Docking = preload("res://docking_controller.gd")
+const Language = preload("res://game_language.gd")
 const ModPanel = preload("res://mod_panel.gd")
 const WaterParticles = preload("res://water_particles.gd")
 const DayNight = preload("res://day_night_cycle.gd")
@@ -15,6 +16,13 @@ var game: Node
 
 func _init(context: Node) -> void:
 	game = context
+
+func refresh_language() -> void:
+	game.export_all_dialog.filters = PackedStringArray(["*.cfg ; " + tr("All game settings")])
+	if game.tuning_panel != null:
+		game.tuning_panel.export_dialog.filters = PackedStringArray(["*.cfg ; " + tr("Movement settings")])
+	if game.sound_panel != null:
+		game.sound_panel.export_dialog.filters = PackedStringArray(["*.cfg ; " + tr("Sound settings")])
 
 func _build_interface() -> void:
 	game.canvas = CanvasLayer.new()
@@ -58,12 +66,12 @@ func _build_interface() -> void:
 	game.export_all_dialog.title = "Export all current settings"
 	game.export_all_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	game.export_all_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
-	game.export_all_dialog.filters = PackedStringArray(["*.cfg ; All game settings"])
+	refresh_language()
 	game.export_all_dialog.current_dir = ProjectSettings.globalize_path("res://..")
 	game.export_all_dialog.current_file = "opensubculture_settings.cfg"
 	game.export_all_dialog.file_selected.connect(func(path: String) -> void:
 		var result = game._export_all_settings(path)
-		game.export_all_message.text = "All settings exported." if result == OK else "Export failed: " + error_string(result)
+		game.export_all_message.text = "All settings exported." if result == OK else tr("Export failed: %s") % error_string(result)
 	)
 	game.add_child(game.export_all_dialog)
 	var graphics_tab := VBoxContainer.new(); graphics_tab.name = "Graphics"
@@ -76,7 +84,7 @@ func _build_interface() -> void:
 	game.graphics_controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	game.graphics_controls.add_theme_constant_override("separation", 12)
 	graphics_scroll.add_child(game.graphics_controls)
-	game.wildlife_density_label = Label.new(); game.graphics_controls.add_child(game.wildlife_density_label)
+	game.wildlife_density_label = Language.LiveLabel.new(); game.graphics_controls.add_child(game.wildlife_density_label)
 	game.wildlife_density_slider = HSlider.new(); game.wildlife_density_slider.scrollable = false
 	game.wildlife_density_slider.min_value = 0; game.wildlife_density_slider.max_value = 300
 	game.wildlife_density_slider.step = 5; game.wildlife_density_slider.value = 100
@@ -85,7 +93,7 @@ func _build_interface() -> void:
 	game.wildlife_density_slider.value_changed.connect(func(_value: float) -> void: game._update_wildlife_density())
 	game.wildlife_density_slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 	game._update_wildlife_density()
-	game.hud_map_zoom_label = Label.new()
+	game.hud_map_zoom_label = Language.LiveLabel.new()
 	game.graphics_controls.add_child(game.hud_map_zoom_label)
 	game.hud_map_zoom_slider = HSlider.new(); game.hud_map_zoom_slider.scrollable = false
 	game.hud_map_zoom_slider.min_value = 0.5
@@ -96,7 +104,7 @@ func _build_interface() -> void:
 	game.graphics_controls.add_child(game.hud_map_zoom_slider)
 	game.hud_map_zoom_slider.value_changed.connect(func(_value: float) -> void: game._update_hud_settings())
 	game.hud_map_zoom_slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
-	game.crt_reflection_label = Label.new()
+	game.crt_reflection_label = Language.LiveLabel.new()
 	game.graphics_controls.add_child(game.crt_reflection_label)
 	game.crt_reflection_slider = HSlider.new(); game.crt_reflection_slider.scrollable = false
 	game.crt_reflection_slider.min_value = 0.0
@@ -108,7 +116,7 @@ func _build_interface() -> void:
 	game.crt_reflection_slider.value_changed.connect(func(_value: float) -> void: game._update_hud_settings())
 	game.crt_reflection_slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 	game._update_hud_settings()
-	game.map_reveal_label = Label.new()
+	game.map_reveal_label = Language.LiveLabel.new()
 	game.graphics_controls.add_child(game.map_reveal_label)
 	game.map_reveal_slider = HSlider.new(); game.map_reveal_slider.scrollable = false
 	game.map_reveal_slider.min_value = 2.0
@@ -146,11 +154,11 @@ func _build_interface() -> void:
 		game._update_water_environment()
 		game._save_preferences()
 	)
-	game.fog_start_label = Label.new(); game.graphics_controls.add_child(game.fog_start_label)
+	game.fog_start_label = Language.LiveLabel.new(); game.graphics_controls.add_child(game.fog_start_label)
 	game.fog_start_slider = HSlider.new(); game.fog_start_slider.scrollable = false; game.fog_start_slider.min_value = 0.0; game.fog_start_slider.max_value = game.fog_visibility - 0.5
 	game.fog_start_slider.step = 0.5; game.fog_start_slider.value = 5.0; game.fog_start_slider.focus_mode = Control.FOCUS_NONE
 	game.graphics_controls.add_child(game.fog_start_slider)
-	game.fog_curve_label = Label.new(); game.graphics_controls.add_child(game.fog_curve_label)
+	game.fog_curve_label = Language.LiveLabel.new(); game.graphics_controls.add_child(game.fog_curve_label)
 	game.fog_curve_slider = HSlider.new(); game.fog_curve_slider.scrollable = false; game.fog_curve_slider.min_value = 0.25; game.fog_curve_slider.max_value = 8.0
 	game.fog_curve_slider.step = 0.1; game.fog_curve_slider.value = 1.8; game.fog_curve_slider.focus_mode = Control.FOCUS_NONE
 	game.graphics_controls.add_child(game.fog_curve_slider)
@@ -191,7 +199,7 @@ func _build_interface() -> void:
 	equipment_button.text = "All equipment at every station: Off"; equipment_button.focus_mode = Control.FOCUS_NONE
 	equipment_button.toggled.connect(func(enabled: bool) -> void:
 		game.testing_all_equipment = enabled
-		equipment_button.text = "All equipment at every station: " + ("On" if enabled else "Off")
+		equipment_button.text = tr("All equipment at every station: %s") % tr("On" if enabled else "Off")
 		if game.dock_interface != null and game.dock_interface.visible: game.dock_interface.rebuild()
 	)
 	system.add_child(equipment_button)
@@ -207,28 +215,28 @@ func _build_interface() -> void:
 		var button := Button.new(); button.text = preset[0]; button.focus_mode = Control.FOCUS_NONE
 		button.pressed.connect(func() -> void: game.daylight_controls.time_of_day.value = preset[1]; game._save_preferences())
 		time_presets.add_child(button)
-	var market_speed_label := Label.new(); system.add_child(market_speed_label)
+	var market_speed_label := Language.LiveLabel.new(); system.add_child(market_speed_label)
 	game.market_speed_slider = HSlider.new(); game.market_speed_slider.name = "MarketSpeed"
 	game.market_speed_slider.scrollable = false; game.market_speed_slider.focus_mode = Control.FOCUS_NONE
 	game.market_speed_slider.min_value = 0; game.market_speed_slider.max_value = 200; game.market_speed_slider.step = 1; game.market_speed_slider.value = 50
 	game.market_speed_slider.tooltip_text = "Speed of market price changes, production and traders. 100% uses the original timing; 0% pauses the market."
 	system.add_child(game.market_speed_slider)
-	game.market_speed_slider.value_changed.connect(func(value: float) -> void: market_speed_label.text = "Market speed: %.0f%%" % value)
-	market_speed_label.text = "Market speed: %.0f%%" % game.market_speed_slider.value
-	var dock_damage_label := Label.new(); system.add_child(dock_damage_label)
+	game.market_speed_slider.value_changed.connect(func(value: float) -> void: market_speed_label.set_message("Market speed: %.0f%%",[value]))
+	market_speed_label.set_message("Market speed: %.0f%%",[game.market_speed_slider.value])
+	var dock_damage_label := Language.LiveLabel.new(); system.add_child(dock_damage_label)
 	game.dock_zapper_damage_slider = HSlider.new(); game.dock_zapper_damage_slider.name = "DockZapperDamage"
 	game.dock_zapper_damage_slider.scrollable = false; game.dock_zapper_damage_slider.focus_mode = Control.FOCUS_NONE
 	game.dock_zapper_damage_slider.min_value = 0; game.dock_zapper_damage_slider.max_value = 50; game.dock_zapper_damage_slider.step = 0.25
 	game.dock_zapper_damage_slider.value = preload("res://dock_defence.gd").DAMAGE
 	system.add_child(game.dock_zapper_damage_slider)
 	game.dock_zapper_damage_slider.value_changed.connect(func(value: float) -> void:
-		dock_damage_label.text = "Dock zapper damage per tick: %.2f" % value
+		dock_damage_label.set_message("Dock zapper damage per tick: %.2f",[value])
 		if is_instance_valid(game.world_root):
 			var defence: Node = game.world_root.get_node_or_null("DockDefence")
 			if defence != null: defence.damage_per_tick = value
 	)
-	dock_damage_label.text = "Dock zapper damage per tick: %.2f" % game.dock_zapper_damage_slider.value
-	game.docking_radius_label = Label.new()
+	dock_damage_label.set_message("Dock zapper damage per tick: %.2f",[game.dock_zapper_damage_slider.value])
+	game.docking_radius_label = Language.LiveLabel.new()
 	system.add_child(game.docking_radius_label)
 	game.docking_radius_slider = HSlider.new(); game.docking_radius_slider.scrollable = false
 	game.docking_radius_slider.min_value = 0.5
@@ -243,9 +251,7 @@ func _build_interface() -> void:
 	var choose := Button.new()
 	choose.text = "Choose Sub Culture folder…"
 	choose.focus_mode = Control.FOCUS_NONE
-	choose.pressed.connect(func() -> void:
-		if not game.world_loading: game.folder_dialog.popup_centered(Vector2i(850, 600))
-	)
+	choose.pressed.connect(game._request_game_folder)
 	system.add_child(choose)
 	game.folder_dialog = FileDialog.new()
 	game.folder_dialog.use_native_dialog = true
@@ -258,10 +264,11 @@ func _build_interface() -> void:
 	game.folder_prompt.title = "Locate original Sub Culture files"
 	game.folder_prompt.ok_button_text = "Choose folder..."
 	game.folder_prompt.cancel_button_text = "Exit"
-	game.folder_prompt.confirmed.connect(func() -> void: game.folder_dialog.popup_centered(Vector2i(850,600)))
+	game.folder_prompt.confirmed.connect(game._show_folder_dialog)
 	game.folder_prompt.canceled.connect(func() -> void: game.get_tree().quit())
 	game.folder_dialog.canceled.connect(func() -> void:
-		if game.game_folder.is_empty(): game._prompt_game_folder("The original Sub Culture files are required to play. Choose the folder containing CLUMPS and DATA."))
+		if game.game_folder.is_empty(): game._prompt_game_folder("The original Sub Culture files are required to play. Choose the folder containing CLUMPS and DATA.")
+		else: game.front_end.restore_button_focus("choose_game_folder"))
 	game.add_child(game.folder_prompt)
 	game.mod_panel = ModPanel.new()
 	game.mod_panel.persist_preferences = game.remember_preferences
@@ -278,21 +285,22 @@ func _build_daylight_controls() -> void:
 	run.button_pressed = true; run.focus_mode = Control.FOCUS_NONE
 	game.graphics_controls.add_child(run); game.daylight_controls.cycle_enabled = run
 	run.toggled.connect(func(on: bool) -> void: game.day_night.enabled = on; game._save_preferences())
-	game.clock_label = Label.new(); game.graphics_controls.add_child(game.clock_label)
+	game.clock_label = Language.LiveLabel.new(); game.graphics_controls.add_child(game.clock_label)
 	for row in [["time_of_day", "Time of day", 0.0, 24.0, 0.1], ["cycle_minutes", "Full cycle length (minutes)", 1.0, 60.0, 1.0], ["night_brightness", "Night brightness", 0.0, 0.5, 0.01]]:
 		var key: String = row[0]; var caption: String = row[1]
-		var label = Label.new(); game.graphics_controls.add_child(label)
+		var label = Language.LiveLabel.new(); game.graphics_controls.add_child(label)
 		var slider := HSlider.new(); slider.scrollable = false; slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]
 		slider.value = float(DayNight.DEFAULTS[key]); slider.focus_mode = Control.FOCUS_NONE
 		game.graphics_controls.add_child(slider); game.daylight_controls[key] = slider
-		label.text = caption if key == "time_of_day" else "%s: %.2f" % [caption, slider.value]
+		if key == "time_of_day": label.text = caption
+		else: label.set_message("%s: %.2f",[caption,slider.value])
 		slider.value_changed.connect(func(value: float) -> void:
 			if key == "time_of_day":
 				game.day_night.hour = fposmod(value, 24.0)
 				if not game.loading_preferences: game.game_settings.preview_hour = game.day_night.hour
 			elif key == "cycle_minutes": game.day_night.cycle_minutes = value
 			else: game.day_night.night_brightness = value
-			label.text = caption if key == "time_of_day" else "%s: %.2f" % [caption, value]
+			if key != "time_of_day": label.set_message("%s: %.2f",[caption,value])
 			game._update_daylight()
 		)
 		slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
@@ -300,24 +308,24 @@ func _build_daylight_controls() -> void:
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; game.graphics_controls.add_child(hint)
 
 func _build_natural_light_controls() -> void:
-	var rays_label := Label.new(); rays_label.text = "Sun ray brightness: 100%"
+	var rays_label := Language.LiveLabel.new(); rays_label.set_message("Sun ray brightness: %d%%",[100])
 	game.graphics_controls.add_child(rays_label)
 	var rays := HSlider.new(); rays.name = "SunRayBrightness"
 	rays.min_value = 0; rays.max_value = 500; rays.step = 5; rays.value = 100
 	rays.scrollable = false; rays.focus_mode = Control.FOCUS_NONE
 	game.graphics_controls.add_child(rays); game.sun_shafts_brightness_slider = rays
 	rays.value_changed.connect(func(value: float) -> void:
-		rays_label.text = "Sun ray brightness: %d%%" % int(value)
+		rays_label.set_message("Sun ray brightness: %d%%",[int(value)])
 		if is_instance_valid(game.sun_shafts): game.sun_shafts.brightness = value / 100.0)
 	rays.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 	for row in [["sun_depth","Sunlight fade begins at depth",0.0,100.0,0.5],["sun_falloff","Sunlight falloff distance",0.5,100.0,0.5],["cave_ambient","Cave ambient light",0.0,0.5,0.0005]]:
 		var key: String = row[0]; var caption: String = row[1]
-		var label = Label.new(); game.graphics_controls.add_child(label)
+		var label = Language.LiveLabel.new(); game.graphics_controls.add_child(label)
 		var slider := HSlider.new(); slider.scrollable = false; slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]; slider.value = NaturalLight.DEFAULTS[key]; slider.focus_mode = Control.FOCUS_NONE
 		game.graphics_controls.add_child(slider); game.natural_light_controls[key] = slider
-		label.text = "%s: %.2f%%" % [caption,slider.value * 100] if key == "cave_ambient" else "%s: %.1f units" % [caption,slider.value]
+		label.set_message("%s: %.2f%%" if key == "cave_ambient" else "%s: %.1f units",[caption,slider.value * 100 if key == "cave_ambient" else slider.value])
 		slider.value_changed.connect(func(value: float) -> void:
-			game.natural_light.configure({key:value}); label.text = "%s: %.2f%%" % [caption,value * 100] if key == "cave_ambient" else "%s: %.1f units" % [caption,value]; game._update_daylight())
+			game.natural_light.configure({key:value}); label.set_message("%s: %.2f%%" if key == "cave_ambient" else "%s: %.1f units",[caption,value * 100 if key == "cave_ambient" else value]); game._update_daylight())
 		slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 
 func _build_equipment_controls() -> void:
@@ -335,14 +343,14 @@ func _build_equipment_controls() -> void:
 		var heading := Label.new(); heading.text = section[0]; tab.add_child(heading)
 		for row in section[1]:
 			var key: String = row[0]; var caption: String = row[1]
-			var label := Label.new(); tab.add_child(label)
+			var label := Language.LiveLabel.new(); tab.add_child(label)
 			var slider := HSlider.new(); slider.scrollable = false
 			slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]
 			slider.value = Equipment.DEFAULTS[key]; slider.focus_mode = Control.FOCUS_NONE
 			game.equipment_controls[key] = slider; tab.add_child(slider)
-			label.text = "%s: %.2f" % [caption, slider.value]
+			label.set_message("%s: %.2f",[caption, slider.value])
 			slider.value_changed.connect(func(value: float) -> void:
-				label.text = "%s: %.2f" % [caption, value]
+				label.set_message("%s: %.2f",[caption, value])
 				game._update_equipment_settings()
 			)
 			slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
@@ -352,11 +360,11 @@ func _build_weapon_controls() -> void:
 	var tab := VBoxContainer.new(); tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL; scroll.add_child(tab)
 	for row in [["auto_aim_cone","Auto aim cone (degrees, full width; 0 = off)",0.0,120.0,1.0],["range","Zapper range",0.5,15.0,0.25],["damage_per_tick","Zapper raw damage per tick (25 ticks/s)",0.0,10.0,0.1],["beam_width","Beam width",0.02,0.6,0.01],["animation_speed","Lightning animation speed",1.0,40.0,1.0],["volume_db","Zapper volume (dB)",-60.0,0.0,1.0],["gore_amount","Gore particles per death",0.0,100.0,1.0],["gore_settle_speed","Gore settling speed",0.1,5.0,0.1],["gore_lifetime","Gore lifetime (seconds)",0.2,10.0,0.1],["chunk_lifetime","Chunk lifetime before fading (seconds)",2.0,300.0,1.0]]:
 		var key: String = row[0]; var caption: String = row[1]
-		var label := Label.new(); tab.add_child(label)
+		var label := Language.LiveLabel.new(); tab.add_child(label)
 		var slider = HSlider.new(); slider.scrollable = false; slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]; slider.value = Weapons.DEFAULTS[key]; slider.focus_mode = Control.FOCUS_NONE; tab.add_child(slider); game.weapon_controls[key] = slider
-		label.text = "%s: %.2f" % [caption,slider.value]
+		label.set_message("%s: %.2f",[caption,slider.value])
 		slider.value_changed.connect(func(value: float) -> void:
-			label.text = "%s: %.2f" % [caption,value]; game.weapon_overrides[key] = value; game._update_weapon_settings())
+			label.set_message("%s: %.2f",[caption,value]); game.weapon_overrides[key] = value; game._update_weapon_settings())
 		slider.set_meta("caption",caption); slider.set_meta("label",label)
 		slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 
@@ -370,13 +378,13 @@ func _build_particle_controls() -> void:
 	for row in [["count", "Particle count", 0.0, 4000.0, 50.0], ["size", "Particle size", 0.005, 0.08, 0.005], ["drift", "Particle drift speed", 0.0, 0.3, 0.01], ["radius", "Particle viewing radius", 3.0, 30.0, 0.5], ["visibility", "Particle brightness", 0.0, 1.0, 0.05]]:
 		var key: String = row[0]
 		var caption: String = row[1]
-		var label = Label.new(); game.graphics_controls.add_child(label)
+		var label = Language.LiveLabel.new(); game.graphics_controls.add_child(label)
 		var slider := HSlider.new(); slider.scrollable = false; slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]
 		slider.value = float(WaterParticles.DEFAULTS[key]); slider.focus_mode = Control.FOCUS_NONE
 		game.graphics_controls.add_child(slider); game.particle_controls[key] = slider
-		label.text = "%s: %.3f" % [caption, slider.value]
+		label.set_message("%s: %.3f",[caption, slider.value])
 		slider.value_changed.connect(func(value: float) -> void:
-			label.text = "%s: %.3f" % [caption, value]
+			label.set_message("%s: %.3f",[caption, value])
 			game.particles.configure({key: value})
 		)
 		slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
@@ -389,25 +397,25 @@ func _build_plant_controls() -> void:
 	enabled.toggled.connect(func(on: bool) -> void: game.plant_current.configure({"enabled":on}); game._save_preferences())
 	for row in [["strength","Plant sway strength",0.0,0.5,0.01],["speed","Plant sway speed",0.0,2.0,0.05],["direction","Plant current direction (degrees)",0.0,360.0,5.0],["variation","Plant sway variation",0.0,1.0,0.05],["wavelength","Plant wave length (plant heights)",0.4,4.0,0.1],["ripple","Plant ripple strength",0.0,1.0,0.01],["twist","Plant twist strength",0.0,2.0,0.05],["wash_strength","Propeller wash strength",0.0,1.5,0.05],["wash_range","Propeller wash range",0.5,12.0,0.25],["wash_recovery","Plant wash recovery (seconds)",0.1,4.0,0.1]]:
 		var key: String = row[0]; var caption: String = row[1]
-		var label = Label.new(); game.graphics_controls.add_child(label)
+		var label = Language.LiveLabel.new(); game.graphics_controls.add_child(label)
 		var slider := HSlider.new(); slider.scrollable = false; slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]
 		slider.value = PlantCurrent.DEFAULTS[key]; slider.focus_mode = Control.FOCUS_NONE
 		game.graphics_controls.add_child(slider); game.plant_controls[key] = slider
-		label.text = "%s: %.2f" % [caption,slider.value]
+		label.set_message("%s: %.2f",[caption,slider.value])
 		slider.value_changed.connect(func(value: float) -> void:
-			label.text = "%s: %.2f" % [caption,value]; game.plant_current.configure({key:value})
+			label.set_message("%s: %.2f",[caption,value]); game.plant_current.configure({key:value})
 		)
 		slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 
 func _build_water_controls() -> void:
 	for row in [["caustics_strength","Sun caustics strength",0.0,2.0,0.05],["caustics_size","Caustics pattern size",0.5,8.0,0.25],["caustics_speed","Caustics animation speed",0.0,2.0,0.05],["caustics_depth","Caustics depth reach",2.0,80.0,1.0],["wave_height","Surface wave height",0.0,0.15,0.005],["wave_size","Surface wave size",1.0,12.0,0.25],["wave_speed","Surface wave speed",0.0,3.0,0.05],["wave_direction","Wave direction (degrees)",0.0,360.0,5.0],["surface_shine","Water surface shine",0.0,2.0,0.05]]:
 		var key: String = row[0]; var caption: String = row[1]
-		var label = Label.new(); game.graphics_controls.add_child(label)
+		var label = Language.LiveLabel.new(); game.graphics_controls.add_child(label)
 		var slider := HSlider.new(); slider.scrollable = false; slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]; slider.value = WaterVisuals.DEFAULTS[key]; slider.focus_mode = Control.FOCUS_NONE
 		game.graphics_controls.add_child(slider); game.water_controls[key] = slider
-		label.text = "%s: %.3f" % [caption,slider.value]
+		label.set_message("%s: %.3f",[caption,slider.value])
 		slider.value_changed.connect(func(value: float) -> void:
-			label.text = "%s: %.3f" % [caption,value]; game.water_visuals.configure({key:value})
+			label.set_message("%s: %.3f",[caption,value]); game.water_visuals.configure({key:value})
 		)
 		slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
 

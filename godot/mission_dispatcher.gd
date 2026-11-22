@@ -300,7 +300,7 @@ func _step_breakout(delta: float) -> void:
 			# 0045d0a0 calls the success animation at transfer completion. The
 			# city return still selects the response/score and pays the reward.
 			runtime.active()["outcome_shown"] = true
-			runtime.outcome.play(game.game_folder,true)
+			runtime.outcome.play(game.game_folder,true,game.game_language)
 	elif not passengers and transfer > 0:
 		transfer = 0; radio("y3")
 

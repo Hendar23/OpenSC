@@ -203,7 +203,7 @@ static func load_path(path: String) -> Dictionary:
 	path = preload("res://runtime_paths.gd").external(path)
 	if not FileAccess.file_exists(path): return {}
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
-	if not valid(data): Mods.note("Invalid map file; keeping the next map or original world: " + path); return {}
+	if not valid(data): Mods.note(String(TranslationServer.translate("Invalid map file; keeping the next map or original world: %s")) % path); return {}
 	# Earlier editor builds captured the recovered cones as scenery models.
 	for key in data.entities:
 		var entry: Dictionary = data.entities[key]
@@ -382,7 +382,7 @@ static func _add_mod_wildlife(data: Dictionary) -> Dictionary:
 	for entry in additions_in_order:
 		var additions: Variant = JSON.parse_string(FileAccess.get_file_as_string(entry.path))
 		if not additions is Dictionary or additions.get("schema_version") != 1 or not additions.get("species") is Array:
-			Mods.note("Invalid wildlife additions: " + str(entry.path)); continue
+			Mods.note(String(TranslationServer.translate("Invalid wildlife additions: %s")) % entry.path); continue
 		var candidate := data.duplicate(true)
 		# An enabled pack overrides matching map definitions, including mod
 		# species accidentally included in maps saved by older editor versions.
@@ -392,6 +392,6 @@ static func _add_mod_wildlife(data: Dictionary) -> Dictionary:
 		candidate.species = candidate.species.filter(func(species: Dictionary) -> bool: return not replacement_ids.has(str(species.id)))
 		candidate.species.append_array(additions.species)
 		if not valid(candidate):
-			Mods.note("Invalid or duplicate creature definitions in " + str(entry.name)); continue
+			Mods.note(String(TranslationServer.translate("Invalid or duplicate creature definitions in %s")) % entry.name); continue
 		data = candidate
 	return data

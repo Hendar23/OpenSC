@@ -3,11 +3,13 @@ extends RefCounted
 
 var game: Node3D
 var cave_background: MeshInstance3D
+var moonlight: DirectionalLight3D
 
 func _init(context: Node3D) -> void:
 	game = context
 
 const World = preload("res://world_loader.gd")
+const Mods = preload("res://mod_registry.gd")
 const SCENIC_FOG_DISTANCE_SCALE := 0.8
 
 func _update_water_environment() -> void:
@@ -28,8 +30,8 @@ func _update_water_environment() -> void:
 		game.fog_start_slider.max_value = game.fog_visibility - 0.5
 		game.water_environment.fog_depth_begin = game.fog_start_slider.value * distance_scale
 		game.water_environment.fog_depth_curve = game.fog_curve_slider.value
-		game.fog_start_label.text = "Fade start distance: %.1f units" % game.fog_start_slider.value
-		game.fog_curve_label.text = "Fog build-up curve: %.1f" % game.fog_curve_slider.value
+		game.fog_start_label.set_message("Fade start distance: %.1f units",[game.fog_start_slider.value])
+		game.fog_curve_label.set_message("Fog build-up curve: %.1f",[game.fog_curve_slider.value])
 	game.water_environment.fog_depth_end = game.fog_visibility * distance_scale
 	game.water_environment.fog_sun_scatter = 0.0
 	game._update_daylight()
@@ -37,6 +39,7 @@ func _update_water_environment() -> void:
 func _update_daylight() -> void:
 	var lighting_cycle: RefCounted = game.menu_backdrop.daylight if game.menu_backdrop != null and game.menu_backdrop.active else game.day_night
 	lighting_cycle.apply(game.water_environment, game.sun, game.surface_material)
+	_update_moonlight(-game.sun.basis.z)
 	if game.front_end != null and game.front_end.player_graphics != null: game.front_end.player_graphics.apply_sun(game.sun)
 	game.get_tree().call_group("building_searchlights", "set_daylight", lighting_cycle.daylight())
 	# Materials already own distance fog. Engine sky fog would recolour the
@@ -54,11 +57,39 @@ func _update_daylight() -> void:
 	if game.fog_curve_slider != null: game.water_visuals.fog(game.water_environment.fog_depth_end if game.water_environment.fog_enabled else 1000000.0,game.water_environment.fog_depth_begin,game.fog_curve_slider.value)
 	if game.clock_label != null:
 		var minutes := int(game.day_night.hour * 60.0) % 1440
-		game.clock_label.text = "World time: %02d:%02d" % [minutes / 60, minutes % 60]
+		game.clock_label.set_message("World time: %02d:%02d",[minutes / 60, minutes % 60])
 		game.daylight_controls.time_of_day.set_value_no_signal(game.day_night.hour)
+
+func _update_moonlight(direction: Vector3) -> void:
+	var energy := Mods.moonlight_energy * smoothstep(0.0, 1.0, direction.y)
+	if is_zero_approx(energy):
+		if moonlight != null: moonlight.hide()
+		return
+	if moonlight == null:
+		moonlight = DirectionalLight3D.new()
+		moonlight.name = "Moonlight"
+		moonlight.set_meta("lunar", true)
+		moonlight.light_color = Color(0.80, 0.88, 1.0)
+		moonlight.shadow_enabled = true
+		moonlight.directional_shadow_max_distance = game.sun.directional_shadow_max_distance
+		moonlight.directional_shadow_blend_splits = game.sun.directional_shadow_blend_splits
+		moonlight.shadow_bias = game.sun.shadow_bias
+		moonlight.shadow_normal_bias = game.sun.shadow_normal_bias
+		game.add_child(moonlight)
+	moonlight.basis = Basis.looking_at(-direction, Vector3.FORWARD)
+	moonlight.light_energy = energy
+	moonlight.show()
 
 func has_sub_ambient(menu_active: bool) -> bool:
 	return not menu_active and game.has_started_game and is_instance_valid(game.pilot)
+
+func update_night_vision(lighting_camera: Camera3D, enabled: bool) -> void:
+	var daylight := 0.0
+	if enabled:
+		daylight = smoothstep(0.55, 1.0, game.day_night.daylight())
+		if daylight > 0.0:
+			daylight *= game.natural_light.visibility(lighting_camera.get_global_transform_interpolated().origin)
+	game.front_end.player_graphics.set_night_vision(enabled, daylight)
 
 func update_background(lighting_camera: Camera3D, sub_lighting: bool) -> void:
 	if is_instance_valid(lighting_camera) and game.natural_light.image != null:

@@ -1,0 +1,2012 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: OpenSC\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "%d  Unreadable save"
+msgstr "%d  Spielstand nicht lesbar"
+
+msgid "%d FPS"
+msgstr "%d FPS"
+
+msgid "%d Unread Mail"
+msgstr "%d ungelesene Nachricht"
+
+msgid "%d Unread Mails"
+msgstr "%d ungelesene Nachrichten"
+
+msgid "%d more notes (hover to read)."
+msgstr "Weitere Hinweise: %d (zum Lesen mit der Maus darüberfahren)."
+
+msgid "%d scenery objects · %d plants in %d patches"
+msgstr "%d Umgebungsobjekte · %d Pflanzen in %d Gruppen"
+
+msgid "%s gameplay data: %s"
+msgstr "Spieldaten von %s: %s"
+
+msgid "%s is not sold at this station."
+msgstr "Diese Station verkauft diesen Artikel nicht: %s."
+
+msgid "%s requires OpenSC %s."
+msgstr "%s erfordert OpenSC %s."
+
+msgid "%s: %.1f units"
+msgstr "%s: %.1f Einheiten"
+
+msgid "%s: %s overrides %s"
+msgstr "%s: %s überschreibt %s"
+
+msgid "%s: CITY DOCKING PAD : Dock currently in use. Please wait."
+msgstr "%s: ANDOCKPLATZ: Andockplatz belegt. Bitte warten."
+
+msgid "%s: CITY RELAY BEACON : Thank you for your assistance. 1000 credit bounty paid."
+msgstr "%s: RELAISBOJE: Danke für deine Hilfe. Eine Prämie von 1000 Credits wurde ausgezahlt."
+
+msgid "%s: GLB material %s is unavailable; keeping embedded textures."
+msgstr "%s: GLB-Material %s ist nicht verfügbar. Die eingebetteten Texturen bleiben erhalten."
+
+msgid "%s: HUD instrument needs a Screen_Display or Dial_Display mesh; using original sprites."
+msgstr "%s: Das HUD-Instrument benötigt ein Mesh namens Screen_Display oder Dial_Display. Die ursprünglichen Sprites werden verwendet."
+
+msgid "%s: bubble model must contain one mesh."
+msgstr "%s: Das Blasenmodell muss genau ein Mesh enthalten."
+
+msgid "%s: could not generate terrain mipmaps for %s; using the next replacement or original."
+msgstr "%s: Gelände-Mipmaps für %s konnten nicht erzeugt werden. Der nächste Ersatz oder das Original wird verwendet."
+
+msgid "%s: could not load %s for GLB material; using the next replacement or embedded texture."
+msgstr "%s: %s für das GLB-Material konnte nicht geladen werden. Der nächste Ersatz oder die eingebettete Textur wird verwendet."
+
+msgid "%s: could not load %s; using the next replacement or original."
+msgstr "%s: %s konnte nicht geladen werden. Der nächste Ersatz oder das Original wird verwendet."
+
+msgid "%s: could not load docking audio %s; using the next replacement or original."
+msgstr "%s: Andockton %s konnte nicht geladen werden. Der nächste Ersatz oder das Original wird verwendet."
+
+msgid "%s: could not load first-person cockpit; trying the next mod."
+msgstr "%s: Die Kanzel für die Egoperspektive konnte nicht geladen werden. Der nächste Mod wird versucht."
+
+msgid "%s: could not load scenery GLB."
+msgstr "%s: GLB-Umgebung konnte nicht geladen werden."
+
+msgid "%s: could not load submarine audio %s; using the next replacement or original."
+msgstr "%s: U-Boot-Ton %s konnte nicht geladen werden. Der nächste Ersatz oder das Original wird verwendet."
+
+msgid "%s: could not load texture %s; using the next replacement or original."
+msgstr "%s: Textur %s konnte nicht geladen werden. Der nächste Ersatz oder das Original wird verwendet."
+
+msgid "%s: missing single-surface scenery mesh %s."
+msgstr "%s: Umgebungsgitter %s mit nur einer Oberfläche fehlt."
+
+msgid "A full pack of %d is needed."
+msgstr "Ein vollständiges Paket mit %d Stück ist erforderlich."
+
+msgid "ABYSS"
+msgstr "ABGRUND"
+
+msgid "ANCHOR"
+msgstr "ANKER"
+
+msgid "AQUATRAZ PRISON GUARD"
+msgstr "GEFÄNGNISWACHE VON AQUATRAZ"
+
+msgid "Accept missions while docked."
+msgstr "Docke an, um Missionen anzunehmen."
+
+msgid "Active wildlife: %s"
+msgstr "Aktive Tierwelt: %s"
+
+msgid "Additional yaw drag"
+msgstr "Zusätzlicher Gierwiderstand"
+
+msgid "Aligning with %s…"
+msgstr "Ausrichtung auf %s …"
+
+msgid "All"
+msgstr "Alle"
+
+msgid "All equipment at every station: %s"
+msgstr "Alle Ausrüstung an jeder Station: %s"
+
+msgid "All equipment at every station: Off"
+msgstr "Alle Ausrüstung an jeder Station: Aus"
+
+msgid "All game settings"
+msgstr "Alle Spieleinstellungen"
+
+msgid "All missions for testing: %s"
+msgstr "Alle Missionen zum Testen: %s"
+
+msgid "All missions for testing: Off"
+msgstr "Alle Missionen zum Testen: Aus"
+
+msgid "All settings exported."
+msgstr "Alle Einstellungen wurden exportiert."
+
+msgid "Already owned."
+msgstr "Bereits im Besitz."
+
+msgid "Another sucker!"
+msgstr "Noch ein Dummkopf!"
+
+msgid "Anti-aliasing"
+msgstr "Kantenglättung"
+
+msgid "Apply"
+msgstr "Anwenden"
+
+msgid "Approaching %s…"
+msgstr "Annäherung an %s …"
+
+msgid "Ascend"
+msgstr "Auftauchen"
+
+msgid "Asset path must stay inside its mod folder: %s"
+msgstr "Der Ressourcenpfad muss im Mod-Ordner liegen: %s"
+
+msgid "Audio"
+msgstr "Ton"
+
+msgid "Auto Save"
+msgstr "Automatischer Spielstand"
+
+msgid "Auto aim cone (degrees, full width; 0 = off)"
+msgstr "Zielhilfekegel (Gesamtwinkel in Grad, 0 = aus)"
+
+msgid "Autosave failed: %s"
+msgstr "Automatisches Speichern fehlgeschlagen: %s"
+
+msgid "Axis %d"
+msgstr "Achse %d"
+
+msgid "BACAU SHUTTLE"
+msgstr "BACAU-FÄHRE"
+
+msgid "BELUGA GUARD SHIP"
+msgstr "WACHSCHIFF VON BELUGA"
+
+msgid "BOHINE BASE"
+msgstr "BOHINE-STÜTZPUNKT"
+
+msgid "BOHINE CITY"
+msgstr "BOHINE-STADT"
+
+msgid "BOHINE FREIGHTER"
+msgstr "BOHINE-FRACHTER"
+
+msgid "BOHINE FREIGTER"
+msgstr "BOHINE-FRACHTER"
+
+msgid "BOHINE HERDER"
+msgstr "BOHINE-HIRT"
+
+msgid "BOHINE MINERS"
+msgstr "BOHINE-BERGLEUTE"
+
+msgid "BOHINE SHIP"
+msgstr "BOHINE-SCHIFF"
+
+msgid "BOHINE SHUTTLE"
+msgstr "BOHINE-FÄHRE"
+
+msgid "BOHINE SUB"
+msgstr "BOHINE-U-BOOT"
+
+msgid "BONE_ARCHWAY"
+msgstr "KNOCHENBOGEN"
+
+msgid "BURIED_PIPE"
+msgstr "VERSCHÜTTETES_ROHR"
+
+msgid "Bacau shuttle"
+msgstr "Bacau-Fähre"
+
+msgid "Back"
+msgstr "Zurück"
+
+msgid "Backing up %s"
+msgstr "Sicherung von %s"
+
+msgid "Ballast damping"
+msgstr "Ballastdämpfung"
+
+msgid "Ballast restoring strength"
+msgstr "Rückstellkraft des Ballasts"
+
+msgid "Beam width"
+msgstr "Strahlbreite"
+
+msgid "Before %s"
+msgstr "Vor %s"
+
+msgid "Big Ears"
+msgstr "Große Ohren"
+
+msgid "Bindings changed for this session, but the settings file could not be saved."
+msgstr "Die Belegung wurde für diese Sitzung geändert. Die Einstellungsdatei konnte nicht gespeichert werden."
+
+msgid "Bindings saved."
+msgstr "Tastenbelegung gespeichert."
+
+msgid "Bohine"
+msgstr "Bohine"
+
+msgid "Borderless"
+msgstr "Randlos"
+
+msgid "Bottom camera / minimap"
+msgstr "Unterkamera / Minikarte"
+
+msgid "Brightness"
+msgstr "Helligkeit"
+
+msgid "Bubbles per propeller at full speed"
+msgstr "Blasen je Propeller bei voller Fahrt"
+
+msgid "CHEAT"
+msgstr "CHEAT"
+
+msgid "CITY"
+msgstr "STADT"
+
+msgid "CITY DOCKING PAD"
+msgstr "ANDOCKPLATZ"
+
+msgid "CITY DOCKING PAD : Approach too fast to dock. Slow down."
+msgstr "ANDOCKPLATZ: Anflug zu schnell. Langsamer fahren."
+
+msgid "CITY DOCKING PAD : Automatic docking in progress"
+msgstr "ANDOCKPLATZ: Automatisches Andocken läuft"
+
+msgid "CITY DOCKING PAD : Automatic launch in progress"
+msgstr "ANDOCKPLATZ: Automatisches Abdocken läuft"
+
+msgid "CITY DOCKING PAD : Do you want to dock? (Y/N)"
+msgstr "ANDOCKPLATZ: Möchtest du andocken? (Y/N)"
+
+msgid "CITY DROP POINT"
+msgstr "ABLIEFERSTELLE"
+
+msgid "CITY DROP POINT : Do you want attached object to be automatically retrieved? (Y/N)"
+msgstr "ABLIEFERSTELLE: Soll das angehängte Objekt automatisch geborgen werden? (Y/N)"
+
+msgid "CITY RELAY TOWER"
+msgstr "RELAISTURM"
+
+msgid "CRT reflection strength: %.0f%%"
+msgstr "Stärke der CRT-Reflexion: %.0f%%"
+
+msgid "Camera distance"
+msgstr "Kameraabstand"
+
+msgid "Can't save during a mission."
+msgstr "Während einer Mission kann nicht gespeichert werden."
+
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgid "Cancel binding"
+msgstr "Belegung abbrechen"
+
+msgid "Cannot create the save folder."
+msgstr "Der Spielstandordner konnte nicht erstellt werden."
+
+msgid "Cannot open player folder: %s"
+msgstr "Spielerordner konnte nicht geöffnet werden: %s"
+
+msgid "Cannot save invalid game state."
+msgstr "Ein ungültiger Spielzustand kann nicht gespeichert werden."
+
+msgid "Cannot write the save file."
+msgstr "Die Speicherdatei konnte nicht geschrieben werden."
+
+msgid "Canopy"
+msgstr "Kanzel"
+
+msgid "Cargo"
+msgstr "Fracht"
+
+msgid "Cargo weight multiplier"
+msgstr "Multiplikator für Frachtgewicht"
+
+msgid "Caustics animation speed"
+msgstr "Animationsgeschwindigkeit der Kaustik"
+
+msgid "Caustics depth reach"
+msgstr "Tiefenreichweite der Kaustik"
+
+msgid "Caustics pattern size"
+msgstr "Größe des Kaustikmusters"
+
+msgid "Cave ambient light"
+msgstr "Umgebungslicht in Höhlen"
+
+msgid "Chain length"
+msgstr "Kettenlänge"
+
+msgid "Changes apply live. Lower drag = longer coasting.\nW/S: thrust · A/D: turn · Q/E: pods · ↑/↓: pitch\nPad: pull back = nose up · right stick pods · triggers thrust"
+msgstr "Änderungen gelten sofort. Weniger Widerstand = längeres Ausrollen.\nW/S: Schub · A/D: Drehen · Q/E: Gondeln · ↑/↓: Nicken\nController: zurückziehen = Bug hoch · rechter Stick: Gondeln · Trigger: Schub"
+
+msgid "Changes are saved automatically."
+msgstr "Änderungen werden automatisch gespeichert."
+
+msgid "Changes are saved automatically. Export all settings includes every developer tab."
+msgstr "Änderungen werden automatisch gespeichert. Der Gesamtexport enthält alle Entwicklerregisterkarten."
+
+msgid "Changes save automatically. Either slot can use keyboard, mouse or controller."
+msgstr "Änderungen werden automatisch gespeichert. Beide Belegungen unterstützen Tastatur, Maus und Controller."
+
+msgid "Checking for updates..."
+msgstr "Suche nach Updates …"
+
+msgid "Choose Sub Culture folder…"
+msgstr "Sub-Culture-Ordner auswählen …"
+
+msgid "Choose folder..."
+msgstr "Ordner auswählen …"
+
+msgid "Choose language"
+msgstr "Sprache wählen"
+
+msgid "Choose your Sub Culture game folder"
+msgstr "Wähle deinen Sub-Culture-Spielordner"
+
+msgid "Chunk lifetime before fading (seconds)"
+msgstr "Dauer bis zum Ausblenden der Überreste (Sekunden)"
+
+msgid "City stock: %d"
+msgstr "Stadtbestand: %d"
+
+msgid "Classic Sub physics: %s"
+msgstr "Klassische U-Boot-Physik: %s"
+
+msgid "Cleaning asset cache"
+msgstr "Ressourcen-Cache wird bereinigt"
+
+msgid "Cleaning asset cache: checked %d files"
+msgstr "Cache-Bereinigung: %d Dateien geprüft"
+
+msgid "Cleaning asset cache: removed %d old entries"
+msgstr "Cache-Bereinigung: %d alte Einträge entfernt"
+
+msgid "Clear discovered areas to test the current reveal radius. Smaller radii keep previous discoveries."
+msgstr "Setze entdeckte Bereiche zurück, um den aktuellen Aufdeckungsradius zu testen. Kleinere Radien erhalten bisherige Entdeckungen."
+
+msgid "Clear this binding"
+msgstr "Diese Belegung löschen"
+
+msgid "Close"
+msgstr "Schließen"
+
+msgid "Close (F1)"
+msgstr "Schließen (F1)"
+
+msgid "Close (F6)"
+msgstr "Schließen (F6)"
+
+msgid "Close (T)"
+msgstr "Schließen (T)"
+
+msgid "Closing docking port…"
+msgstr "Andockschleuse schließt sich …"
+
+msgid "Cockpit glass settings must be an object."
+msgstr "Kanzelglaseinstellungen müssen ein Objekt sein."
+
+msgid "Collision damage minimum speed"
+msgstr "Mindestgeschwindigkeit für Kollisionsschaden"
+
+msgid "Collision damage multiplier"
+msgstr "Multiplikator für Kollisionsschaden"
+
+msgid "Continue"
+msgstr "Fortsetzen"
+
+msgid "Contrast"
+msgstr "Kontrast"
+
+msgid "Controller %s"
+msgstr "Controller %s"
+
+msgid "Controller impact rumble (0 = off)"
+msgstr "Controller-Vibration bei Aufprall (0 = aus)"
+
+msgid "Controls"
+msgstr "Steuerung"
+
+msgid "Cost %d"
+msgstr "Kosten: %d"
+
+msgid "Could not automatically save audio settings: %s"
+msgstr "Toneinstellungen konnten nicht automatisch gespeichert werden: %s"
+
+msgid "Could not create player Mods folder: %s"
+msgstr "Der Mods-Ordner des Spielers konnte nicht erstellt werden: %s"
+
+msgid "Could not create the download folder."
+msgstr "Der Downloadordner konnte nicht erstellt werden."
+
+msgid "Could not create the mod folder."
+msgstr "Der Mod-Ordner konnte nicht erstellt werden."
+
+msgid "Could not download %s."
+msgstr "%s konnte nicht heruntergeladen werden."
+
+msgid "Could not export settings: %s"
+msgstr "Einstellungen konnten nicht exportiert werden: %s"
+
+msgid "Could not export sound settings."
+msgstr "Toneinstellungen konnten nicht exportiert werden."
+
+msgid "Could not find CLUMPS/SUB.DFF and DATA/SCEN1.BSP in that folder."
+msgstr "CLUMPS/SUB.DFF und DATA/SCEN1.BSP wurden in diesem Ordner nicht gefunden."
+
+msgid "Could not find the original game files."
+msgstr "Die Originaldateien des Spiels wurden nicht gefunden."
+
+msgid "Could not finish installing the mod."
+msgstr "Die Installation des Mods konnte nicht abgeschlossen werden."
+
+msgid "Could not finish saving: %s"
+msgstr "Speichern konnte nicht abgeschlossen werden: %s"
+
+msgid "Could not load terrain from %s"
+msgstr "Gelände aus %s konnte nicht geladen werden"
+
+msgid "Could not mount protected mod assets with this game build; restart after replacing a pack."
+msgstr "Diese Spielversion konnte die geschützten Mod-Ressourcen nicht laden. Starte nach dem Ersetzen des Pakets neu."
+
+msgid "Could not open the downloaded ZIP."
+msgstr "Die heruntergeladene ZIP-Datei konnte nicht geöffnet werden."
+
+msgid "Could not read mod.json: %s"
+msgstr "mod.json konnte nicht gelesen werden: %s"
+
+msgid "Could not read the staged mod."
+msgstr "Der vorbereitete Mod konnte nicht gelesen werden."
+
+msgid "Could not safely back up %s."
+msgstr "Für %s konnte keine sichere Sicherung erstellt werden."
+
+msgid "Could not save %s: %s"
+msgstr "%s konnte nicht gespeichert werden: %s"
+
+msgid "Could not save general settings: %s"
+msgstr "Allgemeine Einstellungen konnten nicht gespeichert werden: %s"
+
+msgid "Could not save graphics settings: %s"
+msgstr "Grafikeinstellungen konnten nicht gespeichert werden: %s"
+
+msgid "Could not save mod selection: %s"
+msgstr "Mod-Auswahl konnte nicht gespeichert werden: %s"
+
+msgid "Could not write the mod files."
+msgstr "Die Mod-Dateien konnten nicht geschrieben werden."
+
+msgid "Couldn’t refresh official mods."
+msgstr "Offizielle Mods konnten nicht aktualisiert werden."
+
+msgid "Creak chance (0.20 = 20%)"
+msgstr "Knarrwahrscheinlichkeit (0,20 = 20 %)"
+
+msgid "Creaking volume"
+msgstr "Lautstärke des Knarrens"
+
+msgid "Credits"
+msgstr "Guthaben"
+
+msgid "Credits: %d"
+msgstr "Guthaben: %d"
+
+msgid "Current mission:"
+msgstr "Aktuelle Mission:"
+
+msgid "Current mission: %s"
+msgstr "Aktuelle Mission: %s"
+
+msgid "Curved-edge distortion"
+msgstr "Verzerrung an gewölbten Rändern"
+
+msgid "D-pad down"
+msgstr "Steuerkreuz runter"
+
+msgid "D-pad left"
+msgstr "Steuerkreuz links"
+
+msgid "D-pad right"
+msgstr "Steuerkreuz rechts"
+
+msgid "D-pad up"
+msgstr "Steuerkreuz hoch"
+
+msgid "DIPLOMATIC SHUTTLE"
+msgstr "DIPLOMATENFÄHRE"
+
+msgid "DOWNED SUB"
+msgstr "ABGESCHOSSENES U-BOOT"
+
+msgid "Day"
+msgstr "Tag"
+
+msgid "Decline docking"
+msgstr "Andocken ablehnen"
+
+msgid "Deep Sea Lights"
+msgstr "Tiefseescheinwerfer"
+
+msgid "Deep-Sea Lights"
+msgstr "Tiefseescheinwerfer"
+
+msgid "Deployment / retraction speed"
+msgstr "Ausfahr- und Einholgeschwindigkeit"
+
+msgid "Depth Charge Launcher"
+msgstr "Wasserbombenwerfer"
+
+msgid "Descend"
+msgstr "Abtauchen"
+
+msgid "Developer menu"
+msgstr "Entwicklermenü"
+
+msgid "Dirt and smudges"
+msgstr "Schmutz und Schlieren"
+
+msgid "Disable random pirates: %s"
+msgstr "Zufällige Piraten deaktivieren: %s"
+
+msgid "Discord"
+msgstr "Discord"
+
+msgid "Display mode"
+msgstr "Anzeigemodus"
+
+msgid "Dock"
+msgstr "Andocken"
+
+msgid "Dock / undock"
+msgstr "Andocken / abdocken"
+
+msgid "Dock currently in use. Please wait."
+msgstr "Andockplatz belegt. Bitte warten."
+
+msgid "Dock menu / buying and selling volume"
+msgstr "Lautstärke des Andockmenüs / Kaufs und Verkaufs"
+
+msgid "Dock zapper damage per tick: %.2f"
+msgstr "Schaden des Andock-Zappers je Tick: %.2f"
+
+msgid "Docked at %s — Press Y to undock"
+msgstr "Bei %s angedockt — zum Abdocken Y drücken"
+
+msgid "Docking at %s…"
+msgstr "Andocken bei %s …"
+
+msgid "Docking prompt radius: %.1f units"
+msgstr "Radius der Andockanfrage: %.1f Einheiten"
+
+msgid "Docking requires movement speed and vertical thrust."
+msgstr "Zum Andocken sind Fahrt und vertikaler Schub erforderlich."
+
+msgid "Docking sequence volume"
+msgstr "Lautstärke des Andockvorgangs"
+
+msgid "Docking · DOCKING / DOCK / DOCKSHUT"
+msgstr "Andocken · DOCKING / DOCK / DOCKSHUT"
+
+msgid "Door finish volume"
+msgstr "Lautstärke am Ende der Türbewegung"
+
+msgid "Download"
+msgstr "Herunterladen"
+
+msgid "Download update"
+msgstr "Update herunterladen"
+
+msgid "Download verification failed for %s."
+msgstr "Der Download von %s konnte nicht überprüft werden."
+
+msgid "Downloading %s"
+msgstr "%s wird heruntergeladen"
+
+msgid "Dump the cargo and we might let you swim!"
+msgstr "Wirf die Fracht ab, und vielleicht lassen wir dich davonschwimmen!"
+
+msgid "Duplicate mod ID: %s"
+msgstr "Doppelte Mod-ID: %s"
+
+msgid "EMPTY"
+msgstr "LEER"
+
+msgid "ESCAPE POD"
+msgstr "RETTUNGSKAPSEL"
+
+msgid "EXPOSED_PIPE"
+msgstr "FREILIEGENDES_ROHR"
+
+msgid "Each side propeller thrust"
+msgstr "Schub je Seitenpropeller"
+
+msgid "Earlier"
+msgstr "Nach oben"
+
+msgid "Edge tint"
+msgstr "Randtönung"
+
+msgid "Effects volume: %d%%"
+msgstr "Effektlautstärke: %d%%"
+
+msgid "Empty"
+msgstr "Leer"
+
+msgid "Empty slot"
+msgstr "Leerer Speicherplatz"
+
+msgid "Enable mods · Later entries take priority"
+msgstr "Mods aktivieren · Spätere Einträge haben Vorrang"
+
+msgid "Equipment"
+msgstr "Ausrüstung"
+
+msgid "Equipment Next"
+msgstr "Nächste Ausrüstung"
+
+msgid "Equipment Previous"
+msgstr "Vorherige Ausrüstung"
+
+msgid "Equipment Toggle"
+msgstr "Ausrüstung ein- / ausschalten"
+
+msgid "Escape Pod"
+msgstr "Rettungskapsel"
+
+msgid "Exit"
+msgstr "Beenden"
+
+msgid "Expected schema_version 1 and a tables object."
+msgstr "Erwartet werden schema_version 1 und ein Objekt tables."
+
+msgid "Explosion volume"
+msgstr "Explosionslautstärke"
+
+msgid "Export"
+msgstr "Exportieren"
+
+msgid "Export all current settings"
+msgstr "Alle aktuellen Einstellungen exportieren"
+
+msgid "Export all settings"
+msgstr "Alle Einstellungen exportieren"
+
+msgid "Export failed: %s"
+msgstr "Export fehlgeschlagen: %s"
+
+msgid "Export settings"
+msgstr "Einstellungen exportieren"
+
+msgid "Extra pitch as speed rises"
+msgstr "Zusätzliche Tonhöhe bei steigender Geschwindigkeit"
+
+msgid "F1 is reserved for the developer menu. Choose another control."
+msgstr "F1 ist für das Entwicklermenü reserviert. Wähle eine andere Eingabe."
+
+msgid "FLATS"
+msgstr "EBENEN"
+
+msgid "FPS counter"
+msgstr "FPS-Anzeige"
+
+msgid "Face the docking position and level the submarine before docking with turning disabled."
+msgstr "Richte das U-Boot auf den Andockplatz aus und bringe es in die Waagerechte, wenn die Drehung deaktiviert ist."
+
+msgid "Face the docking position before docking with turning disabled."
+msgstr "Richte das U-Boot vor dem Andocken auf den Andockplatz aus, wenn die Drehung deaktiviert ist."
+
+msgid "Fade start distance: %.1f units"
+msgstr "Beginn der Nebelblende: %.1f Einheiten"
+
+msgid "Fire weapon"
+msgstr "Waffe abfeuern"
+
+msgid "First-person crosshair: %s"
+msgstr "Fadenkreuz in der Egoperspektive: %s"
+
+msgid "Fish zapper volume"
+msgstr "Lautstärke des Fisch-Zappers"
+
+msgid "Floating water particles"
+msgstr "Schwebeteilchen im Wasser"
+
+msgid "Fog build-up curve: %.1f"
+msgstr "Kurve der Nebeldichte: %.1f"
+
+msgid "Fog distance"
+msgstr "Nebeldistanz"
+
+msgid "Forward drag"
+msgstr "Längswiderstand"
+
+msgid "Forward thrust"
+msgstr "Vorwärtsschub"
+
+msgid "Frame limit"
+msgstr "Bildratenlimit"
+
+msgid "Frame rate limit"
+msgstr "Bildratenlimit"
+
+msgid "Frame-rate limit"
+msgstr "Bildratenlimit"
+
+msgid "Fresh meat!"
+msgstr "Frischfleisch!"
+
+msgid "Friendly"
+msgstr "Freundlich"
+
+msgid "Full cycle length (minutes)"
+msgstr "Dauer des gesamten Zyklus (Minuten)"
+
+msgid "Full map"
+msgstr "Gesamtkarte"
+
+msgid "Fullscreen"
+msgstr "Vollbild"
+
+msgid "GIANT_BOOT"
+msgstr "RIESENSTIEFEL"
+
+msgid "GUARD SHIP"
+msgstr "WACHSCHIFF"
+
+msgid "General"
+msgstr "Allgemein"
+
+msgid "Give player 100,000 credits"
+msgstr "Spieler 100.000 Credits geben"
+
+msgid "Glass blue"
+msgstr "Blauanteil des Glases"
+
+msgid "Glass green"
+msgstr "Grünanteil des Glases"
+
+msgid "Glass red"
+msgstr "Rotanteil des Glases"
+
+msgid "Glass roughness"
+msgstr "Rauheit des Glases"
+
+msgid "Gore lifetime (seconds)"
+msgstr "Lebensdauer der Blutpartikel (Sekunden)"
+
+msgid "Gore particles per death"
+msgstr "Blutpartikel pro Tod"
+
+msgid "Gore settling speed"
+msgstr "Sinkgeschwindigkeit der Blutpartikel"
+
+msgid "Graphics"
+msgstr "Grafik"
+
+msgid "Grapple volume (dB)"
+msgstr "Greifhakenlautstärke (dB)"
+
+msgid "Grappling Hook"
+msgstr "Greifhaken"
+
+msgid "HUD 1"
+msgstr "HUD 1"
+
+msgid "HUD 2"
+msgstr "HUD 2"
+
+msgid "HUD 3"
+msgstr "HUD 3"
+
+msgid "HUD 4"
+msgstr "HUD 4"
+
+msgid "HUD 5"
+msgstr "HUD 5"
+
+msgid "HUD and utilities"
+msgstr "HUD und Hilfsfunktionen"
+
+msgid "High"
+msgstr "Hoch"
+
+msgid "Hold"
+msgstr "Frachtraum"
+
+msgid "Homing Torpedoes"
+msgstr "Zielsuchtorpedos"
+
+msgid "Hostile"
+msgstr "Feindselig"
+
+msgid "Hull Strength"
+msgstr "Rumpfstärke"
+
+msgid "Hull impacts · HIT1 / HIT3 / CREAKING"
+msgstr "Rumpfstöße · HIT1 / HIT3 / CREAKING"
+
+msgid "Ignored invalid cockpit glass setting: %s"
+msgstr "Ungültige Einstellung für Kanzelglas ignoriert: %s"
+
+msgid "Ignored invalid material texture binding: %s"
+msgstr "Ungültige Texturzuordnung des Materials ignoriert: %s"
+
+msgid "Ignored invalid movement setting: %s"
+msgstr "Ungültige Bewegungseinstellung ignoriert: %s"
+
+msgid "Impact cooldown"
+msgstr "Wartezeit zwischen Stößen"
+
+msgid "Impact volume"
+msgstr "Aufpralllautstärke"
+
+msgid "Inner reflection"
+msgstr "Innenreflexion"
+
+msgid "Installed"
+msgstr "Installiert"
+
+msgid "Installing %s"
+msgstr "%s wird installiert"
+
+msgid "Invalid"
+msgstr "Ungültig"
+
+msgid "Invalid FMV replacement: %s"
+msgstr "Ungültiger Videoersatz: %s"
+
+msgid "Invalid asset entry: %s"
+msgstr "Ungültiger Ressourceneintrag: %s"
+
+msgid "Invalid map file; keeping the next map or original world: %s"
+msgstr "Ungültige Kartendatei. Die nächste Karte oder die ursprüngliche Welt wird verwendet: %s"
+
+msgid "Invalid model scale: %s"
+msgstr "Ungültiger Modellmaßstab: %s"
+
+msgid "Invalid or duplicate creature definitions in %s"
+msgstr "Ungültige oder doppelte Tierdefinitionen in %s"
+
+msgid "Invalid save slot."
+msgstr "Ungültiger Speicherplatz."
+
+msgid "Invalid scenery settings or missing self-contained GLB."
+msgstr "Ungültige Umgebungseinstellungen oder fehlende eigenständige GLB-Datei."
+
+msgid "Invalid wildlife additions: %s"
+msgstr "Ungültige Ergänzungen der Tierwelt: %s"
+
+msgid "Item cannot be sold."
+msgstr "Dieser Artikel kann nicht verkauft werden."
+
+msgid "Item unavailable."
+msgstr "Artikel nicht verfügbar."
+
+msgid "LIMPET_ROCK"
+msgstr "NAPFSCHNECKENFELS"
+
+msgid "Later"
+msgstr "Nach unten"
+
+msgid "Leaving %s…"
+msgstr "%s wird verlassen …"
+
+msgid "Left stick X"
+msgstr "Linker Stick X"
+
+msgid "Left stick Y"
+msgstr "Linker Stick Y"
+
+msgid "Left stick click"
+msgstr "Linken Stick drücken"
+
+msgid "Left trigger"
+msgstr "Linker Trigger"
+
+msgid "Lens flares: %s"
+msgstr "Linsenreflexionen: %s"
+
+msgid "Let's see how tough you are!"
+msgstr "Mal sehen, wie hart du bist!"
+
+msgid "Let's see what you've got!"
+msgstr "Zeig mal, was du draufhast!"
+
+msgid "Light beam angle"
+msgstr "Öffnungswinkel des Lichtkegels"
+
+msgid "Light brightness"
+msgstr "Scheinwerferhelligkeit"
+
+msgid "Light downward angle"
+msgstr "Abwärtswinkel des Scheinwerfers"
+
+msgid "Light range"
+msgstr "Scheinwerferreichweite"
+
+msgid "Lightning animation speed"
+msgstr "Animationsgeschwindigkeit der Blitze"
+
+msgid "Limit resolutions"
+msgstr "Auflösungen begrenzen"
+
+msgid "Limit to display"
+msgstr "Auf Bildschirm begrenzen"
+
+msgid "Listening for %s, binding %d... Press and release one button, or hold it and press another. Click Cancel binding to stop."
+msgstr "Warte auf eine Eingabe für „%s“, Belegung %d … Drücke eine Taste und lasse sie los oder halte sie gedrückt und drücke eine weitere. Wähle Belegung abbrechen, um zu beenden."
+
+msgid "Live controls · pitch 1.0 = original sample rate.\n-60 dB mutes a layer. Lower response = faster changes."
+msgstr "Live-Einstellungen · Tonhöhe 1,0 = ursprüngliche Abtastrate.\n-60 dB schaltet eine Ebene stumm. Kürzere Reaktionszeit = schnellere Änderungen."
+
+msgid "Load Game"
+msgstr "Spiel laden"
+
+msgid "Loading"
+msgstr "Laden"
+
+msgid "Loading gameplay data"
+msgstr "Spieldaten werden geladen"
+
+msgid "Loading..."
+msgstr "Laden …"
+
+msgid "Locate original Sub Culture files"
+msgstr "Originaldateien von Sub Culture suchen"
+
+msgid "Loop join smoothing"
+msgstr "Glättung der Schleifenübergänge"
+
+msgid "Low"
+msgstr "Niedrig"
+
+msgid "Low shield warning volume"
+msgstr "Lautstärke der Schildwarnung"
+
+msgid "METAL_ARTEFACT"
+msgstr "METALLARTEFAKT"
+
+msgid "METAL_CAVE"
+msgstr "METALLHÖHLE"
+
+msgid "MINERS"
+msgstr "BERGLEUTE"
+
+msgid "MINESHIP"
+msgstr "BERGBAUSCHIFF"
+
+msgid "MISSION COMPUTER"
+msgstr "MISSIONSCOMPUTER"
+
+msgid "Magnet"
+msgstr "Magnet"
+
+msgid "Magnet volume (dB)"
+msgstr "Magnetlautstärke (dB)"
+
+msgid "Mailbox"
+msgstr "Postfach"
+
+msgid "Main"
+msgstr "Hauptpropeller"
+
+msgid "Main Menu"
+msgstr "Hauptmenü"
+
+msgid "Main forward thrust"
+msgstr "Hauptschub vorwärts"
+
+msgid "Main propeller · PROP3"
+msgstr "Hauptpropeller · PROP3"
+
+msgid "Main reverse thrust"
+msgstr "Hauptschub rückwärts"
+
+msgid "Map and menus"
+msgstr "Karte und Menüs"
+
+msgid "Market speed: %.0f%%"
+msgstr "Marktgeschwindigkeit: %.0f%%"
+
+msgid "Master volume"
+msgstr "Gesamtlautstärke"
+
+msgid "Maximum ascent/descent speed"
+msgstr "Maximale Auf-/Abtauchgeschwindigkeit"
+
+msgid "Maximum bubbles: %s"
+msgstr "Maximale Blasenzahl: %s"
+
+msgid "Maximum forward speed"
+msgstr "Maximale Vorwärtsgeschwindigkeit"
+
+msgid "Maximum pitch speed"
+msgstr "Maximale Nickgeschwindigkeit"
+
+msgid "Maximum reverse speed"
+msgstr "Maximale Rückwärtsgeschwindigkeit"
+
+msgid "Maximum turning speed"
+msgstr "Maximale Drehgeschwindigkeit"
+
+msgid "Medium"
+msgstr "Mittel"
+
+msgid "Menu"
+msgstr "Menü"
+
+msgid "Menu Down"
+msgstr "Menü: runter"
+
+msgid "Menu Left"
+msgstr "Menü: links"
+
+msgid "Menu Right"
+msgstr "Menü: rechts"
+
+msgid "Menu Up"
+msgstr "Menü: hoch"
+
+msgid "Menu back"
+msgstr "Im Menü zurück"
+
+msgid "Menu confirm"
+msgstr "Menüauswahl bestätigen"
+
+msgid "Minimap reveal radius: %.1f units"
+msgstr "Aufdeckungsradius der Minikarte: %.1f Einheiten"
+
+msgid "Minimap zoom: %.1f×"
+msgstr "Minikartenzoom: %.1f×"
+
+msgid "Minimum impact speed"
+msgstr "Minimale Aufprallgeschwindigkeit"
+
+msgid "Missing asset file: %s"
+msgstr "Fehlende Ressourcendatei: %s"
+
+msgid "Missing original file: %s"
+msgstr "Fehlende Originaldatei: %s"
+
+msgid "Mission failed."
+msgstr "Mission fehlgeschlagen."
+
+msgid "Mission failed. You can accept the prospecting job again at a city."
+msgstr "Mission fehlgeschlagen. Du kannst den Prospektionsauftrag erneut in einer Stadt annehmen."
+
+msgid "Missions"
+msgstr "Missionen"
+
+msgid "Mod ID must contain lowercase letters, numbers, dots, underscores or hyphens."
+msgstr "Die Mod-ID darf nur Kleinbuchstaben, Zahlen, Punkte, Unterstriche oder Bindestriche enthalten."
+
+msgid "Model trigger_distance must be model_radius: %s"
+msgstr "trigger_distance des Modells muss model_radius sein: %s"
+
+msgid "Mods"
+msgstr "Mods"
+
+msgid "Mouse Button %d"
+msgstr "Maustaste %d"
+
+msgid "Movement"
+msgstr "Bewegung"
+
+msgid "Movement %s: %s overrides %s"
+msgstr "Bewegung %s: %s überschreibt %s"
+
+msgid "Movement settings"
+msgstr "Bewegungseinstellungen"
+
+msgid "Movement tuning"
+msgstr "Bewegungseinstellungen"
+
+msgid "Movement, sound and graphics in one file."
+msgstr "Bewegung, Ton und Grafik in einer Datei."
+
+msgid "Moving doors volume"
+msgstr "Lautstärke der Türbewegung"
+
+msgid "Name saved game"
+msgstr "Spielstand benennen"
+
+msgid "Neutral"
+msgstr "Neutral"
+
+msgid "New Game"
+msgstr "Neues Spiel"
+
+msgid "Nice sub. Shame about the owner!"
+msgstr "Schönes U-Boot. Schade um den Kapitän!"
+
+msgid "Night"
+msgstr "Nacht"
+
+msgid "Night brightness"
+msgstr "Nachthelligkeit"
+
+msgid "No cargo to sell."
+msgstr "Keine Fracht zum Verkaufen."
+
+msgid "No commodity market at this station."
+msgstr "Diese Station hat keinen Warenmarkt."
+
+msgid "No gameplay archive could be decoded."
+msgstr "Das Spieldatenarchiv konnte nicht dekodiert werden."
+
+msgid "No language archive could be decoded."
+msgstr "Das Spracharchiv konnte nicht dekodiert werden."
+
+msgid "No mail."
+msgstr "Keine Nachrichten."
+
+msgid "No mods installed."
+msgstr "Keine Mods installiert."
+
+msgid "No room for another pack."
+msgstr "Kein Platz für ein weiteres Paket."
+
+msgid "No saved game in this slot."
+msgstr "Kein Spielstand auf diesem Platz."
+
+msgid "No saved games yet"
+msgstr "Keine Spielstände vorhanden"
+
+msgid "No scenery/mission database could be decoded."
+msgstr "Die Umgebungs- und Missionsdatenbank konnte nicht dekodiert werden."
+
+msgid "None"
+msgstr "Keine"
+
+msgid "Not available yet"
+msgstr "Noch nicht verfügbar"
+
+msgid "Not enough credits."
+msgstr "Nicht genügend Credits."
+
+msgid "Not installed"
+msgstr "Nicht installiert"
+
+msgid "Nothing personal, just business!"
+msgstr "Nichts Persönliches, nur Geschäft!"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Off"
+msgstr "Aus"
+
+msgid "Official"
+msgstr "Offiziell"
+
+msgid "On"
+msgstr "Ein"
+
+msgid "Open Player Folder"
+msgstr "Spielerordner öffnen"
+
+msgid "OpenSC v%s is available. Would you like to open the download page?"
+msgstr "OpenSC v%s ist verfügbar. Möchtest du die Downloadseite öffnen?"
+
+msgid "OpenSubCulture needs your original Sub Culture files. Choose the game folder containing CLUMPS and DATA."
+msgstr "OpenSubCulture benötigt die Originaldateien von Sub Culture. Wähle den Spielordner mit CLUMPS und DATA aus."
+
+msgid "Opening docking port…"
+msgstr "Andockschleuse öffnet sich …"
+
+msgid "Options"
+msgstr "Optionen"
+
+msgid "Original Sub Culture by Criterion Studios · Ubisoft"
+msgstr "Originalspiel Sub Culture von Criterion Studios · Ubisoft"
+
+msgid "Out of stock."
+msgstr "Ausverkauft."
+
+msgid "PIRATE : %s"
+msgstr "PIRAT: %s"
+
+msgid "PIRATE OUTPOST"
+msgstr "PIRATEN-AUSSENPOSTEN"
+
+msgid "PIRATE ROBOT"
+msgstr "PIRATENROBOTER"
+
+msgid "PIRATE SHIP"
+msgstr "PIRATENSCHIFF"
+
+msgid "PIRATE SUB"
+msgstr "PIRATEN-U-BOOT"
+
+msgid "PIRATES"
+msgstr "PIRATEN"
+
+msgid "PIRATE_VALLEY"
+msgstr "PIRATENTAL"
+
+msgid "PRISON RELAY TOWER"
+msgstr "GEFÄNGNIS-RELAISTURM"
+
+msgid "PRISON SUB"
+msgstr "GEFÄNGNIS-U-BOOT"
+
+msgid "PROCHA ATTACK SUB"
+msgstr "PROCHA-KAMPF-U-BOOT"
+
+msgid "PROCHA BASE"
+msgstr "PROCHA-STÜTZPUNKT"
+
+msgid "PROCHA CITY"
+msgstr "PROCHA-STADT"
+
+msgid "PROCHA FREIGHTER"
+msgstr "PROCHA-FRACHTER"
+
+msgid "PROCHA FREIGTER"
+msgstr "PROCHA-FRACHTER"
+
+msgid "PROCHA HERDER"
+msgstr "PROCHA-HIRT"
+
+msgid "PROCHA SHUTTLE"
+msgstr "PROCHA-FÄHRE"
+
+msgid "PROCHA SUB"
+msgstr "PROCHA-U-BOOT"
+
+msgid "Particle brightness"
+msgstr "Partikelhelligkeit"
+
+msgid "Particle count"
+msgstr "Partikelanzahl"
+
+msgid "Particle drift speed"
+msgstr "Driftgeschwindigkeit der Partikel"
+
+msgid "Particle size"
+msgstr "Partikelgröße"
+
+msgid "Particle viewing radius"
+msgstr "Sichtweite der Partikel"
+
+msgid "Pause the cycle to hold a time. F1 pauses it while you adjust settings."
+msgstr "Pausiere den Zyklus, um die Uhrzeit festzuhalten. F1 pausiert ihn während der Einstellungen."
+
+msgid "Photo mode"
+msgstr "Fotomodus"
+
+msgid "Photo mode replay: %s"
+msgstr "Wiederholung im Fotomodus: %s"
+
+msgid "Pickup distance"
+msgstr "Aufnahmedistanz"
+
+msgid "Piloting"
+msgstr "Steuerung des U-Boots"
+
+msgid "Piloting ready."
+msgstr "U-Boot ist startklar."
+
+msgid "Pitch acceleration"
+msgstr "Nickbeschleunigung"
+
+msgid "Pitch at full load"
+msgstr "Tonhöhe bei voller Last"
+
+msgid "Pitch at low load"
+msgstr "Tonhöhe bei niedriger Last"
+
+msgid "Pitch down (nose down)"
+msgstr "Bug senken"
+
+msgid "Pitch response time"
+msgstr "Reaktionszeit der Tonhöhe"
+
+msgid "Pitch up (nose up)"
+msgstr "Bug anheben"
+
+msgid "Placing mod scenery"
+msgstr "Mod-Umgebung wird platziert"
+
+msgid "Plant current direction (degrees)"
+msgstr "Strömungsrichtung für Pflanzen (Grad)"
+
+msgid "Plant ripple strength"
+msgstr "Stärke der Kräuselbewegung der Pflanzen"
+
+msgid "Plant sway speed"
+msgstr "Geschwindigkeit der Pflanzenbewegung"
+
+msgid "Plant sway strength"
+msgstr "Stärke der Pflanzenbewegung"
+
+msgid "Plant sway variation"
+msgstr "Variation der Pflanzenbewegung"
+
+msgid "Plant twist strength"
+msgstr "Stärke der Pflanzenverdrehung"
+
+msgid "Plant wash recovery (seconds)"
+msgstr "Erholungszeit der Pflanzen nach Propellerstrom (Sekunden)"
+
+msgid "Plant wave length (plant heights)"
+msgstr "Wellenlänge der Pflanzenbewegung (in Pflanzenhöhen)"
+
+msgid "Plants sway in current"
+msgstr "Pflanzen wiegen sich in der Strömung"
+
+msgid "Play FMVs: %s"
+msgstr "Videos abspielen: %s"
+
+msgid "Pod rotation · PROP1"
+msgstr "Gondeldrehung · PROP1"
+
+msgid "Pod tilt speed"
+msgstr "Neigegeschwindigkeit der Gondeln"
+
+msgid "Pods"
+msgstr "Gondeln"
+
+msgid "Prepare to be sunk!"
+msgstr "Mach dich aufs Sinken gefasst!"
+
+msgid "Preparing FMV: %s"
+msgstr "Video wird vorbereitet: %s"
+
+msgid "Preparing environment lighting"
+msgstr "Umgebungsbeleuchtung wird vorbereitet"
+
+msgid "Preparing map"
+msgstr "Karte wird vorbereitet"
+
+msgid "Preparing mission assets"
+msgstr "Missionsdaten werden vorbereitet"
+
+msgid "Preparing mission audio"
+msgstr "Missionston wird vorbereitet"
+
+msgid "Preparing mission models: %d / %d"
+msgstr "Missionsmodelle werden vorbereitet: %d / %d"
+
+msgid "Preparing player submarine"
+msgstr "U-Boot wird vorbereitet"
+
+msgid "Preparing radio portraits"
+msgstr "Funkporträts werden vorbereitet"
+
+msgid "Preparing ships and missions"
+msgstr "Schiffe und Missionen werden vorbereitet"
+
+msgid "Preparing submarine equipment"
+msgstr "U-Boot-Ausrüstung wird vorbereitet"
+
+msgid "Preparing to dock…"
+msgstr "Andocken wird vorbereitet …"
+
+msgid "Preparing wildlife and world objects"
+msgstr "Tierwelt und Objekte werden vorbereitet"
+
+msgid "Preview hull impact"
+msgstr "Rumpfstoß vorhören"
+
+msgid "Preview load / simulated speed"
+msgstr "Vorschaulast / simulierte Geschwindigkeit"
+
+msgid "Previous version backup retained at %s"
+msgstr "Die Sicherung der vorherigen Version liegt unter %s"
+
+msgid "Procha"
+msgstr "Procha"
+
+msgid "Propeller spin-down time"
+msgstr "Auslaufzeit der Propeller"
+
+msgid "Propeller wash range"
+msgstr "Reichweite des Propellerstroms"
+
+msgid "Propeller wash strength"
+msgstr "Stärke des Propellerstroms"
+
+msgid "Protected assets must be preconverted model scenes: %s"
+msgstr "Geschützte Ressourcen müssen vorkonvertierte Modellszenen sein: %s"
+
+msgid "Pull speed"
+msgstr "Zuggeschwindigkeit"
+
+msgid "Pull strength"
+msgstr "Zugkraft"
+
+msgid "Put a mod folder containing mod.json into %s."
+msgstr "Lege den Mod-Ordner mit der Datei mod.json unter %s ab."
+
+msgid "RED DOLPHIN"
+msgstr "ROTER DELFIN"
+
+msgid "RED ORCA"
+msgstr "ROTER ORCA"
+
+msgid "ROCK_ARCH"
+msgstr "FELSBOGEN"
+
+msgid "ROCK_OUTCROP"
+msgstr "FELSVORSPRUNG"
+
+msgid "Radiation Shield"
+msgstr "Strahlenschutz"
+
+msgid "Random pirate weapons: %s"
+msgstr "Zufällige Piratenwaffen: %s"
+
+msgid "Random pitch ± (0.05 = 5%)"
+msgstr "Zufällige Tonhöhenabweichung ± (0,05 = 5 %)"
+
+msgid "Ready"
+msgstr "Bereit"
+
+msgid "Rear camera / minimap"
+msgstr "Heckkamera / Minikarte"
+
+msgid "Record %s/%s must be an object or null."
+msgstr "Eintrag %s/%s muss ein Objekt oder null sein."
+
+msgid "Reflection distance"
+msgstr "Reflexionsentfernung"
+
+msgid "Reflection resolution"
+msgstr "Reflexionsauflösung"
+
+msgid "Reflection strength"
+msgstr "Reflexionsstärke"
+
+msgid "Reflective canopies"
+msgstr "Spiegelnde Kanzeln"
+
+msgid "Refresh mods"
+msgstr "Mods aktualisieren"
+
+msgid "Replace the saved game in this slot?"
+msgstr "Den Spielstand an diesem Platz überschreiben?"
+
+msgid "Required equipment is unavailable: %s"
+msgstr "Benötigte Ausrüstung nicht verfügbar: %s"
+
+msgid "Required weapon is unavailable: %s"
+msgstr "Benötigte Waffe nicht verfügbar: %s"
+
+msgid "Requires OpenSC %s."
+msgstr "Erfordert OpenSC %s."
+
+msgid "Reset fog of war"
+msgstr "Nebel des Krieges zurücksetzen"
+
+msgid "Resolution"
+msgstr "Auflösung"
+
+msgid "Restore defaults"
+msgstr "Standardbelegung wiederherstellen"
+
+msgid "Restores shields to full strength."
+msgstr "Stellt die Schilde vollständig wieder her."
+
+msgid "Reveal whole map"
+msgstr "Ganze Karte aufdecken"
+
+msgid "Reverse thrust"
+msgstr "Rückwärtsschub"
+
+msgid "Right stick X"
+msgstr "Rechter Stick X"
+
+msgid "Right stick Y"
+msgstr "Rechter Stick Y"
+
+msgid "Right stick click"
+msgstr "Rechten Stick drücken"
+
+msgid "Right trigger"
+msgstr "Rechter Trigger"
+
+msgid "Rope length"
+msgstr "Seillänge"
+
+msgid "Rotation"
+msgstr "Drehung"
+
+msgid "Run day/night cycle"
+msgstr "Tag-Nacht-Zyklus aktivieren"
+
+msgid "SAILOR"
+msgstr "SEEMANN"
+
+msgid "SANDY_PIPE"
+msgstr "SANDROHR"
+
+msgid "SHIP COMPUTER"
+msgstr "BORDCOMPUTER"
+
+msgid "SOUTH_OUTLET"
+msgstr "SÜDAUSLASS"
+
+msgid "STRANDED SUB"
+msgstr "GESTRANDETES U-BOOT"
+
+msgid "SUB COMMANDER"
+msgstr "U-BOOT-KOMMANDANT"
+
+msgid "SWAT FORCE"
+msgstr "SPEZIALEINHEIT"
+
+msgid "Save file is too large."
+msgstr "Die Speicherdatei ist zu groß."
+
+msgid "Save games are available while docked."
+msgstr "Speichern ist möglich, wenn du angedockt bist."
+
+msgid "Saving is unavailable during an active mission."
+msgstr "Während einer aktiven Mission kann nicht gespeichert werden."
+
+msgid "Say goodbye to your sub!"
+msgstr "Sag deinem U-Boot Lebewohl!"
+
+msgid "Scratch brightness"
+msgstr "Helligkeit der Kratzer"
+
+msgid "Scratch count"
+msgstr "Anzahl der Kratzer"
+
+msgid "Scratch length"
+msgstr "Länge der Kratzer"
+
+msgid "Scratch width"
+msgstr "Breite der Kratzer"
+
+msgid "Screenshot saved"
+msgstr "Bildschirmfoto gespeichert"
+
+msgid "Screenshot saving failed: %s"
+msgstr "Bildschirmfoto konnte nicht gespeichert werden: %s"
+
+msgid "Select Shield Repair from the hold."
+msgstr "Wähle die Schildreparatur im Frachtraum aus."
+
+msgid "SellPrice %d"
+msgstr "Verkaufspreis: %d"
+
+msgid "Settings exported."
+msgstr "Einstellungen wurden exportiert."
+
+msgid "Shadow quality"
+msgstr "Schattenqualität"
+
+msgid "Shadows"
+msgstr "Schatten"
+
+msgid "Shields"
+msgstr "Schilde"
+
+msgid "Shields are already at full strength."
+msgstr "Die Schilde sind bereits vollständig geladen."
+
+msgid "Should've brought some backup!"
+msgstr "Du hättest Verstärkung mitbringen sollen!"
+
+msgid "Side pods · PROP4"
+msgstr "Seitengondeln · PROP4"
+
+msgid "Side propeller thrust in forward/reverse"
+msgstr "Schub der Seitenpropeller bei Vor-/Rückwärtsfahrt"
+
+msgid "Sideways drag"
+msgstr "Querwiderstand"
+
+msgid "Sound"
+msgstr "Ton"
+
+msgid "Sound settings"
+msgstr "Toneinstellungen"
+
+msgid "Sound settings exported."
+msgstr "Toneinstellungen wurden exportiert."
+
+msgid "Speed of market price changes, production and traders. 100% uses the original timing; 0% pauses the market."
+msgstr "Geschwindigkeit von Preisänderungen, Produktion und Handel. 100 % entspricht dem Original, 0 % pausiert den Markt."
+
+msgid "Speed: %.2f · Vertical: %.2f units/s\nPod tilt: %.1f° · Hull pitch: %.1f°\nDocking limit: %.2f units/s"
+msgstr "Geschwindigkeit: %.2f · Vertikal: %.2f Einheiten/s\nGondelneigung: %.1f° · Rumpfneigung: %.1f°\nAndockgrenze: %.2f Einheiten/s"
+
+msgid "Standing with %s:"
+msgstr "Ansehen bei %s:"
+
+msgid "Start a new game first"
+msgstr "Starte zuerst ein neues Spiel"
+
+msgid "Stationary audio preview"
+msgstr "Klangvorschau im Stand"
+
+msgid "Stop turning before docking with turning acceleration and drag disabled."
+msgstr "Beende die Drehung vor dem Andocken, wenn Drehbeschleunigung und Drehwiderstand deaktiviert sind."
+
+msgid "Submarine mass"
+msgstr "Masse des U-Boots"
+
+msgid "Submarine sound tuning"
+msgstr "U-Boot-Klangeinstellungen"
+
+msgid "Suck-O-Matic"
+msgstr "Suck-O-Matic"
+
+msgid "Suction depth"
+msgstr "Ansaugtiefe"
+
+msgid "Suction radius"
+msgstr "Ansaugradius"
+
+msgid "Sun caustics strength"
+msgstr "Stärke der Sonnenkaustik"
+
+msgid "Sun ray brightness: %d%%"
+msgstr "Helligkeit der Sonnenstrahlen: %d%%"
+
+msgid "Sun ray brightness: 100%"
+msgstr "Helligkeit der Sonnenstrahlen: 100 %"
+
+msgid "Sun shafts: %s"
+msgstr "Sonnenstrahlen: %s"
+
+msgid "Sunlight fade begins at depth"
+msgstr "Tiefe, ab der Sonnenlicht abnimmt"
+
+msgid "Sunlight falloff distance"
+msgstr "Abklingdistanz des Sonnenlichts"
+
+msgid "Sunrise"
+msgstr "Sonnenaufgang"
+
+msgid "Sunset"
+msgstr "Sonnenuntergang"
+
+msgid "Surface wave height"
+msgstr "Wellenhöhe an der Oberfläche"
+
+msgid "Surface wave size"
+msgstr "Wellengröße an der Oberfläche"
+
+msgid "Surface wave speed"
+msgstr "Wellengeschwindigkeit an der Oberfläche"
+
+msgid "Switch camera"
+msgstr "Kamera wechseln"
+
+msgid "System"
+msgstr "System"
+
+msgid "TOUKA GUARD SHIP"
+msgstr "WACHSCHIFF VON TOUKA"
+
+msgid "TOUKA_CAVES"
+msgstr "TOUKA-HÖHLEN"
+
+msgid "TRYTON GUARD SHIP"
+msgstr "WACHSCHIFF VON TRYTON"
+
+msgid "TRYTON_CAVES"
+msgstr "TRYTON-HÖHLEN"
+
+msgid "Table %s must contain a records object."
+msgstr "Tabelle %s muss ein Objekt records enthalten."
+
+msgid "Take screenshot"
+msgstr "Bildschirmfoto aufnehmen"
+
+msgid "That folder does not contain CLUMPS/SUB.DFF and DATA/SCEN1.BSP."
+msgstr "In diesem Ordner fehlen die erforderlichen Dateien CLUMPS/SUB.DFF und DATA/SCEN1.BSP."
+
+msgid "That folder does not contain CLUMPS/SUB.DFF and DATA/SCEN1.BSP. Please choose the original Sub Culture game folder."
+msgstr "Dieser Ordner enthält weder CLUMPS/SUB.DFF noch DATA/SCEN1.BSP. Wähle den ursprünglichen Sub-Culture-Spielordner aus."
+
+msgid "That salvage belongs to us!"
+msgstr "Das Bergungsgut gehört uns!"
+
+msgid "That sub's scrap!"
+msgstr "Dein U-Boot ist Schrott!"
+
+msgid "The downloaded ZIP contains an invalid path."
+msgstr "Die heruntergeladene ZIP-Datei enthält einen ungültigen Pfad."
+
+msgid "The downloaded ZIP is incomplete."
+msgstr "Die heruntergeladene ZIP-Datei ist unvollständig."
+
+msgid "The downloaded ZIP is larger than expected."
+msgstr "Die heruntergeladene ZIP-Datei ist größer als erwartet."
+
+msgid "The downloaded mod does not match its catalogue entry."
+msgstr "Der heruntergeladene Mod stimmt nicht mit seinem Katalogeintrag überein."
+
+msgid "The installed mod changed. Refresh mods and try again."
+msgstr "Der installierte Mod wurde geändert. Aktualisiere die Mod-Liste und versuche es erneut."
+
+msgid "The map could not be read."
+msgstr "Die Karte konnte nicht gelesen werden."
+
+msgid "The mod folder already exists: %s"
+msgstr "Der Mod-Ordner existiert bereits: %s"
+
+msgid "The original Sub Culture files are required to play. Choose the folder containing CLUMPS and DATA."
+msgstr "Zum Spielen werden die Originaldateien von Sub Culture benötigt. Wähle den Ordner mit CLUMPS und DATA aus."
+
+msgid "The saved dock is not present in this map."
+msgstr "Der gespeicherte Andockplatz ist auf dieser Karte nicht vorhanden."
+
+msgid "The saved dock is unavailable."
+msgstr "Der gespeicherte Andockplatz ist nicht verfügbar."
+
+msgid "The submarine is destroyed."
+msgstr "Das U-Boot ist zerstört."
+
+msgid "The submarine model could not be read."
+msgstr "Das U-Boot-Modell konnte nicht gelesen werden."
+
+msgid "This mission is unavailable at this station."
+msgstr "Diese Mission ist an dieser Station nicht verfügbar."
+
+msgid "This mission is unavailable."
+msgstr "Diese Mission ist nicht verfügbar."
+
+msgid "This save is damaged or uses an unsupported version."
+msgstr "Dieser Spielstand ist beschädigt oder verwendet eine nicht unterstützte Version."
+
+msgid "This save is damaged."
+msgstr "Dieser Spielstand ist beschädigt."
+
+msgid "This station does not trade that commodity in this direction."
+msgstr "Diese Station bietet dieses Warengeschäft nicht an."
+
+msgid "This station has no market for that commodity."
+msgstr "Diese Station hat keinen Markt für diese Ware."
+
+msgid "Time of day"
+msgstr "Tageszeit"
+
+msgid "Time to feed the fishes!"
+msgstr "Zeit für Fischfutter!"
+
+msgid "Top Speed"
+msgstr "Höchstgeschwindigkeit"
+
+msgid "Torpedo Launcher"
+msgstr "Torpedowerfer"
+
+msgid "Towing pitch influence"
+msgstr "Einfluss der Schleppfracht auf die Neigung"
+
+msgid "Turn Left"
+msgstr "Links drehen"
+
+msgid "Turn Right"
+msgstr "Rechts drehen"
+
+msgid "Turning acceleration"
+msgstr "Drehbeschleunigung"
+
+msgid "Turning drag"
+msgstr "Drehwiderstand"
+
+msgid "UNKNOWN"
+msgstr "UNBEKANNT"
+
+msgid "Unbound"
+msgstr "Nicht belegt"
+
+msgid "Underwater fog"
+msgstr "Unterwassernebel"
+
+msgid "Unlimited"
+msgstr "Unbegrenzt"
+
+msgid "Unsupported asset ID or file type: %s"
+msgstr "Nicht unterstützte Ressourcen-ID oder nicht unterstützter Dateityp: %s"
+
+msgid "Unsupported manifest version; expected schema_version 1."
+msgstr "Nicht unterstützte Manifestversion, erwartet wird schema_version 1."
+
+msgid "Update"
+msgstr "Aktualisieren"
+
+msgid "Update available"
+msgstr "Update verfügbar"
+
+msgid "Update available: %s"
+msgstr "Update verfügbar: %s"
+
+msgid "Update requires OpenSC %s"
+msgstr "Update erfordert OpenSC %s"
+
+msgid "Upgrade already at maximum."
+msgstr "Die Verbesserung ist bereits auf der höchsten Stufe."
+
+msgid "VELCOVA GUARD SHIP"
+msgstr "WACHSCHIFF VON VELCOVA"
+
+msgid "VOLCANO"
+msgstr "VULKAN"
+
+msgid "VSync"
+msgstr "VSync"
+
+msgid "VSync (vertical sync)"
+msgstr "Vertikale Synchronisierung"
+
+msgid "Vacuum volume (dB)"
+msgstr "Saugerlautstärke (dB)"
+
+msgid "Verifying %s"
+msgstr "%s wird überprüft"
+
+msgid "Vertical drag"
+msgstr "Vertikaler Widerstand"
+
+msgid "View"
+msgstr "Ansicht"
+
+msgid "Volume"
+msgstr "Lautstärke"
+
+msgid "Volume response time"
+msgstr "Reaktionszeit der Lautstärke"
+
+msgid "WEST_OUTLET"
+msgstr "WESTAUSLASS"
+
+msgid "WOOD_OUTCROP"
+msgstr "HOLZVORSPRUNG"
+
+msgid "Waiting for original Sub Culture files..."
+msgstr "Warte auf die Originaldateien von Sub Culture …"
+
+msgid "Water drag"
+msgstr "Wasserwiderstand"
+
+msgid "Water resistance"
+msgstr "Wasserwiderstand"
+
+msgid "Water surface shine"
+msgstr "Glanz der Wasseroberfläche"
+
+msgid "Wave direction (degrees)"
+msgstr "Wellenrichtung (Grad)"
+
+msgid "We're taking everything you've got!"
+msgstr "Wir nehmen dir alles ab!"
+
+msgid "We've been waiting for you!"
+msgstr "Wir haben auf dich gewartet!"
+
+msgid "Weapon Next"
+msgstr "Nächste Waffe"
+
+msgid "Weapon Previous"
+msgstr "Vorherige Waffe"
+
+msgid "Weapons"
+msgstr "Waffen"
+
+msgid "Weapons and equipment"
+msgstr "Waffen und Ausrüstung"
+
+msgid "Welcome to %s."
+msgstr "Willkommen in %s."
+
+msgid "Wildlife density: %.0f%%"
+msgstr "Dichte der Tierwelt: %.0f%%"
+
+msgid "Wildlife splat volume"
+msgstr "Lautstärke der Tiergeräusche bei Treffern"
+
+msgid "Windowed"
+msgstr "Fenster"
+
+msgid "World time: %02d:%02d"
+msgstr "Spielzeit: %02d:%02d"
+
+msgid "Wrong part of the ocean, pal!"
+msgstr "Falsche Ecke des Ozeans, Kumpel!"
+
+msgid "Yaw torque multiplier"
+msgstr "Multiplikator des Giermoments"
+
+msgid "You should've stayed at home!"
+msgstr "Du wärst besser zu Hause geblieben!"
+
+msgid "You won't get away!"
+msgstr "Du entkommst uns nicht!"
+
+msgid "You're about to spring a leak!"
+msgstr "Gleich hast du ein Leck!"
+
+msgid "You're easy pickings!"
+msgstr "Du bist leichte Beute!"
+
+msgid "You're going down!"
+msgstr "Du gehst unter!"
+
+msgid "You're in our water now!"
+msgstr "Jetzt bist du in unserem Gewässer!"
+
+msgid "You're in the wrong waters, mate!"
+msgstr "Du bist hier im falschen Gewässer, Kumpel!"
+
+msgid "You're not getting out of this one!"
+msgstr "Da kommst du nicht mehr raus!"
+
+msgid "You're swimming home!"
+msgstr "Du schwimmst nach Hause!"
+
+msgid "You've got something we want!"
+msgstr "Du hast etwas, das wir wollen!"
+
+msgid "Your cargo belongs to us!"
+msgstr "Deine Fracht gehört uns!"
+
+msgid "Zapper auto aim: %s"
+msgstr "Zielhilfe für den Zapper: %s"
+
+msgid "Zapper range"
+msgstr "Zapper-Reichweite"
+
+msgid "Zapper raw damage per tick (25 ticks/s)"
+msgstr "Zapper-Rohschaden je Tick (25 Ticks/s)"
+
+msgid "Zapper volume (dB)"
+msgstr "Zapper-Lautstärke (dB)"
+
+msgid "assets must be an object of asset-ID/replacement pairs."
+msgstr "assets muss ein Objekt mit Ressourcen-ID-/Ersatzpaaren sein."
+
+msgid "button %d"
+msgstr "Taste %d"
+
+msgid "forward_axis must be +Z or -Z: %s"
+msgstr "forward_axis muss +Z oder -Z sein: %s"
+
+msgid "material_textures must map GLB material indices to texture IDs."
+msgstr "material_textures muss GLB-Materialindizes Textur-IDs zuordnen."
+
+msgid "movement must be an object of setting/value pairs."
+msgstr "movement muss ein Objekt mit Einstellungs-/Wertpaaren sein."
+
+msgid "terrain_mipmaps must be a boolean on a texture asset: %s"
+msgstr "terrain_mipmaps muss bei einer Textur ein boolescher Wert sein: %s"
+
+msgid "Available in released builds."
+msgstr "In veröffentlichten Versionen verfügbar."
+
+msgid "Changing the folder or language will end the current session. Unsaved progress will be lost."
+msgstr "Ein Wechsel des Ordners oder der Sprache beendet die laufende Sitzung. Nicht gespeicherter Fortschritt geht verloren."
+
+msgid "Could not restore default settings (%s)."
+msgstr "Die Standardeinstellungen konnten nicht wiederhergestellt werden (%s)."
+
+msgid "Restore Defaults"
+msgstr "Standardeinstellungen wiederherstellen"
+
+msgid "Restore this release’s default settings, including F1 settings and mod selection? OpenSC will restart. Your saves, installed mods, game folder and language will be kept."
+msgstr "Die Standardeinstellungen dieser Version einschließlich der F1-Einstellungen und der Mod-Auswahl wiederherstellen? OpenSC wird neu gestartet. Spielstände, installierte Mods, Spielordner und Sprache bleiben erhalten."
+
+msgid "Unsaved progress will be lost."
+msgstr "Nicht gespeicherter Fortschritt geht verloren."
+
+msgid "Placeholder FMV files found"
+msgstr "Platzhalter für Zwischensequenzen gefunden"
+
+msgid "Some cutscenes in this folder contain only a single frame. OpenSC will skip those cutscenes. To play them, choose a Sub Culture folder that contains the full video files."
+msgstr "Einige Zwischensequenzen in diesem Ordner bestehen aus nur einem Einzelbild. OpenSC überspringt diese Zwischensequenzen. Wähle zum Abspielen einen Sub-Culture-Ordner mit den vollständigen Videodateien."

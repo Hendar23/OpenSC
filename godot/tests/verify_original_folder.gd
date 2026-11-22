@@ -12,7 +12,11 @@ func check(condition: bool, message: String) -> void:
 	if not condition: failures += 1; push_error(message)
 
 func _run() -> void:
-	var config_path := "res://tests/original-folder-test.cfg"
+	var storage := preload("res://player_storage.gd")
+	storage.root_override = "user://original-folder-" + str(OS.get_process_id())
+	var config_path := storage.preferences_path()
+	storage.ensure_parent(config_path)
+	DirAccess.make_dir_recursive_absolute(storage.mods_path())
 	var config := ConfigFile.new()
 	config.set_value("game","folder","res://game_assets")
 	config.save(config_path)
@@ -25,7 +29,7 @@ func _run() -> void:
 	game.remember_preferences = false
 	root.add_child(game)
 	await process_frame; await process_frame
-	check(game.front_end.loading_layer.visible and game.front_end.loading_picture.texture != null,"Missing files keep a loading screen visible")
+	check(game.front_end.loading_layer.visible and game.front_end.loading_picture.texture == null,"Missing files keep a loading screen visible without substitute artwork")
 	check(game.folder_prompt.visible and game.folder_dialog.use_native_dialog,"Missing files offer the native folder picker")
 	check(game.world_root == null and game.gameplay_catalogue.is_empty() and not game.startup_complete,"No original data or world is loaded before folder selection")
 	game.folder_prompt.hide()

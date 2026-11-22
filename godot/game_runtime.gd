@@ -9,6 +9,7 @@ func _init(context: Node3D) -> void:
 const Docking = preload("res://docking_controller.gd")
 
 func _process(delta: float) -> void:
+	_update_night_vision()
 	if game.fmv != null and game.fmv.active: return
 	var in_dock_menu: bool = game.docking != null and game.docking.stage == Docking.Stage.DOCKED and game.dock_interface_active and game.dock_interface.visible and game.dock_interface.page != "load"
 	if in_dock_menu and is_instance_valid(game.submarine_traffic):
@@ -58,7 +59,19 @@ func _process(delta: float) -> void:
 	game._update_radio_messages(delta)
 	if game.developer_ui_visible:
 		var state: RefCounted = game.pilot.movement
-		game.telemetry.text = "Speed: %.2f · Vertical: %.2f units/s\nPod tilt: %.1f° · Hull pitch: %.1f°\nDocking limit: %.2f units/s" % [state.velocity.length(), state.velocity.y, rad_to_deg(state.tilt), rad_to_deg(asin(clampf(-game.pilot.global_basis.z.y, -1.0, 1.0))), game.docking.maximum_docking_speed()]
+		game.telemetry.text = tr("Speed: %.2f · Vertical: %.2f units/s\nPod tilt: %.1f° · Hull pitch: %.1f°\nDocking limit: %.2f units/s") % [state.velocity.length(), state.velocity.y, rad_to_deg(state.tilt), rad_to_deg(asin(clampf(-game.pilot.global_basis.z.y, -1.0, 1.0))), game.docking.maximum_docking_speed()]
+
+func _update_night_vision() -> void:
+	var enabled: bool = (
+		game.pilot_mode and not game.world_loading and not game.loading_save
+		and not game.get_tree().paused and not game.front_end.menu_layer.visible and not game.map_open
+		and (game.fmv == null or not game.fmv.active)
+		and game.docking != null and game.docking.stage != Docking.Stage.DOCKED
+		and is_instance_valid(game.pilot) and not game.pilot.dead
+		and is_instance_valid(game.equipment) and game.equipment.night_vision_enabled()
+		and game.get_viewport().get_camera_3d() == game.camera
+	)
+	game.game_lighting.update_night_vision(game.camera, enabled)
 
 func _request_docking() -> void:
 	if game.pilot.dead: return

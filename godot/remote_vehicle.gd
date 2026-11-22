@@ -69,7 +69,8 @@ func transmission(code: String) -> Dictionary:
 	var runtime: Node = tools.runtime()
 	if runtime == null: return {}
 	var row: Dictionary = runtime.game.gameplay_catalogue.tables.get("radio_messages",{}).get("records",{}).get(code,{})
-	var voice: AudioStream = preload("res://legacy_audio.gd").load_file(tools.folder.path_join("WAVES/ENGLISH/"+code.to_upper()+".RAW"))
+	var path := preload("res://game_language.gd").asset(tools.folder,"WAVES",code.to_upper()+".RAW",runtime.game.game_language)
+	var voice: AudioStream = preload("res://legacy_audio.gd").load_file(path)
 	radio_lines[code] = {"speaker":"ship","key":"equipment/"+code,"text":str(row.get("text","")),"portrait":Radio.speaker_portrait(tools.folder,"ship"),"distorted_portrait":Radio.speaker_portrait(tools.folder,"ship",true),"voice":voice}
 	return radio_lines[code]
 

@@ -1,9 +1,11 @@
 extends Node
 
 const Storage = preload("res://player_storage.gd")
+const MIN_CONTRAST := 50.0
+const MAX_CONTRAST := 150.0
 const MIN_FOG_DISTANCE := 20.0
 const MAX_FOG_DISTANCE := 100.0
-const DEFAULTS := {"display_mode":0,"resolution":Vector2i.ZERO,"limit_resolutions":false,"vsync":true,"frame_limit":0,"anti_aliasing":0,"shadows":2,"reflective_canopies":true,"brightness":100.0,"fog_distance":MAX_FOG_DISTANCE}
+const DEFAULTS := {"display_mode":0,"resolution":Vector2i.ZERO,"limit_resolutions":false,"vsync":true,"frame_limit":0,"anti_aliasing":0,"shadows":2,"reflective_canopies":true,"brightness":100.0,"contrast":100.0,"fog_distance":MAX_FOG_DISTANCE}
 const FRAME_LIMITS := [0,30,60,90,120,144,165,240]
 const RESOLUTIONS := [
 	Vector2i(1280,720),Vector2i(1600,900),Vector2i(1920,1080),Vector2i(1920,1200),
@@ -15,7 +17,10 @@ signal changed
 var settings := DEFAULTS.duplicate()
 var remember_preferences := true
 var settings_path := ""
+var scene_filter_layer: CanvasLayer
 var brightness_material: ShaderMaterial
+var night_vision := false
+var night_vision_daylight := 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -23,15 +28,25 @@ func _ready() -> void:
 	settings.resolution = desktop_size()
 	if remember_preferences: load_preferences()
 	_validate()
-	var layer := CanvasLayer.new(); layer.layer = -1; add_child(layer)
+	scene_filter_layer = CanvasLayer.new()
+	scene_filter_layer.layer = -1
+	add_child(scene_filter_layer)
 	var screen := ColorRect.new(); screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); layer.add_child(screen)
+	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); scene_filter_layer.add_child(screen)
 	brightness_material = ShaderMaterial.new(); brightness_material.shader = preload("res://player_brightness.gdshader")
 	screen.material = brightness_material
 	if remember_preferences: apply_display()
 	get_tree().node_added.connect(_configure_viewport)
 	get_window().size_changed.connect(_apply_resolution)
 	apply_rendering()
+
+func set_night_vision(enabled: bool, daylight: float = 0.0) -> void:
+	if night_vision != enabled:
+		night_vision = enabled
+		brightness_material.set_shader_parameter("night_vision", enabled)
+	if not is_equal_approx(night_vision_daylight, daylight):
+		night_vision_daylight = daylight
+		brightness_material.set_shader_parameter("night_vision_daylight", daylight)
 
 func load_preferences() -> void:
 	var config := preload("res://option_defaults.gd").load_preferences(settings_path)
@@ -64,6 +79,8 @@ func _validate() -> void:
 	if settings.limit_resolutions: settings.resolution = settings.resolution.min(desktop_size())
 	var brightness := float(settings.brightness)
 	settings.brightness = clampf(brightness,50.0,150.0) if is_finite(brightness) else DEFAULTS.brightness
+	var contrast: Variant = settings.contrast
+	settings.contrast = clampf(float(contrast),MIN_CONTRAST,MAX_CONTRAST) if (contrast is float or contrast is int) and is_finite(float(contrast)) else DEFAULTS.contrast
 	var fog_distance: Variant = settings.fog_distance
 	settings.fog_distance = clampf(float(fog_distance),MIN_FOG_DISTANCE,MAX_FOG_DISTANCE) if (fog_distance is float or fog_distance is int) and is_finite(float(fog_distance)) else DEFAULTS.fog_distance
 
@@ -116,6 +133,7 @@ func apply_rendering() -> void:
 	for viewport in get_parent().get_parent().find_children("*","SubViewport",true,false): _configure_viewport(viewport)
 	RenderingServer.directional_shadow_atlas_set_size([256,1024,2048,4096][int(settings.shadows)],true)
 	brightness_material.set_shader_parameter("brightness",float(settings.brightness) / 100.0)
+	brightness_material.set_shader_parameter("contrast",float(settings.contrast) / 100.0)
 
 func _configure_viewport(node: Node) -> void:
 	if not node is Viewport: return

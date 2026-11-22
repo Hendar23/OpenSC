@@ -1,6 +1,9 @@
 extends RefCounted
 
-const ITEMS := ["shield", "hullstr", "radoff", "deep_sea_lights", "suckomat", "zapper", "magnet", "grapple", "zapperup", "bigears", "escape", "attract", "rover", "depthl", "depth", "bubble", "repel", "strobe", "flarel", "sflarel", "woosh", "missile", "mammo", "homers", "ripper", "rammo", "electro"]
+const ITEMS := ["shield", "hullstr", "radoff", "deep_sea_lights", "night_vision", "suckomat", "zapper", "magnet", "grapple", "zapperup", "bigears", "escape", "attract", "rover", "depthl", "depth", "bubble", "repel", "strobe", "flarel", "sflarel", "woosh", "missile", "mammo", "homers", "ripper", "rammo", "electro"]
+const NIGHT_VISION_NAME := "Night Vision"
+const NIGHT_VISION_BASE_PRICE := 5000
+const NIGHT_VISION_CITY_OFFSETS := {"1": -65, "2": 58, "3": -54, "4": 5}
 const AMMO := {"depth":4,"mammo":16,"homers":4,"rammo":32}
 const TORPEDO_NAMES := {"missile":"Torpedo Launcher","mammo":"Torpedoes","homers":"Homing Torpedoes"}
 const WEAPONS := ["zapper","depthl","missile","ripper","electro"]
@@ -14,8 +17,8 @@ static func upgrade_available(progress: Dictionary, id: String) -> bool:
 static func use_item(progress: Dictionary, pilot: Node, id: String) -> String:
 	if id == "shield": return consume_repair(progress,pilot)
 	if not UPGRADES.has(id) or int(progress.hold.get(id,0)) <= 0: return ""
-	if pilot.dead: return "The submarine is destroyed."
-	if not upgrade_available(progress,id): return "Upgrade already at maximum."
+	if pilot.dead: return TranslationServer.translate("The submarine is destroyed.")
+	if not upgrade_available(progress,id): return TranslationServer.translate("Upgrade already at maximum.")
 	var upgrade: Dictionary = UPGRADES[id]
 	progress.status[upgrade.stat] = mini(int(upgrade.maximum),int(progress.status.get(upgrade.stat,0)) + int(upgrade.get("increment",20)))
 	progress.hold[id] -= 1
@@ -23,7 +26,7 @@ static func use_item(progress: Dictionary, pilot: Node, id: String) -> String:
 	pilot.hull_rating = float(progress.status.hull_strength)
 	pilot.radiation_rating = float(progress.status.radiation_shield)
 	return ""
-const SLOTS := {"zapper":9,"deep_sea_lights":5,"suckomat":3,"magnet":3,"grapple":3,"escape":3,"bigears":4,"attract":8,"depthl":7,"rover":7,"bubble":1,"flarel":2,"sflarel":2,"strobe":4,"repel":8,"woosh":8,"missile":6,"ripper":6,"electro":8}
+const SLOTS := {"zapper":9,"deep_sea_lights":5,"night_vision":5,"suckomat":3,"magnet":3,"grapple":3,"escape":3,"bigears":4,"attract":8,"depthl":7,"rover":7,"bubble":1,"flarel":2,"sflarel":2,"strobe":4,"repel":8,"woosh":8,"missile":6,"ripper":6,"electro":8}
 
 static func shield_repair(catalogue: Dictionary, city_id: String, stage: int, testing: bool = false) -> Dictionary:
 	return offer(catalogue,city_id,stage,"shield",testing)
@@ -34,6 +37,20 @@ static func offers(catalogue: Dictionary, city_id: String, stage: int, testing: 
 	return result
 
 static func offer(catalogue: Dictionary, city_id: String, stage: int, id: String, testing: bool = false) -> Dictionary:
+	if id == "night_vision":
+		var price := NIGHT_VISION_BASE_PRICE + int(NIGHT_VISION_CITY_OFFSETS[city_id]) if NIGHT_VISION_CITY_OFFSETS.has(city_id) else 0
+		return {
+			"id": id,
+			"name": TranslationServer.translate(NIGHT_VISION_NAME),
+			"description": TranslationServer.translate("Amplifies low light. Bright lights and daylight wash out the view. Fits the Deep Sea Lights slot."),
+			"available": price > 0,
+			"price": price,
+			"sell_price": floori(price * 0.5),
+			"quantity": 1,
+			"maximum": 1,
+			"slot": SLOTS[id],
+			"square_bitmap": "res://game_assets/ui/night_vision_dock.png"
+		}
 	var source_id := "lights" if id == "deep_sea_lights" else id
 	var tables: Dictionary = catalogue.get("tables",{})
 	var text: Dictionary = tables.get("equipment_text",{}).get("records",{}).get(source_id,{})
@@ -52,16 +69,19 @@ static func offer(catalogue: Dictionary, city_id: String, stage: int, id: String
 					if str(key).ends_with(" buy") and int(record[key]) > 0: fallback = int(record[key]) if fallback == 0 else mini(fallback,int(record[key]))
 			prices[city + " buy"] = maxi(1,fallback)
 	var description := str(text.get("Description","Restores shields to full strength."))
-	description = preload("res://display_text.gd").weapons(description)
-	return {"id":id,"name":TORPEDO_NAMES.get(id,text.get("name",id.capitalize())),"description":description,"available":(testing or not city.is_empty()) and prices.has(city + " buy") and int(prices[city + " buy"]) > 0,"price":maxi(0,int(prices.get(city + " buy",0))),"sell_price":maxi(0,int(prices.get(city + " sell",0))),"quantity":maxi(1,int(definition.get("Default",AMMO.get(id,1)))) if AMMO.has(id) else 1,"maximum":maxi(1,int(definition.get("Maximum",1))),"slot":SLOTS.get(id,0),"square_bitmap":"INTROTEX/" + str(definition.get("Sq Pic","sqshld")).to_upper() + ".BMP","info_bitmap":"INTROTEX/" + str(definition.get("Info Pic","wshields")).to_upper() + ".BMP"}
+	var name: String = text.get("name",id.capitalize())
+	if catalogue.get("provenance",{}).get("locale","en") == "en":
+		description = preload("res://display_text.gd").weapons(description)
+		name = TORPEDO_NAMES.get(id,name)
+	return {"id":id,"name":name,"description":description,"available":(testing or not city.is_empty()) and prices.has(city + " buy") and int(prices[city + " buy"]) > 0,"price":maxi(0,int(prices.get(city + " buy",0))),"sell_price":maxi(0,int(prices.get(city + " sell",0))),"quantity":maxi(1,int(definition.get("Default",AMMO.get(id,1)))) if AMMO.has(id) else 1,"maximum":maxi(1,int(definition.get("Maximum",1))),"slot":SLOTS.get(id,0),"square_bitmap":"INTROTEX/" + str(definition.get("Sq Pic","sqshld")).to_upper() + ".BMP","info_bitmap":"INTROTEX/" + str(definition.get("Info Pic","wshields")).to_upper() + ".BMP"}
 
 static func buy(progress: Dictionary, offer: Dictionary) -> String:
-	if not offer.get("available",false): return str(offer.name) + " is not sold at this station."
-	if not upgrade_available(progress,str(offer.id)): return "Upgrade already at maximum."
-	if UPGRADES.has(str(offer.id)) and int(progress.hold.get(offer.id,0)) >= int(offer.maximum): return "Already owned."
+	if not offer.get("available",false): return String(TranslationServer.translate("%s is not sold at this station.")) % offer.name
+	if not upgrade_available(progress,str(offer.id)): return TranslationServer.translate("Upgrade already at maximum.")
+	if UPGRADES.has(str(offer.id)) and int(progress.hold.get(offer.id,0)) >= int(offer.maximum): return TranslationServer.translate("Already owned.")
 	var quantity := int(offer.get("quantity",1))
-	if offer.id != "shield" and int(progress.hold.get(offer.id,0)) + quantity > int(offer.maximum): return "No room for another pack." if quantity > 1 else "Already owned."
-	if int(progress.status.credits) < int(offer.price): return "Not enough credits."
+	if offer.id != "shield" and int(progress.hold.get(offer.id,0)) + quantity > int(offer.maximum): return TranslationServer.translate("No room for another pack.") if quantity > 1 else TranslationServer.translate("Already owned.")
+	if int(progress.status.credits) < int(offer.price): return TranslationServer.translate("Not enough credits.")
 	progress.status.credits -= int(offer.price)
 	progress.hold[offer.id] = int(progress.hold.get(offer.id,0)) + quantity
 	if offer.id == "bigears": progress.ammunition.bigears = 5
@@ -73,16 +93,16 @@ static func buy(progress: Dictionary, offer: Dictionary) -> String:
 
 static func sell(progress: Dictionary, offer: Dictionary) -> String:
 	var quantity := int(offer.get("quantity",1))
-	if int(offer.get("sell_price",0)) <= 0 or int(progress.hold.get(offer.id,0)) < quantity: return "Item cannot be sold." if quantity == 1 else "A full pack of %d is needed." % quantity
+	if int(offer.get("sell_price",0)) <= 0 or int(progress.hold.get(offer.id,0)) < quantity: return TranslationServer.translate("Item cannot be sold.") if quantity == 1 else String(TranslationServer.translate("A full pack of %d is needed.")) % quantity
 	progress.hold[offer.id] -= quantity
 	if progress.hold[offer.id] == 0: progress.hold.erase(offer.id)
 	progress.status.credits += int(offer.sell_price)
 	return ""
 
 static func consume_repair(progress: Dictionary, pilot: Node) -> String:
-	if int(progress.hold.get("shield",0)) <= 0: return "Select Shield Repair from the hold."
-	if pilot.dead: return "The submarine is destroyed."
-	if pilot.health >= pilot.max_health: return "Shields are already at full strength."
+	if int(progress.hold.get("shield",0)) <= 0: return TranslationServer.translate("Select Shield Repair from the hold.")
+	if pilot.dead: return TranslationServer.translate("The submarine is destroyed.")
+	if pilot.health >= pilot.max_health: return TranslationServer.translate("Shields are already at full strength.")
 	progress.hold.shield -= 1
 	if progress.hold.shield == 0: progress.hold.erase("shield")
 	pilot.restore_health(pilot.max_health,pilot.max_health)

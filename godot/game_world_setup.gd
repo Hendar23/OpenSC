@@ -54,7 +54,7 @@ func _start_game(folder: String) -> void:
 	game.front_end.show_loading()
 	game._progress("Loading gameplay data")
 	await game.get_tree().process_frame
-	game.gameplay_catalogue = OriginalGameData.load_catalogue(folder)
+	game.gameplay_catalogue = OriginalGameData.load_catalogue(folder,true,game.game_language)
 	for warning in game.gameplay_catalogue.warnings: Mods.note(warning)
 	game.export_all_button.disabled = true
 	game.export_all_dialog.hide()
@@ -323,14 +323,15 @@ func _finish_start(folder: String) -> void:
 	if game.radio_feed == null: game._build_radio_feed()
 	var ambient := preload("res://ambient_sounds.gd").new(); ambient.name = "AmbientSounds"
 	game.world_root.add_child(ambient); ambient.setup(game,folder)
-	game.radio_message_audio.setup(folder,game.radio_feed,game.pilot.submarine_audio.tuning,game.game_radio._radio_audio_allowed)
-	game.dock_interface.setup(folder,game._dock_ui_model)
+	game.radio_message_audio.setup(folder,game.radio_feed,game.pilot.submarine_audio.tuning,game.game_radio._radio_audio_allowed,game.game_language)
+	game.dock_interface.setup(folder,game._dock_ui_model,game.game_language)
 	game.pilot_mode = true
 	game.world_root.remove_meta("world_loading")
 	game.ground_traffic.set_simulating(true)
 	game.loaded_world_assets = game._world_asset_key()
 	game.export_all_button.disabled = false
-	game.status_label.text = str(game.world_root.get_meta("scenery_summary", "Piloting ready."))
+	var counts: Array = game.world_root.get_meta("scenery_counts",[])
+	game.status_label.text = tr("%d scenery objects · %d plants in %d patches") % counts if counts.size() == 3 else str(game.world_root.get_meta("scenery_summary", "Piloting ready."))
 	game._update_follow_camera(0.0, true)
 	game.particles.material.set_shader_parameter("surface_height", game.pilot.surface_height)
 	game.particles._rebuild()
@@ -350,7 +351,7 @@ func _finish_start(folder: String) -> void:
 	PhysicsServer3D.set_active(false)
 	game._progress("Preparing mission assets")
 	await preload("res://mission_assets.gd").prepare(game)
-	await game.fmv.prepare(folder,game._progress)
+	await game.fmv.prepare(folder,game._progress,"",game.game_language)
 	game.front_end.progress_bar.value = 95.0
 	game._progress("Preparing map")
 	if game.show_start_menu and DisplayServer.get_name() != "headless":

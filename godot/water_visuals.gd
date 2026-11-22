@@ -10,7 +10,7 @@ var sun_above_water := true
 var surface: ShaderMaterial
 static var globals_registered := false
 
-func _init() -> void:
+static func ensure_globals() -> void:
 	preload("res://natural_light.gd").ensure_globals()
 	if not globals_registered:
 		for key in ["caustics_strength","caustics_size","caustics_speed","caustics_depth","wave_speed","wave_direction","caustics_visibility","caustics_fog_start","caustics_fog_curve"]:
@@ -18,7 +18,11 @@ func _init() -> void:
 		RenderingServer.global_shader_parameter_add("osc_water_height",RenderingServer.GLOBAL_VAR_TYPE_FLOAT,0.0)
 		RenderingServer.global_shader_parameter_add("osc_sun_direction",RenderingServer.GLOBAL_VAR_TYPE_VEC3,Vector3.UP)
 		RenderingServer.global_shader_parameter_add("osc_caustics_texture",RenderingServer.GLOBAL_VAR_TYPE_SAMPLER2D,null)
+		RenderingServer.global_shader_parameter_add("osc_surface_waves",RenderingServer.GLOBAL_VAR_TYPE_VEC4,Vector4.ZERO)
 		globals_registered = true
+
+func _init() -> void:
+	ensure_globals()
 	var noise := FastNoiseLite.new(); noise.seed = 719; noise.noise_type = FastNoiseLite.TYPE_CELLULAR
 	noise.fractal_type = FastNoiseLite.FRACTAL_NONE
 	noise.cellular_return_type = FastNoiseLite.RETURN_DISTANCE2_SUB; noise.frequency = 0.018; noise.cellular_jitter = 0.8
@@ -41,6 +45,7 @@ func configure(values: Dictionary) -> void:
 	_update_caustics()
 	for key in ["caustics_strength","caustics_size","caustics_speed","caustics_depth","wave_speed","wave_direction"]:
 		RenderingServer.global_shader_parameter_set("osc_" + key,deg_to_rad(float(settings[key])) if key == "wave_direction" else settings[key])
+	RenderingServer.global_shader_parameter_set("osc_surface_waves",Vector4(settings.wave_height,settings.wave_size,settings.wave_speed,deg_to_rad(settings.wave_direction)))
 	if surface != null:
 		surface.set_shader_parameter("ripple_normals",preload("res://water_ripples.tres"))
 		for key in ["wave_height","wave_size","wave_speed","wave_direction","surface_shine"]:

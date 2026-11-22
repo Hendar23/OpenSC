@@ -23,6 +23,7 @@ var finishing := false
 var terminal_playback := false
 var prepared_folder := ""
 var prepared_mods := ""
+var prepared_language := ""
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS; layer = 200
@@ -39,30 +40,38 @@ func _docked(_city: int) -> void:
 	if game.loading_save or not game.has_started_game or game.docking.current.is_empty(): return
 	request("dock",0,int(game.docking.current.get("race",0)))
 
-func prepare(folder: String, progress: Callable = Callable(), decoder: String = "") -> void:
+func prepare(folder: String, progress: Callable = Callable(), decoder: String = "", locale: String = "en") -> void:
 	Mods.ensure()
 	var signature := []
 	for id in Library.FILES:
 		for entry in Mods.candidates("video."+id):
 			signature.append([entry.path,Library.Cache.fingerprint(entry.path)])
 	var mod_signature := JSON.stringify(signature)
-	if prepared_folder == folder and prepared_mods == mod_signature: return
+	if prepared_folder == folder and prepared_mods == mod_signature and prepared_language == locale: return
 	for entry in movies.values(): entry.player.free()
 	movies.clear(); warnings.clear(); conversions = 0
 	if decoder.is_empty(): decoder = Library.decoder_path()
+	print("[FMV] Preparing clips from %s (language: %s, FFmpeg: %s)" % [
+		folder, locale, decoder if not decoder.is_empty() else "unavailable",
+	])
 	for id in Library.FILES:
-		var source := Library.source_path(folder,id)
+		var source := Library.source_path(folder,id,locale)
 		if not FileAccess.file_exists(source): warnings.append("Missing FMV: "+source); continue
 		var info := Library.smacker_info(source)
-		if info.is_empty() or int(info.frames) <= 1: warnings.append("Incomplete FMV: "+source); continue
-		if progress.is_valid(): progress.call("Preparing FMV: "+id)
+		if info.is_empty() or int(info.frames) == 0:
+			warnings.append("Unreadable or empty Smacker FMV: " + source)
+			continue
+		if int(info.frames) == 1:
+			warnings.append("Single-frame placeholder (full clip required): " + source)
+			continue
+		if progress.is_valid(): progress.call(tr("Preparing FMV: %s") % id)
 		await get_tree().process_frame
 		var output := Library.cache_path(source)
 		var replacement := false
 		for entry in Mods.candidates("video."+id):
 			var replacement_info := Library.theora_info(str(entry.path))
 			if replacement_info.is_empty() or int(replacement_info.width)*int(info.height) != int(replacement_info.height)*int(info.width):
-				Mods.note("Invalid FMV replacement: "+str(entry.path)); continue
+				Mods.note(String(TranslationServer.translate("Invalid FMV replacement: %s")) % entry.path); continue
 			output = str(entry.path); replacement = true; break
 		if not replacement and not Library.Cache._valid(output):
 			if decoder.is_empty(): warnings.append("FMV conversion requires FFmpeg: "+id); continue
@@ -84,13 +93,20 @@ func prepare(folder: String, progress: Callable = Callable(), decoder: String = 
 		video.play(); await get_tree().process_frame; video.paused = true; video.hide()
 	prepared_folder = folder
 	prepared_mods = mod_signature
+	prepared_language = locale
 	_layout()
-	if not warnings.is_empty(): push_warning("FMVs: "+"; ".join(warnings))
+	if not warnings.is_empty(): push_warning("[FMV] Skipped clips:\n  " + "\n  ".join(warnings))
+	print("[FMV] Ready: %d/%d clips (%d converted)" % [movies.size(), Library.FILES.size(), conversions])
 
 func request(cue: String, city: int = 0, race: int = 0) -> bool:
 	var id := Library.movie(cue,city,race)
-	if game != null and not game.front_end.gameplay_menu.fmvs_enabled: return false
-	if not movies.has(id): return false
+	if id.is_empty(): return false
+	if game != null and not game.front_end.gameplay_menu.fmvs_enabled:
+		print("[FMV] %s skipped: Play FMVs is off" % id)
+		return false
+	if not movies.has(id):
+		print("[FMV] %s skipped: clip unavailable" % id)
+		return false
 	queue.append({"id":id,"terminal":Library.terminal(cue)})
 	if not active:
 		was_paused = get_tree().paused; mouse_mode = Input.mouse_mode
@@ -113,6 +129,7 @@ func _next() -> void:
 	video.volume = db_to_linear(AudioServer.get_bus_volume_db(bus)) if bus >= 0 and not effects_muted else 0.0 if bus >= 0 else 1.0
 	# Restart from frame zero after the silent startup warmup.
 	video.play(); video.show(); video.paused = false
+	print("[FMV] Playback requested for %s" % current)
 	_layout()
 
 func _input(event: InputEvent) -> void:
@@ -130,6 +147,7 @@ func _finished(id: String) -> void:
 func _finish_current() -> void:
 	if not active: return
 	var id := current
+	print("[FMV] Playback ended for %s" % id)
 	var video: VideoStreamPlayer = movies[id].player
 	video.hide(); video.volume = 0.0; video.stop()
 	# Re-prime for later visits to the same dock, while the modal cover remains.

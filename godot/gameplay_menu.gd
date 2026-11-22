@@ -36,6 +36,8 @@ var remember_preferences := true
 var settings_path := ""
 var zapper_auto_aim := false
 var layout: Control
+var scroll: ScrollContainer
+var option_rows: VBoxContainer
 var toggle: Button
 var back: Button
 var status: Label
@@ -66,44 +68,61 @@ func _ready() -> void:
 	var shade := ColorRect.new(); shade.color = Color.TRANSPARENT
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(shade)
 	layout = Control.new(); layout.size = Vector2(640,480); shade.add_child(layout)
-	toggle = _button(Vector2(196,18),Vector2(248,28)); toggle.pressed.connect(_toggle)
-	classic_sub_physics_button = _button(Vector2(196,52),Vector2(248,28)); classic_sub_physics_button.pressed.connect(_toggle_classic_sub_physics)
-	wildlife_button = _button(Vector2(196,86),Vector2(248,28)); wildlife_button.pressed.connect(_cycle_wildlife_limit)
-	sun_shafts_button = _button(Vector2(196,120),Vector2(248,28)); sun_shafts_button.pressed.connect(_toggle_sun_shafts)
-	lens_flares_button = _button(Vector2(196,154),Vector2(248,28)); lens_flares_button.pressed.connect(_toggle_lens_flares)
-	replay_button = _button(Vector2(196,188),Vector2(248,28)); replay_button.pressed.connect(_toggle_replay)
-	fmv_button = _button(Vector2(196,222),Vector2(248,28)); fmv_button.pressed.connect(_toggle_fmvs)
-	bubble_button = _button(Vector2(196,256),Vector2(248,28)); bubble_button.pressed.connect(_cycle_bubble_limit)
-	crosshair_button = _button(Vector2(196,290),Vector2(248,28)); crosshair_button.pressed.connect(_toggle_crosshair)
-	pirate_weapons_button = _button(Vector2(196,324),Vector2(248,28)); pirate_weapons_button.pressed.connect(_toggle_pirate_weapons)
-	random_pirates_button = _button(Vector2(196,358),Vector2(248,28)); random_pirates_button.pressed.connect(_toggle_random_pirates)
-	back = _button(Vector2(216,392),Vector2(208,28)); back.text = "Back"; back.pressed.connect(close_menu)
-	status = Label.new(); status.position = Vector2(160,430); status.size = Vector2(320,32)
+	scroll = ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_RESERVE
+	scroll.follow_focus = true
+	scroll.add_theme_constant_override("scrollbar_h_separation", 5)
+	scroll.get_v_scroll_bar().focus_mode = Control.FOCUS_NONE
+	layout.add_child(scroll)
+	option_rows = VBoxContainer.new()
+	option_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	option_rows.add_theme_constant_override("separation", 6)
+	scroll.add_child(option_rows)
+	wildlife_button = _button(option_rows, _cycle_wildlife_limit)
+	classic_sub_physics_button = _button(option_rows, _toggle_classic_sub_physics)
+	random_pirates_button = _button(option_rows, _toggle_random_pirates)
+	crosshair_button = _button(option_rows, _toggle_crosshair)
+	lens_flares_button = _button(option_rows, _toggle_lens_flares)
+	bubble_button = _button(option_rows, _cycle_bubble_limit)
+	replay_button = _button(option_rows, _toggle_replay)
+	fmv_button = _button(option_rows, _toggle_fmvs)
+	pirate_weapons_button = _button(option_rows, _toggle_pirate_weapons)
+	sun_shafts_button = _button(option_rows, _toggle_sun_shafts)
+	toggle = _button(option_rows, _toggle)
+	back = _button(layout, close_menu, 208.0)
+	back.text = "Back"
+	status = Label.new(); status.size = Vector2(320,32)
 	status.add_theme_font_size_override("font_size",14); status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; layout.add_child(status)
-	get_viewport().size_changed.connect(_layout); _layout(); _refresh(); hide()
+	option_rows.minimum_size_changed.connect(_layout)
+	get_viewport().size_changed.connect(_layout); _refresh(); _layout(); hide()
 
-func _button(point: Vector2,dimensions: Vector2) -> Button:
-	var button := Button.new(); button.position = point; button.size = dimensions
+func _button(parent: Control, activate: Callable, width := 248.0) -> Button:
+	var button := Button.new()
+	button.custom_minimum_size = Vector2(width,28)
 	button.add_theme_font_size_override("font_size",14)
 	var normal := StyleBoxFlat.new(); normal.bg_color = Color(0.01,0.05,0.07,0.82)
 	normal.border_color = Color(0.24,0.55,0.6,0.7); normal.set_border_width_all(1); normal.set_corner_radius_all(5)
+	normal.content_margin_left = 8.0; normal.content_margin_right = 8.0
 	var hover := normal.duplicate() as StyleBoxFlat; hover.bg_color = Color(0.04,0.23,0.28,0.95)
 	button.add_theme_stylebox_override("normal",normal)
 	for state in ["hover","pressed","focus"]: button.add_theme_stylebox_override(state,hover)
-	layout.add_child(button); return button
+	button.pressed.connect(activate)
+	parent.add_child(button)
+	return button
 
 func _refresh() -> void:
-	random_pirates_button.text = "Disable random pirates: %s" % ("On" if disable_random_pirates else "Off")
-	lens_flares_button.text = "Lens flares: %s" % ("On" if lens_flares_enabled else "Off")
-	pirate_weapons_button.text = "Random pirate weapons: %s" % ("On" if random_pirate_weapons else "Off")
-	crosshair_button.text = "First-person crosshair: %s" % ("On" if crosshair_enabled else "Off")
-	classic_sub_physics_button.text = "Classic Sub physics: %s" % ("On" if classic_sub_physics else "Off")
-	bubble_button.text = "Maximum bubbles: %s" % ("Unlimited" if bubble_limit < 0 else "Off" if bubble_limit == 0 else str(bubble_limit))
-	fmv_button.text = "Play FMVs: %s" % ("On" if fmvs_enabled else "Off")
-	replay_button.text = "Photo mode replay: %s" % ("On" if replay_enabled else "Off")
-	toggle.text = "Zapper auto aim: %s" % ("On" if zapper_auto_aim else "Off")
-	wildlife_button.text = "Active wildlife: %s" % ("Unlimited" if wildlife_limit == 0 else str(wildlife_limit))
-	sun_shafts_button.text = "Sun shafts: %s" % ("On" if sun_shafts_enabled else "Off")
+	random_pirates_button.text = tr("Disable random pirates: %s") % (tr("On") if disable_random_pirates else tr("Off"))
+	lens_flares_button.text = tr("Lens flares: %s") % (tr("On") if lens_flares_enabled else tr("Off"))
+	pirate_weapons_button.text = tr("Random pirate weapons: %s") % (tr("On") if random_pirate_weapons else tr("Off"))
+	crosshair_button.text = tr("First-person crosshair: %s") % (tr("On") if crosshair_enabled else tr("Off"))
+	classic_sub_physics_button.text = tr("Classic Sub physics: %s") % (tr("On") if classic_sub_physics else tr("Off"))
+	bubble_button.text = tr("Maximum bubbles: %s") % (tr("Unlimited") if bubble_limit < 0 else tr("Off") if bubble_limit == 0 else str(bubble_limit))
+	fmv_button.text = tr("Play FMVs: %s") % (tr("On") if fmvs_enabled else tr("Off"))
+	replay_button.text = tr("Photo mode replay: %s") % (tr("On") if replay_enabled else tr("Off"))
+	toggle.text = tr("Zapper auto aim: %s") % (tr("On") if zapper_auto_aim else tr("Off"))
+	wildlife_button.text = tr("Active wildlife: %s") % (tr("Unlimited") if wildlife_limit == 0 else str(wildlife_limit))
+	sun_shafts_button.text = tr("Sun shafts: %s") % (tr("On") if sun_shafts_enabled else tr("Off"))
 
 func _toggle_crosshair() -> void:
 	crosshair_enabled = not crosshair_enabled
@@ -175,26 +194,46 @@ func _save() -> void:
 		if config.has_section_key("gameplay","enhanced_explosions"): config.erase_section_key("gameplay","enhanced_explosions")
 		result = Storage.ensure_parent(settings_path)
 		if result == OK: result = config.save(settings_path)
-	if result != OK: status.text = "Could not save general settings: %s" % error_string(result)
+	if result != OK: status.text = tr("Could not save general settings: %s") % error_string(result)
 
 func open_menu() -> void:
-	_refresh(); status.text = ""; show(); toggle.grab_focus()
+	_refresh()
+	var buttons := option_rows.get_children()
+	buttons.sort_custom(func(a: Button, b: Button) -> bool: return a.text.naturalnocasecmp_to(b.text) < 0)
+	for index in buttons.size(): option_rows.move_child(buttons[index], index)
+	status.text = ""
+	show()
+	buttons[0].grab_focus()
+	scroll.scroll_vertical = 0
 
 func close_menu() -> void:
 	if not visible: return
 	hide(); closed.emit()
 
 func _layout() -> void:
-	var viewport := get_viewport().get_visible_rect().size
-	var factor := minf(viewport.x / 640.0,viewport.y / 480.0)
+	var viewport := get_viewport()
+	var available := viewport.get_visible_rect().size
+	if available.x <= 0.0 or available.y <= 0.0: return
+	# Account for the project canvas stretch when keeping short windows readable.
+	var pixels_per_unit := maxf(viewport.get_stretch_transform().get_scale().y, 0.001)
+	var factor := minf(available.x / 640.0, maxf(available.y / 480.0, 1.0 / pixels_per_unit))
+	layout.size = Vector2(640.0, minf(480.0, available.y / factor))
 	layout.scale = Vector2.ONE * factor
-	layout.position = (viewport - Vector2(640,480) * factor) * 0.5
+	layout.position = (available - layout.size * factor) * 0.5
+	var list_size := option_rows.get_combined_minimum_size()
+	var scrollbar_gutter := scroll.get_v_scroll_bar().get_combined_minimum_size().x + scroll.get_theme_constant("scrollbar_h_separation")
+	var list_height := minf(list_size.y, maxf(28.0, layout.size.y - 112.0))
+	scroll.size = Vector2(list_size.x + scrollbar_gutter, list_height)
+	scroll.position = Vector2((layout.size.x - list_size.x) * 0.5, 18.0)
+	back.position = Vector2(216.0, scroll.position.y + scroll.size.y + 6.0)
+	status.position = Vector2(160.0, back.position.y + back.size.y + 10.0)
 
 func _input(event: InputEvent) -> void:
 	if not visible: return
 	if Bindings.pressed(event,"menu_cancel"): close_menu()
 	elif Bindings.pressed(event,"menu_up") or Bindings.pressed(event,"menu_down"):
-		var buttons := [toggle,classic_sub_physics_button,wildlife_button,sun_shafts_button,lens_flares_button,replay_button,fmv_button,bubble_button,crosshair_button,pirate_weapons_button,random_pirates_button,back]
+		var buttons := option_rows.get_children()
+		buttons.append(back)
 		var selected := buttons.find(get_viewport().gui_get_focus_owner())
 		buttons[posmod(selected + (-1 if Bindings.pressed(event,"menu_up") else 1),buttons.size())].grab_focus()
 	elif toggle.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle()

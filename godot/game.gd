@@ -22,6 +22,8 @@ const Creatures = preload("res://creature_loader.gd")
 const Docking = preload("res://docking_controller.gd")
 const FollowCamera = preload("res://follow_camera.gd")
 const Paths = preload("res://asset_paths.gd")
+const Language = preload("res://game_language.gd")
+const Movies = preload("res://fmv_library.gd")
 const Pilot = preload("res://submarine_controller.gd")
 const Tuning = preload("res://tuning_panel.gd")
 const SoundPanel = preload("res://sound_panel.gd")
@@ -99,6 +101,16 @@ var tuning_panel: PanelContainer
 var sound_panel: PanelContainer
 var folder_prompt: ConfirmationDialog
 var folder_dialog: FileDialog
+var folder_switch_prompt: ConfirmationDialog
+var fmv_placeholder_prompt: AcceptDialog
+var restore_defaults_prompt: ConfirmationDialog
+var options_notice: AcceptDialog
+var language_prompt: ConfirmationDialog
+var language_options: OptionButton
+var pending_language_folder := ""
+var pending_language_folder_is_manual := false
+var pending_fmv_folder := ""
+var pending_fmv_language := ""
 var export_all_dialog: FileDialog
 var export_all_button: Button
 var testing_all_equipment := false
@@ -114,6 +126,7 @@ var fog_start_label: Label
 var fog_curve_slider: HSlider
 var fog_curve_label: Label
 var game_folder := ""
+var game_language := "en"
 var world_loading := false
 var pilot_mode := false
 var startup_complete := false
@@ -170,6 +183,16 @@ var ground_traffic: Node
 var market_ui_elapsed := 0.0
 
 func _ready() -> void:
+	if remember_preferences:
+		preload("res://player_log.gd").start()
+	var setup_locale := OS.get_locale_language() if remember_preferences else "en"
+	if remember_preferences:
+		var saved_folder := Paths.find_game_folder()
+		var saved_locale := Language.saved(preload("res://player_storage.gd").preferences_path())
+		var languages := Language.available(saved_folder)
+		if saved_locale in languages or languages.size() == 1:
+			setup_locale = Language.preferred(saved_folder,languages,saved_locale)
+	TranslationServer.set_locale(setup_locale if Language.NAMES.has(setup_locale) else "en")
 	mission_runtime = preload("res://mission_runtime.gd").new(); add_child(mission_runtime); mission_runtime.setup(self)
 	events.mission_available.connect(func(id: String, available: bool) -> void: preload("res://mailbox.gd").set_mission_available(player_progress,id,available))
 	events.mission_completed.connect(func(id: String, score: float) -> void: preload("res://mailbox.gd").mission_completed(player_progress,id,score))
@@ -220,7 +243,24 @@ func _ready() -> void:
 
 func _build_interface() -> void:
 	developer_tools._build_interface()
-	front_end = FrontEnd.new(); front_end.remember_preferences = remember_preferences; add_child(front_end)
+	language_prompt = ConfirmationDialog.new()
+	language_prompt.title = "Choose language"
+	language_prompt.ok_button_text = "Continue"
+	language_prompt.cancel_button_text = "Back"
+	var language_contents := VBoxContainer.new()
+	language_prompt.add_child(language_contents)
+	language_options = OptionButton.new()
+	language_options.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	language_contents.add_child(language_options)
+	language_prompt.confirmed.connect(_confirm_game_language)
+	language_prompt.canceled.connect(_cancel_game_language)
+	add_child(language_prompt)
+	_build_options_dialogs()
+	front_end = FrontEnd.new()
+	front_end.remember_preferences = remember_preferences
+	front_end.restore_defaults_available = _can_restore_defaults()
+	front_end.options_dialog_open = _options_dialog_open
+	add_child(front_end)
 	front_end.player_graphics.changed.connect(func() -> void: _update_hud_settings(); _update_water_environment())
 	front_end.gameplay_menu.auto_aim_changed.connect(func(enabled: bool) -> void:
 		if weapons != null: weapons.auto_aim_enabled = enabled)
@@ -250,6 +290,8 @@ func _build_interface() -> void:
 			front_end.menu_layer.show())
 	front_end.new_game_requested.connect(_begin_new_game)
 	front_end.resume_requested.connect(_continue_game)
+	front_end.choose_game_folder_requested.connect(_request_game_folder)
+	front_end.restore_defaults_requested.connect(_request_restore_defaults)
 	front_end.load_requested.connect(func() -> void: front_end.menu_layer.hide(); dock_interface.open("load"))
 	front_end.mods_requested.connect(func() -> void: if not world_loading: mod_panel.open())
 	mod_panel.visibility_changed.connect(func() -> void: if not mod_panel.visible: front_end.restore_button_focus("mods"))
@@ -261,6 +303,80 @@ func _build_interface() -> void:
 		else: _show_main_menu()
 	)
 	front_end.exit_requested.connect(func() -> void: get_tree().quit())
+
+func _build_options_dialogs() -> void:
+	folder_switch_prompt = ConfirmationDialog.new()
+	folder_switch_prompt.title = "Choose Sub Culture folder…"
+	folder_switch_prompt.dialog_text = "Changing the folder or language will end the current session. Unsaved progress will be lost."
+	folder_switch_prompt.dialog_autowrap = true
+	folder_switch_prompt.ok_button_text = "Continue"
+	folder_switch_prompt.confirmed.connect(_show_folder_dialog)
+	folder_switch_prompt.canceled.connect(func() -> void: front_end.restore_button_focus("choose_game_folder"))
+	add_child(folder_switch_prompt)
+	fmv_placeholder_prompt = AcceptDialog.new()
+	fmv_placeholder_prompt.title = "Placeholder FMV files found"
+	fmv_placeholder_prompt.dialog_text = "Some cutscenes in this folder contain only a single frame. OpenSC will skip those cutscenes. To play them, choose a Sub Culture folder that contains the full video files."
+	fmv_placeholder_prompt.dialog_autowrap = true
+	fmv_placeholder_prompt.ok_button_text = "Continue"
+	fmv_placeholder_prompt.confirmed.connect(_continue_with_placeholders)
+	fmv_placeholder_prompt.canceled.connect(_continue_with_placeholders, CONNECT_DEFERRED)
+	add_child(fmv_placeholder_prompt)
+	restore_defaults_prompt = ConfirmationDialog.new()
+	restore_defaults_prompt.title = "Restore Defaults"
+	restore_defaults_prompt.ok_button_text = "Restore Defaults"
+	restore_defaults_prompt.dialog_autowrap = true
+	restore_defaults_prompt.confirmed.connect(_restore_defaults)
+	restore_defaults_prompt.canceled.connect(func() -> void: front_end.restore_button_focus("restore_defaults"))
+	add_child(restore_defaults_prompt)
+	options_notice = AcceptDialog.new()
+	options_notice.dialog_autowrap = true
+	add_child(options_notice)
+
+func _options_dialog_open() -> bool:
+	return (folder_dialog.visible or folder_prompt.visible or language_prompt.visible
+		or folder_switch_prompt.visible or fmv_placeholder_prompt.visible
+		or restore_defaults_prompt.visible or options_notice.visible)
+
+func _request_game_folder() -> void:
+	if world_loading or loading_save: return
+	if has_started_game: folder_switch_prompt.popup_centered(Vector2i(470, 145))
+	else: _show_folder_dialog()
+
+func _show_folder_dialog() -> void:
+	if world_loading or loading_save: return
+	if not game_folder.is_empty(): folder_dialog.current_dir = game_folder
+	folder_dialog.popup_centered(Vector2i(850, 600))
+
+func _can_restore_defaults() -> bool:
+	return remember_preferences and not OS.has_feature("editor") and defaults_directory.is_empty()
+
+func _request_restore_defaults() -> void:
+	if not _can_restore_defaults() or world_loading or loading_save: return
+	var message := tr("Restore this release’s default settings, including F1 settings and mod selection? OpenSC will restart. Your saves, installed mods, game folder and language will be kept.")
+	if has_started_game: message += "\n\n" + tr("Unsaved progress will be lost.")
+	restore_defaults_prompt.dialog_text = message
+	restore_defaults_prompt.popup_centered(Vector2i(500, 180 if has_started_game else 145))
+	restore_defaults_prompt.get_cancel_button().grab_focus()
+
+func _restore_defaults() -> void:
+	if not _can_restore_defaults() or world_loading or loading_save: return
+	var result := game_settings.reset_player_preferences()
+	if result != OK:
+		options_notice.title = "Restore Defaults"
+		options_notice.dialog_text = tr("Could not restore default settings (%s).") % error_string(result)
+		front_end.restore_button_focus("restore_defaults")
+		options_notice.popup_centered(Vector2i(450, 135))
+		return
+	_restart_after_restore()
+
+func _restart_after_restore() -> void:
+	var arguments := OS.get_cmdline_args()
+	var user_arguments := OS.get_cmdline_user_args()
+	if not user_arguments.is_empty():
+		arguments.append("--")
+		arguments.append_array(user_arguments)
+	OS.set_restart_on_exit(true, arguments)
+	get_tree().quit()
 
 func _bootstrap() -> void:
 	world_loading = true
@@ -284,9 +400,8 @@ func _bootstrap() -> void:
 	if folder.is_empty():
 		_prompt_game_folder("OpenSubCulture needs your original Sub Culture files. Choose the game folder containing CLUMPS and DATA.")
 	else:
-		await _start_game(folder)
-		startup_complete = true
-		if show_start_menu and is_instance_valid(world_root): _show_main_menu()
+		var saved_locale := Language.saved(preload("res://player_storage.gd").preferences_path()) if remember_preferences else "en"
+		await _select_game_language(folder,saved_locale)
 
 func _prompt_game_folder(message: String) -> void:
 	front_end.show_loading()
@@ -310,10 +425,77 @@ func _show_main_menu() -> void:
 	get_tree().paused = true
 
 func _choose_game_folder(folder: String) -> void:
+	if world_loading or loading_save: return
 	if not Paths.valid_game_folder(folder):
-		if game_folder.is_empty(): _prompt_game_folder("That folder does not contain CLUMPS/SUB.DFF and DATA/SCEN1.BSP. Please choose the original Sub Culture game folder.")
-		else: status_label.text = "That folder does not contain CLUMPS/SUB.DFF and DATA/SCEN1.BSP."
+		var message := "That folder does not contain CLUMPS/SUB.DFF and DATA/SCEN1.BSP. Please choose the original Sub Culture game folder."
+		if game_folder.is_empty(): _prompt_game_folder(message)
+		else:
+			options_notice.title = "Choose Sub Culture folder…"
+			options_notice.dialog_text = message
+			front_end.restore_button_focus("choose_game_folder")
+			options_notice.popup_centered(Vector2i(490, 155))
 		return
+	await _select_game_language(folder, "", true)
+
+func _select_game_language(folder: String, saved_locale: String, manual_selection: bool = false) -> void:
+	var languages := Language.available(folder)
+	var preferred := Language.preferred(folder,languages,saved_locale)
+	if languages.size() > 1 and saved_locale not in languages:
+		pending_language_folder = folder
+		pending_language_folder_is_manual = manual_selection
+		language_options.clear()
+		for locale in languages:
+			language_options.add_item(Language.NAMES[locale])
+			language_options.set_item_metadata(language_options.item_count - 1,locale)
+		language_options.select(languages.find(preferred))
+		if game_folder.is_empty(): front_end.progress_bar.hide()
+		language_prompt.popup_centered(Vector2i(450,110))
+		language_options.grab_focus()
+		return
+	await _accept_game_folder(folder, preferred, manual_selection)
+
+func _confirm_game_language() -> void:
+	if pending_language_folder.is_empty() or language_options.selected < 0: return
+	var folder := pending_language_folder
+	pending_language_folder = ""
+	await _accept_game_folder(folder, str(language_options.get_selected_metadata()), pending_language_folder_is_manual)
+
+func _cancel_game_language() -> void:
+	pending_language_folder = ""
+	if game_folder.is_empty(): _prompt_game_folder("Choose your Sub Culture game folder")
+	else: front_end.restore_button_focus("choose_game_folder")
+
+func _accept_game_folder(folder: String, locale: String, manual_selection: bool) -> void:
+	if manual_selection and Movies.has_placeholders(folder, locale):
+		pending_fmv_folder = folder
+		pending_fmv_language = locale
+		fmv_placeholder_prompt.popup_centered.call_deferred(Vector2i(500, 160))
+		return
+	# Startup prepares FMVs from the current files in the saved folder.
+	await _open_original_folder(folder, locale)
+
+func _continue_with_placeholders() -> void:
+	if pending_fmv_folder.is_empty(): return
+	var folder := pending_fmv_folder
+	pending_fmv_folder = ""
+	await _open_original_folder(folder, pending_fmv_language)
+
+func _open_original_folder(folder: String, locale: String) -> void:
+	if folder.simplify_path() == game_folder.simplify_path() and locale == game_language and is_instance_valid(world_root):
+		front_end.restore_button_focus("choose_game_folder")
+		return
+	if has_started_game:
+		mission_runtime._clear_retained_props()
+		mission_runtime._cleanup()
+		player_progress = PlayerProgress.restore()
+		has_started_game = false
+		front_end.can_resume = false
+		_set_camera_mode(false)
+	game_language = locale
+	if TranslationServer.get_locale() != locale:
+		TranslationServer.set_locale(locale)
+		Mods.refresh()
+	developer_tools.refresh_language()
 	await _start_game(folder)
 	startup_complete = true
 	if show_start_menu and not has_started_game and is_instance_valid(world_root): _show_main_menu()
@@ -385,7 +567,7 @@ func _fail_startup(message: String) -> void:
 
 func _input(event: InputEvent) -> void:
 	# Let the update overlay receive GUI mouse events before loading resumes.
-	if startup_updates != null: return
+	if startup_updates != null or (options_notice != null and _options_dialog_open()): return
 	if mod_panel != null and mod_panel.applying:
 		get_viewport().set_input_as_handled(); return
 	if fmv != null and fmv.active: return

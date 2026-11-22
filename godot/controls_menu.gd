@@ -84,7 +84,8 @@ func refresh() -> void:
 func begin_capture(action: String, slot: int) -> void:
 	capture_action = action; capture_slot = slot; pending = null; Bindings.capture_active = true
 	cancel.show(); back.disabled = true; reset.disabled = true
-	status.text = "Listening for %s, binding %d... Press and release one button, or hold it and press another. Click Cancel binding to stop." % [str(config.labels.get(action,action.replace("_"," ").capitalize())),slot + 1]
+	var action_name := str(config.labels.get(action,action.replace("_"," ").capitalize()))
+	status.text = tr("Listening for %s, binding %d... Press and release one button, or hold it and press another. Click Cancel binding to stop.") % [tr(action_name),slot + 1]
 
 func cancel_capture() -> void:
 	capture_action = ""; pending = null; Bindings.capture_active = false

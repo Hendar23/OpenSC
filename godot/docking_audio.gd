@@ -42,7 +42,7 @@ static func load_sound(folder: String, role: String) -> AudioStream:
 		if stream != null:
 			stream.set_meta("asset_mod", replacement.name)
 			return stream
-		Mods.note("%s: could not load docking audio %s; using the next replacement or original." % [replacement.name, role])
+		Mods.note(String(TranslationServer.translate("%s: could not load docking audio %s; using the next replacement or original.")) % [replacement.name, role])
 	return LegacyAudio.load_file(folder.path_join("WAVES/" + str(SAMPLES[role]) + ".RAW"))
 
 func rebuild_loops() -> void:

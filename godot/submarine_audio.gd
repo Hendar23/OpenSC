@@ -78,7 +78,7 @@ static func load_sound(folder: String, role: String) -> AudioStream:
 		if stream != null:
 			stream.set_meta("asset_mod", replacement.name)
 			return stream
-		Mods.note("%s: could not load submarine audio %s; using the next replacement or original." % [replacement.name, role])
+		Mods.note(String(TranslationServer.translate("%s: could not load submarine audio %s; using the next replacement or original.")) % [replacement.name, role])
 	var sample: String = SAMPLES.get(role, ONE_SHOTS.get(role, "LOSHIELD" if role == "low_shield" else ""))
 	return _read_stream(folder.path_join("WAVES/" + sample + ".RAW")) if not sample.is_empty() else null
 

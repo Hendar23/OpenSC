@@ -149,12 +149,12 @@ static func offers(catalogue: Dictionary, progress: Dictionary, city_id: String)
 
 static func trade(catalogue: Dictionary, progress: Dictionary, city_id: String, id: String, buying: bool) -> String:
 	var offer: Dictionary = offers(catalogue,progress,city_id).get(id,{})
-	if offer.is_empty(): return "This station has no market for that commodity."
+	if offer.is_empty(): return TranslationServer.translate("This station has no market for that commodity.")
 	var price := int(offer.buy_price if buying else offer.sell_price)
-	if price <= 0: return "This station does not trade that commodity in this direction."
-	if buying and int(offer.stock) <= 0: return "Out of stock."
-	if buying and int(progress.status.credits) < price: return "Not enough credits."
-	if not buying and int(progress.cargo.get(id,0)) <= 0: return "No cargo to sell."
+	if price <= 0: return TranslationServer.translate("This station does not trade that commodity in this direction.")
+	if buying and int(offer.stock) <= 0: return TranslationServer.translate("Out of stock.")
+	if buying and int(progress.status.credits) < price: return TranslationServer.translate("Not enough credits.")
+	if not buying and int(progress.cargo.get(id,0)) <= 0: return TranslationServer.translate("No cargo to sell.")
 	progress.status.credits += -price if buying else price
 	progress.cargo[id] = int(progress.cargo.get(id,0)) + (1 if buying else -1)
 	if progress.cargo[id] == 0: progress.cargo.erase(id)

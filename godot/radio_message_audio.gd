@@ -6,16 +6,16 @@ const RATE := 11025
 var tuning: RefCounted
 var playback_allowed := Callable()
 
-func setup(folder: String, feed: Control, sound_tuning: RefCounted, allowed: Callable = Callable()) -> void:
+func setup(folder: String, feed: Control, sound_tuning: RefCounted, allowed: Callable = Callable(), locale: String = "en") -> void:
 	add_to_group("dock_radio_audio")
 	process_mode = Node.PROCESS_MODE_PAUSABLE
 	playback_allowed = allowed
-	tuning = sound_tuning; stop(); stream = load_notification(folder)
+	tuning = sound_tuning; stop(); stream = load_notification(folder,locale)
 	if not feed.message_presented.is_connected(message_presented): feed.message_presented.connect(message_presented)
 	if not feed.cleared.is_connected(stop): feed.cleared.connect(stop)
 
-static func load_notification(folder: String) -> AudioStreamWAV:
-	var path := folder.path_join("WAVES/ENGLISH/AA2.RAW")
+static func load_notification(folder: String, locale: String = "en") -> AudioStreamWAV:
+	var path := preload("res://game_language.gd").asset(folder,"WAVES","AA2.RAW",locale)
 	var file := FileAccess.open(path,FileAccess.READ)
 	if file == null: return null
 	var bytes := file.get_buffer(mini(int(round(RATE*SECONDS)),file.get_length()))

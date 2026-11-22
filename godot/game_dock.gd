@@ -17,7 +17,12 @@ func _dock_ui_model() -> Dictionary:
 	var standing: String = game.player_progress.standing.get(str(port.get("race",1)),"neutral")
 	var description_id := "%s%d.%s" % [city.get("description_key",""),game.player_progress.campaign_stage,standing]
 	var description: String = game.gameplay_catalogue.get("tables",{}).get("city_descriptions",{}).get("records",{}).get(description_id,{}).get("text","")
-	return {"live_view":game.docking != null and game.docking.stage == Docking.Stage.DOCKED,"autosave":game.save_games.automatic_slot() if game.dock_interface != null and game.dock_interface.page in ["save","load"] else {},"missions":game.mission_runtime.board(int(city_id) if not city_id.is_empty() else 0),"can_save":game.mission_runtime.can_save(),"city":port.get("name","Dock"),"city_id":city_id,"title_bitmap":city.get("title_bitmap",""),"welcome":description,"standing":{"bad":"Hostile","neutral":"Neutral","good":"Friendly"}.get(standing,"Neutral"),"mission":game.player_progress.mission,"status":game.player_progress.status.duplicate(),"race":port.get("race",1),"repair_offer":preload("res://equipment_shop.gd").shield_repair(game.gameplay_catalogue,city_id,game.player_progress.campaign_stage,game.testing_all_equipment),"offers":preload("res://equipment_shop.gd").offers(game.gameplay_catalogue,city_id,game.player_progress.campaign_stage,game.testing_all_equipment),"installed":preload("res://equipment_shop.gd").installed(game.equipment,game.weapons) if game.equipment != null and game.weapons != null else {},"hold":game.player_progress.hold.duplicate(),"commodity_offers":preload("res://commodity_market.gd").offers(game.gameplay_catalogue,game.player_progress,city_id),"cargo":game.player_progress.cargo.duplicate(),"mail":preload("res://mailbox.gd").messages(game.gameplay_catalogue,game.player_progress,int(city_id) if not city_id.is_empty() else 0),"slots":game.save_games.slots() if game.dock_interface != null and game.dock_interface.page in ["save","load"] else []}
+	var active_id := str(game.mission_runtime.active().get("id",""))
+	var mission_title: String = game.player_progress.mission
+	if not active_id.is_empty():
+		var localized: String = game.mission_runtime.text(active_id).get_slice("\n",0)
+		if not localized.is_empty(): mission_title = localized
+	return {"live_view":game.docking != null and game.docking.stage == Docking.Stage.DOCKED,"autosave":game.save_games.automatic_slot() if game.dock_interface != null and game.dock_interface.page in ["save","load"] else {},"missions":game.mission_runtime.board(int(city_id) if not city_id.is_empty() else 0),"can_save":game.mission_runtime.can_save(),"city":port.get("name","Dock"),"city_id":city_id,"title_bitmap":city.get("title_bitmap",""),"welcome":description,"standing":{"bad":"Hostile","neutral":"Neutral","good":"Friendly"}.get(standing,"Neutral"),"mission":mission_title,"status":game.player_progress.status.duplicate(),"race":port.get("race",1),"repair_offer":preload("res://equipment_shop.gd").shield_repair(game.gameplay_catalogue,city_id,game.player_progress.campaign_stage,game.testing_all_equipment),"offers":preload("res://equipment_shop.gd").offers(game.gameplay_catalogue,city_id,game.player_progress.campaign_stage,game.testing_all_equipment),"installed":preload("res://equipment_shop.gd").installed(game.equipment,game.weapons) if game.equipment != null and game.weapons != null else {},"hold":game.player_progress.hold.duplicate(),"commodity_offers":preload("res://commodity_market.gd").offers(game.gameplay_catalogue,game.player_progress,city_id),"cargo":game.player_progress.cargo.duplicate(),"mail":preload("res://mailbox.gd").messages(game.gameplay_catalogue,game.player_progress,int(city_id) if not city_id.is_empty() else 0),"slots":game.save_games.slots() if game.dock_interface != null and game.dock_interface.page in ["save","load"] else []}
 
 func _dock_ui_action(action: String, payload: Dictionary) -> void:
 	match action:
@@ -75,7 +80,7 @@ func _dock_ui_action(action: String, payload: Dictionary) -> void:
 func _autosave_docked() -> void:
 	if game.docking.stage != Docking.Stage.DOCKED or not game.mission_runtime.can_save(): return
 	if game.save_games.write(-1,game._save_snapshot("Auto Save")) != OK:
-		game.dock_interface.report("Autosave failed: " + game.save_games.error)
+		game.dock_interface.report(tr("Autosave failed: %s") % game.save_games.error)
 
 func _delivery_terms(body: RigidBody3D) -> Dictionary:
 	var stats: Dictionary = body.get("stats") if body.get("stats") is Dictionary else {}

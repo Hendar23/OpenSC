@@ -17,6 +17,8 @@
     {"id": "audio", "label": "Audio"},
     {"id": "gameplay", "label": "General"},
     {"id": "player_folder", "label": "Open Player Folder"},
+    {"id": "choose_game_folder", "label": "Choose Sub Culture folder…"},
+    {"id": "restore_defaults", "label": "Restore Defaults"},
     {"id": "mods", "label": "Mods"},
     {"id": "exit", "label": "Exit"},
     {"id": "back", "label": "Back"}

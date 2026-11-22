@@ -40,5 +40,5 @@ func _reset_provisional_wildlife() -> void:
 			break
 
 func _update_wildlife_density() -> void:
-	game.wildlife_density_label.text = "Wildlife density: %.0f%%" % game.wildlife_density_slider.value
+	game.wildlife_density_label.set_message("Wildlife density: %.0f%%",[game.wildlife_density_slider.value])
 	if game.wildlife != null: game.wildlife.set_density(game.wildlife_density_slider.value / 100.0)

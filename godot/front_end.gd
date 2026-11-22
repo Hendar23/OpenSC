@@ -14,6 +14,8 @@ signal new_game_requested
 signal load_requested
 signal mods_requested
 signal resume_requested
+signal choose_game_folder_requested
+signal restore_defaults_requested
 signal toggle_menu_requested
 signal exit_requested
 signal menu_sound_played(role: String)
@@ -43,9 +45,11 @@ var player_graphics: Node
 var menu_theme: Theme
 var effects_audio: Node
 var remember_preferences := true
+var restore_defaults_available := false
+var options_dialog_open: Callable
 var back_shortcut_busy: Callable
 var menu_page := "main"
-const OPTION_BUTTONS := ["controls","graphics","audio","gameplay","player_folder","back"]
+const OPTION_BUTTONS := ["controls","graphics","audio","gameplay","player_folder","choose_game_folder","restore_defaults","back"]
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -100,9 +104,10 @@ func _ready() -> void:
 	credit_label.name = "OriginalGameCredit"
 	credit_label.text = "Original Sub Culture by Criterion Studios · Ubisoft"
 	credit_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	credit_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	menu_layout.get_parent().add_child(credit_label)
-	credit_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	credit_label.offset_left = -credit_label.get_minimum_size().x - 12; credit_label.offset_right = -12
+	credit_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	credit_label.offset_left = 252; credit_label.offset_right = -12
 	credit_label.offset_top = -30; credit_label.offset_bottom = -10
 	controls_menu = preload("res://controls_menu.gd").new(); add_child(controls_menu)
 	controls_menu.layout.theme = menu_theme
@@ -144,11 +149,12 @@ func _build_menu() -> void:
 	# Older custom menu layouts still get an entrance and return button.
 	for entry in [{"id":"options","label":"Options"},{"id":"gameplay","label":"General"},{"id":"back","label":"Back"}]:
 		if not entries.any(func(item: Dictionary) -> bool: return item.get("id") == entry.id): entries.append(entry)
-	if not entries.any(func(item: Dictionary) -> bool: return item.get("id") == "player_folder"):
+	for entry in [{"id":"player_folder","label":"Open Player Folder"}, {"id":"choose_game_folder","label":"Choose Sub Culture folder…"}, {"id":"restore_defaults","label":"Restore Defaults"}]:
+		if entries.any(func(item: Dictionary) -> bool: return item.get("id") == entry.id): continue
 		var back := entries.size()
 		for index in entries.size():
 			if entries[index].get("id") == "back": back = index; break
-		entries.insert(back,{"id":"player_folder","label":"Open Player Folder"})
+		entries.insert(back,entry)
 	entries = entries.filter(func(entry: Dictionary) -> bool: return entry.get("id") != "discord")
 	var mods_index := -1
 	for index in entries.size():
@@ -156,7 +162,7 @@ func _build_menu() -> void:
 	entries.insert(mods_index + 1 if mods_index >= 0 else entries.size(),{"id":"discord","label":"Discord"})
 	for entry in entries:
 		var id := str(entry.get("id",""))
-		if id not in ["new_game","load","continue","options","back","controls","mods","audio","graphics","gameplay","player_folder","discord","exit"] or buttons.has(id): continue
+		if (id not in OPTION_BUTTONS and id not in ["new_game","load","continue","options","mods","discord","exit"]) or buttons.has(id): continue
 		var button := Button.new(); button.text = str(entry.get("label",id))
 		if id == "gameplay": button.text = "General"
 		button.position = Vector2(rect[0],rect[1] + button_order.size() * float(menu_config.button_spacing))
@@ -166,8 +172,10 @@ func _build_menu() -> void:
 		var hover := normal.duplicate() as StyleBoxFlat; hover.bg_color = Color(0.04,0.23,0.28,0.95)
 		button.add_theme_stylebox_override("normal",normal); button.add_theme_stylebox_override("hover",hover)
 		button.add_theme_stylebox_override("pressed",hover); button.add_theme_stylebox_override("focus",hover)
-		button.set_meta("available",id in ["new_game","options","back","controls","audio","graphics","gameplay","player_folder","mods","discord","exit"])
-		if not button.get_meta("available"): button.tooltip_text = "Not available yet"
+		button.disabled = id == "restore_defaults" and not restore_defaults_available
+		button.set_meta("available",id not in ["load","continue"] and not button.disabled)
+		if button.disabled: button.tooltip_text = "Available in released builds."
+		elif not button.get_meta("available"): button.tooltip_text = "Not available yet"
 		menu_layout.add_child(button); buttons[id] = button; button_order.append(id)
 		button.mouse_entered.connect(func() -> void: _enter_button(button))
 		button.mouse_exited.connect(func() -> void: _leave_button(button))
@@ -188,13 +196,11 @@ func _set_menu_page(next_page: String) -> void:
 	menu_picture.visible = menu_page == "main"
 	active_button = null
 	var area: Array = menu_config.button_rect
-	var width := float(area[2])
-	if menu_page == "main":
-		width = 0.0
-		for id in button_order:
-			if id in OPTION_BUTTONS: continue
-			var button: Button = buttons[id]
-			width = maxf(width,button.get_theme_font("font").get_string_size(button.text,HORIZONTAL_ALIGNMENT_LEFT,-1,button.get_theme_font_size("font_size")).x+24.0)
+	var width := 0.0 if menu_page == "main" else float(area[2])
+	for id in button_order:
+		if (id in OPTION_BUTTONS) != (menu_page == "options"): continue
+		var button: Button = buttons[id]
+		width = maxf(width,button.get_theme_font("font").get_string_size(button.tr(button.text),HORIZONTAL_ALIGNMENT_LEFT,-1,button.get_theme_font_size("font_size")).x+24.0)
 	var row := 0
 	for id in button_order:
 		var on_page: bool = (id in OPTION_BUTTONS) == (menu_page == "options")
@@ -303,7 +309,9 @@ func _activate_button(id: String) -> void:
 		"options": _set_menu_page("options")
 		"player_folder":
 			var result := _open_player_folder()
-			if result != OK: push_warning("Cannot open player folder: "+error_string(result))
+			if result != OK: push_warning(tr("Cannot open player folder: %s") % error_string(result))
+		"choose_game_folder": choose_game_folder_requested.emit()
+		"restore_defaults": restore_defaults_requested.emit()
 		"back": _set_menu_page("main")
 		"mods": mods_requested.emit()
 		"discord": link_opener.call(DISCORD_URL)
@@ -341,7 +349,7 @@ func show_loading() -> void:
 	if controls_menu != null: controls_menu.close_menu()
 	menu_layer.hide(); loading_layer.show()
 	active_button = null
-	progress_bar.value = 0.0; loading_status.text = "Loading..."
+	progress_bar.show(); progress_bar.value = 0.0; loading_status.text = "Loading..."
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func update_progress(message: String) -> void:
@@ -383,6 +391,7 @@ func hide_menu() -> void:
 	active_button = null
 
 func _input(event: InputEvent) -> void:
+	if options_dialog_open.is_valid() and options_dialog_open.call(): return
 	if gameplay_menu != null and gameplay_menu.visible: return
 	if graphics_menu != null and graphics_menu.visible: return
 	if audio_menu != null and audio_menu.visible: return

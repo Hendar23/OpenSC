@@ -34,13 +34,13 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, session_see
 		await tree.process_frame
 		var template := Modern.load_model(pack.scenery.path, {"forward_axis": "+Z", "name": pack.name, "scenery_lods":true})
 		if template == null:
-			Mods.note("%s: could not load scenery GLB." % pack.name); continue
+			Mods.note(String(TranslationServer.translate("%s: could not load scenery GLB.")) % pack.name); continue
 		var models: Array[Dictionary] = []
 		var weight := 0.0
 		for entry in pack.scenery.models:
 			var mesh := template.find_child(str(entry.node), true, false) as MeshInstance3D
 			if mesh == null or mesh.mesh == null or mesh.mesh.get_surface_count() != 1:
-				Mods.note("%s: missing single-surface scenery mesh %s." % [pack.name, entry.node]); continue
+				Mods.note(String(TranslationServer.translate("%s: missing single-surface scenery mesh %s.")) % [pack.name, entry.node]); continue
 			var box := Modern.source_bounds(mesh.mesh)
 			var width := maxf(box.size.x, box.size.z)
 			if width <= 0.00001 or not box.position.is_finite() or not box.size.is_finite(): continue

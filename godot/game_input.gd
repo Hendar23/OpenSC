@@ -60,8 +60,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif Bindings.pressed(event,"weapon_next") and game.weapons != null: game.weapons.cycle(1)
 		if Bindings.pressed(event,"equipment_previous"): game.equipment.cycle(-1)
 		elif Bindings.pressed(event,"equipment_next"): game.equipment.cycle(1)
-		elif Bindings.pressed(event,"equipment_toggle") and (game.docking.stage == Docking.Stage.IDLE or game.docking.is_undocking()):
-			if game.docking.is_undocking() or not Bindings.pressed(event,"dock_decline") or game.docking.nearby.is_empty(): game.equipment.toggle_selected()
+		elif Bindings.pressed(event,"equipment_toggle"):
+			var in_transit: bool = game.docking.stage != Docking.Stage.IDLE
+			var goggles_selected: bool = game.equipment.current().get("id") == "night_vision"
+			if in_transit:
+				if goggles_selected or game.docking.is_undocking(): game.equipment.toggle_selected()
+			elif not Bindings.pressed(event,"dock_decline") or game.docking.nearby.is_empty():
+				game.equipment.toggle_selected()
 	if Bindings.pressed(event,"dock_accept"):
 		game._request_docking()
 		game.get_viewport().set_input_as_handled()

@@ -253,6 +253,7 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 	world.set_meta("searchlight_count", searchlights)
 	world.set_meta("plant_count", plants)
 	world.set_meta("plant_patches", patches)
+	world.set_meta("scenery_counts", [props, plants, patches])
 	world.set_meta("scenery_summary", "%d scenery objects · %d plants in %d patches" % [props, plants, patches])
 	world.set_meta("skipped_records", skipped)
 

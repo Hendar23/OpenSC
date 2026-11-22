@@ -51,7 +51,7 @@ func _ready() -> void:
 	heading.add_theme_font_size_override("font_size", 20)
 	column.add_child(heading)
 	var hint := Label.new()
-	hint.text = "Put a mod folder containing mod.json into %s." % preload("res://player_storage.gd").mods_path()
+	hint.text = tr("Put a mod folder containing mod.json into %s.") % preload("res://player_storage.gd").mods_path()
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(hint)
 	var refresh := Button.new()
@@ -70,6 +70,7 @@ func _ready() -> void:
 	details.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	column.add_child(details)
 	description = Label.new()
+	description.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	description.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	details.add_child(description)
@@ -202,11 +203,11 @@ func _build_rows() -> void:
 		item.add_child(line)
 		var enabled := CheckBox.new()
 		enabled.text = "%s · %s" % [pack.name, pack.version]
-		if pack.get("installed",true): enabled.text += " · Installed"
-		else: enabled.text += " · Not installed · " + String.humanize_size(int(pack.size))
+		if pack.get("installed",true): enabled.text += " · " + tr("Installed")
+		else: enabled.text += " · " + tr("Not installed") + " · " + String.humanize_size(int(pack.size))
 		if pack.has("update"):
-			if Official.compatible(pack.update.min_game_version): enabled.text += "\nUpdate available: " + str(pack.update.version) + " · " + String.humanize_size(int(pack.update.size))
-			else: enabled.text += "\nUpdate requires OpenSC " + str(pack.update.min_game_version)
+			if Official.compatible(pack.update.min_game_version): enabled.text += "\n" + (tr("Update available: %s") % pack.update.version) + " · " + String.humanize_size(int(pack.update.size))
+			else: enabled.text += "\n" + (tr("Update requires OpenSC %s") % pack.update.min_game_version)
 		enabled.disabled = not pack.valid
 		enabled.button_pressed = id in pending_enabled and pack.valid
 		enabled.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -250,7 +251,7 @@ func _show_description(id: String) -> void:
 		if str(pack.id) != id: continue
 		description.text = str(pack.description)
 		if not pack.errors.is_empty(): description.text += "\n" + "\n".join(pack.errors)
-		if pack.has("update") and not Official.compatible(pack.update.min_game_version): description.text += "\nRequires OpenSC " + str(pack.update.min_game_version) + "."
+		if pack.has("update") and not Official.compatible(pack.update.min_game_version): description.text += "\n" + (tr("Requires OpenSC %s.") % pack.update.min_game_version)
 		break
 	if description.get_parent() is ScrollContainer: description.get_parent().scroll_vertical = 0
 
@@ -275,11 +276,11 @@ func _wire_focus(lines: Array[Array]) -> void:
 			control.focus_neighbor_right = control.get_path_to(line[mini(2,column + 1)])
 
 func _update_info() -> void:
-	info.text = "No mods installed." if _listed_packs().is_empty() else ""
+	info.text = tr("No mods installed.") if _listed_packs().is_empty() else ""
 	if not official.last_error.is_empty(): info.text += "\n" + official.last_error
 	var notes: Array[String] = Mods.runtime_warnings.duplicate()
 	if not notes.is_empty(): info.text += "\n" + "\n".join(notes.slice(0, 5))
-	if notes.size() > 5: info.text += "\n%d more notes (hover to read)." % (notes.size() - 5)
+	if notes.size() > 5: info.text += "\n" + (tr("%d more notes (hover to read).") % (notes.size() - 5))
 	info.tooltip_text = "\n".join(notes)
 	info.visible = not info.text.strip_edges().is_empty()
 
@@ -310,7 +311,7 @@ func _commit_apply() -> void:
 	if downloading: download_finished.emit(result == OK)
 	if result != OK:
 		if not embedded: popup_centered()
-		info.text = "Could not save mod selection: " + error_string(result)
+		info.text = tr("Could not save mod selection: %s") % error_string(result)
 		info.show()
 		return
 	hide()

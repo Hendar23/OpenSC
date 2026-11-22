@@ -136,7 +136,7 @@ func setup(sound: Node, in_tabs: bool = false) -> void:
 	export_dialog = FileDialog.new()
 	export_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
-	export_dialog.filters = PackedStringArray(["*.cfg ; Sound settings"])
+	export_dialog.filters = PackedStringArray(["*.cfg ; " + tr("Sound settings")])
 	export_dialog.current_file = "submarine_audio.cfg"
 	export_dialog.file_selected.connect(func(path: String) -> void: message.text = "Sound settings exported." if audio.tuning.save_settings(path) == OK else "Could not export sound settings.")
 	add_child(export_dialog)
@@ -146,7 +146,7 @@ func setup(sound: Node, in_tabs: bool = false) -> void:
 
 func _row(parent: VBoxContainer, row: Array) -> void:
 	var key := str(row[0])
-	var label := Label.new()
+	var label := preload("res://game_language.gd").LiveLabel.new()
 	label.add_theme_font_size_override("font_size", 13)
 	labels[key] = label
 	parent.add_child(label)
@@ -158,7 +158,7 @@ func _row(parent: VBoxContainer, row: Array) -> void:
 	slider.focus_mode = Control.FOCUS_NONE
 	sliders[key] = slider
 	parent.add_child(slider)
-	var update_label := func(value: float) -> void: label.text = "%s: %.2f %s" % [row[1], value, row[5]]
+	var update_label := func(value: float) -> void: label.set_message("%s: %.2f %s",[row[1],value,row[5]])
 	update_label.call(slider.value)
 	slider.value_changed.connect(func(value: float) -> void:
 		audio.tuning.settings[key] = value

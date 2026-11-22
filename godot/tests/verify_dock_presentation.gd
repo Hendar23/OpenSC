@@ -141,5 +141,17 @@ func run() -> void:
  check(ui.page == "save","Controller release activates the held button")
  ui.open("goods")
  check(ui.layout.get_node("BuyCommodity").highlight_art.size() == 1,"Commodity buttons share original states")
+ var multilingual := OS.get_environment("OPENSC_TEST_MULTILINGUAL_FOLDER")
+ state.missions = {"id":"prospecting","title":"Prospecting","available":true}
+ for edition in [[folder,"en",440],[multilingual,"fr",425],[multilingual,"de",396]]:
+  if edition[0].is_empty(): continue
+  ui.setup(edition[0],func() -> Dictionary: return state,edition[1])
+  for mission_race in [1,2]:
+   state.race = mission_race; ui.open("missions")
+   ui.layout.get_node("choose_mission").pressed.emit()
+   var mission_accept: Button = ui.layout.get_node("accept_mission")
+   check(mission_accept.highlight_art.size() == 1 and mission_accept.highlight_art[0].rect.position + mission_accept.position == Vector2(edition[2],436),"Mission Accept highlight aligns for %s, race %d" % [edition[1],mission_race])
+   check(mission_accept.held_art.size() == 1 and mission_accept.held_art[0].rect.position + mission_accept.position == Vector2(547,415),"Mission Accept pressed knob stays aligned")
+   check(not mission_accept.disabled and mission_accept._has_point(Vector2(edition[2],437) - mission_accept.position),"Mission Accept responds over the translated label")
  ui.queue_free(); await process_frame
  print("Dock presentation: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

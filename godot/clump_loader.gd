@@ -58,7 +58,7 @@ static func load_clump(path: String, names: PackedStringArray = PackedStringArra
 			loaded.set_meta("asset_source", replacement.path)
 			loaded.set_meta("asset_id", Mods.model_id(path))
 			return loaded
-		Mods.note("%s: could not load %s; using the next replacement or original." % [replacement.name, replacement.id])
+		Mods.note(String(TranslationServer.translate("%s: could not load %s; using the next replacement or original.")) % [replacement.name, replacement.id])
 	return _load_legacy(path, names, include_morphs)
 
 static func _load_legacy(path: String, names: PackedStringArray = PackedStringArray(), include_morphs: bool = false) -> Node3D:
@@ -387,7 +387,7 @@ static func _load_texture(game_folder: String, texture_name: String, mask_name: 
 		var mod_image := _replacement_image(replacement.path)
 		if mod_image != null and not mod_image.is_empty():
 			if replacement.get("terrain_mipmaps", false) and mod_image.generate_mipmaps() != OK:
-				Mods.note("%s: could not generate terrain mipmaps for %s; using the next replacement or original." % [replacement.name, texture_name])
+				Mods.note(String(TranslationServer.translate("%s: could not generate terrain mipmaps for %s; using the next replacement or original.")) % [replacement.name, texture_name])
 				continue
 			# Modern replacement textures supply their own alpha rather than
 			# requiring an old, differently-sized mask texture.
@@ -397,7 +397,7 @@ static func _load_texture(game_folder: String, texture_name: String, mask_name: 
 			cache[key] = mod_texture
 			Cache.save_resource(disk_key, mod_texture)
 			return mod_texture
-		Mods.note("%s: could not load texture %s; using the next replacement or original." % [replacement.name, texture_name])
+		Mods.note(String(TranslationServer.translate("%s: could not load texture %s; using the next replacement or original.")) % [replacement.name, texture_name])
 	var texture_path := game_folder.path_join("GAMETEX").path_join(texture_name.to_upper() + ".BMP")
 	var image := LegacyBMP.load_image(texture_path)
 	if image == null: image = LegacyBMP.load_image(game_folder.path_join("GAMETEX").path_join(texture_name.to_upper() + ".RAS"))

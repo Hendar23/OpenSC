@@ -24,9 +24,11 @@ static func static_frames(folder: String) -> Array[Texture2D]:
 		if texture != null: frames.append(texture)
 	return frames
 
-static func messages(folder: String) -> Dictionary:
+static func messages(folder: String, locale: String = "") -> Dictionary:
 	var result := {}
-	var file := FileAccess.open(folder.path_join("DATA/ENGLISH/LANGUAGE.ENC"), FileAccess.READ)
+	var language := preload("res://game_language.gd")
+	if locale.is_empty(): locale = language.preferred(folder,language.available(folder),"en")
+	var file := FileAccess.open(folder.path_join(language.archive_path(folder,locale)), FileAccess.READ)
 	if file == null: return result
 	var data := file.get_buffer(file.get_length())
 	if data.size() < 4: return result

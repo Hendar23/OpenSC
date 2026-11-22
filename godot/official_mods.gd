@@ -90,7 +90,7 @@ func refresh_catalogue() -> bool:
 	var response := await _request(CATALOGUE_URL,"",2097152)
 	fetching = false
 	if not response.get("ok",false) or not parse_catalogue(response.get("body",PackedByteArray()).get_string_from_utf8()):
-		last_error = "Couldn’t refresh official mods."
+		last_error = tr("Couldn’t refresh official mods.")
 		return false
 	last_error = ""
 	if Storage.ensure_parent(cache_path()) == OK:
@@ -120,7 +120,7 @@ func _request(url: String, destination: String, limit: int) -> Dictionary:
 
 func _process(_delta: float) -> void:
 	if is_instance_valid(request_node):
-		progress.emit("Downloading " + download_name, float(request_node.get_downloaded_bytes()) / maxf(1.0,float(request_node.get_body_size())))
+		progress.emit(tr("Downloading %s") % download_name, float(request_node.get_downloaded_bytes()) / maxf(1.0,float(request_node.get_body_size())))
 
 func missing(ids: Array[String]) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
@@ -150,31 +150,31 @@ func _checksum(path: String) -> String:
 
 func _extract(archive: String, stage: String, entry: Dictionary) -> String:
 	var zip := ZIPReader.new()
-	if zip.open(archive) != OK: return "Could not open the downloaded ZIP."
+	if zip.open(archive) != OK: return tr("Could not open the downloaded ZIP.")
 	var members := zip.get_files()
 	var seen := {}; var total := 0
 	for member in members:
 		if not safe_member(member,entry.id) or seen.has(member.to_lower()):
-			zip.close(); return "The downloaded ZIP contains an invalid path."
+			zip.close(); return tr("The downloaded ZIP contains an invalid path.")
 		seen[member.to_lower()] = true
 	for member in members:
 		var path := stage.path_join(member)
 		if member.ends_with("/"): continue
 		var bytes := zip.read_file(member)
 		total += bytes.size()
-		if total > int(entry.unpacked_size): zip.close(); return "The downloaded ZIP is larger than expected."
-		if DirAccess.make_dir_recursive_absolute(path.get_base_dir()) != OK: zip.close(); return "Could not create the mod folder."
+		if total > int(entry.unpacked_size): zip.close(); return tr("The downloaded ZIP is larger than expected.")
+		if DirAccess.make_dir_recursive_absolute(path.get_base_dir()) != OK: zip.close(); return tr("Could not create the mod folder.")
 		var file := FileAccess.open(path,FileAccess.WRITE)
-		if file == null: zip.close(); return "Could not write the mod files."
+		if file == null: zip.close(); return tr("Could not write the mod files.")
 		file.store_buffer(bytes)
 		var result := file.get_error(); file.close()
-		if result != OK: zip.close(); return "Could not write the mod files."
-		progress.emit("Installing " + str(entry.name),float(total) / maxf(1.0,float(entry.unpacked_size)))
+		if result != OK: zip.close(); return tr("Could not write the mod files.")
+		progress.emit(tr("Installing %s") % entry.name,float(total) / maxf(1.0,float(entry.unpacked_size)))
 		await get_tree().process_frame
 	zip.close()
-	if total != int(entry.unpacked_size): return "The downloaded ZIP is incomplete."
+	if total != int(entry.unpacked_size): return tr("The downloaded ZIP is incomplete.")
 	var pack := Mods._read_pack(stage.path_join(entry.id))
-	if pack.is_empty() or not pack.valid or not pack.errors.is_empty() or pack.id != entry.id or pack.version != entry.version: return "The downloaded mod does not match its catalogue entry."
+	if pack.is_empty() or not pack.valid or not pack.errors.is_empty() or pack.id != entry.id or pack.version != entry.version: return tr("The downloaded mod does not match its catalogue entry.")
 	return ""
 
 func install(ids: Array[String], updates: Array[String] = []) -> bool:
@@ -193,20 +193,20 @@ func install(ids: Array[String], updates: Array[String] = []) -> bool:
 	var retained: Array[String] = []
 	var token := str(Time.get_ticks_usec())
 	for entry in needed:
-		if not compatible(entry.min_game_version): last_error = entry.name + " requires OpenSC " + entry.min_game_version + "."; break
+		if not compatible(entry.min_game_version): last_error = tr("%s requires OpenSC %s.") % [entry.name,entry.min_game_version]; break
 		var stage := Mods.root.path_join(".official-" + token + "-" + str(entry.id))
 		stages.append(stage)
-		if DirAccess.make_dir_recursive_absolute(stage) != OK: last_error = "Could not create the download folder."; break
+		if DirAccess.make_dir_recursive_absolute(stage) != OK: last_error = tr("Could not create the download folder."); break
 		var archive := stage.path_join("download.zip")
 		download_name = entry.name
-		progress.emit("Downloading " + download_name,0.0)
+		progress.emit(tr("Downloading %s") % download_name,0.0)
 		var response := await _request(entry.url,archive,int(entry.size))
-		if not response.get("ok",false): last_error = "Could not download " + entry.name + "."; break
+		if not response.get("ok",false): last_error = tr("Could not download %s.") % entry.name; break
 		var file := FileAccess.open(archive,FileAccess.READ)
 		var size := file.get_length() if file != null else -1
 		if file != null: file.close()
-		progress.emit("Verifying " + download_name,0.0)
-		if size != int(entry.size) or await _checksum(archive) != entry.sha256: last_error = "Download verification failed for " + entry.name + "."; break
+		progress.emit(tr("Verifying %s") % download_name,0.0)
+		if size != int(entry.size) or await _checksum(archive) != entry.sha256: last_error = tr("Download verification failed for %s.") % entry.name; break
 		last_error = await _extract(archive,stage,entry)
 		if not last_error.is_empty(): break
 	if last_error.is_empty():
@@ -217,19 +217,19 @@ func install(ids: Array[String], updates: Array[String] = []) -> bool:
 			var backup := ""
 			var added: Array[String] = []
 			if update_targets.has(entry.id):
-				if destination.get_base_dir() != Mods.root or not _plain_tree(destination): last_error = "Could not safely back up " + entry.name + "."; break
+				if destination.get_base_dir() != Mods.root or not _plain_tree(destination): last_error = tr("Could not safely back up %s.") % entry.name; break
 				var current := Mods._read_pack(destination)
-				if current.is_empty() or current.id != entry.id or update_for(current) != entry: last_error = "The installed mod changed. Refresh mods and try again."; break
+				if current.is_empty() or current.id != entry.id or update_for(current) != entry: last_error = tr("The installed mod changed. Refresh mods and try again."); break
 				backup = stages[index].path_join("backup")
-				progress.emit("Backing up " + str(entry.name),0.0)
+				progress.emit(tr("Backing up %s") % entry.name,0.0)
 				last_error = await _publish(destination,backup)
 				if not last_error.is_empty(): break
 				for relative in _tree_files(source):
 					if not FileAccess.file_exists(backup.path_join(relative)): added.append(relative)
 			else:
-				if DirAccess.dir_exists_absolute(destination) or FileAccess.file_exists(destination): last_error = "The mod folder already exists: " + entry.name; break
+				if DirAccess.dir_exists_absolute(destination) or FileAccess.file_exists(destination): last_error = tr("The mod folder already exists: %s") % entry.name; break
 			changes.append({"destination":destination,"backup":backup,"stage":stages[index],"added":added})
-			progress.emit("Installing " + str(entry.name),0.0)
+			progress.emit(tr("Installing %s") % entry.name,0.0)
 			last_error = await _publish(source,destination)
 			if not last_error.is_empty(): break
 	if not last_error.is_empty():
@@ -240,7 +240,7 @@ func install(ids: Array[String], updates: Array[String] = []) -> bool:
 			var restored := await _publish(change.backup,change.destination)
 			if not restored.is_empty():
 				retained.append(change.stage)
-				last_error += "\nPrevious version backup retained at " + change.backup
+				last_error += "\n" + (tr("Previous version backup retained at %s") % change.backup)
 	for stage in stages:
 		if stage not in retained: _remove_owned(stage)
 	busy = false
@@ -253,17 +253,17 @@ func _publish(source: String, destination: String) -> String:
 	while not pending.is_empty():
 		var folder: String = pending.pop_back()
 		var directory := DirAccess.open(folder)
-		if directory == null: return "Could not read the staged mod."
+		if directory == null: return tr("Could not read the staged mod.")
 		directory.include_hidden = true
 		for child in directory.get_directories(): pending.append(folder.path_join(child))
 		for filename in directory.get_files():
 			var path := folder.path_join(filename)
 			if path == source.path_join("mod.json"): continue
 			var target := destination.path_join(path.trim_prefix(source + "/"))
-			if DirAccess.make_dir_recursive_absolute(target.get_base_dir()) != OK or DirAccess.copy_absolute(path,target) != OK: return "Could not finish installing the mod."
+			if DirAccess.make_dir_recursive_absolute(target.get_base_dir()) != OK or DirAccess.copy_absolute(path,target) != OK: return tr("Could not finish installing the mod.")
 			await get_tree().process_frame
-	if DirAccess.make_dir_recursive_absolute(destination) != OK: return "Could not create the mod folder."
-	if DirAccess.copy_absolute(source.path_join("mod.json"),destination.path_join("mod.json")) != OK: return "Could not finish installing the mod."
+	if DirAccess.make_dir_recursive_absolute(destination) != OK: return tr("Could not create the mod folder.")
+	if DirAccess.copy_absolute(source.path_join("mod.json"),destination.path_join("mod.json")) != OK: return tr("Could not finish installing the mod.")
 	return ""
 
 static func _plain_tree(path: String) -> bool:

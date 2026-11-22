@@ -4,6 +4,8 @@ signal action_requested(action: String, payload: Dictionary)
 const Mods = preload("res://mod_registry.gd")
 const BMP = preload("res://legacy_bmp.gd")
 const Saves = preload("res://save_games.gd")
+# Origins of the localized Accept overlays in the original 640×480 mission screens.
+const MISSION_ACCEPT_LABEL_X := {"en":440,"fr":425,"de":396}
 # The original load-screen rows are not spaced at a uniform 44 pixels.
 const LOAD_ROW_OFFSETS := [0.0,44.0,87.0,130.0,174.0,217.0,260.0,303.0]
 const DEFAULT_PAGES := {
@@ -15,6 +17,7 @@ const DEFAULT_PAGES := {
 	"load":{"buttons":[{"action":"close","rect":[231,435,185,38]}],"slots":[152,56,336,44]}
 }
 var folder := ""
+var locale := "en"
 var page := "home"
 var model: Callable
 var layout: Control
@@ -96,8 +99,8 @@ func _ready() -> void:
 	overwrite_dialog.add_child(overwrite_input)
 	name_dialog.canceled.connect(_restore_slot_focus); overwrite_dialog.canceled.connect(_restore_slot_focus)
 	get_viewport().size_changed.connect(_resize); _resize(); hide()
-func setup(original_folder: String, state: Callable) -> void:
-	folder = original_folder; model = state
+func setup(original_folder: String, state: Callable, language: String = "en") -> void:
+	folder = original_folder; model = state; locale = language
 	art_cache.clear()
 	_load_menu_audio()
 	pages = DEFAULT_PAGES.duplicate(true)
@@ -135,15 +138,24 @@ func texture(id: String, relative: String) -> Texture2D:
 	# A screen ID historically covered all three factions. Prefer an artwork-
 	# specific override while retaining that shared ID for existing mods.
 	var ids := [id + "_" + relative.get_file().get_basename().to_lower(),id] if id.begins_with("texture.ui_dock_") and not id.begins_with("texture.ui_dock_button_") else [id]
+	var bundled: Texture2D = load(relative) if relative.begins_with("res://") else null
+	var original_path := folder.path_join(relative)
+	if relative.begins_with("INTROTEX/"):
+		var filename := relative.trim_prefix("INTROTEX/").trim_prefix("ENGLISH/")
+		original_path = preload("res://game_language.gd").asset(folder,"INTROTEX",filename,locale)
 	for asset_id in ids:
 		for candidate in Mods.candidates(asset_id):
 			var image := preload("res://clump_loader.gd")._replacement_image(candidate.path)
 			if image != null:
 				var replacement := ImageTexture.create_from_image(image)
-				var original := BMP.load_image(folder.path_join(relative))
-				if original != null: replacement.set_meta("menu_size",Vector2(original.get_size()))
+				if bundled != null:
+					replacement.set_meta("menu_size", bundled.get_size())
+				else:
+					var original := BMP.load_image(original_path)
+					if original != null: replacement.set_meta("menu_size",Vector2(original.get_size()))
 				return replacement
-	var image := BMP.load_image(folder.path_join(relative))
+	if bundled != null: return bundled
+	var image := BMP.load_image(original_path)
 	return ImageTexture.create_from_image(image) if image != null else null
 func _art_size(image: Texture2D) -> Vector2:
 	return image.get_meta("menu_size",image.get_size())
@@ -252,7 +264,7 @@ func _skin_button(node: DockButton, action: String, payload: Dictionary) -> void
 			_piece(node,node.highlight_art,"ENGLISH/" + goods_prefix + "GOOD",Vector2(473,435))
 			_piece(node,node.held_art,goods_prefix + "GBUT",Vector2(563,416))
 	elif page == "missions" and action == "accept_mission":
-		_piece(node,node.highlight_art,"ENGLISH/M" + goods_prefix + "-BAL",Vector2(443,437))
+		_piece(node,node.highlight_art,"ENGLISH/M" + goods_prefix + "-BAL",Vector2(MISSION_ACCEPT_LABEL_X.get(locale,440),436))
 		_piece(node,node.held_art,"M" + goods_prefix + "-B2",Vector2(547,415))
 	elif page == "missions" and action == "home":
 		_piece(node,node.highlight_art,"ENGLISH/M" + goods_prefix + "-BDL",Vector2(93,437))
@@ -377,7 +389,8 @@ func rebuild(new_page: bool = false) -> void:
 			var slots: Array = data.get("slots",[])
 			for slot in slots:
 				var stamp := Saves.display_timestamp(str(slot.saved_at))
-				var text := "%d  %s" % [int(slot.slot) + 1,slot.name]
+				var caption: String = slot.name if slot.exists else tr("Empty slot")
+				var text := "%d  %s" % [int(slot.slot) + 1,caption]
 				if slot.valid and not stamp.is_empty(): text += " — " + stamp
 				if slot.exists and not slot.valid: text = "%d  Unreadable save" % [int(slot.slot) + 1]
 				var node := button("choose_slot",Rect2(area.position + Vector2(0,LOAD_ROW_OFFSETS[int(slot.slot)] * area.size.y / 44.0 if page == "load" else int(slot.slot) * area.size.y),Vector2(area.size.x,36 if page == "load" else 25)),text,{"slot":slot.slot})
@@ -434,7 +447,7 @@ func _mail_panel(data: Dictionary) -> void:
 	if mail_rows.is_empty() or str(data.get("city_id","")) in ["5","6"]:
 		mail_view = "welcome"
 		var welcome := str(data.get("welcome",""))
-		_welcome(welcome if not welcome.is_empty() else "Welcome to %s." % loaded_city,rect(pages.home.welcome))
+		_welcome(welcome if not welcome.is_empty() else tr("Welcome to %s.") % loaded_city,rect(pages.home.welcome))
 		return
 	var prefix := "P" if dock_race == 2 else "B" if dock_race == 1 else ""
 	mail_button = button("mailbox",Rect2(100,203,112,26),"Mailbox")
@@ -453,13 +466,13 @@ func _mail_panel(data: Dictionary) -> void:
 	for row in mail_rows:
 		if not row.get("read",false): unread += 1
 	if unread > 0:
-		var count := label("%d Unread %s" % [unread,"Mail" if unread == 1 else "Mails"],Rect2(289,218,220,17),12)
+		var count := label(tr("%d Unread Mail" if unread == 1 else "%d Unread Mails") % unread,Rect2(289,218,220,17),12)
 		count.name = "UnreadMail"
 		var envelope := TextureRect.new(); envelope.name = "UnreadEnvelope"; envelope.texture = _mail_texture(prefix + "LETTERL")
 		envelope.position = Vector2(269,218); envelope.mouse_filter = Control.MOUSE_FILTER_IGNORE; layout.add_child(envelope)
 	if mail_view == "welcome":
 		var welcome := str(data.get("welcome",""))
-		_welcome(welcome if not welcome.is_empty() else "Welcome to %s." % loaded_city,Rect2(100,81,412,119))
+		_welcome(welcome if not welcome.is_empty() else tr("Welcome to %s.") % loaded_city,Rect2(100,81,412,119))
 	elif mail_view == "list":
 		mail_list = _item_list("Mailbox",Rect2(100,81,412,120))
 		for row in mail_rows:
@@ -613,7 +626,7 @@ func _commodity_shop(data: Dictionary) -> void:
 			if column < 2 and value == "0": value = "—"
 			var amount := label(value,Rect2([242,350,495][column],49 + index * 16,82,16),11,true)
 			amount.name = "Quote_%s_%d" % [id,column]
-			amount.tooltip_text = "City stock: %d" % int(offer.stock)
+			amount.tooltip_text = tr("City stock: %d") % int(offer.stock)
 		index += 1
 	sale_list.item_selected.connect(func(row: int) -> void: selected_commodity = str(sale_list.get_item_metadata(row)); _update_commodity_selection(model.call()))
 	if sale_list.item_count > 0 and sale_list.get_selected_items().is_empty():
@@ -621,7 +634,7 @@ func _commodity_shop(data: Dictionary) -> void:
 	var buy := button("buy_commodity",rect(settings.buy)); buy.name = "BuyCommodity"
 	var sell := button("sell_commodity",rect(settings.sell)); sell.name = "SellCommodity"
 	var info := button("commodity_info",rect(settings.info)); info.name = "CommodityInfo"
-	var credits := label("Credits: %d" % int(data.get("status",{}).get("credits",0)),Rect2(495,428,100,32),11,true)
+	var credits := label(tr("Credits: %d") % int(data.get("status",{}).get("credits",0)),Rect2(495,428,100,32),11,true)
 	credits.name = "CommodityCredits"
 	credits.autowrap_mode = TextServer.AUTOWRAP_OFF
 	credits.size = Vector2(100,32)
@@ -647,7 +660,7 @@ func refresh_market() -> void:
 			if amount == null: continue
 			var value := int(offer.buy_price) if column == 0 else int(offer.sell_price) if column == 1 else int(data.get("cargo",{}).get(id,0))
 			amount.text = "—" if column < 2 and value == 0 else str(value)
-			amount.tooltip_text = "City stock: %d" % int(offer.stock)
+			amount.tooltip_text = tr("City stock: %d") % int(offer.stock)
 	_update_commodity_selection(data)
 
 func _update_commodity_selection(data: Dictionary) -> void:
@@ -713,8 +726,8 @@ func _update_shop_selection(data: Dictionary) -> void:
 	layout.get_node("HoldInfo").disabled = held.is_empty()
 	layout.get_node("SellShieldRepair").disabled = held.is_empty() or int(held.get("sell_price",0)) <= 0 or int(data.get("hold",{}).get(selected_hold,0)) < int(held.get("quantity",1))
 	layout.get_node("UseShieldRepair").disabled = selected_hold not in ["shield","hullstr","radoff","zapperup"] or not preload("res://equipment_shop.gd").upgrade_available(data,selected_hold)
-	layout.get_node("PurchasePrice").text = "Cost %d" % int(sale.price) if not sale.is_empty() else ""
-	layout.get_node("ResalePrice").text = "SellPrice %d" % int(held.sell_price) if not held.is_empty() else ""
+	layout.get_node("PurchasePrice").text = tr("Cost %d") % int(sale.price) if not sale.is_empty() else ""
+	layout.get_node("ResalePrice").text = tr("SellPrice %d") % int(held.sell_price) if not held.is_empty() else ""
 	_ensure_selection_dot()
 	for list in [sale_list,hold_list]:
 		var copies := {}
@@ -802,7 +815,7 @@ func _close_item_info() -> void:
 func _status(data: Dictionary, area: Rect2, compact: bool = false) -> void:
 	var values: Dictionary = data.get("status",{})
 	var faction: String = {1:"Bohine",2:"Procha",4:"Brotherhood"}.get(int(data.get("race",1)),"")
-	var lines := ["Standing with %s:" % faction,str(data.get("standing","Neutral")),"Current mission:",str(data.get("mission","None")),""]
+	var lines := [tr("Standing with %s:") % tr(faction),str(data.get("standing","Neutral")),"Current mission:",str(data.get("mission","None")),""]
 	if compact: lines = ["Current mission:",str(data.get("mission","None")),""]
 	var ratings := [["Hull Strength","hull_strength"],["Top Speed","top_speed"],["Shields","shields"],["Radiation Shield","radiation_shield"],["Credits","credits"]]
 	var panel := Control.new(); panel.name = "SubStatus"; panel.position = area.position; panel.size = area.size; panel.clip_contents = true; layout.add_child(panel)
@@ -1001,7 +1014,7 @@ func _mission_board(data: Dictionary) -> void:
 		var heading := label("Missions",Rect2(24,20,330,14),10); heading.add_theme_color_override("font_color",Color.WHITE)
 	var rows: Array[Button] = []
 	if mission.get("active",false):
-		rows.append(_mission_row(id,"Current mission: "+str(mission.get("title","")),0,selected))
+		rows.append(_mission_row(id,tr("Current mission: %s") % str(mission.get("title","")),0,selected))
 	else:
 		for entry in offers:
 			rows.append(_mission_row(str(entry.id),str(entry.title),rows.size(),str(entry.id) == mission_selection,"choose_mission" if rows.is_empty() else "MissionOffer_"+str(entry.id)))
@@ -1017,7 +1030,8 @@ func _mission_board(data: Dictionary) -> void:
 	if selected and not str(mission.get("response","")).is_empty(): body = str(mission.response)
 	var accept: Button
 	if not information_only:
-		accept = button("accept_mission",Rect2(430,422,180,40),"",{"id":str(content.get("id",""))})
+		var left := minf(430, MISSION_ACCEPT_LABEL_X.get(locale,440))
+		accept = button("accept_mission",Rect2(left,422,610-left,40),"",{"id":str(content.get("id",""))})
 		accept.disabled = not mission.get("available",false) or not selected
 	var can_accept := accept != null and not accept.disabled
 	var scroll := ScrollContainer.new(); scroll.name = "MissionBriefingScroll"; scroll.position = Vector2(16,214); scroll.size = Vector2(605,190)

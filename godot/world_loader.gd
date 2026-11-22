@@ -24,7 +24,7 @@ static func load_world(path: String, tree: SceneTree, progress: Callable, use_re
 			if replacement != null:
 				replacement.set_meta("terrain_asset_hash", disk_cache.fingerprint(entry.path))
 				return replacement
-			Mods.note("Could not load terrain from %s" % entry.name)
+			Mods.note(String(TranslationServer.translate("Could not load terrain from %s")) % entry.name)
 	var cache_key := Assets.conversion_key("world", path)
 	var cached := disk_cache.load_scene(cache_key)
 	if cached != null:

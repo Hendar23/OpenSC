@@ -75,6 +75,14 @@ func setup(player: Node3D, folder: String) -> void:
 	_setup_cycle_audio(folder)
 	_setup_vacuum(player,folder)
 	available.assign(mounted)
+	var goggles := Node3D.new()
+	goggles.name = "NightVisionGoggles"
+	add_child(goggles)
+	goggles.set_meta("default_mount",goggles.transform)
+	available.append({
+		"id": "night_vision", "name": tr(preload("res://equipment_shop.gd").NIGHT_VISION_NAME), "enabled": false,
+		"mount": goggles, "icons": [preload("res://game_assets/ui/night_vision_hud.png")]
+	})
 	_setup_magnet(player,folder)
 	_setup_grapple(player,folder)
 	support_tools = preload("res://submarine_support_tools.gd").new(); add_child(support_tools); support_tools.setup(self,folder)
@@ -193,6 +201,9 @@ func toggle_selected() -> void:
 
 func current() -> Dictionary:
 	return {} if mounted.is_empty() else mounted[selected]
+
+func night_vision_enabled() -> bool:
+	return mounted.any(func(item: Dictionary) -> bool: return item.id == "night_vision" and item.enabled)
 
 func apply_settings() -> void:
 	for item in available: item.mount.visible = item in mounted

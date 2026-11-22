@@ -181,15 +181,17 @@ static func strength(action: String) -> float:
 							value = maxf(value,clampf((Input.get_joy_axis(device,other.axis) * other.sign - deadzone) / (1.0 - deadzone),0.0,1.0))
 	return value
 static func describe(value: Variant) -> String:
-	if value == null: return "Unbound"
+	if value == null: return TranslationServer.translate("Unbound")
 	if value.kind == "button": return button_name(value.modifier) + " + " + button_name(value.button) if value.modifier >= 0 else button_name(value.button)
 	if value.kind == "axis":
 		var names := ["Left stick X","Left stick Y","Right stick X","Right stick Y","Left trigger","Right trigger"]
-		return "Controller " + str(names[value.axis] if value.axis < names.size() else "Axis %d" % value.axis) + (" +" if value.sign > 0 else " -")
+		var name: String = TranslationServer.translate(names[value.axis]) if value.axis < names.size() else String(TranslationServer.translate("Axis %d")) % value.axis
+		return String(TranslationServer.translate("Controller %s")) % name + (" +" if value.sign > 0 else " -")
 	var event := to_event(value)
 	if event is InputEventKey and value.physical:
 		event.physical_keycode = 0; event.keycode = value.code
-	return event.as_text()
+	return TranslationServer.translate(event.as_text())
 static func button_name(button: int) -> String:
 	var names := {JOY_BUTTON_A:"A",JOY_BUTTON_B:"B",JOY_BUTTON_X:"X",JOY_BUTTON_Y:"Y",JOY_BUTTON_LEFT_SHOULDER:"LB",JOY_BUTTON_RIGHT_SHOULDER:"RB",JOY_BUTTON_LEFT_STICK:"Left stick click",JOY_BUTTON_RIGHT_STICK:"Right stick click",JOY_BUTTON_GUIDE:"Xbox",JOY_BUTTON_START:"Menu",JOY_BUTTON_BACK:"View",JOY_BUTTON_DPAD_UP:"D-pad up",JOY_BUTTON_DPAD_DOWN:"D-pad down",JOY_BUTTON_DPAD_LEFT:"D-pad left",JOY_BUTTON_DPAD_RIGHT:"D-pad right"}
-	return "Controller " + str(names.get(button,"button %d" % button))
+	var name: String = TranslationServer.translate(names[button]) if names.has(button) else String(TranslationServer.translate("button %d")) % button
+	return String(TranslationServer.translate("Controller %s")) % name

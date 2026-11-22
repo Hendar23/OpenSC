@@ -21,14 +21,14 @@ func path(slot: int) -> String:
 	return folder.path_join("before-mission.json" if slot == -1 else "slot-%d.json" % slot)
 func read(slot: int) -> Dictionary:
 	error = ""
-	if slot < -1 or slot >= SLOT_COUNT: error = "Invalid save slot."; return {}
+	if slot < -1 or slot >= SLOT_COUNT: error = tr("Invalid save slot."); return {}
 	var file := FileAccess.open(path(slot),FileAccess.READ)
-	if file == null: error = "No saved game in this slot."; return {}
-	if file.get_length() > MAX_FILE_BYTES: error = "Save file is too large."; return {}
+	if file == null: error = tr("No saved game in this slot."); return {}
+	if file.get_length() > MAX_FILE_BYTES: error = tr("Save file is too large."); return {}
 	var parser := JSON.new()
-	if parser.parse(file.get_as_text()) != OK: error = "This save is damaged."; return {}
+	if parser.parse(file.get_as_text()) != OK: error = tr("This save is damaged."); return {}
 	var data: Variant = parser.data
-	if not valid(data): error = "This save is damaged or uses an unsupported version."; return {}
+	if not valid(data): error = tr("This save is damaged or uses an unsupported version."); return {}
 	return data
 static func valid(data: Variant) -> bool:
 	if not data is Dictionary or data.get("version") != VERSION: return false
@@ -69,21 +69,21 @@ static func valid(data: Variant) -> bool:
 	return bytes.size() == preload("res://hud_map.gd").RESOLUTION * preload("res://hud_map.gd").RESOLUTION
 func write(slot: int, snapshot: Dictionary) -> Error:
 	error = ""
-	if slot < -1 or slot >= SLOT_COUNT or not valid(snapshot): error = "Cannot save invalid game state."; return ERR_INVALID_DATA
+	if slot < -1 or slot >= SLOT_COUNT or not valid(snapshot): error = tr("Cannot save invalid game state."); return ERR_INVALID_DATA
 	if not snapshot.get("progress",{}).get("missions",{}).get("active",{}).is_empty():
-		error = "Saving is unavailable during an active mission."; return ERR_UNAVAILABLE
+		error = tr("Saving is unavailable during an active mission."); return ERR_UNAVAILABLE
 	var serialized := JSON.stringify(snapshot)
-	if serialized.to_utf8_buffer().size() > MAX_FILE_BYTES: error = "Save file is too large."; return ERR_INVALID_DATA
+	if serialized.to_utf8_buffer().size() > MAX_FILE_BYTES: error = tr("Save file is too large."); return ERR_INVALID_DATA
 	var absolute := ProjectSettings.globalize_path(folder)
 	var result := DirAccess.make_dir_recursive_absolute(absolute)
-	if result != OK: error = "Cannot create the save folder."; return result
+	if result != OK: error = tr("Cannot create the save folder."); return result
 	var target := ProjectSettings.globalize_path(path(slot))
 	var file := FileAccess.open(target + ".tmp",FileAccess.WRITE)
-	if file == null: error = "Cannot write the save file."; return FileAccess.get_open_error()
+	if file == null: error = tr("Cannot write the save file."); return FileAccess.get_open_error()
 	file.store_string(serialized); file.flush()
 	result = file.get_error(); file.close()
 	if result == OK: result = DirAccess.rename_absolute(target + ".tmp",target)
-	if result != OK: error = "Could not finish saving: " + error_string(result)
+	if result != OK: error = tr("Could not finish saving: %s") % error_string(result)
 	return result
 func slots() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []

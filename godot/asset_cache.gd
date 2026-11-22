@@ -269,7 +269,7 @@ static func maintain(tree: SceneTree, progress: Callable = Callable(), disk_budg
 					report.bytes_removed += _remove_cached_files(directory, [{"name": name, "bytes": bytes}])
 				scanned += 1
 		if Time.get_ticks_usec() - slice > 4000:
-			if progress.is_valid(): progress.call("Cleaning asset cache: checked %d files" % scanned)
+			if progress.is_valid(): progress.call(String(TranslationServer.translate("Cleaning asset cache: checked %d files")) % scanned)
 			await tree.process_frame
 			if _folder() != folder: directory.list_dir_end(); _maintaining = false; return report
 			slice = Time.get_ticks_usec()
@@ -292,7 +292,7 @@ static func maintain(tree: SceneTree, progress: Callable = Callable(), disk_budg
 			if removed == int(entry.bytes):
 				_index.erase(entry.id); groups.erase(entry.id); report.entries_removed += 1
 		if Time.get_ticks_usec() - slice > 4000:
-			if progress.is_valid(): progress.call("Cleaning asset cache: removed %d old entries" % int(report.entries_removed))
+			if progress.is_valid(): progress.call(String(TranslationServer.translate("Cleaning asset cache: removed %d old entries")) % int(report.entries_removed))
 			await tree.process_frame
 			if _folder() != folder: _maintaining = false; return report
 			slice = Time.get_ticks_usec()
