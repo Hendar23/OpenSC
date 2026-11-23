@@ -1,6 +1,8 @@
 extends "res://tests/verify_remaining_stage_two.gd"
 const Survivors = preload("res://mission_survivors.gd")
 const Identity = preload("res://entity_identity.gd")
+const Wreck = preload("res://falling_submarine.gd")
+const Debris = preload("res://submarine_death.gd")
 
 func run() -> void:
 	game = preload("res://game.gd").new(); game.remember_preferences = false; root.add_child(game)
@@ -115,24 +117,35 @@ func run() -> void:
 	mission.step(20.1)
 	check(mission.enemies.all(func(agent: Node3D) -> bool: return agent.engage_player),"Ignoring warning makes all four guards attack")
 	var guards: Array[Node3D] = mission.enemies.duplicate()
+	var fall_seed := 0
+	seed(fall_seed)
+	while randf() < 0.2:
+		fall_seed += 1
+		seed(fall_seed)
+	seed(fall_seed)
 	freighter.take_weapon_damage_from(1000,freighter.global_position,game.pilot)
-	var effects := get_nodes_in_group("base_destruction")
-	check(freighter.dead and effects.size() == 1,"Red Orca starts the requested large destruction effect")
-	var demolition: Node3D = effects[0]; demolition.set_process(false)
-	check(demolition.explosions == 1 and not demolition.buildings[0].model.find_children("*","MeshInstance3D",true,false).is_empty(),"First explosion retains visible freighter geometry")
-	if DisplayServer.get_name() != "headless":
-		demolition._process(0.7)
-		for frame in range(3): await process_frame
-		await RenderingServer.frame_post_draw
-		root.get_texture().get_image().save_png("res://tests/cic-freighter-destruction.png")
+	var wrecks: Array = game.world_root.get_children().filter(func(node: Node) -> bool: return node is Wreck and node.demolition_traffic != null)
+	check(freighter.dead and wrecks.size() == 1 and get_nodes_in_group("base_destruction").is_empty(),"Red Orca launches a wreck before any staged explosions")
+	if wrecks.is_empty(): quit(1); return
+	var wreck: Wreck = wrecks[0]
+	check(wreck.fall != Wreck.Fall.INSTANT and not wreck.visual.get_children().is_empty(),"Red Orca uses the shared sinking wreck and retains its hull")
+	wreck.set_physics_process(false)
 	mission.step(1.9)
 	check(not runtime.active().is_empty(),"Original completion waits two seconds after destruction")
 	mission.step(0.2); await physics_frame; await physics_frame
 	check(runtime.active().is_empty() and game.player_progress.status.credits == 103500,"Destruction pays original 3,500-credit reward once")
-	check(is_instance_valid(demolition) and not demolition.is_queued_for_deletion(),"Mission cleanup leaves the ongoing explosion sequence intact")
+	check(is_instance_valid(wreck) and not wreck.is_queued_for_deletion(),"Mission cleanup leaves the falling wreck intact")
 	check(guards.all(func(agent: Node3D) -> bool: return is_instance_valid(agent) and game.submarine_traffic.traders.has(agent)),"Living guards persist after completion")
+	wreck._detonate()
+	var demolition := get_first_node_in_group("base_destruction")
+	check(demolition != null and demolition.explosions == 1 and not demolition.buildings[0].model.find_children("*","MeshInstance3D",true,false).is_empty(),"Detonation starts the staged blasts with the wreck hull")
+	if demolition == null: quit(1); return
+	demolition.set_process(false)
 	demolition._process(2.11)
 	check(demolition.explosions == 7 and demolition.wrecks == 1,"Six distributed explosions lead to a final large burst and debris")
+	var fragments: Array = game.world_root.get_children().filter(func(node: Node) -> bool: return node is Debris)
+	check(not fragments.is_empty() and fragments.back().collapse_unit > 0.0 and not fragments.back().pieces.is_empty()
+		and fragments.back().pieces[0].has("rest_position"),"Red Orca's final fragments are driven by the shared implosion")
 	await process_frame; await process_frame
 	check(not is_instance_valid(demolition),"Completed destruction cleans up its visual copy")
 	Survivors.clear(game.submarine_traffic)
@@ -163,9 +176,11 @@ func run() -> void:
 	await fresh("spytech")
 	mission = jobs.controller; mission._spawn_freighter()
 	mission.cargo.take_weapon_damage_from(1000,mission.cargo.global_position,game.pilot)
-	check(not get_nodes_in_group("base_destruction").is_empty(),"An unfinished demolition exists before session reset")
-	game._begin_new_game()
-	check(get_nodes_in_group("base_destruction").is_empty(),"New game removes unfinished demolition without spawning old mission debris")
+	var pending: Array = game.world_root.get_children().filter(func(node: Node) -> bool: return node is Wreck and node.demolition_traffic != null)
+	check(not pending.is_empty(),"An unfinished freighter wreck exists before session reset")
+	var pending_ids := pending.map(func(node: Node) -> int: return node.get_instance_id())
+	await game._begin_new_game()
+	check(pending_ids.all(func(id: int) -> bool: return not is_instance_id_valid(id)) and get_nodes_in_group("base_destruction").is_empty(),"New game clears pending freighter wrecks without starting an old demolition")
 	check(game.submarine_traffic.traders.all(func(agent: Node3D) -> bool: return not agent.has_meta(Survivors.TAG)),"New game clears mission aftermath")
 	runtime._cleanup(); game.free(); await process_frame
 	print("CIC covert: %d/%d checks passed" % [checks-failures,checks]); quit(1 if failures else 0)

@@ -38,6 +38,16 @@ func run() -> void:
 	activity.cameras.append(camera); camera.far = 80; activity.refresh_views(); pop.activity = activity
 	fish.position = Vector3(0,0,-70); pop._update_activity(fish,Vector3.ZERO,camera.get_frustum())
 	check(pop.detailed(fish) and fish.animation_interval == 0.0 and fish.is_processing(),"Longer active camera visibility extends both steering and pose updates")
+	pop.visibility_range = 80
+	fish.position = Vector3(0,0,60); pop._update_activity(fish,Vector3.ZERO,camera.get_frustum())
+	var phase := fish.animation_time
+	fish._physics_process(1.0/60.0)
+	check(fish.animation_time > phase and fish.offscreen_delta == 0 and not fish.is_processing(),"Off-camera fish at 60 units still move each physics tick")
+	fish.position = Vector3(0,0,75); pop._update_activity(fish,Vector3.ZERO,camera.get_frustum())
+	phase = fish.animation_time
+	fish._physics_process(1.0/60.0)
+	check(fish.animation_time == phase and fish.offscreen_delta > 0,"Off-camera steering can still batch beyond the full-rate range")
+	fish.offscreen_delta = 0.0
 	pop.activity = null; activity.free(); pop.visibility_range = 10
 	# Exercise ambient travel beyond the new smooth-range boundary.
 	fish.position = Vector3(0,0,pop.smooth_range()+2); fish.attack_range = 3; fish.flee_range = 1.5; fish.visual_animation_enabled = false

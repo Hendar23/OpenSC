@@ -80,6 +80,7 @@ func run() -> void:
 	var frames := Explosion.load_frames(folder)
 	check(frames.size() == 12 and Explosion.smoke_frames.size() == 3,"Original explosion and smoke BMPs load")
 	Explosion.enhanced_enabled = true
+	Explosion.classic_enabled = true
 	var burst := Explosion.new(); world.add_child(burst); burst.setup(frames,2,null); burst.set_process(false); burst._process(0.5)
 	check(burst.lobes.size() == 8 and burst.clouds.size() == 12,"Enhanced explosion has bounded layered bursts and smoke")
 	check(burst.lobes[0].node.visible and burst.clouds[0].node.visible,"Burst and smoke overlap")
@@ -98,6 +99,7 @@ func run() -> void:
 	check(shake.strength > 0,"Shake proximity follows the sub when camera is zoomed out")
 	for tick in range(120): shake._process(0.0167)
 	check(camera.h_offset == 0 and camera.v_offset == 0,"Shake settles without altering camera pose")
+	Explosion.enhanced_enabled = true
 	var menu := preload("res://gameplay_menu.gd").new(); menu.settings_path = "res://tests/cache-traffic-fixtures/effect-options.cfg"; menu.remember_preferences = false; root.add_child(menu)
 	check(Explosion.enhanced_enabled and menu.replay_enabled,"General options always enable enhanced effects and default replay on")
 	menu._toggle_replay(); check(not menu.replay_enabled and Explosion.enhanced_enabled,"Replay switch leaves enhanced effects enabled")

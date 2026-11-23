@@ -158,9 +158,12 @@ func _chunk_supported(part: MeshInstance3D) -> bool:
 func _move_chunk(piece: Dictionary, delta: float) -> void:
 	var part: MeshInstance3D = piece.node
 	piece.velocity *= exp(-1.3 * delta); piece.velocity.y -= delta * 0.9
-	var previous := part.global_position
-	var next: Vector3 = previous + piece.velocity * delta
 	part.rotation += piece.spin * delta * exp(-age)
+	_move_chunk_to(piece,part.global_position + piece.velocity * delta)
+
+func _move_chunk_to(piece: Dictionary, next: Vector3) -> void:
+	var part: MeshInstance3D = piece.node
+	var previous := part.global_position
 	# Support height uses the rotated fragment, so it rests on the floor.
 	var support := _support_height(part)
 	var space := get_world_3d().direct_space_state

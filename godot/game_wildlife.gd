@@ -25,19 +25,29 @@ func _reset_provisional_wildlife() -> void:
 	if population == null: return
 	var random := RandomNumberGenerator.new()
 	random.seed = 8675309 + int(game.world_root.get_meta("wildlife_generation")) * 104729
+	var player_position: Vector3 = game.pilot.global_position
+	var hull_radius: float = game.pilot.wildlife_spawn_radius
 	for fish in population.get_children():
 		fish.health = fish.max_health
 		if fish.dead:
 			fish.dead = false; fish.health = fish.max_health; fish.visible = true; fish.collision_layer = 8; fish.collision_mask = 7
 			fish.get_child(0).set_deferred("disabled",false); fish.set_physics_process(true); fish.set_process(true)
+		# The original placement was checked against the starting hull too.
+		var next: Vector3 = fish.position
+		if not Creatures.clears_player(next,fish.radius,player_position,hull_radius):
+			var original: Vector3 = fish.get_meta("spawn_position",fish.home)
+			if Creatures.clears_player(original,fish.radius,player_position,hull_radius): next = original
 		for attempt in range(24):
 			var point: Vector3 = fish.home + Vector3(random.randf_range(-3, 3), random.randf_range(-0.5, 0.5), random.randf_range(-3, 3))
 			if point.y + fish.radius >= game.pilot.surface_height or not Creatures._clear(game.world_root, point, fish.radius): continue
-			fish.position = point
+			if not Creatures.clears_player(point,fish.radius,player_position,hull_radius): continue
+			next = point
+			break
+		if next != fish.position:
+			fish.position = next
 			fish.rng.seed = random.randi()
 			fish._choose_goal()
 			fish.reset_physics_interpolation()
-			break
 
 func _update_wildlife_density() -> void:
 	game.wildlife_density_label.set_message("Wildlife density: %.0f%%",[game.wildlife_density_slider.value])

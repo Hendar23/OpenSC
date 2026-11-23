@@ -28,8 +28,15 @@ func read(slot: int) -> Dictionary:
 	var parser := JSON.new()
 	if parser.parse(file.get_as_text()) != OK: error = tr("This save is damaged."); return {}
 	var data: Variant = parser.data
-	if not valid(data): error = tr("This save is damaged or uses an unsupported version."); return {}
+	if not valid(data) or _has_active_mission(data):
+		error = tr("This save is damaged or uses an unsupported version.")
+		return {}
 	return data
+
+static func _has_active_mission(data: Dictionary) -> bool:
+	var progress: Variant = data.get("progress")
+	return progress is Dictionary and progress.has("missions") and not progress.missions.active.is_empty()
+
 static func valid(data: Variant) -> bool:
 	if not data is Dictionary or data.get("version") != VERSION: return false
 	if data.has("scenery_seed"):
@@ -70,7 +77,7 @@ static func valid(data: Variant) -> bool:
 func write(slot: int, snapshot: Dictionary) -> Error:
 	error = ""
 	if slot < -1 or slot >= SLOT_COUNT or not valid(snapshot): error = tr("Cannot save invalid game state."); return ERR_INVALID_DATA
-	if not snapshot.get("progress",{}).get("missions",{}).get("active",{}).is_empty():
+	if _has_active_mission(snapshot):
 		error = tr("Saving is unavailable during an active mission."); return ERR_UNAVAILABLE
 	var serialized := JSON.stringify(snapshot)
 	if serialized.to_utf8_buffer().size() > MAX_FILE_BYTES: error = tr("Save file is too large."); return ERR_INVALID_DATA

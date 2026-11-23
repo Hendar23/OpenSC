@@ -41,11 +41,11 @@ func run() -> void:
 	for kind in ["zapper","zapperup"]:
 		agent.armament.select_weapon(kind); target.received = 0
 		agent.armament.begin_frame(0.04); agent.armament.attack(0.04,target)
-		check(is_equal_approx(target.received,0.375 if kind == "zapper" else 0.75),kind+" damages the real hit body at the tuned 25 Hz strength")
+		check(is_equal_approx(target.received,0.1875 if kind == "zapper" else 0.375),kind+" damages the real hit body at the tuned 25 Hz strength")
 		check(agent.armament.arcs[0].firing and agent.armament.arcs[1].firing == (kind == "zapperup"),kind+" uses the corresponding single/double arc")
 		for tick in range(30):
 			agent.armament.begin_frame(1.0/60.0); agent.armament.attack(1.0/60.0,target)
-		check(is_equal_approx(target.received,3.75 if kind == "zapper" else 7.5),kind+" delivers exactly the intended burst damage and stops during cooldown")
+		check(is_equal_approx(target.received,1.875 if kind == "zapper" else 3.75),kind+" delivers exactly the intended burst damage and stops during cooldown")
 	check(agent.player_attack_announced,"Alternative weapons trigger pirate engagement feedback")
 	var wall := StaticBody3D.new(); wall.position.z = 1.4; world.add_child(wall)
 	var block := CollisionShape3D.new(); block.shape = BoxShape3D.new(); block.shape.size = Vector3(2,2,0.1); wall.add_child(block)
@@ -62,7 +62,7 @@ func run() -> void:
 	check(target.received > 0,"Upgraded zapper reaches farther")
 	for tick in range(10): agent.armament.begin_frame(0.04)
 	agent.armament.attack(0.04,target)
-	check(is_equal_approx(target.received,0.75),"Ticks without a target expire rather than being banked")
+	check(is_equal_approx(target.received,0.375),"Ticks without a target expire rather than being banked")
 	agent.armament.select_weapon("electro")
 	check(agent.armament.weapon_id == "missile","Legacy NPC Electro Bolt loadouts fall back to torpedoes")
 	agent.armament.select_weapon("zapperup"); agent.armament.attack(0.04,target)

@@ -159,6 +159,8 @@ func capture(delta: float) -> void:
 	_register_pending()
 	var appearances := {}
 	var visual_began := Time.get_ticks_usec()
+	# The free camera can see poses that were offscreen during recording.
+	get_tree().call_group("marine_life","sample_offscreen_replay_pose")
 	for id in tracks.keys():
 		var track: RefCounted = tracks[id]
 		track.record(tick,timeline,appearances)

@@ -173,7 +173,8 @@ func _mine(point: Vector3) -> void:
 func _destroyed() -> void:
 	resolved = true; walker.dead = true; walker.hide(); walker.disable_chassis_collision()
 	if armament != null: armament.set_physics_process(false)
-	jobs.burst(walker.global_position,3.0); jobs.radio("d10",true); victory_clock = 8.0
+	var explosion: Node3D = jobs.burst(walker.global_position,3.0)
+	jobs.radio("d10",true); victory_clock = 8.0
 	# Retail releases an intact WALKERHEAD with .2 shields, rather than
 	# turning the head into a second set of chassis fragments.
 	if is_instance_valid(head_visual):
@@ -185,6 +186,7 @@ func _destroyed() -> void:
 		head_visual.set_meta("exclude_from_debris",true)
 	var wreck := preload("res://submarine_death.gd").new(); jobs.game.world_root.add_child(wreck); wreck.global_transform = walker.global_transform
 	wreck.setup_machine(walker,walker.appearance,jobs.game.submarine_traffic.bubble_texture)
+	wreck.follow_explosion(explosion)
 
 func release_survivors() -> void:
 	for ship in minelayers+allies:

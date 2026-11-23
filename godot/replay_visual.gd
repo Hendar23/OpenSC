@@ -2,13 +2,14 @@ extends RefCounted
 ## A visual-only history. Resources are retained, never gameplay nodes/scripts.
 const CAPACITY := 602
 const NO_MATERIAL_VALUES: Array = []
-const MATERIAL_FIELDS := ["opacity","albedo_texture","emission_texture","albedo_color","emission_color","uv_offset","strength","beam_length","beam_width","seed","light_color","propeller_bend","drift_distance","cloud_center","flare_color","brightness","reach","diameter","cone_cosine","forward_sign","solar","lunar","arc_scale","arc_phase","arc_strength"]
+const MATERIAL_FIELDS := ["opacity","albedo_texture","emission_texture","albedo_color","emission_color","uv_offset","strength","beam_length","beam_width","seed","light_color","propeller_bend","drift_distance","cloud_center","flare_color","brightness","reach","diameter","cone_cosine","forward_sign","solar","lunar","blast_unit","spill_over","arc_scale","arc_phase","arc_strength"]
 var source: WeakRef
 var detached := false
 var kind := ""
 var stride := 14
 var data := PackedFloat32Array()
 var stamps := PackedInt64Array()
+var blast_phases := PackedFloat32Array()
 var versions: Array[Dictionary] = []
 var previous: Array = []
 var proxy: Node3D
@@ -29,6 +30,7 @@ func setup(node: Node3D, time: float) -> void:
 	if node is MeshInstance3D and node.mesh is ArrayMesh: stride += node.mesh.get_blend_shape_count()
 	mutable_mesh = node.get_meta("replay_mutable_mesh",false)
 	data.resize(CAPACITY*stride); stamps.resize(CAPACITY); stamps.fill(-1)
+	if node.get_meta("replay_blast_phase",false): blast_phases.resize(CAPACITY)
 
 func _drop_version() -> void:
 	versions.pop_front()
@@ -69,6 +71,7 @@ func record(tick: int, time: float, appearances: Dictionary = {}) -> void:
 	data[offset+13] = versions.back().tick
 	if node is MeshInstance3D:
 		for index in range(stride-14): data[offset+14+index] = node.get_blend_shape_value(index)
+		if not blast_phases.is_empty(): blast_phases[slot] = node.material_override.get_shader_parameter("blast_age")
 	# Keep one preceding appearance for interpolation across the buffer edge.
 	while versions.size() > 1 and (versions[1].tick <= tick-CAPACITY+1 or versions[1].time <= time-30.0): _drop_version()
 
@@ -216,6 +219,10 @@ func show_at(root: Node3D, tick: int, fraction: float, time: float) -> void:
 	proxy.global_transform = pose
 	if proxy is MeshInstance3D:
 		for index in range(stride-14): proxy.set_blend_shape_value(index,lerpf(data[offset+14+index],data[next+14+index],fraction) if interpolate else data[offset+14+index])
+		if not blast_phases.is_empty():
+			var phase := blast_phases[slot]
+			if interpolate: phase = lerpf(phase,blast_phases[(tick+1)%CAPACITY],fraction)
+			proxy.material_override.set_shader_parameter("blast_age",phase)
 	elif kind == "burst": _burst(version.state,time-born)
 
 func _apply(state: Dictionary) -> void:

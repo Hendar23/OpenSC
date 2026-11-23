@@ -251,11 +251,13 @@ func retain_scene_until_docking(scene: Node3D) -> void:
 	retained_props.append(scene)
 	if scene.has_meta("mission_owner"): scene.remove_meta("mission_owner")
 
-func _retained_prop_destroyed(body: Node3D) -> void:
+func _retained_prop_destroyed(body: Node3D, explosion: Node3D = null) -> void:
 	if not is_instance_valid(body): return
 	var effect := preload("res://submarine_death.gd").new()
 	game.world_root.add_child(effect); effect.global_position = body.global_position
 	effect.setup_machine(body,body.get_child(0),game.submarine_traffic.bubble_texture,[],body.linear_velocity)
+	if is_instance_valid(explosion): effect.follow_explosion(explosion)
+	else: effect.configure_bubble_collapse()
 	body.hide()
 
 func _clear_retained_props() -> void:

@@ -4,8 +4,8 @@ const Assets = preload("res://clump_loader.gd")
 const Zapper = preload("res://submarine_weapons.gd")
 const Damage = preload("res://original_damage.gd")
 const BURST_DURATION := 0.4
-# A pirate TMISSILE at terminal speed deals 3.75 raw damage to a stationary target.
-const BURST_DAMAGE := 3.75
+# A regular burst deals half the raw damage of a full-speed pirate torpedo hit on a stationary target.
+const BURST_DAMAGE := 1.875
 const DAMAGE_PER_TICK := BURST_DAMAGE / (BURST_DURATION * Damage.TICKS_PER_SECOND)
 const WEAPONS := ["missile","zapper","zapperup"]
 var agent: Node3D

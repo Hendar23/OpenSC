@@ -510,11 +510,12 @@ func _fire_base(defence: Dictionary) -> Node3D:
 	missile.get_child(0).show()
 	return missile
 
-func burst(point: Vector3, size: float) -> void: _burst(point,size)
+func burst(point: Vector3, size: float) -> Node3D: return _burst(point,size)
 
-func _burst(point: Vector3, size: float) -> void:
+func _burst(point: Vector3, size: float) -> Node3D:
 	var effect := preload("res://mine_explosion.gd").new(); game.world_root.add_child(effect); effect.global_position = point
 	effect.setup(game.submarine_traffic.explosion_frames,size,game.submarine_traffic.explosion_sound)
+	return effect
 
 func _detach_walker_head() -> void:
 	if is_instance_valid(controller) and controller.has_method("detach_head"): controller.detach_head()

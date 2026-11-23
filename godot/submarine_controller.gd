@@ -109,6 +109,7 @@ var reset_transform := Transform3D.IDENTITY
 var previous_contacts := {}
 var previous_velocity := Vector3.ZERO
 var collision_parts: Array[Dictionary] = []
+var wildlife_spawn_radius := COLLIDER_RADIUS
 
 func _ready() -> void:
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON if active else Node.PHYSICS_INTERPOLATION_MODE_OFF
@@ -143,7 +144,13 @@ func fit_collision_to_visual() -> void:
 func _build_collision(parts: Array[Dictionary]) -> void:
 	for part in collision_parts: part.collider.free()
 	collision_parts = parts
+	wildlife_spawn_radius = COLLIDER_RADIUS
 	for part in collision_parts:
+		# Include the full sweep of collision parts that tilt with the pods.
+		var rest_pose: Transform3D = part.get("rest_pose",Transform3D.IDENTITY)
+		var pivot := rest_pose.origin
+		for point: Vector3 in part.points:
+			wildlife_spawn_radius = maxf(wildlife_spawn_radius,pivot.length() + point.distance_to(pivot))
 		var shape := ConvexPolygonShape3D.new()
 		shape.points = part.points
 		shape.margin = 0.005
@@ -324,6 +331,9 @@ func _contact_impact(state: PhysicsDirectBodyState3D) -> Dictionary:
 		var body := state.get_contact_collider_object(index) as CollisionObject3D
 		# The water ceiling only limits movement; it is never a hull impact.
 		if body != null and body.collision_layer & 4 != 0 and body.collision_layer & 1 == 0: continue
+		# Solid contacts can be resolved before the mine's overlap query sees them.
+		if controls_enabled and body is FloatingMine and body.player == self and body.armed and not body.dead and bool(body.stats.get("trigger_on_contact",true)):
+			body.detonate.call_deferred()
 		# Feedback includes harmless wildlife contacts and gentle impacts,
 		# independently of damage and sound thresholds or sound cooldown.
 		var rumble_id := state.get_contact_collider_id(index)

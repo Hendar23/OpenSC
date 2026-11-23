@@ -131,19 +131,7 @@ func _load_environment(folder: String) -> bool:
 func _populate_world(folder: String) -> void:
 	game._progress("Preparing wildlife and world objects")
 	await game.get_tree().process_frame
-	if map_data.is_empty():
-		await Creatures.populate(game.world_root, folder, game.get_tree(), game._progress)
-		var stats: Dictionary = game.gameplay_catalogue.tables.creature_stats.records
-		var death_frames := preload("res://creature_death.gd").load_gore(folder)
-		var death_flesh := Assets._load_texture(folder,"BEEF2","",{})
-		for fish in game.world_root.get_node("AmbientFish").get_children():
-			fish.configure_health(float(stats.get(str(fish.get_meta("species","")).to_lower(),{}).get("health",10)))
-			fish.damage_sustain = float(stats.get(str(fish.get_meta("species","")).to_lower(),{}).get("sustain",1.0))
-			fish.death_texture = Assets._load_texture(folder,"BUBBLE","BUBBLEM",{})
-			fish.death_sound = Weapons._sound(folder,"audio.creature.death","SPLAT")
-			fish.death_frames = death_frames
-			fish.death_flesh_texture = death_flesh
-	else:
+	if not map_data.is_empty():
 		game.wildlife = Wildlife.new()
 		game.wildlife.max_active = game.front_end.gameplay_menu.wildlife_limit
 		game.wildlife.gameplay_catalogue = game.gameplay_catalogue
@@ -172,6 +160,22 @@ func _populate_world(folder: String) -> void:
 	canopy_reflections.setup(game.world_root.get_world_3d(),game.front_end.player_graphics.settings.reflective_canopies)
 	if game.wildlife != null:
 		for template in game.wildlife.templates.values(): game.natural_light.attach(template)
+
+func _populate_provisional_wildlife(folder: String) -> void:
+	await Creatures.populate(game.world_root,folder,game.get_tree(),game._progress,game.pilot)
+	var population: Node3D = game.world_root.get_node("AmbientFish")
+	var stats: Dictionary = game.gameplay_catalogue.tables.creature_stats.records
+	var death_frames := preload("res://creature_death.gd").load_gore(folder)
+	var death_flesh := Assets._load_texture(folder,"BEEF2","",{})
+	for fish in population.get_children():
+		fish.configure_health(float(stats.get(str(fish.get_meta("species","")).to_lower(),{}).get("health",10)))
+		fish.damage_sustain = float(stats.get(str(fish.get_meta("species","")).to_lower(),{}).get("sustain",1.0))
+		fish.death_texture = Assets._load_texture(folder,"BUBBLE","BUBBLEM",{})
+		fish.death_sound = Weapons._sound(folder,"audio.creature.death","SPLAT")
+		fish.death_frames = death_frames
+		fish.death_flesh_texture = death_flesh
+	game.water_visuals.attach(population)
+	game.natural_light.attach(population)
 
 func _setup_vehicle(folder: String) -> void:
 	game._progress("Preparing submarine equipment")
@@ -221,6 +225,9 @@ func _setup_vehicle(folder: String) -> void:
 	game.pilot.visual = game.model
 	game.pilot.setup_damage_smoke(folder)
 	game.pilot.fit_collision_to_visual()
+	if map_data.is_empty():
+		game.pilot.reset_at(point,game.world_root.get_meta("player_spawn_basis",Basis.IDENTITY))
+		await _populate_provisional_wildlife(folder)
 	game.equipment = Equipment.new()
 	game.pilot.add_child(game.equipment)
 	game.equipment.setup(game.pilot, folder)
@@ -360,6 +367,7 @@ func _finish_start(folder: String) -> void:
 			if game.cockpit_hud.map_data.scenery_baked: break
 			await game.get_tree().process_frame
 	await preload("res://asset_cache.gd").maintain(game.get_tree(), game._progress)
+	await SessionExplosion.warm_up(game.world_root,game.get_viewport().get_camera_3d())
 	game._progress("Ready")
 	game.front_end.progress_bar.value = 100.0
 	if not game.loading_save: game.loading_canvas.visible = false

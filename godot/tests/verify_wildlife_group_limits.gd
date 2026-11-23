@@ -31,9 +31,31 @@ func run() -> void:
 	pop.player = observer; pop.view_camera = camera; pop.visibility_range = 30
 	pop.definitions.silver = {"id":"silver","model":"SILVER","scale_min":100,"scale_max":100,"speed":1.0,"group_behaviour":"shoaling","response":"ignore","mobility":"swimming","health":6.0}
 	pop.templates.silver = Node3D.new(); pop.model_bounds.silver = AABB(Vector3.ONE * -0.1,Vector3.ONE * 0.2)
+	var overlapping := state("overlapping",1)
+	overlapping.group.position = [0,0,0]; overlapping.group.radius = 0.0
+	pop.random_groups.append(overlapping)
+	pop._stream_update(true)
+	check(overlapping.members.is_empty() and not overlapping.attempted,"Initial streaming retries later when a fish's placement overlaps the starting submarine")
+	# The centre is outside the hull. A large fish's body still reaches it.
+	overlapping.group.position = [0,0,2]
+	pop.model_bounds.silver = AABB(Vector3.ONE * -1.0,Vector3.ONE * 2.0)
+	pop._stream_update(true)
+	check(overlapping.members.is_empty(),"Initial streaming accounts for the fish's full radius")
+	pop.model_bounds.silver = AABB(Vector3.ONE * -0.1,Vector3.ONE * 0.2)
+	pop.random_groups.clear()
+	var approached := state("approached",2); pop.random_groups.append(approached)
+	pop._stream_update(); pop._advance_spawn()
+	check(not pop.pending_spawn.is_empty(),"An off-screen shoal prepares before its collision is enabled")
+	if not pop.pending_spawn.is_empty():
+		observer.position = pop.pending_spawn.placements[0].point
+		await finish_spawn(pop)
+	check(pop.pending_spawn.is_empty() and approached.members.is_empty() and not approached.attempted,"Swimming into a prepared spawn cancels it before the fish go live")
+	observer.position = Vector3.ZERO
+	pop.random_groups.clear()
 	var shoal := state("twenty",20); pop.random_groups.append(shoal)
 	pop._stream_update()
 	check(not pop.pending_spawn.is_empty() and pop.active_count() == 0,"Streaming queues a whole shoal without creating all its actors in one frame")
+	await process_frame; await process_frame
 	pop._advance_spawn()
 	check(pop.pending_spawn.members.size() == 1 and pop.active_count() == 0 and not shoal.attempted,"One prepared fish remains hidden and cannot activate an incomplete shoal")
 	check(pop.spawn_staging.get_child(0).collision_layer == 0 and not pop.spawn_staging.get_child(0).is_physics_processing(),"Preparing wildlife has no live collision or simulation")

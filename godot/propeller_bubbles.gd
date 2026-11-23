@@ -76,7 +76,7 @@ func emit_from(index: int, origin: Vector3, exhaust: Vector3, power: float, rate
 		particles.append({"budget_birth":birth_serial,"replay_id":replay_serial,"position": origin + jitter, "drift": exhaust * signf(power) * random.randf_range(0.06, 0.14),
 			"rise": random.randf_range(0.8, 1.2), "age": 0.0, "size": random.randf_range(0.045, 0.10)})
 
-func emit_blast_cloud(origin: Vector3, diameter: float) -> void:
+func emit_blast_cloud(origin: Vector3, diameter: float, lifetime: float = 0.0, rise_rate: float = 1.0) -> void:
 	var radius := clampf(diameter * 0.22,0.15,1.2)
 	for index in range(96):
 		if particles.size() >= capacity or bubble_limit == 0 or origin.y >= surface_height: break
@@ -85,9 +85,11 @@ func emit_blast_cloud(origin: Vector3, diameter: float) -> void:
 		var spread := Vector3(random.randf_range(-1.0,1.0),random.randf_range(-0.2,0.2),random.randf_range(-1.0,1.0))
 		birth_serial += 1
 		replay_serial += 1
-		particles.append({"budget_birth":birth_serial,"replay_id":replay_serial,"position":origin + spread * radius,
-			"drift":spread * random.randf_range(0.2,0.5),"rise":random.randf_range(0.8,1.2),
-			"age":0.0,"size":random.randf_range(0.045,0.16),"surface_bound":is_finite(surface_height)})
+		var particle := {"budget_birth":birth_serial,"replay_id":replay_serial,"position":origin + spread * radius,
+			"drift":spread * random.randf_range(0.2,0.5),"rise":random.randf_range(0.8,1.2) * rise_rate,
+			"age":0.0,"size":random.randf_range(0.045,0.16),"surface_bound":lifetime <= 0.0 and is_finite(surface_height)}
+		if lifetime > 0.0: particle.lifetime = lifetime
+		particles.append(particle)
 
 func _physics_process(delta: float) -> void:
 	advance(delta,false)

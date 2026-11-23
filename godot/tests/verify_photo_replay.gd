@@ -81,6 +81,23 @@ func run() -> void:
 	previous_life.show_at(lifetimes,1,0,0.1); next_life.show_at(lifetimes,1,0,0.1)
 	check(not previous_life.proxy.visible and next_life.proxy.visible and next_life.proxy.position.x == 100,"Reused fish appear only during their own lifetime")
 	recycled.free(); replay.clear(); lifetimes.free()
+	var turtle_visual := Node3D.new(); turtle_visual.set_meta("asset_source","TURTLE.DFF")
+	var turtle_body := Node3D.new(); turtle_body.name = "Frame_0"; turtle_visual.add_child(turtle_body)
+	var flipper := MeshInstance3D.new(); flipper.name = "Frame_4"; flipper.mesh = ArrayMesh.new(); turtle_body.add_child(flipper)
+	var turtle := preload("res://fish_controller.gd").new()
+	turtle.setup(turtle_visual,Vector3(0,150,20),AABB(Vector3.ONE * -200,Vector3.ONE * 400),200,0.5,1)
+	game.world_root.add_child(turtle)
+	turtle.visual_animation_enabled = false; turtle.set_process(false)
+	replay._scan(turtle)
+	turtle.animation_time = 0.0; replay.capture(0.05)
+	var first_pose := flipper.global_basis
+	turtle.animation_time = 1.0 / 3.0; replay.capture(0.05)
+	var next_pose := flipper.global_basis
+	var turtle_track: RefCounted = replay.tracks[flipper.get_instance_id()]
+	var turtle_playback := Node3D.new(); game.world_root.add_child(turtle_playback)
+	turtle_track.show_at(turtle_playback,0,0.5,0.075)
+	check(not first_pose.is_equal_approx(next_pose) and turtle_track.proxy.basis.is_equal_approx(first_pose.slerp(next_pose,0.5)),"Replay samples and interpolates off-camera wildlife animation with live pose updates disabled")
+	turtle.free(); replay.clear(); turtle_playback.free()
 	var actor := Actor.new(); game.world_root.add_child(actor)
 	var mesh := MeshInstance3D.new(); mesh.mesh = BoxMesh.new(); actor.add_child(mesh)
 	var material := StandardMaterial3D.new(); material.albedo_color = Color.RED; mesh.material_override = material
@@ -97,8 +114,10 @@ func run() -> void:
 	var ghost_track: RefCounted = replay.tracks[ghost.get_instance_id()]
 	ghost.free(); replay.capture(0.05)
 	# Record a real enhanced explosion, its texture changes and fade state.
+	preload("res://mine_explosion.gd").classic_enabled = true
 	var explosion := preload("res://mine_explosion.gd").new(); actor.add_child(explosion)
 	explosion.global_position = Vector3(8,150,0); explosion.setup(game.submarine_explosion_frames,2,null); explosion.set_process(false)
+	preload("res://mine_explosion.gd").classic_enabled = false
 	replay._scan(explosion); explosion._process(0.1); replay.capture(0.05)
 	var lobe_track: RefCounted = replay.tracks[explosion.lobes[0].node.get_instance_id()]
 	var cloud_track: RefCounted = replay.tracks[explosion.clouds[0].node.get_instance_id()]

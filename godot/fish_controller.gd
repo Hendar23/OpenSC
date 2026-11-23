@@ -1,6 +1,7 @@
 extends CharacterBody3D
 
 const ANIMATION_SPEED := 0.5
+const MIN_FULL_RATE_DISTANCE := 64.0
 const CreatureAnimation = preload("res://creature_animation.gd")
 var animation: RefCounted
 var turn_speed := 60.0
@@ -175,7 +176,8 @@ func _advance_ambient(delta: float) -> void:
 	animation_time += delta * playback_rate
 
 func submarine_contact_damage(sub_velocity: Vector3, _normal: Vector3) -> float:
-	if dead or combat == null or not combat.settings.get("original_contact",false) or population == null or not is_instance_valid(population.player): return 0.0
+	if dead or combat == null or combat.settings.has_zapper or not combat.settings.get("original_contact",false): return 0.0
+	if population == null or not is_instance_valid(population.player): return 0.0
 	var toward: Vector3 = (global_position - population.player.global_position).normalized()
 	var closing := maxf(0,(sub_velocity - velocity).dot(toward))
 	return preload("res://original_damage.gd").object_contact(closing,float(combat.settings.contact_inflict))
@@ -268,9 +270,16 @@ func _process(delta: float) -> void:
 	if not animation_refresh and animation_elapsed < animation_interval: return
 	animation_refresh = false
 	animation_elapsed = fmod(animation_elapsed,animation_interval) if animation_interval > 0.0 else 0.0
+	_apply_swim_pose()
+	_update_lure()
+
+func sample_offscreen_replay_pose() -> void:
+	if not visual_animation_enabled and is_physics_processing() and animation != null and animation.has_animation():
+		_apply_swim_pose()
+
+func _apply_swim_pose() -> void:
 	var between_ticks := Engine.get_physics_interpolation_fraction() / float(Engine.physics_ticks_per_second)
 	animation.apply(animation_time + between_ticks * playback_rate)
-	_update_lure()
 
 func configure_crawler(size: Vector3) -> void:
 	if walks_sideways: size = Vector3(size.z,size.y,size.x)
@@ -487,14 +496,13 @@ func _physics_process(delta: float) -> void:
 		ambient_mode = true
 		_advance_ambient(delta); return
 	ambient_mode = false
-	# Offscreen wildlife still roams, but need not run expensive steering and
-	# terrain probes at 60 Hz. Close creatures retain full-rate reactions.
-	if not visual_animation_enabled and population != null and population.streaming and is_instance_valid(population.player) and global_position.distance_squared_to(population.player.global_position) > pow(maxf(maxf(attack_range,flee_range),3.0) + radius,2):
-		offscreen_delta += delta
-		if offscreen_delta < 0.1: return
-		delta = offscreen_delta; offscreen_delta = 0.0
-	else:
-		delta += offscreen_delta; offscreen_delta = 0.0
+	# Keep movement continuous around the player, including behind the camera.
+	if not visual_animation_enabled and population != null and population.streaming and is_instance_valid(population.player):
+		var full_rate_distance := maxf(MIN_FULL_RATE_DISTANCE,maxf(attack_range,flee_range)) + radius
+		if global_position.distance_squared_to(population.player.global_position) > full_rate_distance * full_rate_distance and offscreen_delta + delta < 0.1:
+			offscreen_delta += delta
+			return
+	delta += offscreen_delta; offscreen_delta = 0.0
 	if mobility == "crawling" and not ground_initialized: _ground_on_terrain(1.0)
 	turn_timer -= delta
 	# Arrival belongs to the goal's centre, not the collision sphere size.
@@ -582,12 +590,17 @@ func _physics_process(delta: float) -> void:
 		velocity *= time_scale
 		move_and_slide()
 		velocity /= time_scale
-	if mobility != "crawling" and get_slide_collision_count() > 0:
-		var normal := get_slide_collision(0).get_normal()
-		avoidance = (direction + normal * 2.0).normalized()
-		avoidance_timer = 1.0
-		goal = position + avoidance * 6.0
-		turn_timer = 2.0
+	if mobility != "crawling":
+		for index in range(get_slide_collision_count()):
+			var contact := get_slide_collision(index)
+			# The hull still blocks movement. Contact with the zapper target
+			# does not steer the fish away before it can fire.
+			if engaged and not escaping and combat != null and combat.settings.has_zapper and contact.get_collider() == combat.target: continue
+			avoidance = (direction + contact.get_normal() * 2.0).normalized()
+			avoidance_timer = 1.0
+			goal = position + avoidance * 6.0
+			turn_timer = 2.0
+			break
 	# The collider enforces the surface; this clamp also covers oversized steps.
 	position.y = minf(position.y, surface_height - radius - safe_margin)
 	_update_orientation()

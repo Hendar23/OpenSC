@@ -130,8 +130,7 @@ func prepare_abstract_route() -> bool:
 
 func _destroy_visuals() -> void:
 	if not staged_destruction: super._destroy_visuals(); return
-	var effect := preload("res://base_destruction.gd").new(); system.get_parent().add_child(effect)
-	effect.setup_vessel(get_parent(),system)
+	preload("res://falling_submarine.gd").launch(system,get_parent(),[get_parent()],body.velocity,false,true)
 
 static func install_mission(model: Node3D, values: Dictionary, controller: Script = null) -> Node3D:
 	var agent = preload("res://trader_submarine.gd").install(model,values,controller if controller != null else load("res://mission_vessel.gd"))

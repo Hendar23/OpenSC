@@ -3,6 +3,7 @@ const Progress = preload("res://player_progress.gd")
 const Rules = preload("res://mission_rules.gd")
 const FallingSubmarine = preload("res://falling_submarine.gd")
 const Explosion = preload("res://mine_explosion.gd")
+const Debris = preload("res://submarine_death.gd")
 var game: Node
 var runtime: Node
 var jobs: Node
@@ -80,7 +81,7 @@ func run() -> void:
 	Input.parse_input_event(escape); await process_frame
 	check(game.front_end.menu_layer.visible and paused,"Actual Esc opens main menu from the dock home screen")
 	game._resume_game()
-	check(game.dock_interface.visible and game.dock_interface.page == "home" and paused,"Continue restores docked city UI")
+	check(game.dock_interface.visible and game.dock_interface.page == "home" and not paused,"Continue restores the dock UI and resumes the outside world")
 	game.dock_interface.open("missions")
 	Input.parse_input_event(escape); await process_frame
 	check(not game.front_end.menu_layer.visible and game.dock_interface.page == "home","Esc from a dock subpage keeps its Back behaviour")
@@ -190,10 +191,13 @@ func run() -> void:
 	game.events.city_docked.emit(1)
 	check(not is_instance_valid(rescued_freighter) and runtime.retained_props.is_empty(),"Next player docking removes the retained freighter even with no active mission")
 	mission = await fresh("bomb")
-	var bomb: Dictionary = mission.bombs[0]; bomb.body.global_position = mission.ship.global_position
+	var bomb: Dictionary = mission.bombs[0]; bomb.body.global_position = mission.ship.global_position + Vector3.RIGHT * 0.6
 	game.pilot.global_position = mission.ship.global_position+Vector3.UP*20
 	bomb.body.take_weapon_damage(1000)
 	check(not runtime.active().is_empty() and mission.failed,"Freighter loss keeps original four-second outcome delay")
+	var bomb_wrecks: Array = game.world_root.get_children().filter(func(node: Node) -> bool: return node is Debris)
+	check(not bomb_wrecks.is_empty() and bomb_wrecks.back().collapse_unit > 0.0
+		and bomb_wrecks.back().to_global(bomb_wrecks.back().collapse_origin).is_equal_approx(bomb.body.global_position),"Freighter debris pulls toward the bomb's own explosion")
 	mission.step(4)
 	check(runtime.active().is_empty() and heard("an10") and game.player_progress.status.credits == 10000,"Explosion beside freighter fails without payout")
 	check(runtime.retained_props.is_empty(),"Destroyed freighter is never retained as a surviving ship")
@@ -202,6 +206,8 @@ func run() -> void:
 	runtime.finish(true)
 	later_wreck.take_weapon_damage(1000000)
 	check(later_wreck.dead and not later_wreck.visible and runtime.active().is_empty(),"Retained freighter can be destroyed without re-triggering mission failure")
+	bomb_wrecks = game.world_root.get_children().filter(func(node: Node) -> bool: return node is Debris)
+	check(not bomb_wrecks.is_empty() and bomb_wrecks.back().collapse_unit > 0.0,"Retained freighter uses the shared inward pull after mission completion")
 	runtime._session_started(false)
 	check(not is_instance_valid(later_wreck) and runtime.retained_props.is_empty(),"Session reset clears retained freighters")
 	mission = await fresh("bomb"); mission.started = true

@@ -7,6 +7,7 @@ func _init(context: Node3D) -> void:
 	game = context
 
 const SUB_RENDER_LAYER := 2
+const Docking = preload("res://docking_controller.gd")
 
 func _update_follow_camera(delta: float, snap: bool = false) -> void:
 	game.camera.cull_mask |= preload("res://remote_vehicle.gd").RENDER_LAYER
@@ -14,6 +15,12 @@ func _update_follow_camera(delta: float, snap: bool = false) -> void:
 	if game.first_person:
 		game.camera.global_transform = pose * Transform3D(Basis.IDENTITY,game.cockpit_camera_offset)
 		return
+	var next := third_person_position(pose,delta,snap)
+	var target: Vector3 = pose.origin + Vector3.UP * 0.35
+	game.camera.global_position = next
+	if next.distance_to(target) > 0.01: game.camera.look_at(target, Vector3.UP)
+
+func third_person_position(pose: Transform3D, delta: float, snap: bool) -> Vector3:
 	var target: Vector3 = pose.origin + Vector3.UP * 0.35
 	var forward: Vector3 = -pose.basis.z
 	var heading := atan2(-forward.x, -forward.z)
@@ -43,8 +50,13 @@ func _update_follow_camera(delta: float, snap: bool = false) -> void:
 	hit = game.get_world_3d().direct_space_state.intersect_ray(query)
 	if not hit.is_empty(): next = target + (next-target).normalized() * maxf(0.02,target.distance_to(hit.position)-0.05)
 	next.y = minf(next.y, game.pilot.surface_height - 0.2)
-	game.camera.global_position = next
-	if next.distance_to(target) > 0.01: game.camera.look_at(target, Vector3.UP)
+	return next
+
+func update_cinematic_camera() -> void:
+	game.camera.global_position = game.docking.cinematic_camera
+	var target: Vector3 = game.pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.35
+	if game.camera.global_position.distance_to(target) > 0.01: game.camera.look_at(target, Vector3.UP)
+	game.camera_was_frozen = true
 
 func _set_camera_mode(cockpit: bool) -> void:
 	if game.pilot == null: return
@@ -52,5 +64,9 @@ func _set_camera_mode(cockpit: bool) -> void:
 	game.first_person = cockpit
 	if cockpit: game.camera.cull_mask &= ~SUB_RENDER_LAYER
 	else: game.camera.cull_mask |= SUB_RENDER_LAYER
-	game._update_follow_camera(0.0,true)
+	if not cockpit and game.docking != null and game.docking.stage != Docking.Stage.DOCKED and game.docking.camera_frozen():
+		update_cinematic_camera()
+	else:
+		game.camera_was_frozen = false
+		game._update_follow_camera(0.0,true)
 	if is_instance_valid(game.first_person_cockpit): game.first_person_cockpit.refresh()

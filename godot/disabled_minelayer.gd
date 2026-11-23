@@ -35,6 +35,7 @@ func take_weapon_damage(strength: float, _source: Vector3 = Vector3.ZERO) -> voi
 		wreck.setup_machine(self,get_child(0),game.submarine_traffic.bubble_texture,[],linear_velocity)
 		var effect := preload("res://mine_explosion.gd").new(); game.world_root.add_child(effect); effect.global_position = global_position
 		effect.setup(game.submarine_traffic.explosion_frames,1.5,game.submarine_traffic.explosion_sound)
+		wreck.follow_explosion(effect)
 	hide(); destroyed.emit()
 
 func take_weapon_damage_from(strength: float, source: Vector3, _attacker: Node3D) -> void:

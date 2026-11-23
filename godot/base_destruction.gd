@@ -10,8 +10,9 @@ var sound: AudioStream
 var bubble_texture: Texture2D
 var explosions := 0
 var wrecks := 0
+var implode_debris := false
 
-func setup_vessel(model: Node3D, traffic: Node) -> void:
+func setup_vessel(model: Node3D, traffic: Node, vehicle: bool = false) -> void:
 	# Keep a visual copy so mission cleanup cannot remove the demolition.
 	# Never copy controllers, hull colliders, hidden missile templates or smoke.
 	var visual := Node3D.new(); traffic.get_parent().add_child(visual)
@@ -20,7 +21,7 @@ func setup_vessel(model: Node3D, traffic: Node) -> void:
 		var copy := MeshInstance3D.new(); copy.mesh = mesh.mesh; copy.material_override = mesh.material_override
 		for surface in mesh.mesh.get_surface_count(): copy.set_surface_override_material(surface,mesh.get_surface_override_material(surface))
 		visual.add_child(copy); copy.global_transform = mesh.global_transform
-	setup([visual],[],traffic)
+	setup([visual],[],traffic,0.0,vehicle)
 
 func _visible_within(node: Node3D, root: Node3D) -> bool:
 	# The dead source hull is already hidden; test its descendants only.
@@ -29,8 +30,9 @@ func _visible_within(node: Node3D, root: Node3D) -> bool:
 		node = node.get_parent() as Node3D
 	return true
 
-func setup(models: Array[Node3D], smoke: Array[Node], traffic: Node, initial_delay: float = 0.0) -> void:
+func setup(models: Array[Node3D], smoke: Array[Node], traffic: Node, initial_delay: float = 0.0, vehicle: bool = false) -> void:
 	name = "BaseDestruction"; add_to_group("base_destruction")
+	implode_debris = vehicle
 	frames = traffic.explosion_frames; sound = traffic.explosion_sound; bubble_texture = traffic.bubble_texture
 	for model in models:
 		model.reparent(self,true)
@@ -59,14 +61,16 @@ func _process(delta: float) -> void:
 			building.next += 1
 		if not building.collapsed and elapsed >= COLLAPSE_TIME:
 			building.collapsed = true
-			_burst(bounds.get_center(),clampf(bounds.size.length()*0.35,1.4,3.0))
+			var effect := _burst(bounds.get_center(),clampf(bounds.size.length()*0.35,1.4,3.0))
 			var model: Node3D = building.model
 			var wreck := preload("res://submarine_death.gd").new(); get_parent().add_child(wreck)
 			wreck.global_position = bounds.get_center()
 			wreck.setup_machine(model,model,bubble_texture)
+			if implode_debris: wreck.follow_explosion(effect)
 			wrecks += 1; model.hide(); model.queue_free()
 	if not buildings.is_empty() and buildings.all(func(building: Dictionary) -> bool: return building.collapsed): queue_free()
 
-func _burst(point: Vector3, size: float) -> void:
+func _burst(point: Vector3, size: float) -> Node3D:
 	var effect := preload("res://mine_explosion.gd").new(); get_parent().add_child(effect)
 	effect.global_position = point; effect.setup(frames,size,sound); explosions += 1
+	return effect

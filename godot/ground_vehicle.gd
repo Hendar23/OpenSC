@@ -236,6 +236,7 @@ func take_weapon_damage(strength: float, _source: Vector3 = Vector3.ZERO) -> voi
 	respawn_remaining = float(tuning.npc_respawn_delay)
 	var effect := preload("res://mine_explosion.gd").new(); get_parent().get_parent().add_child(effect); effect.global_position = global_position
 	effect.setup(explosion_frames,maxf(0.3,bounds.size.length()),explosion_sound)
+	wreck.follow_explosion(effect)
 
 func take_weapon_damage_from(strength: float, source: Vector3, attacker: Node3D) -> void:
 	var previous := report_player_attack

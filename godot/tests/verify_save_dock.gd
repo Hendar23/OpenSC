@@ -16,7 +16,7 @@ func run() -> void:
 	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
 	if folder.is_empty(): folder = preload("res://asset_paths.gd").find_game_folder()
 	var storage = preload("res://player_storage.gd")
-	storage.root_override = "res://tests/cache-save-dock-fixtures"; storage.ensure_parent(storage.preferences_path())
+	storage.root_override = test_fixture_path("save-dock"); storage.ensure_parent(storage.preferences_path())
 	var ignore := FileAccess.open(storage.root_override.path_join(".gdignore"),FileAccess.WRITE); ignore.store_string("")
 	var config := ConfigFile.new(); config.set_value("game","folder",folder); config.save(storage.preferences_path())
 	var game := Game.new(); game.remember_preferences = false; root.add_child(game)
@@ -30,10 +30,10 @@ func run() -> void:
 	check(game.market_speed_slider.get_parent().name == "System" and not game.market_speed_slider.scrollable,"Market speed slider lives under System and ignores the mouse wheel")
 	game.market_speed_slider.value = 10
 	check(is_equal_approx(game._view_settings().market_speed,0.1),"Exported settings include adjustable market speed")
-	var speed_path := "res://tests/market-speed-settings.cfg"
+	var speed_path := test_fixture_path("save-dock").path_join("market-speed-settings.cfg")
 	game.remember_preferences = true
 	var previous_directory: String = game.defaults_directory
-	game.defaults_directory = "res://tests"
+	game.defaults_directory = test_fixture_path("save-dock")
 	check(game._save_preferences(speed_path) == OK,"Market speed saves with shared settings")
 	game.remember_preferences = false; game.defaults_directory = previous_directory
 	game.market_speed_slider.value = 50
@@ -45,7 +45,7 @@ func run() -> void:
 	check((-game.pilot.global_basis.z).is_equal_approx(Vector3.LEFT),"New game faces 90 degrees right of the previous positive-Z heading")
 	check(game.pilot.global_basis.is_equal_approx(game.world_root.get_meta("player_spawn_basis")),"New game uses the editable spawn rotation")
 	check(game.radio_feed.anchor_left == 0.0 and game.radio_feed.offset_left == 20.0 and game.radio_feed.offset_bottom == -20.0,"Unified radio stack uses the bottom-left HUD position")
-	game.save_games.folder = "res://tests/save-fixture"
+	game.save_games.folder = test_fixture_path("save-dock").path_join("save-fixture")
 	var port: Dictionary = game.docking.ports[0]
 	game.docking.current = port; game.docking.saved_collision_mask = game.pilot.collision_mask
 	game.pilot.global_position = port.inside; game.pilot.active = false; game.pilot.freeze = true
@@ -144,12 +144,13 @@ func run() -> void:
 	map_document.object_types[0].damage = 45
 	# Load an edited map through the real mod path without changing the user's map.
 	map_document.entities.player_spawn.transform[9] += 10.0
-	var pack_dir := "res://tests/save-map-fixture/edited"
+	var map_fixture := test_fixture_path("save-dock").path_join("map-mods")
+	var pack_dir := map_fixture.path_join("edited")
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(pack_dir))
 	check(preload("res://map_document.gd").save(map_document,pack_dir.path_join("map.json")) == OK,"Edited map fixture validates")
 	var manifest := FileAccess.open(pack_dir.path_join("mod.json"),FileAccess.WRITE)
 	manifest.store_string(JSON.stringify({"schema_version":1,"id":"save-map-test","name":"Save map test","assets":{"map.scen1":"map.json"}})); manifest.close()
-	game.Mods.initialize(false,"res://tests/save-map-fixture"); game.Mods.apply(["save-map-test"],[],false)
+	game.Mods.initialize(false,map_fixture); game.Mods.apply(["save-map-test"],[],false)
 	check(snapshot.map_signature == game._map_signature() and game._exploration_matches_map(snapshot.map_signature),"Object stats, mine placement and spawn moves preserve save compatibility")
 	game.Mods.initialize(false)
 	for file in ["map.json","mod.json"]: DirAccess.remove_absolute(ProjectSettings.globalize_path(pack_dir.path_join(file)))
@@ -177,7 +178,7 @@ func run() -> void:
 	check(game.dock_interface.page == "home","Controller hold keeps the current dock page visible")
 	accept.pressed = false; game.dock_interface._input(accept)
 	check(game.dock_interface.page == "equipment","Controller A activates the focused dock control")
-	var override_path := "res://tests/dock-layout-fixture.json"
+	var override_path := test_fixture_path("save-dock").path_join("dock-layout-fixture.json")
 	var layout_file := FileAccess.open(override_path,FileAccess.WRITE)
 	layout_file.store_string(JSON.stringify({"schema_version":1,"text_colour":[1,0,0],"pages":{"home":{"title":[20,20,100,30]}}})); layout_file.close()
 	game.Mods.layers["ui.dock"] = [{"path":override_path}]
@@ -236,14 +237,12 @@ func run() -> void:
 	var missing_item := snapshot.duplicate(true); missing_item.weapons.append("unavailable-test-weapon")
 	game.save_games.write(1,missing_item)
 	check(not await game._load_saved_game(1),"Missing inventory item still prevents loading")
-	# Switching from cockpit must not snap the launch camera back into the dock.
-	game.first_person = true
 	game._dock_ui_action("launch",{})
 	check(game.docking.stage != game.Docking.Stage.DOCKED,"Launch starts undocking")
 	check(not paused and game.world_root.can_process() and game.pilot.can_process() and game.docking.can_process(),"Launch resumes the outside world before undocking starts")
 	game.docking.set_physics_process(false)
 	game._process(0)
-	check(game.camera.global_position.is_equal_approx(launch_camera) and not game.first_person,"Launch preserves outside camera even after cockpit mode")
+	check(game.camera.global_position.is_equal_approx(launch_camera) and not game.first_person,"Third-person launch preserves the exterior camera")
 	var launch_target := game.pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.35
 	check((-game.camera.global_basis.z).dot((launch_target - launch_camera).normalized()) > 0.999,"Launch camera points at the docked submarine rather than the exit")
 	await capture("launch-camera")

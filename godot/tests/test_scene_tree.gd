@@ -3,6 +3,11 @@ extends SceneTree
 func _init() -> void:
 	preload("res://asset_cache.gd").enabled = false
 
+func test_fixture_path(suite: String) -> String:
+	var isolated := OS.get_environment("OPENSC_TEST_FIXTURE_ROOT")
+	if not isolated.is_empty(): return isolated.path_join(suite)
+	return "res://tests/cache-%s-%d-fixtures" % [suite, OS.get_process_id()]
+
 func _finalize() -> void:
 	if "--keep-test-cache" in OS.get_cmdline_user_args(): return
 	var storage_root: String = preload("res://player_storage.gd").root_override.simplify_path()

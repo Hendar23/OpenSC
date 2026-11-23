@@ -55,6 +55,7 @@ func setup(world: Node3D, folder: String, dock_ports: Array[Dictionary], terrain
 		if box.position.y - CLEARANCE < cruise and box.end.y + CLEARANCE > cruise: obstacles.append(box.grow(CLEARANCE))
 	bubble_texture = preload("res://clump_loader.gd")._load_texture(folder,"BUBBLE","BUBBLEM",{})
 	bubbles = preload("res://propeller_bubbles.gd").new(); add_child(bubbles); bubbles.configure(bubble_texture); bubbles.surface_height = map.surface_height
+	bubbles.add_to_group("blast_bubble_emitter")
 	explosion_frames = preload("res://mine_explosion.gd").load_frames(folder)
 	explosion_sound = preload("res://submarine_weapons.gd")._sound(folder,"audio.object.mine.explosion","EXPLODE1")
 	for agent in world.find_children("Trader","Node3D",true,false):

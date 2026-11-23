@@ -5,6 +5,7 @@ const Scenery = preload("res://scenery_loader.gd")
 const Fish = preload("res://fish_controller.gd")
 const SPECIES := ["ANGEL", "JACKFISH", "LIONFISH", "SILVER", "STINGRAY", "DOGFISH", "ANGLER", "BARACUDA"]
 const RECORDED_CREATURES := ["BLOWFISH", "LIONFISH", "EEL", "BADJELLY", "TURTLE"]
+const PLAYER_SPAWN_MARGIN := 0.25
 
 # These are authored mission records, not proof of an ambient population.
 static func spawn_records(folder: String, offset: Vector3) -> Array[Dictionary]:
@@ -19,7 +20,7 @@ static func spawn_records(folder: String, offset: Vector3) -> Array[Dictionary]:
 			"comment": row.get("Comment", ""), "param1": row.get("param1"), "param2": row.get("param2")})
 	return records
 
-static func populate(world: Node3D, folder: String, tree: SceneTree, progress: Callable) -> void:
+static func populate(world: Node3D, folder: String, tree: SceneTree, progress: Callable, pilot: RigidBody3D = null) -> void:
 	var records := spawn_records(folder, world.get_meta("database_offset"))
 	world.set_meta("creature_spawn_records", records)
 	if world.has_node("AmbientFish"): return
@@ -30,6 +31,7 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 	var bounds: AABB = world.get_meta("bounds")
 	var surface: float = world.get_meta("surface_height")
 	var player: Vector3 = world.get_meta("player_spawn", bounds.get_center())
+	if pilot != null: player = pilot.global_position
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 8675309 + int(world.get_meta("wildlife_generation", 0)) * 104729
 	var count := 0
@@ -56,8 +58,14 @@ static func populate(world: Node3D, folder: String, tree: SceneTree, progress: C
 				break
 		if center.is_finite():
 			for member in range(4):
-				var point := center + Vector3(rng.randf_range(-3.0, 3.0), rng.randf_range(-0.5, 0.5), rng.randf_range(-3.0, 3.0))
-				if not _clear(world, point, model_radius) or point.y + model_radius >= surface: continue
+				var point := Vector3.INF
+				for attempt in range(24):
+					var candidate := center + Vector3(rng.randf_range(-3.0, 3.0), rng.randf_range(-0.5, 0.5), rng.randf_range(-3.0, 3.0))
+					if candidate.y + model_radius >= surface or not _clear(world,candidate,model_radius): break
+					if pilot != null and not clears_player(candidate,model_radius,player,pilot.wildlife_spawn_radius): continue
+					point = candidate
+					break
+				if not point.is_finite(): continue
 				var fish := Fish.new()
 				fish.name = "%s_%d" % [SPECIES[school], member]
 				fish.set_meta("species", SPECIES[school])
@@ -84,6 +92,13 @@ static func _open_water(world: Node3D, x: float, z: float, surface: float, radiu
 	if low >= high: return Vector3(INF, INF, INF)
 	var point := Vector3(x, rng.randf_range(low, high), z)
 	return point if _clear(world, point, radius) else Vector3(INF, INF, INF)
+
+static func clears_player(point: Vector3, radius: float, player_position: Vector3, hull_radius: float, crawler: bool = false) -> bool:
+	var offset := point - player_position
+	# Crawlers may change height when snapped to the seabed after placement.
+	if crawler: offset.y = 0.0
+	var clearance := radius + hull_radius + PLAYER_SPAWN_MARGIN
+	return offset.length_squared() > clearance * clearance
 
 static func _clear(world: Node3D, point: Vector3, radius: float) -> bool:
 	var query := PhysicsShapeQueryParameters3D.new()

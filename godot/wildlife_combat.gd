@@ -1,5 +1,8 @@
 extends Node3D
 const Document = preload("res://map_document.gd")
+const Damage = preload("res://original_damage.gd")
+const ZAPPER_AIM_DOT_SQUARED := 0.9
+const ZAPPER_RANGE_MULTIPLIER := 1.3
 var fish: CharacterBody3D
 var settings := {}
 var target: Node3D
@@ -17,6 +20,9 @@ func configure(owner_fish: CharacterBody3D, species: Dictionary) -> void:
 	fish = owner_fish; settings = Document.creature_combat(species)
 	var model := str(species.get("model","")).to_lower()
 	fish.set_meta("sound_model",model)
+	# Retail Mutants select a target up to three units away before creating
+	# their short forward arc. Selection distance does not extend damage reach.
+	if model.trim_prefix("model.") == "mutant": settings.zapper_trigger_distance = 3.0
 	if fish.population != null:
 		var stats: Dictionary = fish.population.gameplay_catalogue.get("tables",{}).get("creature_stats",{}).get("records",{}).get(model,{})
 		settings["original_contact"] = stats.has("inflict") and (not species.has("bite_damage") or is_equal_approx(float(species.bite_damage),float(stats.inflict)))
@@ -68,39 +74,58 @@ func attack(delta: float) -> void:
 	# Retail MOMJELLY (0041f950) aims its arc at the chosen victim; other
 	# wildlife retains its forward-facing strike (0047ee30).
 	var aimed: bool = settings.get("zapper_aim_target",false)
-	if aimed: forward = offset.normalized()
+	var toward_target := offset.normalized()
+	if aimed: forward = toward_target
 	var start: Vector3 = fish.global_position + forward * fish.radius * 0.7
 	if settings.has_zapper and float(settings.zapper_range) > 0.0:
-		# Original Mutant arc runs from local +Z 0.5 to +Z 1.5. Its
-		# dimensions remain world distances, independent of wildlife size.
-		start = fish.global_position + forward * float(settings.get("zapper_start",0.5))
-		var zap_query := PhysicsRayQueryParameters3D.create(start,start + forward * float(settings.zapper_range),15,[fish.get_rid()])
+		# Keep the muzzle at its authored offset and scale the beam reach.
+		# These are world distances, independent of wildlife size.
+		var muzzle_offset := float(settings.get("zapper_start",0.5))
+		start = fish.global_position + forward * muzzle_offset
+		var reach := float(settings.zapper_range) * ZAPPER_RANGE_MULTIPLIER
+		var end := start + forward * reach
+		var alignment := forward.dot(toward_target)
+		# At point-blank range the normal muzzle can sit past the whole target.
+		# Trace from the fish there, keeping the far endpoint and obstruction checks.
+		if alignment > 0.0 and offset.dot(forward) < muzzle_offset:
+			start = fish.global_position
+		var zap_query := PhysicsRayQueryParameters3D.create(start,end,15,[fish.get_rid()])
 		zap_query.hit_back_faces = true
-		zap_query.hit_from_inside = aimed
+		zap_query.hit_from_inside = true
 		var zap_hit := fish.get_world_3d().direct_space_state.intersect_ray(zap_query)
 		var struck: Node3D = zap_hit.get("collider")
-		if struck == target or (aimed and is_instance_valid(struck) and struck.has_method("take_weapon_damage")):
-			zap_clock += maxf(0.0,delta) * preload("res://original_damage.gd").TICKS_PER_SECOND
-			while zap_clock >= 1.0 - 0.000001:
-				zap_clock = maxf(0.0,zap_clock - 1.0)
-				# One chance in sixteen per original update; the arc lives
-				# for its initial update and two subsequent updates.
-				if zap_ticks_left == 0 and fish.rng.randi_range(0,255) < int(settings.get("zapper_chance",16)): zap_ticks_left = 3
-				if zap_ticks_left > 0:
-					preload("res://zapper_surge.gd").strike(struck)
-					preload("res://original_damage.gd").weapon(struck,float(settings.zapper_damage_per_tick),fish.global_position)
-					_hit_feedback(zap_hit)
-					zap_ticks_left -= 1
+		var hits_target := struck == target or (aimed and is_instance_valid(struck) and struck.has_method("take_weapon_damage"))
+		# The original forward strike rolls for a burst when the fish is lined
+		# up. The ray decides what the burst hits, even when it misses entirely.
+		var trigger_distance := maxf(muzzle_offset + reach,float(settings.get("zapper_trigger_distance",0.0)))
+		var lined_up := not aimed and alignment > 0.0 and alignment * alignment > ZAPPER_AIM_DOT_SQUARED and offset.length() <= trigger_distance
+		var can_start_burst := hits_target or lined_up
+		if aimed and not hits_target: zap_ticks_left = 0
+		# Preserve the original update cadence through brief misses as the fish
+		# swims past the hull or turns away after contact.
+		zap_clock += maxf(0.0,delta) * Damage.TICKS_PER_SECOND
+		while zap_clock >= 1.0 - 0.000001:
+			zap_clock = maxf(0.0,zap_clock - 1.0)
+			# One chance in sixteen per original update; a burst runs for three.
+			if zap_ticks_left == 0 and can_start_burst and fish.rng.randi_range(0,255) < int(settings.get("zapper_chance",16)): zap_ticks_left = 3
 			if zap_ticks_left > 0:
-				_show_weapon(start,zap_hit.position)
-			else:
-				_stop_weapon()
+				if hits_target:
+					preload("res://zapper_surge.gd").strike(struck)
+					Damage.weapon(struck,float(settings.zapper_damage_per_tick),fish.global_position)
+					if zap_hit.normal != Vector3.ZERO: _hit_feedback(zap_hit)
+				zap_ticks_left -= 1
+		if zap_ticks_left > 0:
+			if hits_target: preload("res://zapper_surge.gd").strike(struck)
+			if not zap_hit.is_empty():
+				end = zap_hit.position
+				# An inside hit returns the muzzle itself as the hit point.
+				if hits_target and zap_hit.normal == Vector3.ZERO:
+					end = start + forward * minf(reach,0.1)
+			_show_weapon(start,end)
 			return
-		zap_ticks_left = 0; zap_clock = 0.0
 	_stop_weapon()
-	# Retail fish damage the player on physical contact (00465fa0), not
-	# through a separate timed bite. Explicit custom bite settings remain editable.
-	if settings.get("original_contact",false): return
+	# Unarmed fish use original contact damage or an authored timed bite.
+	if settings.has_zapper or settings.get("original_contact",false): return
 	# Bites retain their close-range reach and facing check.
 	var target_radius := float(target.get("radius")) if target.get("radius") != null else (float(target.collision_height()) * 0.5 if target.has_method("collision_height") else 0.0)
 	if offset.length() > fish.radius + target_radius + float(settings.bite_range) or bite_timer > 0 or forward.dot(offset.normalized()) < 0.65: return
@@ -110,7 +135,7 @@ func attack(delta: float) -> void:
 	if hit.get("collider") != target:
 		_stop_weapon(); return
 	bite_timer = float(settings.attack_interval)
-	preload("res://original_damage.gd").weapon(target,float(settings.bite_damage),fish.global_position,fish)
+	Damage.weapon(target,float(settings.bite_damage),fish.global_position,fish)
 	_hit_feedback(hit)
 
 func _hit_feedback(hit: Dictionary) -> void:

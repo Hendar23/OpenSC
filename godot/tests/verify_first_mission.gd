@@ -160,17 +160,21 @@ func run() -> void:
 	for body in game.object_population.get_children():
 		if body.has_meta("mission_owner") and body.get("shard") != null and body.shard > 0: shards += 1
 	check(shards == 3,"Shattered mission crystals retain ownership for cleanup")
+	game.pilot.dead = true
 	game._submarine_destroyed()
+	game.world_root.get_node("FallingSubmarine")._detonate()
 	check(runtime.can_save() and runtime.outcome.visible,"Death displays an outcome and releases mission")
 	check(game.submarine_explosion_sound != null and str(game.submarine_explosion_sound.get_meta("asset_source","")).get_file().to_upper() == "EXPL.RAW","Player death uses the original sample 0x0c EXPL sound")
-	check(game.world_root.get_children().any(func(node: Node) -> bool: return node.get_script() == preload("res://mine_explosion.gd") and node.audio != null and node.audio.stream == game.submarine_explosion_sound),"Player wreck explosion actually plays the original death sound")
+	check(game.world_root.get_children().any(func(node: Node) -> bool: return node.get_script() == preload("res://mine_explosion.gd") and node.audio != null and node.audio.stream == preload("res://mine_explosion.gd").RemasterSound),"Player wreck explosion plays the remastered sound")
 	check(runtime.outcome.graphic.texture == runtime.outcome.textures.get(game.game_folder+"game_over"),"Player death displays original GAMEOVER art instead of mission-failed art")
 	runtime.outcome._process(0.5)
 	check(runtime.outcome.graphic.modulate.a > 0 and is_equal_approx(float(runtime.outcome.graphic.material.get_shader_parameter("age")),0.5),"Game Over uses the animated mission-result presentation")
 	await game._begin_new_game()
 	check(runtime.can_save() and runtime.last_response.is_empty(),"New Game clears mission and response")
 	check(not runtime.outcome.visible,"New Game dismisses Game Over")
+	game.pilot.dead = true
 	game._submarine_destroyed()
+	game.world_root.get_node("FallingSubmarine")._detonate()
 	check(runtime.outcome.visible and runtime.outcome.graphic.texture == runtime.outcome.textures.get(game.game_folder+"game_over"),"Death without an active mission also displays Game Over")
 	runtime.outcome._process(runtime.outcome.DURATION)
 	check(not runtime.outcome.visible,"Game Over finishes through the shared result animation lifecycle")

@@ -45,15 +45,12 @@ func _process(delta: float) -> void:
 	if game.docking != null and game.docking.stage == Docking.Stage.DOCKED:
 		game.game_dock.view.update(game)
 		game.camera_was_frozen = true
-	elif game.docking != null and game.docking.camera_frozen():
-		game.camera.global_position = game.docking.cinematic_camera
-		var target: Vector3 = game.pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.35
-		if game.camera.global_position.distance_to(target) > 0.01: game.camera.look_at(target, Vector3.UP)
-		game.camera_was_frozen = true
+	elif not game.first_person and game.docking != null and game.docking.camera_frozen():
+		game.game_camera.update_cinematic_camera()
 	else:
-		if game.camera_was_frozen:
+		if game.camera_was_frozen and not game.first_person:
 			game.camera_follow.resume(game.camera.global_position, game.pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.35)
-			game.camera_was_frozen = false
+		game.camera_was_frozen = false
 		game._update_follow_camera(delta)
 	game._update_daylight()
 	game._update_radio_messages(delta)
@@ -78,10 +75,12 @@ func _request_docking() -> void:
 	var launching: bool = game.docking.stage == Docking.Stage.DOCKED
 	if launching and is_instance_valid(game.submarine_traffic): game.submarine_traffic.clear_player_exit(game.docking.current)
 	if game.docking.request_docking():
-		if game.first_person:
-			game._set_camera_mode(false)
-			if not launching: game.docking.cinematic_camera = game.camera.global_position
-		if launching: game.camera.global_position = game.docking.cinematic_camera
+		if launching:
+			if game.first_person: game._update_follow_camera(0.0,true)
+			else: game.game_camera.update_cinematic_camera()
+		elif game.first_person:
+			# Keep an exterior viewpoint available even when the approach starts in the cockpit.
+			game.docking.cinematic_camera = game.game_camera.third_person_position(game.pilot.global_transform,0.0,true)
 
 func _submarine_health_changed(remaining: float, capacity: float) -> void:
 	game.player_progress.status.shields = int(round(remaining / capacity * 100.0))

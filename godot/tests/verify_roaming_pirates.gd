@@ -134,7 +134,11 @@ func run() -> void:
 	check(game.testing_all_equipment,"Developer button enables equipment testing")
 	for city_id in range(1,7):
 		var offers := Shop.offers(game.gameplay_catalogue,str(city_id),stage,game.testing_all_equipment)
-		check(offers.values().all(func(offer: Dictionary) -> bool: return offer.available and offer.price > 0),"All implemented equipment sold at station " + str(city_id))
+		if city_id in [5,6]:
+			var night_vision: Dictionary = offers.night_vision
+			check(not night_vision.available and night_vision.price == 0,"Night Vision remains unavailable at station " + str(city_id) + " with the testing override")
+			offers.erase("night_vision")
+		check(offers.values().all(func(offer: Dictionary) -> bool: return offer.available and offer.price > 0),"Every eligible item is sold at station " + str(city_id) + " with the testing override")
 	unlock.button_pressed = false
 	check(not game.testing_all_equipment and game.player_progress.campaign_stage == stage,"Testing override switches off without advancing campaign")
 	# WEAPONS1.CSV baseline: shield, hull, radiation, lights, suction, zapper, magnet, grapple.

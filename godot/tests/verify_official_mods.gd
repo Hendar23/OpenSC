@@ -58,7 +58,9 @@ func run() -> void:
 	root.gui_embed_subwindows = true
 	Storage.root_override = base.path_join("player")
 	DirAccess.make_dir_recursive_absolute(Storage.mods_path())
-	write(Storage.mods_path().path_join("local/mod.json"),JSON.stringify({"schema_version":1,"id":"local","name":"Manual mod","version":"9.0.0","assets":{}}))
+	var local_path := Storage.mods_path().path_join("local/mod.json")
+	var local_manifest := {"schema_version":1,"id":"local","name":"Manual mod","version":"9.0.0","assets":{},"movement":{"camera_distance":8}}
+	write(local_path,JSON.stringify(local_manifest))
 	var config := ConfigFile.new()
 	config.set_value("mods","enabled",["local","deleted"])
 	config.set_value("mods","order",["local","deleted"])
@@ -174,6 +176,22 @@ func run() -> void:
 	count = service.requests.size()
 	await panel._commit_apply()
 	check(service.requests.size() == count and Mods._read_pack(Mods.root.path_join("alpha")).version == "1.1.0","Apply never replaces a working mod with an incompatible update")
+	panel.open(); await process_frame; await process_frame; await process_frame
+	panel.choices.alpha.button_pressed = false
+	local_manifest.movement.camera_distance = 11
+	local_manifest.version = "9.1.0"
+	write(local_path,JSON.stringify(local_manifest))
+	original = FileAccess.get_file_as_bytes(Storage.preferences_path())
+	var generation := preload("res://asset_cache.gd").generation
+	panel.refresh_button.pressed.emit()
+	check("9.1.0" in panel.choices.local.text and not panel.choices.alpha.button_pressed,"Refresh previews new manifest metadata and keeps pending selections")
+	check(Mods.movement.camera_distance == 8 and Mods.packs[0].version == "9.0.0" and preload("res://asset_cache.gd").generation == generation,"Refresh leaves the applied registry and cache intact")
+	panel.cancel_button.pressed.emit()
+	check("alpha" in Mods.enabled and FileAccess.get_file_as_bytes(Storage.preferences_path()) == original,"Cancel leaves applied and saved mod choices intact")
+	panel.open(); await process_frame; await process_frame; await process_frame
+	panel.refresh_button.pressed.emit()
+	await panel._commit_apply()
+	check(Mods.movement.camera_distance == 11,"Apply activates refreshed local mod settings")
 	paused = false; panel.free()
 	Official._remove_owned(ProjectSettings.globalize_path(base))
 	Storage.root_override = ""

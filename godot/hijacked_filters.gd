@@ -109,8 +109,7 @@ func _walker(pose: Transform3D) -> void:
 	walkers.append(walker)
 
 func _walker_destroyed(walker: RigidBody3D) -> void:
-	jobs.burst(walker.global_position,2.5)
-	jobs.runtime._retained_prop_destroyed(walker)
+	jobs.runtime._retained_prop_destroyed(walker,jobs.burst(walker.global_position,2.5))
 
 func _battleship(pose: Transform3D) -> void:
 	boss = jobs.Document.load_model("BOSS",jobs.game.game_folder)

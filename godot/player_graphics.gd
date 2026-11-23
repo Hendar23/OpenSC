@@ -54,6 +54,16 @@ func load_preferences() -> void:
 		if config.has_section_key("graphics",key): settings[key] = config.get_value("graphics",key)
 	_validate()
 
+func reload_preferences() -> void:
+	var old_mode: int = settings.display_mode
+	var old_resolution: Vector2i = settings.resolution
+	settings = DEFAULTS.duplicate()
+	settings.resolution = desktop_size()
+	load_preferences()
+	if settings.display_mode != old_mode or settings.resolution != old_resolution: apply_display()
+	apply_rendering()
+	changed.emit()
+
 func desktop_size() -> Vector2i:
 	var size := DisplayServer.screen_get_size(get_window().current_screen)
 	return size if size.x >= 1050 and size.y >= 600 else Vector2i(1280,720)

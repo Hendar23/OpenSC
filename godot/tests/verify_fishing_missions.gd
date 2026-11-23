@@ -184,7 +184,7 @@ func run() -> void:
 	enemy.armament.select_weapon("zapperup"); enemy.motion.velocity = Vector3.ZERO
 	await physics_frame; await physics_frame
 	enemy.advance(0.04)
-	check(is_equal_approx(health_before-state.agent.health.remaining,0.75*state.agent.health.sustain) and state.under_attack,"A scripted attacker's upgraded zapper damages its objective and triggers the same radio call")
+	check(is_equal_approx(health_before-state.agent.health.remaining,0.375*state.agent.health.sustain) and state.under_attack,"A scripted attacker's upgraded zapper damages its objective and triggers the same radio call")
 	state.agent.health.remaining = health_before; state.agent.get_parent().global_transform = herder_pose
 	enemy.get_parent().global_transform = enemy_pose; enemy.motion.velocity = Vector3.ZERO
 	fill(state)

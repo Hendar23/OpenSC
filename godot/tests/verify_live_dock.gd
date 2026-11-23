@@ -27,7 +27,7 @@ func run() -> void:
 	var storage = preload("res://player_storage.gd")
 	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
 	if folder.is_empty(): folder = preload("res://asset_paths.gd").find_game_folder()
-	storage.root_override = "res://tests/cache-live-dock-fixtures"; storage.ensure_parent(storage.preferences_path())
+	storage.root_override = test_fixture_path("live-dock"); storage.ensure_parent(storage.preferences_path())
 	var ignore := FileAccess.open(storage.root_override.path_join(".gdignore"),FileAccess.WRITE); ignore.store_string("")
 	var config := ConfigFile.new(); config.set_value("game","folder",folder); config.save(storage.preferences_path())
 	var game := preload("res://game.gd").new(); game.remember_preferences = false; root.add_child(game)

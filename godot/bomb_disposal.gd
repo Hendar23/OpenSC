@@ -15,6 +15,7 @@ var outcome_clock := -1.0
 var radio_clock := -1.0
 var radio_stage := 0
 var builder: RefCounted
+var freighter_blast: Node3D
 
 func start() -> void:
 	jobs.phase = "search"; builder = preload("res://student_rescue.gd").new(); builder.jobs = jobs
@@ -132,7 +133,10 @@ func _explode(item: Dictionary) -> void:
 	var player: RigidBody3D = jobs.game.pilot
 	if not player.dead:
 		player.apply_central_impulse(point.direction_to(player.global_position)*player.mass*0.75)
-	if not failed and is_instance_valid(ship) and not ship.dead and point.distance_squared_to(ship.global_position) < 2.5: ship.take_weapon_damage(1000000)
+	if not failed and is_instance_valid(ship) and not ship.dead and point.distance_squared_to(ship.global_position) < 2.5:
+		freighter_blast = effect
+		ship.take_weapon_damage(1000000)
+		freighter_blast = null
 	for other in bombs:
 		if other.active and is_instance_valid(other.body) and point.distance_squared_to(other.body.global_position) < 2.5: other.remaining = 1
 
@@ -144,6 +148,8 @@ func _ship_lost() -> void:
 		if item.active: item.remaining = 1
 	var effect := preload("res://submarine_death.gd").new(); jobs.game.world_root.add_child(effect); effect.global_position = ship.global_position
 	effect.setup_machine(ship,ship.get_child(0),jobs.game.submarine_traffic.bubble_texture)
+	if freighter_blast != null: effect.follow_explosion(freighter_blast)
+	else: effect.configure_bubble_collapse()
 	ship.hide(); jobs.radio("an10",true)
 
 func delivery_cities(body: Node3D) -> Variant:

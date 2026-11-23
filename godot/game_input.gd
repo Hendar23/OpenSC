@@ -44,10 +44,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		if Bindings.pressed(event,"bottom_camera_toggle") and game.cockpit_hud != null:
 			game.cockpit_hud.set_bottom_camera_enabled(not game.cockpit_hud.bottom_camera_enabled)
 			game.get_viewport().set_input_as_handled(); return
-		if Bindings.pressed(event,"camera_toggle"):
-			game._set_camera_mode(not game.first_person)
-			game.get_viewport().set_input_as_handled()
-			return
+	if not game.developer_ui_visible and game.docking.stage != Docking.Stage.DOCKED and Bindings.pressed(event,"camera_toggle"):
+		game._set_camera_mode(not game.first_person)
+		game.get_viewport().set_input_as_handled()
+		return
 	if not game.developer_ui_visible and game.cockpit_hud != null:
 		for index in range(5):
 			if Bindings.pressed(event,"hud_%d" % (index + 1)):

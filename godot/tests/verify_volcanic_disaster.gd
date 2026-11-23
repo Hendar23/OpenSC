@@ -120,12 +120,17 @@ func run() -> void:
 	check(core.rocks.all(func(rock: Variant) -> bool: return is_instance_valid(rock)) and core.audio.all(func(sound: Variant) -> bool: return is_instance_valid(sound)),"Freed debris and finished audio cannot interrupt later eruption cycles")
 	check(core.rocks.size() >= 2 and core.smoke.puffs.size() >= 2,"Eruption produces real rock bodies and original smoke")
 	var bursts := core.get_children().filter(func(node: Node) -> bool: return node is Burst)
+	var small: Node3D = core.rocks[-2]; var large: Node3D = core.rocks[-1]
 	check(not bursts.is_empty() and bursts.all(func(effect: Node3D) -> bool: return effect.spill_over and is_equal_approx(effect.global_position.y,position.y+2.0)),"Volcano flashes clear the highest crater lip above the lower smoke and bubbles")
+	check(not bursts.is_empty() and bursts.back().remastered and bursts.back().volume_material.get_shader_parameter("spill_over"),"Remastered crater fire retains a separate plume")
+	Burst.classic_enabled = true
+	core._erupt(false,true)
+	Burst.classic_enabled = false
+	bursts = core.get_children().filter(func(node: Node) -> bool: return node is Burst and not node.remastered)
 	if not bursts.is_empty():
 		var flash: Node3D = bursts.back(); flash._process(0.55)
 		check(flash.lobes.any(func(lobe: Dictionary) -> bool: return not lobe.upward and lobe.node.visible and lobe.node.position.y < flash.size*0.15 and lobe.node.global_position.y > position.y+1.9 and Vector2(lobe.node.position.x,lobe.node.position.z).length() > flash.size),"Spilling fire stays near the mouth instead of sinking through the volcano sides")
 		check(flash.lobes.filter(func(lobe: Dictionary) -> bool: return lobe.upward).size() == 2 and flash.lobes.any(func(lobe: Dictionary) -> bool: return lobe.upward and lobe.node.visible and lobe.node.position.y > flash.size and Vector2(lobe.node.position.x,lobe.node.position.z).is_zero_approx()),"Two staggered fire bursts rise straight up from the crater")
-	var small: Node3D = core.rocks[-2]; var large: Node3D = core.rocks[-1]
 	check(small.get_child(0).get_meta("asset_source","").contains("SMALROCK") and large.get_child(0).get_meta("asset_source","").contains("ROCK"),"Both original eruption rock models are used")
 	check(small.mass == 10 and small.linear_velocity.y > 0 and not small.get_meta("grapple_tow_target"),"Rocks launch upwards with original mass and no collectible salvage")
 	check(core.sounds.values().all(func(stream: AudioStream) -> bool: return stream != null),"Original eruption and blast sounds load")

@@ -21,6 +21,7 @@ func check(ok: bool, message: String) -> void:
 	checks += 1
 	if not ok: failures += 1; push_error(message)
 func run() -> void:
+	preload("res://mine_explosion.gd").classic_enabled = true
 	Mods.initialize(false)
 	var editor := Editor.new(); editor.remember_preferences = false; root.add_child(editor)
 	await process_frame; editor._set_mode(true)

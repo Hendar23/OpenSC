@@ -100,7 +100,10 @@ func _apply_settings() -> void:
 	if reflections != null: reflections.configure(int(settings.reflection_resolution),float(settings.reflection_range),game.camera)
 
 func refresh() -> void:
-	visible = model != null and game.first_person and game.pilot_mode and not game.world_loading and not game.pilot.dead and not game.dock_interface_active and not game.map_open and not game.front_end.menu_layer.visible and game.camera.current
+	visible = (model != null and game.first_person and game.pilot_mode and not game.world_loading
+		and not game.pilot.dead and not game.dock_interface_active and not game.map_open
+		and not game.front_end.menu_layer.visible and game.camera.current
+		and game.docking != null and game.docking.stage != game.Docking.Stage.DOCKED)
 	if refraction_layer != null: refraction_layer.visible = visible
 
 func _process(delta: float) -> void:

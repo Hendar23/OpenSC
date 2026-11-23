@@ -5,11 +5,8 @@ class Graphics extends "res://player_graphics.gd":
 	func apply_display() -> void: pass
 	func apply_rendering() -> void: pass
 class ReleaseReset extends "res://game.gd":
-	var restart_requested := false
-
 	func _bootstrap() -> void: pass
 	func _can_restore_defaults() -> bool: return true
-	func _restart_after_restore() -> void: restart_requested = true
 var checks := 0
 var failures := 0
 func check(ok: bool, message: String) -> void:
@@ -18,7 +15,7 @@ func check(ok: bool, message: String) -> void:
 func _initialize() -> void: call_deferred("run")
 func run() -> void:
 	var storage = preload("res://player_storage.gd")
-	storage.root_override = "res://tests/cache-option-defaults-fixtures"
+	storage.root_override = test_fixture_path("option-defaults")
 	storage.ensure_parent(storage.preferences_path())
 	var path: String = storage.root_override.path_join("fresh.cfg")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
@@ -65,7 +62,7 @@ func run() -> void:
 
 func verify_restore(authored: ConfigFile) -> void:
 	var storage = preload("res://player_storage.gd")
-	storage.root_override = "user://options-reset-fixture-" + str(OS.get_process_id())
+	storage.root_override = test_fixture_path("options-reset")
 	var path: String = storage.preferences_path()
 	var config := ConfigFile.new()
 	config.set_value("game", "folder", "original-install")
@@ -74,6 +71,7 @@ func verify_restore(authored: ConfigFile) -> void:
 	config.set_value("hud", "map", false)
 	config.set_value("bindings", "menu_down", [])
 	config.set_value("mods", "enabled", ["fixture-pack"])
+	config.set_value("mods", "order", ["fixture-pack"])
 	config.set_value("graphics", "resolution", Vector2i(1600,900))
 	config.set_value("gameplay", "disable_random_pirates", true)
 	config.set_value("audio", "effects_volume", 15.0)
@@ -93,20 +91,30 @@ func verify_restore(authored: ConfigFile) -> void:
 	game.game_folder = "original-install"
 	root.add_child(game)
 	game.game_language = "fr"
+	game.has_started_game = true
+	game.day_night.hour = 14.5
+	game.player_progress.status.credits = 4567
+	var progress = game.player_progress
 	game.front_end.show_menu(false)
 	game.front_end._activate_button("options")
 	game.front_end._activate_button("restore_defaults")
-	check(game.restore_defaults_prompt.visible and FileAccess.get_file_as_bytes(path) == original_preferences,"Restore Defaults asks for confirmation before writing")
+	check(game.restore_defaults_prompt.visible and game.restore_defaults_prompt.dialog_text == "Are you sure?" and FileAccess.get_file_as_bytes(path) == original_preferences,"Restore Defaults asks a short question before writing")
 	game.restore_defaults_prompt.hide()
 	game.restore_defaults_prompt.canceled.emit()
-	check(not game.restart_requested and FileAccess.get_file_as_bytes(path) == original_preferences,"Cancel leaves the preferences and running session intact")
+	check(FileAccess.get_file_as_bytes(path) == original_preferences,"Cancel leaves the preferences intact")
 	game.front_end._activate_button("restore_defaults")
 	game.restore_defaults_prompt.hide()
 	game.restore_defaults_prompt.confirmed.emit()
 	config.clear()
-	check(game.restart_requested and config.load(path) == OK,"Confirm saves the reset and requests a restart")
-	check(Array(config.get_sections()) == ["game"] and config.get_value("game", "folder") == "original-install" and config.get_value("game", "language") == "fr","Reset clears all overrides and preserves folder and language")
-	check(Defaults.load_preferences(path).encode_to_text() == authored.encode_to_text(),"Restart reads the defaults bundled with the release")
+	check(config.load(path) == OK and Array(config.get_sections()) == ["game", "mods"],"Confirm clears only settings overrides")
+	check(config.get_value("game", "folder") == "original-install" and config.get_value("game", "language") == "fr","Reset preserves folder and language")
+	check(config.get_value("mods", "enabled") == ["fixture-pack"] and config.get_value("mods", "order") == ["fixture-pack"],"Reset preserves selected mods and priority")
+	check(Defaults.load_preferences(path).encode_to_text() == authored.encode_to_text(),"Later launches will use the same defaults")
+	check(game.front_end.gameplay_menu.disable_random_pirates == bool(authored.get_value("gameplay", "disable_random_pirates")) and game.front_end.effects_audio.volume == float(authored.get_value("audio", "effects_volume")),"Live gameplay and audio use release defaults")
+	check(game.front_end.player_graphics.settings.resolution == game.front_end.player_graphics.desktop_size(),"Live graphics returns to desktop resolution")
+	check(game.has_started_game and is_same(game.player_progress, progress) and progress.status.credits == 4567 and game.day_night.hour == 14.5,"Reset preserves progress and the current game clock")
+	var bindings = preload("res://input_bindings.gd")
+	check(bindings.bindings == bindings.defaults(),"Live controls return to the default bindings")
 	check(FileAccess.get_file_as_string(save_path) == "{}" and FileAccess.get_file_as_string(mod_path) == "{}","Reset preserves saves and installed mods")
 	check(tuning_paths.map(func(file: String) -> String: return FileAccess.get_sha256(file)) == tuning_before,"Reset leaves the authored F1 defaults untouched")
 	game.free()

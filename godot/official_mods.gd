@@ -122,11 +122,11 @@ func _process(_delta: float) -> void:
 	if is_instance_valid(request_node):
 		progress.emit(tr("Downloading %s") % download_name, float(request_node.get_downloaded_bytes()) / maxf(1.0,float(request_node.get_body_size())))
 
-func missing(ids: Array[String]) -> Array[Dictionary]:
+func missing(ids: Array[String], installed: Array[Dictionary]) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for entry in entries:
 		if entry.id not in ids: continue
-		if Mods.packs.any(func(pack: Dictionary) -> bool: return pack.id == entry.id): continue
+		if installed.any(func(pack: Dictionary) -> bool: return pack.id == entry.id): continue
 		result.append(entry)
 	return result
 
@@ -177,12 +177,13 @@ func _extract(archive: String, stage: String, entry: Dictionary) -> String:
 	if pack.is_empty() or not pack.valid or not pack.errors.is_empty() or pack.id != entry.id or pack.version != entry.version: return tr("The downloaded mod does not match its catalogue entry.")
 	return ""
 
-func install(ids: Array[String], updates: Array[String] = []) -> bool:
+func install(ids: Array[String], updates: Array[String] = [], preview: Variant = null) -> bool:
 	if busy: return false
 	busy = true; last_error = ""
-	var needed := missing(ids)
+	var installed: Array[Dictionary] = Mods.packs if preview == null else preview
+	var needed := missing(ids, installed)
 	var update_targets := {}
-	for pack in Mods.packs:
+	for pack in installed:
 		if str(pack.id) not in updates: continue
 		var entry := update_for(pack)
 		if entry.is_empty(): continue

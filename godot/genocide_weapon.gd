@@ -148,7 +148,7 @@ func detach_head() -> void:
 	var wreck := preload("res://submarine_death.gd").new(); jobs.game.world_root.add_child(wreck)
 	wreck.global_position = walker.global_position
 	wreck.setup_machine(walker,walker.appearance,jobs.game.submarine_traffic.bubble_texture)
-	jobs.burst(walker.global_position,1.2)
+	wreck.follow_explosion(jobs.burst(walker.global_position,1.2))
 	walker.hide(); walker.disable_chassis_collision()
 	jobs.game.cockpit_hud.map_data.actor_markers.erase(walker)
 	phase = "head"; jobs.phase = "head"; warning = 6
@@ -242,7 +242,7 @@ func _catastrophe() -> void:
 	var body: Node3D = head if is_instance_valid(head) else walker
 	if is_instance_valid(body):
 		var blast := preload("res://base_destruction.gd").new(); jobs.game.world_root.add_child(blast)
-		blast.setup_vessel(body,jobs.game.submarine_traffic)
+		blast.setup_vessel(body,jobs.game.submarine_traffic,true)
 	# Retail sets the global catastrophe/player-death flags, wherever the
 	# player is. This is not a normal local cargo explosion that can be outrun.
 	jobs.game.pilot.take_damage(100000.0)

@@ -7,7 +7,7 @@ func _init() -> void:
 	super._init()
 	if "--with-cache" in OS.get_cmdline_user_args(): preload("res://asset_cache.gd").enabled = true
 	var storage = preload("res://player_storage.gd")
-	storage.root_override = "res://tests/cache-continue-fixtures"; storage.ensure_parent(storage.preferences_path())
+	storage.root_override = test_fixture_path("continue"); storage.ensure_parent(storage.preferences_path())
 	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
 	if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
 	var config := ConfigFile.new(); config.set_value("game","folder",folder); config.save(storage.preferences_path())
@@ -18,7 +18,7 @@ func check(value: bool, message: String) -> void:
 	if not value: failures += 1; push_error(message)
 
 func clear_saves(saves: RefCounted) -> void:
-	assert(saves.folder.begins_with("res://tests/cache-continue-fixtures/"))
+	assert(saves.folder == test_fixture_path("continue").path_join("savegame"))
 	for slot in range(-1,saves.SLOT_COUNT): DirAccess.remove_absolute(ProjectSettings.globalize_path(saves.path(slot)))
 
 func cold_menu() -> void:
@@ -55,6 +55,14 @@ func run() -> void:
 	check(game.save_games.write(-1,automatic) == OK and game.save_games.latest_slot() == -1,"Most recent autosave is eligible for Continue")
 	var broken := FileAccess.open(game.save_games.path(3),FileAccess.WRITE); broken.store_string("broken save"); broken.close()
 	check(game.save_games.latest_slot() == -1,"Corrupt saves do not hide the newest valid save")
+	var active_mission_save := automatic.duplicate(true)
+	active_mission_save.saved_at = "2026-10-19T15:00:00"
+	active_mission_save.progress.missions.active = {"id":"tradetrad","city":1,"refinery":false}
+	check(game.save_games.write(4,active_mission_save) == ERR_UNAVAILABLE,"Saving during an active mission remains unavailable")
+	var active_mission_file := FileAccess.open(game.save_games.path(4),FileAccess.WRITE)
+	active_mission_file.store_string(JSON.stringify(active_mission_save)); active_mission_file.close()
+	check(game.save_games.read(4).is_empty(),"Load rejects an active encounter that a dock save cannot restore")
+	check(game.save_games.latest_slot() == -1,"Continue skips an active-mission save even when it is newer")
 	game.free(); await process_frame; paused = false
 	game = preload("res://game.gd").new(); game.remember_preferences = false; game.show_start_menu = true; root.add_child(game)
 	for frame in range(4000):
@@ -81,7 +89,8 @@ func run() -> void:
 		if game.has_started_game and not game.loading_save: break
 		await process_frame
 	check(game.has_started_game and game.player_progress.status.credits == 300,"Controller Continue loads latest autosave through real loader")
-	check(not game.loading_canvas.visible and paused and game.dock_interface.visible and game.dock_interface.page == "home" and not game.front_end.menu_layer.visible,"Continue restores saved dock interface")
+	check(not game.loading_canvas.visible and game.dock_interface.visible and game.dock_interface.page == "home" and not game.front_end.menu_layer.visible,"Continue restores saved dock interface")
+	check(not paused and game.world_root.can_process(),"Continue resumes the outside world while docked")
 	game.player_progress.status.credits = 777
 	game._show_main_menu(); await game._continue_game()
 	check(game.player_progress.status.credits == 777 and not game.front_end.menu_layer.visible,"Continue resumes live session without reloading or losing progress")

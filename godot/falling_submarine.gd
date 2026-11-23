@@ -19,6 +19,7 @@ var bubble_emitter: Node3D
 var blast: Callable
 var player: Node3D
 var track_player := false
+var demolition_traffic: Node
 var finished := false
 var bumped_player := false
 var spin := 1.0
@@ -28,7 +29,7 @@ static func choose_fall(speed: float, roll: float) -> Fall:
 	if roll < 0.2: return Fall.INSTANT
 	return Fall.ARC if speed >= 0.85 else Fall.SPIN
 
-static func launch(traffic: Node, hull: Node3D, sources: Array[Node3D], momentum: Vector3 = Vector3.ZERO, follows_player: bool = false) -> CharacterBody3D:
+static func launch(traffic: Node, hull: Node3D, sources: Array[Node3D], momentum: Vector3 = Vector3.ZERO, follows_player: bool = false, staged_demolition: bool = false) -> CharacterBody3D:
 	var wreck := new()
 	traffic.get_parent().add_child(wreck)
 	wreck.global_transform = Transform3D(hull.global_basis.orthonormalized(),hull.global_position)
@@ -39,6 +40,7 @@ static func launch(traffic: Node, hull: Node3D, sources: Array[Node3D], momentum
 	wreck.blast = traffic.wreck_blast
 	wreck.player = traffic.player
 	wreck.track_player = follows_player
+	if staged_demolition: wreck.demolition_traffic = traffic
 	wreck.setup(sources,momentum,choose_fall(momentum.length(),randf()))
 	return wreck
 
@@ -134,12 +136,23 @@ func _detonate() -> void:
 	set_physics_process(false)
 	collision_layer = 0; collision_mask = 0
 	_follow_player()
+	if is_instance_valid(demolition_traffic):
+		# Demolition takes ownership of the wreck's visual at its final pose.
+		var demolition := preload("res://base_destruction.gd").new()
+		get_parent().add_child(demolition)
+		demolition.setup([visual],[],demolition_traffic,0.0,true)
+		hide()
+		detonated.emit()
+		queue_free()
+		return
 	var point := to_global(bounds.get_center())
 	var diameter := clampf(bounds.size.length(),0.65,8.0)
-	_burst(point,diameter,true)
+	var effect := _burst(point,diameter,true)
 	var debris := Debris.new(); get_parent().add_child(debris); debris.global_position = point
 	debris.setup_machine(self,visual,null if is_instance_valid(bubble_emitter) else bubbles,[],velocity * 0.35)
-	if is_instance_valid(bubble_emitter): bubble_emitter.emit_blast_cloud(point,diameter)
+	debris.follow_explosion(effect)
+	if is_instance_valid(bubble_emitter) and (not effect.remastered or not bubble_emitter.is_in_group("blast_bubble_emitter")):
+		bubble_emitter.emit_blast_cloud(point,diameter)
 	if is_in_group("trader_wrecks"):
 		remove_from_group("trader_wrecks")
 		debris.add_to_group("trader_wrecks")
@@ -149,7 +162,8 @@ func _detonate() -> void:
 	detonated.emit()
 	queue_free()
 
-func _burst(point: Vector3, diameter: float, main: bool) -> void:
+func _burst(point: Vector3, diameter: float, main: bool) -> Explosion:
 	var effect := Explosion.new(); get_parent().add_child(effect)
 	effect.global_position = point
 	effect.setup(frames,diameter,sound if main else null,main)
+	return effect

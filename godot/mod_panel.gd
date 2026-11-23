@@ -12,6 +12,7 @@ var persist_preferences := true
 var rows: VBoxContainer
 var info: Label
 var choices := {}
+var installed_packs: Array[Dictionary] = []
 var pending_order: Array[String] = []
 var pending_enabled: Array[String] = []
 var embedded := false
@@ -57,7 +58,7 @@ func _ready() -> void:
 	var refresh := Button.new()
 	refresh_button = refresh
 	refresh.text = "Refresh mods"
-	refresh.pressed.connect(func() -> void: Mods.refresh(); open())
+	refresh.pressed.connect(_refresh_installed)
 	column.add_child(refresh)
 	scroll = ScrollContainer.new(); scroll.follow_focus = true
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -138,6 +139,7 @@ func embed(parent: Control) -> void:
 func open() -> void:
 	if applying: return
 	Mods.ensure(persist_preferences)
+	installed_packs = Mods.packs.duplicate()
 	pending_order = Mods.order.duplicate()
 	pending_enabled = Mods.enabled.duplicate()
 	_add_catalogue_order()
@@ -149,7 +151,7 @@ func open() -> void:
 
 func _listed_packs() -> Array[Dictionary]:
 	var listed: Array[Dictionary] = []
-	for pack in Mods.packs:
+	for pack in installed_packs:
 		var item: Dictionary = pack.duplicate()
 		var update: Dictionary = official.update_for(pack)
 		if not update.is_empty(): item["update"] = update
@@ -162,6 +164,15 @@ func _listed_packs() -> Array[Dictionary]:
 func _add_catalogue_order() -> void:
 	for pack in _listed_packs():
 		if str(pack.id) not in pending_order: pending_order.append(str(pack.id))
+
+func _refresh_installed() -> void:
+	installed_packs = Mods.discover_installed(pending_order)
+	var listed := _listed_packs()
+	pending_order = pending_order.filter(func(id: String) -> bool:
+		return listed.any(func(pack: Dictionary) -> bool: return pack.id == id))
+	_add_catalogue_order()
+	_build_rows()
+	if persist_preferences: _refresh_catalogue()
 
 func _refresh_catalogue() -> void:
 	if official.fetching or applying: return
@@ -190,11 +201,12 @@ func _build_rows() -> void:
 	var focused_id: String = str(focused.get_meta("mod_id","")) if focused != null else ""
 	var focused_column: int = int(focused.get_meta("mod_column",0)) if focused != null else 0
 	var lines: Array[Array] = []
+	var listed := _listed_packs()
 	for child in rows.get_children(): child.free()
 	choices.clear()
 	for id in pending_order:
 		var pack := {}
-		for candidate in _listed_packs():
+		for candidate in listed:
 			if str(candidate.id) == id: pack = candidate; break
 		if pack.is_empty(): continue
 		var item := VBoxContainer.new()
@@ -290,17 +302,17 @@ func _apply() -> void:
 func _commit_apply() -> void:
 	if applying: return
 	var updates: Array[String] = []
-	for pack in Mods.packs:
+	for pack in installed_packs:
 		if str(pack.id) not in pending_enabled: continue
 		var update: Dictionary = official.update_for(pack)
 		if not update.is_empty() and Official.compatible(update.min_game_version): updates.append(str(pack.id))
-	var downloading: bool = not official.missing(pending_enabled).is_empty() or not updates.is_empty()
+	var downloading: bool = not official.missing(pending_enabled, installed_packs).is_empty() or not updates.is_empty()
 	if downloading:
 		applying = true
 		hide()
 		download_started.emit()
 		await get_tree().process_frame
-		if not await official.install(pending_enabled,updates):
+		if not await official.install(pending_enabled, updates, installed_packs):
 			applying = false
 			download_finished.emit(false)
 			if not embedded: popup_centered()

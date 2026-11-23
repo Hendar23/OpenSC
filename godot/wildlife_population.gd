@@ -2,6 +2,7 @@ extends Node3D
 const Document = preload("res://map_document.gd")
 const Fish = preload("res://fish_controller.gd")
 const Creatures = preload("res://creature_loader.gd")
+const Pilot = preload("res://submarine_controller.gd")
 var document := {}
 var templates := {}
 var world: Node3D
@@ -148,7 +149,7 @@ func _retire(fish: Node3D) -> void:
 
 func smooth_range() -> float:
 	# Keep the transition beyond visible water, including the following camera.
-	return maxf(48.0,visibility_range + 8.0)
+	return maxf(Fish.MIN_FULL_RATE_DISTANCE,visibility_range + 16.0)
 
 func detailed(fish: Node3D) -> bool:
 	if not fish.mission_owner.is_empty(): return true
@@ -273,6 +274,9 @@ func _limit_activity(center: Vector3, viewer: Vector3, planes: Array, activation
 		if fits: admitted += ambient
 
 func _stream_update(initial: bool = false) -> void:
+	# The first gameplay population must wait for the fitted submarine and its
+	# actual spawn pose. Map previews have no gameplay pilot.
+	if streaming and not is_instance_valid(player): return
 	var center: Vector3 = player.global_position if is_instance_valid(player) else world.get_meta("player_spawn",world.get_meta("bounds").get_center())
 	# A small band outside the fog prepares creatures before they are visible.
 	# Park individual fish, so one nearby member cannot retain a distant shoal.
@@ -362,6 +366,8 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 	var box: AABB = model_bounds[group.species]
 	var home := Document.vector(group.position)
 	var player_position: Vector3 = player.global_position if is_instance_valid(player) else world.get_meta("player_spawn",home)
+	var hull_radius: float = player.wildlife_spawn_radius if is_instance_of(player,Pilot) else Pilot.COLLIDER_RADIUS
+	var crawler: bool = species.mobility == "crawling"
 	var count := random.randi_range(int(group.count_min),int(group.count_max))
 	# Capacity may postpone a shoal, but must never silently shrink its roll.
 	if streaming and limit_to_visible_range and max_active > 0 and count > maxi(0,max_active - active_count()): return members
@@ -376,9 +382,10 @@ func _spawn_group(group: Dictionary, random: RandomNumberGenerator, avoid_visibl
 		for attempt in range(24):
 			var spread := minf(float(group.radius) * 0.4, 5.0)
 			var candidate := home + Vector3(random.randf_range(-spread, spread), random.randf_range(-0.5, 0.5), random.randf_range(-spread, spread))
-			if species.mobility == "crawling": candidate = floor_point(candidate, radius)
+			if crawler: candidate = floor_point(candidate, radius)
 			if limit_to_visible_range and candidate.distance_to(player_position) > visibility_range + _activation_margin(): continue
 			if streaming:
+				if not Creatures.clears_player(candidate,radius,player_position,hull_radius,crawler): continue
 				var viewer := view_camera.global_position if is_instance_valid(view_camera) else player_position
 				var nearby: bool = activity.nearby(candidate,radius,2.0) if is_instance_valid(activity) else candidate.distance_squared_to(viewer) <= pow(visibility_range + radius + 2.0,2)
 				if not nearby: continue
@@ -482,12 +489,14 @@ func _advance_spawn() -> void:
 	if max_active > 0 and active_count()+count > max_active:
 		_cancel_spawn(); return
 	var viewer: Vector3 = view_camera.global_position if is_instance_valid(view_camera) else player.global_position
+	var hull_radius: float = player.wildlife_spawn_radius if is_instance_of(player,Pilot) else Pilot.COLLIDER_RADIUS
+	var crawler: bool = job.species.mobility == "crawling"
 	# The player may turn or move during preparation. Never reveal a partial
 	# shoal or materialise a finished one in front of an active camera.
 	for placement in job.placements:
 		var point: Vector3 = placement.point
 		var retained: bool = activity.nearby(point,placement.radius,2.0) if is_instance_valid(activity) else viewer.distance_to(point) <= visibility_range+placement.radius+2.0
-		if not retained or _visible_spawn(point,player.global_position,placement.radius):
+		if not retained or not Creatures.clears_player(point,placement.radius,player.global_position,hull_radius,crawler) or _visible_spawn(point,player.global_position,placement.radius):
 			_cancel_spawn(); return
 	if int(job.cursor) < count:
 		_create_member(job.group,job.species,job.template,job.box,job.home,job.placements[job.cursor],job.members,job.shoal,job.reserved,true)

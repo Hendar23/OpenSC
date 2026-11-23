@@ -5,13 +5,14 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-CORE = ['script_compilation', 'modern_model_bounds', 'game_updates', 'official_mods', 'npc_torpedoes', 'cache_dependencies', 'cache_cleanup', 'loading_cache',
-        'npc_navigation_budget', 'local_simulation', 'performance_foundation', 'mission_dispatcher']
-INTEGRATION = ['asset_cache', 'continue_game', 'mission_rewards', 'stage_two_missions', 'stage_three_jobs', 'volcanic_disaster', 'covert_defection', 'stage_three_remaining', 'pirate_stockpile', 'allied_distress', 'nuclear_stockpile', 'rampaging_walker', 'escort_diplomats', 'original_fidelity']
+CORE = ['script_compilation', 'modern_model_bounds', 'protected_mods', 'game_updates', 'official_mods', 'npc_torpedoes', 'cache_dependencies', 'cache_cleanup', 'loading_cache',
+        'npc_navigation_budget', 'local_simulation', 'performance_foundation', 'mission_dispatcher', 'option_defaults']
+INTEGRATION = ['asset_cache', 'continue_game', 'save_dock', 'live_dock', 'mission_rewards', 'stage_two_missions', 'stage_three_jobs', 'volcanic_disaster', 'covert_defection', 'stage_three_remaining', 'pirate_stockpile', 'allied_distress', 'nuclear_stockpile', 'rampaging_walker', 'escort_diplomats', 'original_fidelity']
 LOCAL_MOD = ['scenery_scatter', 'scenery_sessions']
 
 
@@ -48,9 +49,11 @@ def main():
                        '--script', f'res://tests/verify_{suite}.gd', '--log-file', str(output / (name + '.engine.log'))]
             if extra: command += ['--'] + extra
             try:
-                result = subprocess.run(command, env=environment, capture_output=True, text=True,
-                    encoding='utf-8', errors='replace', timeout=args.timeout,
-                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+                with tempfile.TemporaryDirectory(prefix=f'{name}-', dir=output) as scratch:
+                    suite_env = {**environment, 'OPENSC_TEST_FIXTURE_ROOT': Path(scratch).as_posix()}
+                    result = subprocess.run(command, env=suite_env, capture_output=True, text=True,
+                        encoding='utf-8', errors='replace', timeout=args.timeout,
+                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
                 log = result.stdout + result.stderr
                 ok = result.returncode == 0 and not re.search(r'(?m)^(?:SCRIPT )?ERROR:', log)
             except subprocess.TimeoutExpired as error:

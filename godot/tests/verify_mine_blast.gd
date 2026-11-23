@@ -1,6 +1,7 @@
 extends SceneTree
 const Pilot = preload("res://submarine_controller.gd")
 const Population = preload("res://object_population.gd")
+const Mine = preload("res://floating_mine.gd")
 class FakeJoy extends RefCounted:
 	var calls := 0
 	func get_connected_joypads() -> Array: return [0]
@@ -88,4 +89,40 @@ func run() -> void:
 		mine.free()
 	check(pilot.dead,"Three isolated 35-damage mines destroy a submarine with 100 shields")
 	pilot.free(); population.free()
+	await verify_physical_contact()
 	print("Mine blast: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)
+
+func verify_physical_contact() -> void:
+	var pilot := Pilot.new()
+	pilot.remember_settings = false
+	pilot.active = true
+	root.add_child(pilot)
+	for settings in [[true,true,true],[false,true,true],[true,false,true],[true,true,false]]:
+		var trigger_on_contact: bool = settings[0]
+		var armed: bool = settings[1]
+		var controls_enabled: bool = settings[2]
+		pilot.controls_enabled = controls_enabled
+		pilot.restore_health()
+		pilot.reset_at(Vector3.ZERO)
+		await physics_frame
+		await physics_frame
+		var definition: Dictionary = preload("res://object_definitions.gd").FLOATING_MINE.duplicate(true)
+		definition.trigger_on_contact = trigger_on_contact
+		var mine := Mine.new()
+		mine.setup(definition,Node3D.new(),null,armed)
+		mine.player = pilot
+		mine.home = Vector3.RIGHT * 2.0
+		mine.position = mine.home
+		root.add_child(mine)
+		# Jolt reports the solid hull contact independently of the overlap poll.
+		mine.set_physics_process(false)
+		for frame in range(60):
+			pilot.velocity = Vector3.RIGHT * 6.0
+			await physics_frame
+			if pilot.previous_contacts.has(mine.get_instance_id()): break
+		check(pilot.previous_contacts.has(mine.get_instance_id()),"Moving hull makes a real physics contact with the solid mine")
+		await process_frame
+		check(mine.dead == (trigger_on_contact and armed and controls_enabled),
+			"First hull contact respects mine trigger, arming and player control settings %s" % [settings])
+		mine.free()
+	pilot.free()

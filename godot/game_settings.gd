@@ -13,7 +13,7 @@ var preview_hour := 10.0
 func _init(context: Node) -> void:
 	game = context
 
-func _load_preferences(path: String = "") -> void:
+func _load_preferences(path: String = "", preserve_clock: bool = false) -> void:
 	var explicit_import := not path.is_empty()
 	if path.is_empty(): path = preload("res://current_settings.gd").path("view_defaults.cfg",game.defaults_directory)
 	var config := ConfigFile.new()
@@ -63,6 +63,7 @@ func _load_preferences(path: String = "") -> void:
 	if (configured_hour is float or configured_hour is int) and is_finite(float(configured_hour)):
 		preview_hour = fposmod(float(configured_hour),24.0)
 	for key in game.daylight_controls:
+		if preserve_clock and key == "time_of_day": continue
 		var fallback: Variant = game.daylight_controls[key].button_pressed if key == "cycle_enabled" else game.daylight_controls[key].value
 		var setting: Variant = config.get_value("view", key, fallback)
 		if key == "cycle_enabled":
@@ -191,20 +192,36 @@ func save_player_preferences(hud_index: int = -1) -> void:
 	if result != OK: game._report_settings_error(path,result)
 
 func reset_player_preferences() -> Error:
-	# Keep the original installation selected so the next launch skips setup.
-	# All other preferences fall back to the data packaged with this release.
 	var storage = preload("res://player_storage.gd")
 	var path := storage.preferences_path()
-	var result := storage.ensure_parent(path)
+	var preferences := ConfigFile.new()
+	var result := preferences.load(path)
+	if result != OK and result != ERR_FILE_NOT_FOUND: return result
+	for section in ["gameplay", "graphics", "audio", "bindings", "developer", "hud"]:
+		if preferences.has_section(section): preferences.erase_section(section)
+	result = storage.ensure_parent(path)
 	if result != OK: return result
-	var setup := ConfigFile.new()
-	setup.set_value("game", "folder", game.game_folder)
-	setup.set_value("game", "language", game.game_language)
 	var temporary := path + ".tmp"
-	result = setup.save(temporary)
+	result = preferences.save(temporary)
 	if result == OK:
 		result = DirAccess.rename_absolute(ProjectSettings.globalize_path(temporary), ProjectSettings.globalize_path(path))
-	if result != OK: DirAccess.remove_absolute(ProjectSettings.globalize_path(temporary))
+	if result != OK:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(temporary))
+		return result
+	preload("res://input_bindings.gd").reset_defaults()
+	_load_preferences("", true)
+	if is_instance_valid(game.pilot):
+		game.pilot.movement.load_settings(false)
+		if game.tuning_panel != null: game.tuning_panel.refresh_settings()
+		var audio: Node = game.pilot.submarine_audio
+		if is_instance_valid(audio):
+			var old_blend: float = audio.tuning.settings.loop_blend_ms
+			audio.tuning.load_settings(false)
+			if audio.tuning.settings.loop_blend_ms != old_blend: audio.rebuild_loops()
+			if game.sound_panel != null: game.sound_panel.refresh_settings()
+	game.front_end.gameplay_menu.reload_preferences()
+	game.front_end.player_graphics.reload_preferences()
+	game.front_end.effects_audio.reload_preferences()
 	return result
 
 func player_hud_enabled(index: int) -> bool:

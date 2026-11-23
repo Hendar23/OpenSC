@@ -19,6 +19,9 @@ func _ready() -> void:
 	scope = get_parent().get_parent()
 	get_tree().node_added.connect(_route)
 	_scan(scope)
+	reload_preferences()
+
+func reload_preferences() -> void:
 	var config := ConfigFile.new()
 	if remember_preferences:
 		config = preload("res://option_defaults.gd").load_preferences(settings_path)

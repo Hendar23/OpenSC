@@ -10,6 +10,8 @@ signal replay_changed(enabled: bool)
 signal classic_sub_physics_changed(enabled: bool)
 var classic_sub_physics := false
 var classic_sub_physics_button: Button
+var classic_explosions := false
+var classic_explosions_button: Button
 signal random_pirates_changed(disabled: bool)
 var disable_random_pirates := false
 var random_pirates_button: Button
@@ -45,6 +47,10 @@ var status: Label
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS; layer = 12
 	if settings_path.is_empty(): settings_path = Storage.preferences_path()
+	_load_preferences()
+	_build_menu()
+
+func _load_preferences() -> void:
 	var config := ConfigFile.new()
 	if remember_preferences:
 		config = preload("res://option_defaults.gd").load_preferences(settings_path)
@@ -52,19 +58,35 @@ func _ready() -> void:
 		random_pirate_weapons = bool(config.get_value("gameplay","random_pirate_weapons",true))
 		crosshair_enabled = bool(config.get_value("gameplay","first_person_crosshair",true))
 		classic_sub_physics = bool(config.get_value("gameplay","classic_sub_physics",false))
+		classic_explosions = bool(config.get_value("gameplay","classic_explosions",false))
 		zapper_auto_aim = bool(config.get_value("gameplay","zapper_auto_aim",false))
 		sun_shafts_enabled = bool(config.get_value("gameplay","sun_shafts",true))
 		lens_flares_enabled = bool(config.get_value("gameplay","lens_flares",true))
 		var saved_limit := int(config.get_value("gameplay","wildlife_limit",80))
-		if saved_limit in WILDLIFE_LIMITS: wildlife_limit = saved_limit
+		wildlife_limit = saved_limit if saved_limit in WILDLIFE_LIMITS else 80
 		replay_enabled = bool(config.get_value("gameplay","photo_replay",true))
 		fmvs_enabled = bool(config.get_value("gameplay","play_fmvs",true))
 		var saved_bubbles := int(config.get_value("gameplay","bubble_limit",config.get_value("graphics","bubble_limit",200)))
-		if saved_bubbles in BUBBLE_LIMITS: bubble_limit = saved_bubbles
+		bubble_limit = saved_bubbles if saved_bubbles in BUBBLE_LIMITS else 200
 	preload("res://propeller_bubbles.gd").set_limit(bubble_limit)
 	preload("res://lens_flare.gd").set_enabled(lens_flares_enabled)
-	# Older installations may have selected Classic; enhanced effects now stay on.
-	preload("res://mine_explosion.gd").enhanced_enabled = true
+	preload("res://mine_explosion.gd").classic_enabled = classic_explosions
+func reload_preferences() -> void:
+	var live_options := {
+		"zapper_auto_aim": auto_aim_changed, "classic_sub_physics": classic_sub_physics_changed,
+		"disable_random_pirates": random_pirates_changed, "random_pirate_weapons": pirate_weapons_changed,
+		"wildlife_limit": wildlife_limit_changed, "sun_shafts_enabled": sun_shafts_changed,
+		"replay_enabled": replay_changed,
+	}
+	var previous := {}
+	for key in live_options: previous[key] = get(key)
+	_load_preferences()
+	for key in live_options:
+		var value: Variant = get(key)
+		if value != previous[key]: live_options[key].emit(value)
+	_refresh()
+
+func _build_menu() -> void:
 	var shade := ColorRect.new(); shade.color = Color.TRANSPARENT
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(shade)
 	layout = Control.new(); layout.size = Vector2(640,480); shade.add_child(layout)
@@ -81,6 +103,7 @@ func _ready() -> void:
 	scroll.add_child(option_rows)
 	wildlife_button = _button(option_rows, _cycle_wildlife_limit)
 	classic_sub_physics_button = _button(option_rows, _toggle_classic_sub_physics)
+	classic_explosions_button = _button(option_rows, _toggle_classic_explosions)
 	random_pirates_button = _button(option_rows, _toggle_random_pirates)
 	crosshair_button = _button(option_rows, _toggle_crosshair)
 	lens_flares_button = _button(option_rows, _toggle_lens_flares)
@@ -117,6 +140,7 @@ func _refresh() -> void:
 	pirate_weapons_button.text = tr("Random NPC submarine weapons: %s") % (tr("On") if random_pirate_weapons else tr("Off"))
 	crosshair_button.text = tr("First-person crosshair: %s") % (tr("On") if crosshair_enabled else tr("Off"))
 	classic_sub_physics_button.text = tr("Classic Sub physics: %s") % (tr("On") if classic_sub_physics else tr("Off"))
+	classic_explosions_button.text = tr("Enable classic explosions: %s") % (tr("On") if classic_explosions else tr("Off"))
 	bubble_button.text = tr("Maximum bubbles: %s") % (tr("Unlimited") if bubble_limit < 0 else tr("Off") if bubble_limit == 0 else str(bubble_limit))
 	fmv_button.text = tr("Play FMVs: %s") % (tr("On") if fmvs_enabled else tr("Off"))
 	replay_button.text = tr("Photo mode replay: %s") % (tr("On") if replay_enabled else tr("Off"))
@@ -131,6 +155,11 @@ func _toggle_crosshair() -> void:
 func _toggle_classic_sub_physics() -> void:
 	classic_sub_physics = not classic_sub_physics
 	_refresh(); classic_sub_physics_changed.emit(classic_sub_physics); _save()
+
+func _toggle_classic_explosions() -> void:
+	classic_explosions = not classic_explosions
+	preload("res://mine_explosion.gd").classic_enabled = classic_explosions
+	_refresh(); _save()
 
 func _toggle_random_pirates() -> void:
 	disable_random_pirates = not disable_random_pirates
@@ -191,6 +220,7 @@ func _save() -> void:
 		config.set_value("gameplay","play_fmvs",fmvs_enabled)
 		config.set_value("gameplay","first_person_crosshair",crosshair_enabled)
 		config.set_value("gameplay","classic_sub_physics",classic_sub_physics)
+		config.set_value("gameplay","classic_explosions",classic_explosions)
 		if config.has_section_key("gameplay","enhanced_explosions"): config.erase_section_key("gameplay","enhanced_explosions")
 		result = Storage.ensure_parent(settings_path)
 		if result == OK: result = config.save(settings_path)
@@ -222,11 +252,11 @@ func _layout() -> void:
 	layout.position = (available - layout.size * factor) * 0.5
 	var list_size := option_rows.get_combined_minimum_size()
 	var scrollbar_gutter := scroll.get_v_scroll_bar().get_combined_minimum_size().x + scroll.get_theme_constant("scrollbar_h_separation")
-	var list_height := minf(list_size.y, maxf(28.0, layout.size.y - 112.0))
+	var list_height := minf(list_size.y, maxf(28.0, layout.size.y - 78.0))
 	scroll.size = Vector2(list_size.x + scrollbar_gutter, list_height)
-	scroll.position = Vector2((layout.size.x - list_size.x) * 0.5, 18.0)
-	back.position = Vector2(216.0, scroll.position.y + scroll.size.y + 6.0)
-	status.position = Vector2(160.0, back.position.y + back.size.y + 10.0)
+	scroll.position = Vector2((layout.size.x - list_size.x) * 0.5, 12.0)
+	back.position = Vector2(216.0, scroll.position.y + scroll.size.y + 5.0)
+	status.position = Vector2(160.0, back.position.y + back.size.y + 5.0)
 
 func _input(event: InputEvent) -> void:
 	if not visible: return
@@ -238,6 +268,7 @@ func _input(event: InputEvent) -> void:
 		buttons[posmod(selected + (-1 if Bindings.pressed(event,"menu_up") else 1),buttons.size())].grab_focus()
 	elif toggle.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle()
 	elif classic_sub_physics_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_classic_sub_physics()
+	elif classic_explosions_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_classic_explosions()
 	elif wildlife_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")):
 		_cycle_wildlife_limit(-1 if Bindings.pressed(event,"menu_left") else 1)
 	elif sun_shafts_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_sun_shafts()
@@ -252,6 +283,7 @@ func _input(event: InputEvent) -> void:
 	elif Bindings.pressed(event,"menu_accept"):
 		if toggle.has_focus(): _toggle()
 		elif classic_sub_physics_button.has_focus(): _toggle_classic_sub_physics()
+		elif classic_explosions_button.has_focus(): _toggle_classic_explosions()
 		elif wildlife_button.has_focus(): _cycle_wildlife_limit()
 		elif sun_shafts_button.has_focus(): _toggle_sun_shafts()
 		elif lens_flares_button.has_focus(): _toggle_lens_flares()

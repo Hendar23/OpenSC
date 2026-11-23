@@ -62,7 +62,7 @@ func _physics_process(delta: float) -> void:
 		dying -= delta
 		if dying <= 0:
 			var demolition := preload("res://base_destruction.gd").new(); game.world_root.add_child(demolition)
-			demolition.setup_vessel(self,game.submarine_traffic)
+			demolition.setup_vessel(self,game.submarine_traffic,true)
 			queue_free(); return
 	elif stalled > 0:
 		stalled = maxf(0,stalled-delta); fan_speed *= pow(0.25,delta*25)

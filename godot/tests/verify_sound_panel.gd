@@ -67,7 +67,7 @@ func _run() -> void:
 	burst.setup([],1.0,game.submarine_explosion_sound)
 	panel.sliders.master_volume.value = -3; panel.sliders.explosion_volume.value = -20
 	burst._process(0.0)
-	check(burst.audio.volume_db == -23,"Explosion volume combines with master volume")
+	check(burst.audio.volume_db == -13,"Explosion volume combines with master volume and the remastered sample's gain")
 	panel.sliders.explosion_volume.value = -60; burst._process(0.0)
 	check(burst.audio.volume_db == -80,"Explosion slider supports muting")
 	check(not panel.find_children("*","Button",true,false).any(func(b: Button) -> bool: return b.text == "Save" and not panel.export_dialog.is_ancestor_of(b)) and not game.tuning_panel.find_children("*","Button",true,false).any(func(b: Button) -> bool: return b.text == "Save settings" and not game.tuning_panel.export_dialog.is_ancestor_of(b)),"Manual Save buttons are removed")

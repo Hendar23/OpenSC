@@ -18,7 +18,7 @@ static var _mounted_resource_packs := {}
 static func protected_model_path(path: String) -> bool:
 	return path.begins_with("res://_protected_mods/") and path.get_extension().to_lower() == "scn"
 
-static func _resource_root(value: Variant, folder: String, id: String) -> String:
+static func _resource_root(value: Variant, folder: String, id: String, mount_protected: bool) -> String:
 	if not value is Dictionary: return ""
 	var relative := str(value.get("file", "")).replace("\\", "/")
 	var path := folder.path_join(relative).simplify_path()
@@ -35,6 +35,7 @@ static func _resource_root(value: Variant, folder: String, id: String) -> String
 	if suffix.length() != 24: return ""
 	for character in suffix:
 		if character not in "0123456789abcdef": return ""
+	if not mount_protected and not _mounted_resource_packs.has(virtual): return virtual
 	var digest := FileAccess.get_sha256(path)
 	if _mounted_resource_packs.has(virtual):
 		# Godot cannot unmount packs. Changed content uses a new namespace; never
@@ -67,26 +68,29 @@ static func initialize(read_preferences: bool = true, folder: String = "", prefe
 	refresh()
 
 static func refresh() -> void:
-	packs.clear()
-	packs = _discover(root)
-	packs.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		var first := order.find(str(a.id))
-		var second := order.find(str(b.id))
-		if first < 0: first = 100000
-		if second < 0: second = 100000
-		return str(a.name).naturalnocasecmp_to(str(b.name)) < 0 if first == second else first < second
-	)
+	packs = discover_installed(order, true)
 	order.clear()
 	for pack in packs: order.append(str(pack.id))
 	_rebuild()
 
-static func _discover(location: String) -> Array[Dictionary]:
+static func discover_installed(priorities: Array[String], mount_protected: bool = false) -> Array[Dictionary]:
+	var found := _discover(root, mount_protected)
+	found.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var first := priorities.find(str(a.id))
+		var second := priorities.find(str(b.id))
+		if first < 0: first = 100000
+		if second < 0: second = 100000
+		return str(a.name).naturalnocasecmp_to(str(b.name)) < 0 if first == second else first < second
+	)
+	return found
+
+static func _discover(location: String, mount_protected: bool) -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
 	if not DirAccess.dir_exists_absolute(location): return found
 	var ids := {}
 	for folder in DirAccess.get_directories_at(location):
 		if folder.begins_with("."): continue
-		var pack := _read_pack(location.path_join(folder))
+		var pack := _read_pack(location.path_join(folder), mount_protected)
 		if pack.is_empty(): continue
 		if ids.has(pack.id):
 			pack.valid = false
@@ -97,7 +101,7 @@ static func _discover(location: String) -> Array[Dictionary]:
 		found.append(pack)
 	return found
 
-static func _read_pack(folder: String) -> Dictionary:
+static func _read_pack(folder: String, mount_protected: bool = true) -> Dictionary:
 	var path := folder.path_join("mod.json")
 	if not FileAccess.file_exists(path): return {}
 	var pack := {"id": folder.get_file(), "name": folder.get_file(), "version": "", "description": "", "folder": folder, "valid": true, "errors": [], "assets": {}, "movement": {}}
@@ -131,11 +135,14 @@ static func _read_pack(folder: String) -> Dictionary:
 	var asset_folder := folder
 	var protected := manifest.has("resource_pack")
 	if protected:
-		asset_folder = _resource_root(manifest.resource_pack, folder, str(pack.id)) if valid_id else ""
+		asset_folder = _resource_root(manifest.resource_pack, folder, str(pack.id), mount_protected) if valid_id else ""
 		if asset_folder.is_empty():
 			pack.valid = false
 			pack.errors.append(TranslationServer.translate("Could not mount protected mod assets with this game build; restart after replacing a pack."))
 			return pack
+		# Discovery can show an unmounted pack's manifest. Its resources are
+		# validated when the registry applies the selection, since packs cannot be unmounted.
+		if not mount_protected and not _mounted_resource_packs.has(asset_folder): return pack
 	if manifest.has("scenery"):
 		var scatter := _read_scenery(manifest.scenery, asset_folder, protected)
 		if scatter.is_empty():

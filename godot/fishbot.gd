@@ -24,3 +24,4 @@ func _death_effect() -> void:
 	var explosion := preload("res://mine_explosion.gd").new()
 	holder.add_child(explosion); explosion.global_position = global_position
 	explosion.setup(traffic.explosion_frames,1.0,traffic.explosion_sound)
+	wreck.follow_explosion(explosion)

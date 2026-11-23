@@ -26,6 +26,7 @@ func _enabled() -> bool:
 	if not game.front_end.gameplay_menu.crosshair_enabled or game.pilot.dead or game.pilot.remote_controlled: return false
 	if game.world_loading or game.loading_save or game.get_tree().paused: return false
 	if game.map_open or game.developer_ui_visible or game.dock_interface_active: return false
+	if game.docking == null or game.docking.stage != game.Docking.Stage.IDLE: return false
 	if game.loading_canvas.visible or game.front_end.menu_layer.visible: return false
 	if game.photo_mode != null and game.photo_mode.active: return false
 	if game.fmv != null and game.fmv.active: return false

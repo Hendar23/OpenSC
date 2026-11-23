@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Game = preload("res://game.gd")
 const Map = preload("res://hud_map.gd")
 var checks := 0
@@ -7,6 +7,10 @@ func _initialize() -> void: call_deferred("_run")
 func check(condition: bool, message: String) -> void:
 	checks += 1
 	if not condition: failures += 1; push_error(message)
+func cockpit_follows_pilot(game: Node3D, snap: bool = false) -> bool:
+	var pose: Transform3D = game.pilot.global_transform if snap else game.pilot.get_global_transform_interpolated()
+	var expected := pose * Transform3D(Basis.IDENTITY,game.cockpit_camera_offset)
+	return game.first_person and game.camera.global_transform.is_equal_approx(expected) and (game.camera.cull_mask & Game.SUB_RENDER_LAYER) == 0
 func _run() -> void:
 	var map := Map.new()
 	map.bounds = AABB(Vector3.ZERO,Vector3(200,10,100))
@@ -34,12 +38,25 @@ func _run() -> void:
 	check(map.is_explored(Vector3(46,0,50)), "Rising to see over the ridge reveals the previously occluded area")
 	map.reset_exploration()
 	check(not map.is_explored(Vector3(35,0,50)), "Reset exploration clears accumulated discoveries")
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	var storage = preload("res://player_storage.gd")
+	if folder.is_empty(): folder = preload("res://asset_paths.gd").find_game_folder()
+	storage.root_override = "user://cockpit-camera-%d" % OS.get_process_id()
+	storage.ensure_parent(storage.preferences_path())
+	var config := ConfigFile.new()
+	config.set_value("game","folder",folder)
+	config.save(storage.preferences_path())
 	var game := Game.new(); game.remember_preferences = false; root.add_child(game)
-	for frame in range(1200):
+	var native := DisplayServer.get_name() != "headless"
+	for frame in range(2400):
 		if game.startup_complete: break
 		await physics_frame
 	check(game.startup_complete,"Game loads")
 	if not game.startup_complete: quit(1); return
+	game.front_end.gameplay_menu.fmvs_enabled = false
+	await game._begin_new_game()
+	if native:
+		root.mode = Window.MODE_WINDOWED; root.size = Vector2i(1280,720)
 	game.map_reveal_slider.value = 5.0
 	check(is_equal_approx(game.cockpit_hud.map_data.reveal_radius,5.0), "F1 reveal radius slider updates the map live")
 	var reveal_button: Button = game.graphics_controls.find_child("RevealWholeMap",true,false)
@@ -72,19 +89,42 @@ func _run() -> void:
 	game.pilot.global_basis = Basis.IDENTITY
 	game.pilot.global_position = game.docking.ports[0].entry; game.pilot.velocity = Vector3.ZERO
 	game.pilot.angular_velocity = Vector3.ZERO; game.pilot.reset_physics_interpolation()
+	game.docking.set_physics_process(false)
 	game._set_camera_mode(true)
 	game._request_docking()
-	check(game.docking.stage != game.Docking.Stage.IDLE and not game.first_person,"Accepted docking switches to third person automatically")
-	check(game.docking.cinematic_camera.is_equal_approx(game.camera.global_position),"Docking freezes the third-person camera position")
+	check(game.docking.stage == game.Docking.Stage.ALIGN and cockpit_follows_pilot(game,true),"Docking begins in the selected cockpit view")
+	check(not game.first_person_crosshair._enabled(),"Weapons crosshair is hidden during automatic docking")
 	game._unhandled_input(button)
-	check(not game.first_person,"Camera toggle cannot interrupt docking")
-	game.docking.cancel()
-	if DisplayServer.get_name() != "headless":
-		root.mode = Window.MODE_WINDOWED; root.size = Vector2i(1280,720)
-		game.pilot.reset_at(game.pilot.spawn)
-		game._set_camera_mode(true)
-		for frame in range(60): await process_frame
-		root.get_texture().get_image().save_png("res://tests/cockpit-first-person-preview.png")
+	check(not game.first_person and game.docking.cinematic_camera.is_equal_approx(game.camera.global_position),"Controller Y selects the fixed exterior camera during docking")
+	game._unhandled_input(key)
+	check(cockpit_follows_pilot(game,true) and game.docking.stage == game.Docking.Stage.ALIGN,"Keyboard V restores cockpit view without interrupting docking")
+	var approach_follows := true
+	var captured_descent := false
+	for frame in range(1000):
+		game.docking._physics_process(0.1)
+		game._process(0)
+		if game.docking.stage == game.Docking.Stage.DOCKED: break
+		approach_follows = approach_follows and cockpit_follows_pilot(game)
+		if (native and not captured_descent and game.docking.stage == game.Docking.Stage.DESCEND
+			and game.docking.elapsed > float(game.docking.travel_profile.duration) * 0.5):
+			await RenderingServer.frame_post_draw
+			captured_descent = root.get_texture().get_image().save_png(storage.root_override.path_join("cockpit-descent.png")) == OK
+	check(approach_follows,"Cockpit camera follows the submarine through the entire approach and descent")
+	if native: check(captured_descent,"The cockpit view renders during descent")
+	check(game.docking.stage == game.Docking.Stage.DOCKED and game.dock_interface.visible and game.game_dock.view.active,"Docking still opens the city interface with its live exterior view")
+	game._dock_ui_action("launch",{})
+	check(game.docking.stage == game.Docking.Stage.EXIT_OPEN and cockpit_follows_pilot(game,true),"Undocking begins in the selected cockpit view")
+	game._unhandled_input(key)
+	check(not game.first_person and game.camera.global_position.is_equal_approx(game.docking.cinematic_camera),"Exterior camera remains available during launch")
+	game._unhandled_input(button)
+	check(cockpit_follows_pilot(game,true),"Switching back during launch restores cockpit view")
+	var launch_follows := true
+	for frame in range(1000):
+		game.docking._physics_process(0.1)
+		game._process(0)
+		launch_follows = launch_follows and cockpit_follows_pilot(game)
+		if game.docking.stage == game.Docking.Stage.IDLE: break
+	check(launch_follows and game.docking.stage == game.Docking.Stage.IDLE,"Cockpit view follows launch and remains selected when piloting resumes")
 	game.queue_free(); await process_frame
 	print("Cockpit camera and exploration: %d checks, %d failures" % [checks,failures])
 	quit(1 if failures else 0)
