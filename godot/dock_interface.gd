@@ -181,7 +181,7 @@ func label(text: String, area: Rect2, font_size: int = 13, centre: bool = false)
 	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if centre: node.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	layout.add_child(node); node.position = area.position; node.size = area.size; node.clip_text = true; return node
-func button(action: String, area: Rect2, text: String = "", payload: Dictionary = {}) -> Button:
+func button(action: String, area: Rect2, text: String = "", payload: Dictionary = {}, parent: Control = null) -> Button:
 	var node := DockButton.new(); node.position = area.position; node.size = area.size; node.text = text
 	node.name = action + "_" + str(payload.slot) if action == "choose_slot" else action
 	node.add_theme_font_size_override("font_size",12); node.add_theme_color_override("font_color",text_colour)
@@ -200,7 +200,7 @@ func button(action: String, area: Rect2, text: String = "", payload: Dictionary 
 		node.held = true; node.set_meta("sounded_down",true); node.queue_redraw()
 		if not outcome_sound: _play_menu_sound("activate"))
 	node.button_up.connect(func() -> void: node.held = false; node.queue_redraw())
-	layout.add_child(node); button_nodes.append(node)
+	(parent if parent != null else layout).add_child(node); button_nodes.append(node)
 	node.pressed.connect(func() -> void:
 		if not outcome_sound and not node.get_meta("sounded_down",false): _play_menu_sound("activate")
 		node.set_meta("sounded_down",false)
@@ -330,7 +330,9 @@ func rebuild(new_page: bool = false) -> void:
 	rebuilding = true; active_button = null
 	mail_list = null; mail_body = null; mail_button = null
 	var focused := get_viewport().gui_get_focus_owner()
-	var focus_name := str(focused.name) if not new_page and focused != null and layout.is_ancestor_of(focused) else ""
+	var focus_path := layout.get_path_to(focused) if not new_page and focused != null and layout.is_ancestor_of(focused) else NodePath()
+	var old_mission_list := layout.get_node_or_null("MissionListScroll") as ScrollContainer
+	var mission_list_offset := old_mission_list.scroll_vertical if not new_page and old_mission_list != null else 0
 	# A button may still be emitting pressed while its page changes.
 	for child in layout.get_children():
 		if child == info_dialog: continue
@@ -383,7 +385,7 @@ func rebuild(new_page: bool = false) -> void:
 
 		"goods": _commodity_shop(data)
 		"missions":
-			_mission_board(data)
+			_mission_board(data,mission_list_offset)
 		"save","load":
 			var area := rect(pages[page].get("slots"))
 			var slots: Array = data.get("slots",[])
@@ -416,7 +418,7 @@ func rebuild(new_page: bool = false) -> void:
 		automatic.tooltip_text = Saves.display_timestamp(str(auto.get("saved_at","")))
 	var slot_controls: Array[Button] = []
 	if page in ["save","load"]: slot_controls = _wire_slot_focus()
-	var restored := layout.get_node_or_null(NodePath(focus_name)) as Control if not focus_name.is_empty() else null
+	var restored := layout.get_node_or_null(focus_path) as Control if not focus_path.is_empty() else null
 	if restored != null: restored.grab_focus()
 	elif page in ["save","load"]:
 		(slot_controls[0] if not slot_controls.is_empty() else button_nodes[0]).grab_focus()
@@ -980,23 +982,29 @@ func _dialog_input(dialog: ConfirmationDialog, event: InputEvent) -> void:
 			if next != null: next.grab_focus()
 			dialog.get_viewport().set_input_as_handled(); break
 
-func _mission_row(id: String, title: String, index: int, selected: bool, row_name: String = "choose_mission") -> Button:
-	var row := button("choose_mission",Rect2(24,34+index*15,335,15),title)
+const MISSION_ROW_HEIGHT := 15
+const MISSION_LIST_AREA := Rect2(15,34,350,165)
+
+func _mission_row(parent: Control, id: String, title: String, index: int, selected: bool, row_name: String = "choose_mission") -> Button:
+	var origin := MISSION_LIST_AREA.position if parent == layout else Vector2.ZERO
+	var position := origin + Vector2(9,index * MISSION_ROW_HEIGHT)
+	var width := 335 if parent == layout else 329
+	var row := button("choose_mission",Rect2(position,Vector2(width,MISSION_ROW_HEIGHT)),title,{},parent)
 	row.name = row_name
 	for state in ["normal","hover","focus","pressed"]: row.add_theme_stylebox_override(state,StyleBoxEmpty.new())
 	row.alignment = HORIZONTAL_ALIGNMENT_LEFT; row.add_theme_font_size_override("font_size",10)
+	row.clip_text = parent != layout
 	row.add_theme_color_override("font_focus_color",Color.WHITE); row.add_theme_color_override("font_hover_color",Color.WHITE)
 	row.add_theme_color_override("font_color",text_colour)
 	row.pressed.connect(func() -> void:
-		mission_selection = id; rebuild()
-		var next := layout.get_node_or_null(row_name) as Control
-		if next != null: next.grab_focus())
+		row.grab_focus()
+		mission_selection = id; rebuild())
 	if selected:
 		_ensure_selection_dot(); var dot := TextureRect.new(); dot.texture = selection_dot
-		dot.position = Vector2(15,38+index*15); dot.size = Vector2(8,8); dot.mouse_filter = Control.MOUSE_FILTER_IGNORE; layout.add_child(dot)
+		dot.position = position + Vector2(-9,4); dot.size = Vector2(8,8); dot.mouse_filter = Control.MOUSE_FILTER_IGNORE; parent.add_child(dot)
 	return row
 
-func _mission_board(data: Dictionary) -> void:
+func _mission_board(data: Dictionary, list_offset: int) -> void:
 	var mission: Dictionary = data.get("missions",{})
 	var information: Array = mission.get("information",[])
 	var info := {}
@@ -1012,14 +1020,30 @@ func _mission_board(data: Dictionary) -> void:
 	var content: Dictionary = chosen if not chosen.is_empty() else mission
 	if not information_only:
 		var heading := label("Missions",Rect2(24,20,330,14),10); heading.add_theme_color_override("font_color",Color.WHITE)
+	var row_count := (1 if mission.get("active",false) else offers.size()) + information.size()
+	var row_parent := layout
+	var list_height := row_count * MISSION_ROW_HEIGHT
+	if list_height > MISSION_LIST_AREA.size.y:
+		var list_scroll := ScrollContainer.new()
+		list_scroll.name = "MissionListScroll"
+		list_scroll.position = MISSION_LIST_AREA.position; list_scroll.size = MISSION_LIST_AREA.size
+		list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		list_scroll.follow_focus = true
+		layout.add_child(list_scroll)
+		row_parent = Control.new(); row_parent.name = "Rows"
+		row_parent.custom_minimum_size.y = list_height
+		row_parent.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row_parent.mouse_filter = Control.MOUSE_FILTER_PASS
+		list_scroll.add_child(row_parent)
+		list_scroll.set_deferred("scroll_vertical",list_offset)
 	var rows: Array[Button] = []
 	if mission.get("active",false):
-		rows.append(_mission_row(id,tr("Current mission: %s") % str(mission.get("title","")),0,selected))
+		rows.append(_mission_row(row_parent,id,tr("Current mission: %s") % str(mission.get("title","")),0,selected))
 	else:
 		for entry in offers:
-			rows.append(_mission_row(str(entry.id),str(entry.title),rows.size(),str(entry.id) == mission_selection,"choose_mission" if rows.is_empty() else "MissionOffer_"+str(entry.id)))
+			rows.append(_mission_row(row_parent,str(entry.id),str(entry.title),rows.size(),str(entry.id) == mission_selection,"choose_mission" if rows.is_empty() else "MissionOffer_"+str(entry.id)))
 	for entry in information:
-		rows.append(_mission_row(str(entry.id),str(entry.title),rows.size(),str(entry.id) == mission_selection,"RefineryInfo_"+str(entry.id)))
+		rows.append(_mission_row(row_parent,str(entry.id),str(entry.title),rows.size(),str(entry.id) == mission_selection,"RefineryInfo_"+str(entry.id)))
 	# Retail 0043e0d0 leaves an empty list blank; refinery heading is blank too.
 	var picture := TextureRect.new(); picture.name = "MissionPicture"; picture.position = Vector2(384,14); picture.size = Vector2(238,179)
 	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; picture.mouse_filter = Control.MOUSE_FILTER_IGNORE

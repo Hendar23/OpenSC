@@ -1,6 +1,7 @@
 extends Node
 signal docked
 signal docking_started
+signal about_to_launch
 
 const Access = preload("res://dock_access.gd")
 const Morph = preload("res://morph_animation.gd")
@@ -197,6 +198,7 @@ func request_docking() -> bool:
 		if not Access.acquire(current,self):
 			launch_pending = true; message = tr("Dock currently in use. Please wait."); return false
 		launch_pending = false
+		about_to_launch.emit()
 		_prepare_transit_settings()
 		# Reveal behind the closed hatch before it starts opening.
 		pilot.reveal_visual()

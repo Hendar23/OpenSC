@@ -237,8 +237,11 @@ func run() -> void:
 	var missing_item := snapshot.duplicate(true); missing_item.weapons.append("unavailable-test-weapon")
 	game.save_games.write(1,missing_item)
 	check(not await game._load_saved_game(1),"Missing inventory item still prevents loading")
+	game.player_progress.status.credits = 704
 	game._dock_ui_action("launch",{})
 	check(game.docking.stage != game.Docking.Stage.DOCKED,"Launch starts undocking")
+	var departure: Dictionary = game.save_games.read(-1)
+	check(departure.get("progress",{}).get("status",{}).get("credits") == 704 and departure.get("dock",{}).get("id") == automatic.dock.id,"Launch autosaves the latest dock transactions at the departing city")
 	check(not paused and game.world_root.can_process() and game.pilot.can_process() and game.docking.can_process(),"Launch resumes the outside world before undocking starts")
 	game.docking.set_physics_process(false)
 	game._process(0)
@@ -264,6 +267,24 @@ func run() -> void:
 			check(game.camera.global_position.is_equal_approx(launch_camera) and (-game.camera.global_basis.z).dot((target - launch_camera).normalized()) > 0.999,"Fixed launch camera tracks the submarine during ascent")
 	check(game.docking.stage == game.Docking.Stage.IDLE and game.pilot.active,"Loaded save can finish undocking")
 	check(game.pilot.physics_interpolation_mode == Node.PHYSICS_INTERPOLATION_MODE_ON,"Finishing launch restores interpolation for normal piloting")
+	check(await game._load_saved_game(-1),"Launch autosave loads using the existing dock-save format")
+	game.docking.set_physics_process(false)
+	var access := preload("res://dock_access.gd")
+	var entrance_owner := Node.new()
+	var departure_port: Dictionary = game.docking.current
+	access.acquire(departure_port,entrance_owner)
+	game.player_progress.status.credits = 705
+	game.docking.request_docking()
+	check(game.docking.launch_pending and game.save_games.read(-1).progress.status.credits == 704,"A blocked launch waits before autosaving")
+	access.release(departure_port,entrance_owner); entrance_owner.free()
+	game.docking._physics_process(0.0)
+	check(game.docking.stage == game.Docking.Stage.EXIT_OPEN and game.save_games.read(-1).progress.status.credits == 705,"Automatically retried launch autosaves once the exit is available")
+	check(await game._load_saved_game(-1),"Retried launch leaves a valid autosave")
+	game.player_progress.missions.active = {"id":"prospecting"}
+	game.player_progress.status.credits = 706
+	game._dock_ui_action("launch",{})
+	check(game.docking.stage == game.Docking.Stage.EXIT_OPEN and game.save_games.read(-1).progress.status.credits == 705,"An active mission allows launch and preserves the previous autosave")
+	game.player_progress.missions.active.clear()
 	# Read real legacy saves, but only write copies into the isolated test folder.
 	var actual_saves := preload("res://save_games.gd").new()
 	for slot in range(actual_saves.SLOT_COUNT):

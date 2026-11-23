@@ -153,5 +153,31 @@ func run() -> void:
    check(mission_accept.highlight_art.size() == 1 and mission_accept.highlight_art[0].rect.position + mission_accept.position == Vector2(edition[2],436),"Mission Accept highlight aligns for %s, race %d" % [edition[1],mission_race])
    check(mission_accept.held_art.size() == 1 and mission_accept.held_art[0].rect.position + mission_accept.position == Vector2(547,415),"Mission Accept pressed knob stays aligned")
    check(not mission_accept.disabled and mission_accept._has_point(Vector2(edition[2],437) - mission_accept.position),"Mission Accept responds over the translated label")
+ var offers := []
+ for index in range(18):
+  offers.append({"id":"offer_%d" % index,"title":"Offer %d" % index,"briefing":"Briefing %d" % index})
+ state.missions = {"available":true,"offers":offers.slice(0,11)}
+ ui.open("missions")
+ check(ui.layout.get_node_or_null("MissionListScroll") == null,"Fitting mission lists keep the original layout")
+ state.missions.offers = offers
+ ui.open("missions"); await process_frame
+ var list: ScrollContainer = ui.layout.get_node("MissionListScroll")
+ var briefing: ScrollContainer = ui.layout.get_node("MissionBriefingScroll")
+ check(list.get_v_scroll_bar().visible and list.clip_contents and list.position.y + list.size.y < briefing.position.y,"Overflowing rows are clipped above the briefing and have a scrollbar")
+ var wheel := InputEventMouseButton.new(); wheel.button_index = MOUSE_BUTTON_WHEEL_DOWN; wheel.pressed = true
+ wheel.position = list.get_global_transform_with_canvas() * Vector2(30,40)
+ root.push_input(wheel,true); await process_frame
+ check(list.scroll_vertical > 0 and briefing.scroll_vertical == 0,"Mouse wheel scrolls only the mission rows")
+ var penultimate: Button = list.get_node("Rows/MissionOffer_offer_16")
+ penultimate.grab_focus()
+ var down := InputEventJoypadButton.new(); down.button_index = JOY_BUTTON_DPAD_DOWN; down.pressed = true
+ ui._input(down); await process_frame
+ var last: Button = list.get_node("Rows/MissionOffer_offer_17")
+ check(root.gui_get_focus_owner() == last and list.scroll_vertical == int(list.get_v_scroll_bar().max_value - list.get_v_scroll_bar().page),"Controller focus scrolls the last offer into view")
+ var offset := list.scroll_vertical
+ last.pressed.emit(); await process_frame
+ list = ui.layout.get_node("MissionListScroll")
+ check(list.scroll_vertical == offset and root.gui_get_focus_owner() == list.get_node("Rows/MissionOffer_offer_17"),"Selecting an offscreen offer preserves list position and focus")
+ check(ui.layout.get_node("MissionBriefingScroll/MissionBriefing").text == "Briefing 17" and not ui.layout.get_node("accept_mission").disabled,"The final offer opens its briefing and enables Accept")
  ui.queue_free(); await process_frame
  print("Dock presentation: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

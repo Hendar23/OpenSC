@@ -324,6 +324,7 @@ func _setup_actors(folder: String) -> void:
 	game.object_population.player = game.pilot
 	game.docking.docking_started.connect(func() -> void: game.events.city_docking_started.emit(int(game.docking.current.node.get_meta("city_id"))))
 	game.docking.docked.connect(game._reset_docked_wildlife)
+	game.docking.about_to_launch.connect(game._autosave_docked)
 	game.docking.docked.connect(func() -> void: game.events.city_docked.emit(int(game.docking.current.node.get_meta("city_id"))))
 	game.equipment.activated.connect(func(id: String, active: bool) -> void: game.events.equipment_activated.emit(id,active))
 
