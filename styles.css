@@ -23,7 +23,7 @@ h3 { font-size: 1.2rem; line-height: 1.35; }
 .skip-link { position: fixed; z-index: 5; inset: .5rem auto auto .5rem; padding: .7rem 1rem; transform: translateY(-160%); background: var(--accent); color: #142022; }
 .skip-link:focus { transform: none; }
 
-.footer-inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem 2rem; }
+.footer-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem 2rem; }
 nav { display: flex; align-items: center; flex-wrap: wrap; gap: .55rem clamp(1rem, 3vw, 2rem); }
 nav a { color: var(--muted); text-decoration: none; font-size: .92rem; font-weight: 650; }
 nav a:hover, .text-link:hover { color: var(--accent); }
