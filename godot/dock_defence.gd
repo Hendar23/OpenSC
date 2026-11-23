@@ -65,6 +65,7 @@ func _physics_process(delta: float) -> void:
 func _show(state: Dictionary) -> void:
 	# Aquatraz (city 5) applies damage but has no ordinary dock spike arcs.
 	if int(state.node.get_meta("city_id")) == 5: return
+	preload("res://zapper_surge.gd").strike(state.target)
 	if state.arcs.is_empty():
 		for point in EMITTERS:
 			var arc := preload("res://submarine_weapons.gd").create_arc(state.node,population.zapper_frames)

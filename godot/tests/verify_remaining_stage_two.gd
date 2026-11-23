@@ -250,7 +250,9 @@ func run() -> void:
 			var attackers: Array = mission.enemies.slice(1)
 			var fired := {}
 			var hit_player := false
-			for agent: Node3D in attackers: agent.set_local_simulation(true)
+			for agent: Node3D in attackers:
+				agent.armament.select_weapon("missile")
+				agent.set_local_simulation(true)
 			for frame in range(1200):
 				game.pilot.active = true; game.pilot.controls_enabled = true; game.pilot.restore_health(1000000)
 				await physics_frame

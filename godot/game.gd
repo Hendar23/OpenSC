@@ -269,7 +269,7 @@ func _build_interface() -> void:
 	front_end.gameplay_menu.random_pirates_changed.connect(func(disabled: bool) -> void:
 		if is_instance_valid(submarine_traffic) and is_instance_valid(submarine_traffic.roaming_population): submarine_traffic.roaming_population.set_disabled(disabled))
 	front_end.gameplay_menu.pirate_weapons_changed.connect(func(enabled: bool) -> void:
-		if is_instance_valid(submarine_traffic) and is_instance_valid(submarine_traffic.roaming_population): submarine_traffic.roaming_population.set_random_weapons(enabled))
+		if is_instance_valid(submarine_traffic): submarine_traffic.set_random_npc_weapons(enabled))
 	front_end.gameplay_menu.wildlife_limit_changed.connect(func(limit: int) -> void:
 		if wildlife != null: wildlife.set_active_limit(limit))
 	front_end.gameplay_menu.sun_shafts_changed.connect(func(enabled: bool) -> void:

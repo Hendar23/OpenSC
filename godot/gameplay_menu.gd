@@ -114,7 +114,7 @@ func _button(parent: Control, activate: Callable, width := 248.0) -> Button:
 func _refresh() -> void:
 	random_pirates_button.text = tr("Disable random pirates: %s") % (tr("On") if disable_random_pirates else tr("Off"))
 	lens_flares_button.text = tr("Lens flares: %s") % (tr("On") if lens_flares_enabled else tr("Off"))
-	pirate_weapons_button.text = tr("Random pirate weapons: %s") % (tr("On") if random_pirate_weapons else tr("Off"))
+	pirate_weapons_button.text = tr("Random NPC submarine weapons: %s") % (tr("On") if random_pirate_weapons else tr("Off"))
 	crosshair_button.text = tr("First-person crosshair: %s") % (tr("On") if crosshair_enabled else tr("Off"))
 	classic_sub_physics_button.text = tr("Classic Sub physics: %s") % (tr("On") if classic_sub_physics else tr("Off"))
 	bubble_button.text = tr("Maximum bubbles: %s") % (tr("Unlimited") if bubble_limit < 0 else tr("Off") if bubble_limit == 0 else str(bubble_limit))

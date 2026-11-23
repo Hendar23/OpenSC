@@ -87,6 +87,7 @@ func attack(delta: float) -> void:
 				# for its initial update and two subsequent updates.
 				if zap_ticks_left == 0 and fish.rng.randi_range(0,255) < int(settings.get("zapper_chance",16)): zap_ticks_left = 3
 				if zap_ticks_left > 0:
+					preload("res://zapper_surge.gd").strike(struck)
 					preload("res://original_damage.gd").weapon(struck,float(settings.zapper_damage_per_tick),fish.global_position)
 					_hit_feedback(zap_hit)
 					zap_ticks_left -= 1

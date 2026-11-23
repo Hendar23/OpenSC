@@ -1,6 +1,7 @@
 extends "res://tests/test_scene_tree.gd"
 const Damage = preload("res://original_damage.gd")
 const Shop = preload("res://equipment_shop.gd")
+const Armament = preload("res://pirate_armament.gd")
 var checks := 0
 var failures := 0
 func check(ok: bool, message: String) -> void:
@@ -26,8 +27,8 @@ func run() -> void:
 	await physics_frame
 	var population = traffic.roaming_population
 	var distribution := {"missile":0,"zapper":0,"zapperup":0,"electro":0}
-	for roll in range(100): distribution[population.weapon_for_roll(roll)] += 1
-	check(distribution == {"missile":40,"zapper":30,"zapperup":20,"electro":10},"Weapon probabilities are exactly 40/30/20/10")
+	for roll in range(100): distribution[Armament.weapon_for_roll(roll)] += 1
+	check(distribution == {"missile":50,"zapper":30,"zapperup":20,"electro":0},"Weapon probabilities are exactly 50/30/20 with no Electro Bolt")
 	check(population != null and population.ships.size() == 2,"Two random pirate slots created")
 	check(population.ships.all(func(agent: Node3D) -> bool: return not agent.dead),"Two pirates spawn alive")
 	check(population.ships.all(func(agent: Node3D) -> bool: return str(agent.get_parent().get_meta("asset_id",str(agent.get_parent().get_meta("asset_source","")).get_file().get_basename())).trim_prefix("model.").to_upper() == "PIRATE"),"Random pirates use only the yellow hull")
@@ -81,11 +82,16 @@ func run() -> void:
 	pirate.get_parent().position += Vector3.ONE
 	traffic.restore(snapshot)
 	check(pirate.armament.weapon_id == "zapperup","Save/restore preserves a pirate's assigned weapon")
-	population.set_random_weapons(false)
+	game.front_end.gameplay_menu._toggle_pirate_weapons()
 	check(population.ships.all(func(ship: Node3D) -> bool: return ship.armament.weapon_id == "missile"),"Disabling random weapons restores existing pirates to torpedoes")
 	traffic.restore(snapshot)
 	check(pirate.armament.weapon_id == "missile","Disabled preference takes precedence over a saved random weapon")
-	population.set_random_weapons(true)
+	game.front_end.gameplay_menu._toggle_pirate_weapons()
+	var legacy_electro := snapshot.duplicate(true)
+	legacy_electro["population/pirates/0"].pirate_weapon = "electro"
+	check(traffic.valid_snapshot(legacy_electro),"Published beta Electro Bolt snapshots remain valid")
+	traffic.restore(legacy_electro)
+	check(pirate.armament.weapon_id == "missile","An old Electro Bolt loadout restores to torpedoes")
 	var legacy_weapons := snapshot.duplicate(true)
 	for entry in legacy_weapons.values(): entry.erase("pirate_weapon")
 	check(traffic.valid_snapshot(legacy_weapons),"Published beta saves without weapon fields remain valid")

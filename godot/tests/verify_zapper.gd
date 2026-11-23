@@ -46,6 +46,9 @@ func _run() -> void:
 	await physics_frame; await physics_frame
 	weapon.update_fire(true,0.1)
 	check(weapon.firing and weapon.last_hit == target and is_equal_approx(target.health,9.0),"Holding fire damages a creature directly ahead")
+	var surge := target.get_node_or_null(Weapons.HullSurge.NODE_NAME)
+	var hull_meshes := fish_model.find_children("*","MeshInstance3D",true,false)
+	check(surge != null and not hull_meshes.is_empty() and hull_meshes.all(func(mesh: MeshInstance3D) -> bool: return mesh.material_overlay is ShaderMaterial),"A real player ray lights the target's model")
 	check(not weapon.hit_blood.particles.is_empty() and not target.dead,"Nonlethal zapper damage emits blood feedback")
 	var blood_count: int = weapon.hit_blood.particles.size()
 	weapon.update_fire(true,0)
@@ -57,6 +60,7 @@ func _run() -> void:
 	check(weapon.beam_end.distance_to(start) < 2.0,"Beam ends at the target's collision body")
 	weapon.update_fire(false,0.1)
 	check(not weapon.firing and not weapon.beam.visible and not weapon.audio.playing,"Release immediately stops beam, damage and sound")
+	check(is_instance_valid(surge) and not surge.is_queued_for_deletion(),"Hull electricity remains after the weapon is released")
 	check(weapon.hit_blood.particles.size() == blood_count,"Releasing fire stops emitting blood")
 	weapon.hit_blood._process(1.0)
 	check(weapon.hit_blood.particles.is_empty(),"Hit blood fades and cleans up after release")
@@ -109,6 +113,7 @@ func _run() -> void:
 	await physics_frame; await physics_frame
 	weapon.update_fire(true,0.2)
 	check(target.health == 9 and weapon.last_hit == wall and weapon.beam_end.distance_to(start) < 1,"Scenery blocks the beam and protects creatures behind it")
+	check(not wall.has_node(Weapons.HullSurge.NODE_NAME),"A non-target scenery collider does not acquire a hull surge")
 	check(weapon.hit_blood.particles.is_empty(),"Scenery hits do not emit blood")
 	check(weapon.impact.visible and weapon.impact_frames.size() == 2,"Terrain hit uses the two original masked spark textures")
 	weapon._process(0.05); var spark: Texture2D = weapon.impact.texture

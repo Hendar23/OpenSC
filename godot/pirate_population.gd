@@ -38,7 +38,6 @@ var retry := 0.0
 var random := RandomNumberGenerator.new()
 var portrait: Texture2D
 var distorted_portrait: Texture2D
-var random_weapons := true
 var disabled := false
 
 func set_disabled(value: bool) -> void:
@@ -53,17 +52,6 @@ func suspend_population() -> void:
 		agent.motion.velocity = Vector3.ZERO
 		agent.armament.reset()
 		if is_instance_valid(agent.smoke): agent.smoke.clear()
-
-static func weapon_for_roll(roll: int) -> String:
-	if roll < 40: return "missile"
-	if roll < 70: return "zapper"
-	if roll < 90: return "zapperup"
-	return "electro"
-
-func set_random_weapons(enabled: bool) -> void:
-	random_weapons = enabled
-	if not enabled:
-		for agent in ships: agent.armament.select_weapon("missile")
 
 func setup(manager: Node, folder: String, document: Dictionary) -> void:
 	traffic = manager; random.randomize()
@@ -82,8 +70,6 @@ func setup(manager: Node, folder: String, document: Dictionary) -> void:
 		preload("res://entity_identity.gd").assign_id(model,"population/pirates/%d" % index)
 		var agent := Pirate.install_pirate(model,values); agent.roaming = true
 		traffic.register_vessel(agent,get_parent(),folder)
-		agent.armament = preload("res://pirate_armament.gd").new(); agent.add_child(agent.armament)
-		agent.armament.setup(agent,folder)
 		agent.player_attack_started.connect(_taunt.bind(agent))
 		ships.append(agent)
 		# Hidden until a safe first placement is found.
@@ -129,6 +115,6 @@ func replace(agent: Node3D) -> bool:
 		if crowded or not traffic.water_clear(point): continue
 		agent.home.origin = point; agent.home.basis = Basis(Vector3.UP,random.randf_range(-PI,PI))
 		agent.reset(); agent.running = traffic.simulating
-		agent.armament.select_weapon(weapon_for_roll(random.randi_range(0,99)) if random_weapons else "missile")
+		agent.roll_weapon(random.randi_range(0,99))
 		return true
 	return false

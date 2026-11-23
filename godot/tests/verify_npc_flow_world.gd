@@ -36,6 +36,7 @@ func run() -> void:
 	var host := actor("PRISON",center,false); host.combat_enabled = false
 	host.health.configure(10000.0,0.3)
 	var attacker := actor("PIRATE",center+Vector3(0,0,-12),true); attacker.victim = host.body
+	attacker.armament.select_weapon("missile")
 	var patrol := actor("TRADSHUT",center+Vector3(-12,0,-9),false); patrol.combat_enabled = false; patrol.loop_route = true
 	patrol.waypoints = PackedVector3Array([center+Vector3(-12,0,7),center+Vector3(-4,0,7),center+Vector3(-4,0,-9),center+Vector3(-12,0,-9)])
 	game.camera.global_position = center+Vector3(15,-0.4,14); game.camera.look_at(center)

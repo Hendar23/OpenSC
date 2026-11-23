@@ -240,6 +240,7 @@ func run() -> void:
 	check(game.pilot.health < game.pilot.max_health,"Walker missiles really register damage on the player")
 	mission._alert_guards()
 	for guard in mission.enemies:
+		guard.armament.select_weapon("missile")
 		guard.random.seed = 456+mission.enemies.find(guard); guard.set_local_simulation(true); guard.set_physics_process(false)
 	var firing_guards := {}
 	for tick in range(180):

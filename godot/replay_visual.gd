@@ -2,7 +2,7 @@ extends RefCounted
 ## A visual-only history. Resources are retained, never gameplay nodes/scripts.
 const CAPACITY := 602
 const NO_MATERIAL_VALUES: Array = []
-const MATERIAL_FIELDS := ["opacity","albedo_texture","emission_texture","albedo_color","emission_color","uv_offset","strength","beam_length","beam_width","seed","light_color","propeller_bend","drift_distance","cloud_center","flare_color","brightness","reach","diameter","cone_cosine","forward_sign","solar","lunar"]
+const MATERIAL_FIELDS := ["opacity","albedo_texture","emission_texture","albedo_color","emission_color","uv_offset","strength","beam_length","beam_width","seed","light_color","propeller_bend","drift_distance","cloud_center","flare_color","brightness","reach","diameter","cone_cosine","forward_sign","solar","lunar","arc_scale","arc_phase","arc_strength"]
 var source: WeakRef
 var detached := false
 var kind := ""
@@ -76,6 +76,9 @@ func _values(node: Node3D, appearances: Dictionary) -> Array:
 	var result: Array = []
 	if node is MeshInstance3D:
 		result = [_identity(node.mesh),_identity(node.material_override),node.layers,node.transparency]
+		var overlay: Material = node.material_overlay
+		if overlay != null:
+			result.append(_identity(overlay)); result.append(_material_values(overlay,appearances))
 		if node.mesh != null:
 			for surface in node.mesh.get_surface_count():
 				var surface_material: Material = node.get_surface_override_material(surface)
@@ -126,6 +129,7 @@ func _state(node: Node3D, appearances: Dictionary) -> Dictionary:
 	if node is MeshInstance3D:
 		state["mesh"] = _mesh_copy(node.mesh,node.get_meta("replay_mesh_arrays",[])) if mutable_mesh and node.mesh != null else node.mesh
 		state["bounds"] = node.custom_aabb
+		if node.material_overlay != null: state["overlay"] = _material(node.material_overlay,appearances)
 		state["surfaces"] = []
 		if node.mesh != null:
 			for index in node.mesh.get_surface_count(): state.surfaces.append(_material(node.get_surface_override_material(index),appearances))
@@ -221,6 +225,7 @@ func _apply(state: Dictionary) -> void:
 	if proxy is MeshInstance3D:
 		proxy.mesh = state.mesh
 		proxy.custom_aabb = state.get("bounds",AABB())
+		proxy.material_overlay = _apply_material(state.get("overlay",{}),proxy.material_overlay)
 		for index in state.surfaces.size(): proxy.set_surface_override_material(index,_apply_material(state.surfaces[index],proxy.get_surface_override_material(index)))
 	elif proxy is Sprite3D:
 		proxy.texture = state.texture; proxy.modulate = state.modulate; proxy.pixel_size = state.pixel_size

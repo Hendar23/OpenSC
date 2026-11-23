@@ -287,6 +287,7 @@ func _setup_actors(folder: String) -> void:
 	game.docking.setup(game.pilot, game.world_root, folder, game.camera,game.gameplay_catalogue)
 	game.submarine_traffic = preload("res://submarine_traffic.gd").new(); game.submarine_traffic.name = "SubmarineTraffic"; game.world_root.add_child(game.submarine_traffic)
 	game.submarine_traffic.events = game.events
+	game.submarine_traffic.random_npc_weapons = game.front_end.gameplay_menu.random_pirate_weapons
 	game.submarine_traffic.prepare_visual = func(visual: Node3D) -> void: game.water_visuals.attach(visual); game.natural_light.attach(visual)
 	game.submarine_traffic.wreck_blast = game.object_population._exploded
 	game.submarine_traffic.setup(game.world_root,folder,game.docking.ports,game.cockpit_hud.map_data,game.pilot,func(faction: int) -> void:
@@ -298,7 +299,7 @@ func _setup_actors(folder: String) -> void:
 		game.submarine_traffic.build_graph(128)
 		await game.get_tree().process_frame
 	game.submarine_traffic.pirate_defeated.connect(game._pirate_bounty)
-	game.submarine_traffic.enable_roaming_pirates(folder,map_data,game.front_end.gameplay_menu.random_pirate_weapons,game.front_end.gameplay_menu.disable_random_pirates)
+	game.submarine_traffic.enable_roaming_pirates(folder,map_data,game.front_end.gameplay_menu.disable_random_pirates)
 	game.submarine_traffic.roaming_population.transmission.connect(func(message: Dictionary) -> void:
 		if game.radio_feed != null: game.radio_feed.push_message(message,game.docking.radio_static)
 	)

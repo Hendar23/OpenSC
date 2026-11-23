@@ -7,6 +7,7 @@ var asset_folder := ""
 ## One water navigation graph shared by all civilian vessels.
 signal pirate_defeated(position: Vector3)
 var roaming_population: Node3D
+var random_npc_weapons := true
 const Trader = preload("res://trader_submarine.gd")
 const Access = preload("res://dock_access.gd")
 const STEP := 2.0
@@ -75,12 +76,19 @@ func register_vessel(agent: Node3D, world: Node3D, folder: String, alert: Callab
 	agent.get_parent().physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON if simulating else Node.PHYSICS_INTERPOLATION_MODE_OFF
 	if map.get("actor_markers") != null: map.actor_markers.append(agent.body)
 
-func enable_roaming_pirates(folder: String, document: Dictionary, random_weapons: bool = true, disabled: bool = false) -> void:
+func enable_roaming_pirates(folder: String, document: Dictionary, disabled: bool = false) -> void:
 	if is_instance_valid(roaming_population): return
 	roaming_population = preload("res://pirate_population.gd").new(); roaming_population.name = "RoamingPirates"
-	roaming_population.random_weapons = random_weapons
 	roaming_population.disabled = disabled
 	get_parent().add_child(roaming_population); roaming_population.setup(self,folder,document)
+
+func set_random_npc_weapons(enabled: bool) -> void:
+	random_npc_weapons = enabled
+	if enabled: return
+	for agent in traders:
+		if not is_instance_valid(agent): continue
+		var armament = agent.get("armament")
+		if armament != null and armament.weapon_id != "missile": armament.select_weapon("missile")
 
 func replenish_docked(delta: float) -> void:
 	# Existing population replacement remains tied to visits to a dock.
@@ -429,7 +437,7 @@ func restore(value: Dictionary) -> void:
 		agent.mission_owner = entry.get("mission_owner","")
 		if agent.get("player_attack_announced") is bool: agent.player_attack_announced = entry.get("player_attack_announced",false)
 		if agent.get("armament") != null:
-			agent.armament.select_weapon(str(entry.get("pirate_weapon","missile")) if roaming_population.random_weapons else "missile")
+			agent.armament.select_weapon(str(entry.get("pirate_weapon","missile")) if random_npc_weapons else "missile")
 		agent.get_parent().global_transform = preload("res://map_document.gd").decode(entry.pose)
 		agent.get_parent().reset_physics_interpolation()
 		agent.motion.velocity = Vector3.ZERO; agent.motion.bank = 0.0; agent.speed = 0.0; agent.body.velocity = Vector3.ZERO

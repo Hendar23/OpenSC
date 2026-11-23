@@ -5,6 +5,7 @@ const AudioLoop = preload("res://audio_loop.gd")
 const LegacyAudio = preload("res://legacy_audio.gd")
 const Mods = preload("res://mod_registry.gd")
 const Creature = preload("res://fish_controller.gd")
+const HullSurge = preload("res://zapper_surge.gd")
 const DEFAULTS := {"auto_aim_cone":30.0,"range":2.5,"damage_per_tick":2.5,"beam_width":0.08,"animation_speed":12.5,"volume_db":-16.0,"gore_amount":20.0,"gore_settle_speed":1.0,"gore_lifetime":2.0,"chunk_lifetime":60.0}
 var settings := DEFAULTS.duplicate()
 var auto_aim_enabled := false
@@ -221,6 +222,7 @@ func update_fire(held: bool, delta: float) -> void:
 	if not hit.is_empty():
 		beam_end = hit.position
 		impact.global_position = beam_end - forward * 0.025
+		HullSurge.strike(last_hit)
 		if last_hit.has_method("take_damage"):
 			var previous_health: float = last_hit.health if last_hit is Creature else 0.0
 			preload("res://original_damage.gd").weapon(last_hit,effective_damage() * damage_ticks,beam_start,pilot,"zapper",hit)

@@ -3,6 +3,7 @@ signal player_attack_started
 ## Authored enemies share vessel movement, damage, wakes and wreck effects.
 ## Mission activation and mission radio dialogue belong to the mission system.
 const PIRATE_MODELS := ["PIRATE","PIRATE2","PIRATE3"]
+const Armament = preload("res://pirate_armament.gd")
 const PIRATE_DEFAULTS := {"npc_speed":2.5,"npc_health":30.0,"npc_sustain":0.3,"npc_respawn":false,"npc_respawn_delay":120.0,"npc_detection":25.0,"npc_attack_range":15.0,"npc_fire_interval":1.5,"npc_faction":3}
 const PIRATE_LIMITS := {"npc_speed":[0.1,8.0],"npc_health":[0.1,10000.0],"npc_sustain":[0.0,100.0],"npc_respawn_delay":[1.0,3600.0],"npc_detection":[1.0,200.0],"npc_attack_range":[1.0,100.0],"npc_fire_interval":[0.1,60.0],"npc_faction":[3,3]}
 var roaming := false
@@ -17,7 +18,7 @@ var shot_retry := 0.0
 var acquire_clock := 0.0
 var fallback_probe := 0
 var player_attack_announced := false
-var armament: Node3D # Only random encounter slots install alternative weapons.
+var armament: Node3D
 
 static func install_pirate(model: Node3D, values: Dictionary) -> Node3D:
 	var agent = preload("res://trader_submarine.gd").install(model,values,load("res://pirate_submarine.gd"))
@@ -32,9 +33,14 @@ func health_multiplier() -> float:
 
 func reset() -> void:
 	super.reset()
-	if armament != null: armament.reset()
 	victim = null; cooldown = 0; replan = 0; wait = 0; shot_retry = 0; acquire_clock = 0; fallback_probe = 0; attack_run.reset()
 	player_attack_announced = false
+	if armament != null:
+		if roaming: armament.reset()
+		else: roll_weapon(randi_range(0,99))
+
+func roll_weapon(roll: int) -> void:
+	armament.select_weapon(Armament.weapon_for_roll(roll) if system.random_npc_weapons else "missile")
 
 func set_local_simulation(on: bool) -> void:
 	if not on and armament != null: armament.reset()
@@ -48,9 +54,14 @@ func configure_resources(folder: String) -> void:
 	if missile_template != null:
 		add_child(missile_template); missile_template.hide()
 	bubble_trail = system.bubbles
+	if armament == null:
+		armament = Armament.new(); add_child(armament); armament.setup(self,folder)
+
+func advance(delta: float) -> void:
+	if armament != null: armament.begin_frame(delta)
+	super.advance(delta)
 
 func _advance_motion(delta: float) -> void:
-	if armament != null: armament.begin_frame(delta)
 	if dead:
 		super._advance_motion(delta); return
 	if _ambient_attacks_suppressed():
@@ -58,7 +69,7 @@ func _advance_motion(delta: float) -> void:
 			victim = null; path.clear(); attack_run.reset()
 		_roam(delta); return
 	cooldown = maxf(0,cooldown - delta); replan -= delta; shot_retry = maxf(0,shot_retry-delta); acquire_clock -= delta
-	if not _valid_target(victim):
+	if not is_instance_valid(victim) or not _valid_target(victim):
 		victim = null
 		if acquire_clock <= 0:
 			victim = _nearest_target(); acquire_clock = 0.25+fmod(float(get_instance_id()%19)*0.017,0.12)
@@ -140,7 +151,7 @@ func _nearest_target() -> Node3D:
 	for agent in system.traders:
 		if agent != self and int(agent.tuning.npc_faction) != 3: candidates.append(agent.body)
 	for candidate in candidates:
-		if not _valid_target(candidate): continue
+		if not is_instance_valid(candidate) or not _valid_target(candidate): continue
 		var distance := global_position.distance_squared_to(candidate.global_position)
 		if distance < best: nearest = candidate; best = distance
 	return nearest

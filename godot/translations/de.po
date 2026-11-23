@@ -1444,8 +1444,8 @@ msgstr "FELSVORSPRUNG"
 msgid "Radiation Shield"
 msgstr "Strahlenschutz"
 
-msgid "Random pirate weapons: %s"
-msgstr "Zufällige Piratenwaffen: %s"
+msgid "Random NPC submarine weapons: %s"
+msgstr "Zufällige Waffen für NPC-U-Boote: %s"
 
 msgid "Random pitch ± (0.05 = 5%)"
 msgstr "Zufällige Tonhöhenabweichung ± (0,05 = 5 %)"

@@ -1444,8 +1444,8 @@ msgstr "AFFLEUREMENT_ROCHEUX"
 msgid "Radiation Shield"
 msgstr "Protection antiradiation"
 
-msgid "Random pirate weapons: %s"
-msgstr "Armes de pirates aléatoires : %s"
+msgid "Random NPC submarine weapons: %s"
+msgstr "Armes aléatoires des sous-marins PNJ : %s"
 
 msgid "Random pitch ± (0.05 = 5%)"
 msgstr "Variation aléatoire de la hauteur ± (0,05 = 5 %)"

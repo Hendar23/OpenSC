@@ -69,6 +69,7 @@ func run() -> void:
 				var occupied: AABB = other.get_parent().global_transform*other.bounds.grow(0.25)
 				check(not hull.intersects(occupied),"Alarm wave starts without overlapping hulls")
 	for agent: Node3D in attackers:
+		agent.armament.select_weapon("missile")
 		agent.random.seed = 1234+attackers.find(agent)
 		agent.set_local_simulation(true); agent.set_physics_process(false)
 	for phase in ["inside","exit","open"]:

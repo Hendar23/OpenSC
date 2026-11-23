@@ -193,6 +193,7 @@ func run() -> void:
 	var population: Node3D = game.submarine_traffic.roaming_population
 	var pirate: Node3D = population.ships[0]
 	pirate.reset(); pirate.set_physics_process(false); pirate.running = true
+	pirate.armament.select_weapon("missile")
 	game.pilot.global_position = Vector3(10000,game.pilot.surface_height-5,10000)
 	pirate.get_parent().global_position = game.pilot.global_position-Vector3(0,0,8)
 	pirate.get_parent().global_basis = Basis.IDENTITY

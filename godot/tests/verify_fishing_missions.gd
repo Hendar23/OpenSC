@@ -159,6 +159,7 @@ func run() -> void:
 	check(state.count == 6 and fishing.first_wave and fishing.enemies.size() == 2,"Half-full Procha herder announces six fish and spawns two Bohine attackers")
 	check(fishing.enemies[0].engage_player and fishing.enemies[1].combat_target == state.agent.body and fishing.enemies[1]._nearest_target() == state.agent.body,"One Bohine attacker targets the player and one targets the herder")
 	var enemy: Node3D = fishing.enemies[1]; enemy.set_local_simulation(false)
+	enemy.armament.select_weapon("missile")
 	var enemy_before: Vector3 = enemy.global_position
 	var target_shields: float = state.agent.health.remaining
 	for step in range(720): enemy.advance_abstract(0.25)
@@ -178,6 +179,12 @@ func run() -> void:
 		await physics_frame
 		if state.agent.health.remaining < health_before: break
 	check(state.agent.health.remaining < health_before and state.under_attack,"A mission attacker's real missile hits the herder and triggers its under-attack radio call")
+	state.agent.health.remaining = health_before; state.under_attack = false
+	enemy.get_parent().global_transform = Transform3D(Basis(Vector3.UP,PI),Vector3(10020,-10,10004))
+	enemy.armament.select_weapon("zapperup"); enemy.motion.velocity = Vector3.ZERO
+	await physics_frame; await physics_frame
+	enemy.advance(0.04)
+	check(is_equal_approx(health_before-state.agent.health.remaining,0.75*state.agent.health.sustain) and state.under_attack,"A scripted attacker's upgraded zapper damages its objective and triggers the same radio call")
 	state.agent.health.remaining = health_before; state.agent.get_parent().global_transform = herder_pose
 	enemy.get_parent().global_transform = enemy_pose; enemy.motion.velocity = Vector3.ZERO
 	fill(state)
@@ -200,6 +207,7 @@ func run() -> void:
 	check(restored.all(func(agent: Node3D) -> bool:
 		var entry: Dictionary = aftermath.submarine_traffic[preload("res://entity_identity.gd").of(agent)]
 		return is_equal_approx(agent.health.remaining,entry.health) and agent.get_parent().global_transform.is_equal_approx(preload("res://map_document.gd").decode(entry.pose)) and agent.get_parent().get_meta("editor_model") == entry.fishing_survivor),"Reload preserves each survivor's original model, damage and world pose")
+	check(restored.any(func(agent: Node3D) -> bool: return preload("res://entity_identity.gd").of(agent) == identities[1] and agent.armament.weapon_id == "zapperup"),"A scripted attacker retains its upgraded zapper after mission completion and reload")
 	var invalid: Dictionary = aftermath.submarine_traffic.duplicate(true)
 	invalid[identities[0]].fishing_survivor = "PIRATE3"
 	check(not game.submarine_traffic.valid_snapshot(invalid),"Dynamic survivor restore only accepts the fishing encounter's allowed vessel models")

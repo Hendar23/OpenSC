@@ -32,7 +32,10 @@ func health_multiplier() -> float:
 	return model_health_multiplier(get_parent())
 
 func _physics_process(delta: float) -> void:
-	if not dormant: super._physics_process(delta)
+	if dormant:
+		if armament != null: armament.reset()
+		return
+	super._physics_process(delta)
 
 func boarding_goal() -> Vector3:
 	var goal: Vector3 = follow.get_parent().to_global(formation)
@@ -86,6 +89,7 @@ func arm_freighter(folder: String) -> void:
 	# FREIGHT 00456560/00455f90: fixed ship, fore/aft homing launchers,
 	# ten-unit range and 125 simulation ticks between shots.
 	freighter_guns = true; staged_destruction = true; cooldown = 5.0
+	if armament != null: armament.queue_free(); armament = null
 	if is_instance_valid(missile_template): missile_template.free()
 	missile_template = preload("res://clump_loader.gd").load_clump(folder.path_join("CLUMPS/HMISSILE.DFF"))
 	if missile_template != null: add_child(missile_template); missile_template.hide()
@@ -142,7 +146,7 @@ func _valid_target(target: Node3D) -> bool:
 
 func _nearest_target() -> Node3D:
 	var target: Node3D = system.player if engage_player else combat_target
-	return target if _valid_target(target) else null
+	return target if is_instance_valid(target) and _valid_target(target) else null
 
 func _advance_motion(delta: float) -> void:
 	if dead: return
