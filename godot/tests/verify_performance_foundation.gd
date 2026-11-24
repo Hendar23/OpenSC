@@ -44,6 +44,7 @@ func run() -> void:
 	var camera := Camera3D.new(); world.add_child(camera)
 	var reflection := preload("res://canopy_reflections.gd").new(); world.add_child(reflection)
 	var glass: Array[ShaderMaterial] = []; reflection.setup(world.get_world_3d(),glass,camera)
+	check(reflection.views.all(func(view: SubViewport) -> bool: return view.get_meta("exterior_capture",false) and view.msaa_3d == Viewport.MSAA_DISABLED and view.positional_shadow_atlas_size == 0),"Cockpit reflection captures stay off MSAA and positional shadow atlases")
 	var captured := {}
 	for frame in range(6):
 		reflection.update_capture(1.0/60,true,camera)

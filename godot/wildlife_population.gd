@@ -22,6 +22,8 @@ var visibility_range := 30.0
 var view_camera: Camera3D
 var session_seed := -1
 var stream_timer := 0.0
+var last_physics_frame := -1
+var physics_only_frames := 0
 var activity: Node
 var pool := {}
 var pooled_count := 0
@@ -214,8 +216,21 @@ func set_density(value: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	if not streaming or not simulating: return
-	_advance_spawn()
 	stream_timer -= delta
+
+func _process(_delta: float) -> void:
+	if not streaming or not simulating or not is_physics_processing(): return
+	var physics_frame := Engine.get_physics_frames()
+	var physics_stepped := physics_frame != last_physics_frame
+	last_physics_frame = physics_frame
+	# Run shoal placement queries and staged construction on idle render frames
+	# between 60 Hz ticks, while still progressing when every frame steps physics.
+	if physics_stepped:
+		physics_only_frames += 1
+		if physics_only_frames < 2: return
+	else:
+		physics_only_frames = 0
+	_advance_spawn()
 	if stream_timer <= 0.0:
 		stream_timer = 0.1
 		_stream_update()

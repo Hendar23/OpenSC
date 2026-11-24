@@ -12,11 +12,14 @@ func setup(world: World3D, glass: Array[ShaderMaterial], source: Camera3D) -> vo
 	materials = glass
 	for index in range(6):
 		var view := SubViewport.new(); view.name = "ReflectionFace%d" % index
+		view.set_meta("exterior_capture",true)
 		view.size = Vector2i(256,256); view.world_3d = world
 		view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		view.msaa_3d = Viewport.MSAA_DISABLED
 		view.positional_shadow_atlas_size = 0; view.mesh_lod_threshold = 4.0
 		view.canvas_cull_mask = 0; add_child(view); views.append(view)
 		var camera := Camera3D.new(); camera.fov = 90; camera.near = 0.04
+		camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 		camera.far = minf(source.far,40.0); camera.cull_mask = source.cull_mask & ~(2 | (1 << 19))
 		view.add_child(camera); camera.current = true; cameras.append(camera)
 		for material in materials: material.set_shader_parameter("reflection_face_%d" % index,view.get_texture())

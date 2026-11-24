@@ -15,7 +15,7 @@ static func fit(visual: Node3D, player: Node3D) -> Array[Dictionary]:
 	for section in range(3):
 		var low := bounds.position.z + bounds.size.z * section / 3.0
 		var high := bounds.position.z + bounds.size.z * (section + 1) / 3.0
-		var points := _unique(_slice(faces,low,high))
+		var points := _hull_points(_slice(faces,low,high))
 		if points.size() >= 4: result.append({"name": "HullCollision" if section == 0 else "HullCollision%d" % section,"points": points})
 	var roles: Dictionary = visual.get_meta("submarine_parts", {"left_pod": "Hull/LeftPod", "right_pod": "Hull/RightPod", "main_propeller": "Hull/RearPropeller"})
 	for role in ["left_pod","right_pod","main_propeller"]:
@@ -25,7 +25,7 @@ static func fit(visual: Node3D, player: Node3D) -> Array[Dictionary]:
 		var points := PackedVector3Array()
 		for entry in Geometry._meshes(source,parent_pose):
 			for vertex in entry.mesh.get_faces(): points.append(entry.pose * vertex)
-		points = _unique(points)
+		points = _hull_points(points)
 		if points.size() < 4: continue
 		var part := {"name": str(role).to_pascal_case() + "Collision", "points": points}
 		# Follow the pods, including their propellers, as they tilt. The rear
@@ -35,6 +35,16 @@ static func fit(visual: Node3D, player: Node3D) -> Array[Dictionary]:
 			part["rest_pose"] = player.global_transform.affine_inverse() * source.global_transform
 		result.append(part)
 	return result
+
+static func _hull_points(points: PackedVector3Array) -> PackedVector3Array:
+	var unique := _unique(points)
+	if unique.size() <= 32: return unique
+	var shape := ConvexPolygonShape3D.new()
+	shape.points = unique
+	var debug := shape.get_debug_mesh()
+	if debug == null: return unique
+	var hull := _unique(debug.get_faces())
+	return hull if hull.size() >= 4 else unique
 
 static func _unique(points: PackedVector3Array) -> PackedVector3Array:
 	var seen := {}

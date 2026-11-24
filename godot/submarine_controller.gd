@@ -144,6 +144,8 @@ func fit_collision_to_visual() -> void:
 func _build_collision(parts: Array[Dictionary]) -> void:
 	for part in collision_parts: part.collider.free()
 	collision_parts = parts
+	cached_collision_height = -1.0
+	wildlife_radius_frame = -1
 	wildlife_spawn_radius = COLLIDER_RADIUS
 	for part in collision_parts:
 		# Include the full sweep of collision parts that tilt with the pods.
@@ -163,10 +165,16 @@ func _build_collision(parts: Array[Dictionary]) -> void:
 func _sync_pod_collisions() -> void:
 	for part in collision_parts:
 		if part.has("source") and is_instance_valid(part.source):
-			part.collider.transform = global_transform.affine_inverse() * part.source.global_transform * part.rest_pose.affine_inverse()
+			var next: Transform3D = global_transform.affine_inverse() * part.source.global_transform * part.rest_pose.affine_inverse()
+			if not part.collider.transform.is_equal_approx(next):
+				part.collider.transform = next
+				cached_collision_height = -1.0
 
+var cached_collision_height := -1.0
 func collision_height() -> float:
-	return surface_clearance(Basis.IDENTITY) + surface_clearance(Basis(Vector3.RIGHT,PI))
+	if cached_collision_height < 0.0:
+		cached_collision_height = surface_clearance(Basis.IDENTITY) + surface_clearance(Basis(Vector3.RIGHT,PI))
+	return cached_collision_height
 
 var wildlife_radius_frame := -1
 var wildlife_radius := 0.0
@@ -317,7 +325,10 @@ func surface_clearance(orientation: Basis) -> float:
 	var highest := -INF
 	for part in collision_parts:
 		var pose: Transform3D = part.collider.transform
-		for point in part.points: highest = maxf(highest,(orientation * (pose * point)).y)
+		var combined := orientation * pose.basis
+		var axis := Vector3(combined.x.y, combined.y.y, combined.z.y)
+		var offset_y := (orientation * pose.origin).y
+		for point in part.points: highest = maxf(highest, offset_y + axis.dot(point))
 	return highest
 
 var previous_rumble_contacts := {}

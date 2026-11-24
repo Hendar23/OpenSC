@@ -7,6 +7,7 @@ var views: Array[SubViewport] = []
 var cameras: Array[Camera3D] = []
 var face := 0
 var elapsed := 0.0
+var last_physics_frame := -1
 var capture_origin := Vector3.ZERO
 var started := false
 var enabled := true
@@ -33,9 +34,11 @@ func setup(world: World3D, active: bool = true) -> void:
 		view.set_meta("exterior_capture",true)
 		view.size = Vector2i(128,128); view.world_3d = world
 		view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		view.msaa_3d = Viewport.MSAA_DISABLED
 		view.positional_shadow_atlas_size = 0; view.mesh_lod_threshold = 8.0
 		view.canvas_cull_mask = 0; add_child(view); views.append(view)
 		var camera := Camera3D.new(); camera.fov = 90; camera.near = 0.15; camera.far = 30.0
+		camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 		# World layer only: exclude player (2), glass-bearing meshes (1 << 17)
 		# and the camera-local cockpit. No render target can sample itself.
 		camera.cull_mask = 1
@@ -48,13 +51,18 @@ func set_enabled(active: bool) -> void:
 	set_process(active)
 	RenderingServer.global_shader_parameter_set("osc_exterior_enabled",active)
 	RenderingServer.global_shader_parameter_set("osc_exterior_ready",false)
-	face = 0; elapsed = 0.0; started = false
+	face = 0; elapsed = 0.0; started = false; last_physics_frame = -1
 	for view in views: view.render_target_update_mode = SubViewport.UPDATE_DISABLED
 
 func _process(delta: float) -> void:
+	var physics_frame := Engine.get_physics_frames()
+	var physics_stepped := physics_frame != last_physics_frame
+	last_physics_frame = physics_frame
 	if not enabled or views.is_empty(): return
 	elapsed += delta
 	if elapsed < 0.1: return
+	# Defer one render frame at high FPS so capture draws avoid 60 Hz physics ticks.
+	if physics_stepped and elapsed < 0.12 and delta < 0.015: return
 	elapsed = 0.0
 	var source := get_viewport().get_camera_3d()
 	if source == null: return
