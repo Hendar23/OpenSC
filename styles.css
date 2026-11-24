@@ -34,16 +34,11 @@ nav a:hover, .text-link:hover { color: var(--accent); }
   background: linear-gradient(160deg, #0a2630, var(--background) 78%);
   border-bottom: 1px solid var(--line);
 }
-.hero-inner { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2rem; padding-top: clamp(4rem, 8vw, 8rem); }
+.hero-inner { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2rem; padding-top: clamp(4rem, 8vw, 8rem); padding-bottom: clamp(2rem, 5vw, 4rem); }
 .hero-copy { max-width: 37rem; }
 .hero-photo { position: absolute; z-index: -1; inset: 0 0 0 31%; }
 .hero-photo img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 60% center; }
 .hero-photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #0a2029 0%, #0a2029e8 12%, #0a20296e 37%, transparent 65%), linear-gradient(0deg, #08161cf5 0%, transparent 32%); }
-.field-notes { margin-top: clamp(1rem, 4vw, 3.5rem); border-top: 1px solid #56717a; }
-.field-notes dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .55rem 1rem; margin: 0; padding-block: .9rem 1.15rem; }
-.field-notes dl > div { display: grid; gap: .2rem; }
-.field-notes dt { color: var(--muted); font: 500 .875rem/1.4 ui-monospace, Consolas, monospace; }
-.field-notes dd { margin: 0; font-weight: 750; }
 .eyebrow { margin-bottom: 1rem; color: var(--accent); font-size: .875rem; font-weight: 750; letter-spacing: .13em; line-height: 1.45; text-transform: uppercase; }
 h1 { font: 900 clamp(4.2rem, 8.55vw, 8.7rem)/.86 var(--display); letter-spacing: -.084em; }
 .hero-title-accent { color: var(--accent); }
@@ -85,7 +80,6 @@ footer p { color: var(--muted); font-size: .875rem; }
   .hero-photo { position: relative; inset: auto; z-index: auto; border: 1px solid var(--line); border-radius: .25rem; overflow: hidden; }
   .hero-photo::after { content: none; }
   .hero-photo img { height: auto; }
-  .field-notes { margin-top: 0; }
   .split, .feature-grid { grid-template-columns: 1fr; }
   .gallery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .footer-inner { align-items: start; flex-direction: column; }
@@ -95,5 +89,4 @@ footer p { color: var(--muted); font-size: .875rem; }
   .wrap { width: calc(100% - 2rem); }
   .hero h1 { font-size: clamp(3.6rem, 13vw, 5.5rem); }
   .hero-description { margin-top: 1.15rem; }
-  .field-notes dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
