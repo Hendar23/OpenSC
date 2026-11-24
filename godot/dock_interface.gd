@@ -6,6 +6,8 @@ const BMP = preload("res://legacy_bmp.gd")
 const Saves = preload("res://save_games.gd")
 # Origins of the localized Accept overlays in the original 640×480 mission screens.
 const MISSION_ACCEPT_LABEL_X := {"en":440,"fr":425,"de":396}
+# Origins of the localized buttons in the original 640×480 equipment screens.
+const LOCALIZED_EQUIPMENT_BUTTON_X := {"sale_info":20,"buy":80,"hold_info":472,"sell":532}
 # The original load-screen rows are not spaced at a uniform 44 pixels.
 const LOAD_ROW_OFFSETS := [0.0,44.0,87.0,130.0,174.0,217.0,260.0,303.0]
 const DEFAULT_PAGES := {
@@ -26,6 +28,7 @@ var backdrop: ColorRect
 var live_window := false
 const WINDOW_MASKS := {1:preload("res://game_assets/ui/dock_window_b.svg"),2:preload("res://game_assets/ui/dock_window_p.svg"),4:preload("res://game_assets/ui/dock_window_r.svg")}
 var pages := DEFAULT_PAGES.duplicate(true)
+var equipment_layout_overrides := {}
 var text_colour := Color(1,0.8,0.15)
 var custom_colour: Variant = null
 var button_nodes: Array[Button] = []
@@ -104,13 +107,16 @@ func setup(original_folder: String, state: Callable, language: String = "en") ->
 	art_cache.clear()
 	_load_menu_audio()
 	pages = DEFAULT_PAGES.duplicate(true)
+	equipment_layout_overrides.clear()
 	custom_colour = null
 	for id in ["ui.dock","ui.saves"]:
 		for candidate in Mods.candidates(id):
 			var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(candidate.path))
 			if not data is Dictionary or data.get("schema_version") != 1 or not data.get("pages") is Dictionary: continue
 			for key in data.pages:
-				if pages.has(key) and data.pages[key] is Dictionary: pages[key].merge(data.pages[key],true)
+				if pages.has(key) and data.pages[key] is Dictionary:
+					pages[key].merge(data.pages[key],true)
+					if key == "equipment": equipment_layout_overrides.merge(data.pages[key],true)
 			var colour: Variant = data.get("text_colour")
 			if preload("res://map_document.gd").finite_array(colour,3): custom_colour = Color(float(colour[0]),float(colour[1]),float(colour[2]))
 			break
@@ -518,6 +524,15 @@ func _welcome(text: String, area: Rect2) -> void:
 	scroll.add_child(body)
 
 
+func _equipment_button_rect(key: String) -> Rect2:
+	if locale not in ["fr","de"] or equipment_layout_overrides.has(key):
+		return rect(pages.equipment[key])
+	var width := 57
+	if key in ["buy","sell"]:
+		width = 93 if dock_race in [2,4] else 94
+		if key == "sell" and locale == "de" and dock_race == 4: width = 92
+	return Rect2(LOCALIZED_EQUIPMENT_BUTTON_X[key],361,width,26)
+
 func _equipment_shop(data: Dictionary) -> void:
 	var offers: Dictionary = data.get("offers",{"shield":data.get("repair_offer",{})})
 	var settings: Dictionary = pages.equipment
@@ -531,8 +546,8 @@ func _equipment_shop(data: Dictionary) -> void:
 		if id == selected_sale: sale_list.select(sale_list.item_count - 1)
 	sale_list.item_selected.connect(func(index: int) -> void: selected_sale = str(sale_list.get_item_metadata(index)); _update_shop_selection(data))
 	var cost := label("",rect(settings.cost),12,true); cost.name = "PurchasePrice"
-	var buy := button("buy_equipment",rect(settings.buy)); buy.name = "BuyShieldRepair"
-	var sale_info := button("repair_info",rect(settings.sale_info),"",{"side":"sale"}); sale_info.name = "SaleInfo"
+	var buy := button("buy_equipment",_equipment_button_rect("buy")); buy.name = "BuyShieldRepair"
+	var sale_info := button("repair_info",_equipment_button_rect("sale_info"),"",{"side":"sale"}); sale_info.name = "SaleInfo"
 	hold_list = _item_list("Hold",rect(settings.hold))
 	hold_list.add_theme_font_size_override("font_size",10)
 	for id in data.get("hold",{}):
@@ -548,8 +563,8 @@ func _equipment_shop(data: Dictionary) -> void:
 			if hold_list.get_item_metadata(previous) == selected_hold: selected_hold_copy += 1
 		_update_shop_selection(data))
 	var price := label("",rect(settings.sell_price),12,true); price.name = "ResalePrice"
-	var info := button("repair_info",rect(settings.hold_info),"",{"side":"hold"}); info.name = "HoldInfo"
-	var sell := button("sell_equipment",rect(settings.sell)); sell.name = "SellShieldRepair"
+	var info := button("repair_info",_equipment_button_rect("hold_info"),"",{"side":"hold"}); info.name = "HoldInfo"
+	var sell := button("sell_equipment",_equipment_button_rect("sell")); sell.name = "SellShieldRepair"
 	_status(data,rect(settings.status),true)
 	label(status,Rect2(210,184,230,13),10,true)
 	# The original two-view submarine illustration shares the slot highlight.

@@ -44,7 +44,8 @@ static func load_model(path: String, descriptor: Dictionary = {}) -> Node3D:
 	var state := GLTFState.new()
 	if document.append_from_file(path, state) != OK: return null
 	_apply_material_textures(state, descriptor)
-	if descriptor.get("id", "") == "submarine.player":
+	var asset_id := str(descriptor.get("id", ""))
+	if asset_id in ["submarine.player", "model.pirate"]:
 		_tag_exterior_canopy(state, json)
 	if descriptor.get("scenery_lods",false) or str(descriptor.get("id","")) in ["model.reed","model.bush1","model.bush2","model.bush3","model.bush4"]:
 		# Runtime GLTF loading does not run the editor's automatic LOD import.
@@ -59,6 +60,14 @@ static func load_model(path: String, descriptor: Dictionary = {}) -> Node3D:
 	var root := Node3D.new()
 	root.name = path.get_file().get_basename()
 	root.add_child(imported)
+	if asset_id == "model.pirate":
+		for visual in root.find_children("*", "MeshInstance3D", true, false):
+			if visual.mesh == null: continue
+			for surface in range(visual.mesh.get_surface_count()):
+				var surface_material: Material = visual.get_active_material(surface)
+				if surface_material != null and surface_material.get_meta("exterior_canopy", false):
+					visual.layers = 1 << 17
+					break
 	root.scale = Vector3.ONE * float(descriptor.get("scale", 1.0))
 	# Normalize to the legacy +Z loader contract; piloting then turns it to -Z.
 	if str(descriptor.get("forward_axis", "-Z")) == "-Z": imported.rotation.y += PI
@@ -79,7 +88,7 @@ static func load_model(path: String, descriptor: Dictionary = {}) -> Node3D:
 	return root
 
 static func _tag_exterior_canopy(state: GLTFState, source: Dictionary) -> void:
-	# Allow player models to use the same live reflections as the retail glass.
+	# Allow replacement submarines to use the same live reflections as retail glass.
 	# Material extras are an explicit opt-in, so hull paint and other GLBs retain
 	# their imported material behavior.
 	var descriptions: Variant = source.get("materials", [])

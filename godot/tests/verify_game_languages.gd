@@ -6,6 +6,7 @@ const Language = preload("res://game_language.gd")
 const Data = preload("res://original_game_data.gd")
 const FMV = preload("res://fmv_library.gd")
 const Audio = preload("res://legacy_audio.gd")
+const Equipment = preload("res://equipment_shop.gd")
 var checks := 0
 var failures := 0
 
@@ -108,6 +109,19 @@ func _run() -> void:
 	_check(french_data.tables.radio_messages.records.aa2.text != german_data.tables.radio_messages.records.aa2.text,"Changing languages changes radio text on the same folder")
 	_check(german_data.tables.radio_messages.records.city1.text.begins_with("RELAISTURM:"),"German display localizes the retail English radio heading")
 	_check(german_data.tables.source_texts.records["english.messages.txt"].text.contains("CITY RELAY TOWER"),"The raw retail archive is preserved")
+	var german_equipment: Dictionary = german_data.tables.equipment_text.records
+	for id in ["shield","zapper","depthl"]:
+		var offer := Equipment.offer(german_data,"1",1,id)
+		_check(not offer.description.is_empty() and offer.description == german_equipment[id].Desc,"German %s retains its retail equipment description" % id)
+	_check(Equipment.offer(french_data,"1",1,"zapper").description == french_data.tables.equipment_text.records.zapper.Description,"French equipment still reads the Description column")
+	var night_vision_names := {"fr":"Vision nocturne","de":"Nachtsicht"}
+	TranslationServer.set_locale("en")
+	var english_night_vision := Equipment.offer(english_data,"1",1,"night_vision")
+	for locale in night_vision_names:
+		TranslationServer.set_locale(locale)
+		var offer := Equipment.offer(german_data if locale == "de" else french_data,"1",1,"night_vision")
+		_check(offer.name == night_vision_names[locale] and not offer.description.is_empty() and offer.description != english_night_vision.description,"Night Vision offer text is localized for " + locale)
+	TranslationServer.set_locale("en")
 	var landmarks := preload("res://map_landmarks.gd").new()
 	landmarks.setup(german_data)
 	_check(not landmarks.markers.is_empty() and landmarks.markers[0].name == "KNOCHENBOGEN","The shared English landmark names are translated for display")

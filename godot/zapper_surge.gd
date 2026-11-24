@@ -12,6 +12,42 @@ var since_hit := 0.0
 var phase := 0.0
 var strength := 1.0
 
+static func warm_up(world: Node3D, camera: Camera3D, hull: Node3D, frames: Array[Texture2D]) -> void:
+	if DisplayServer.get_name() == "headless" or camera == null: return
+	var probe := Node3D.new()
+	world.add_child(probe)
+	var point := camera.global_position - camera.global_basis.z * 3.0
+	var material := _make_pass(null,1.0)
+	material.set_shader_parameter("arc_strength",0.0)
+	# Use the fitted hull's real vertex layouts, including replacement models.
+	for source: MeshInstance3D in hull.find_children("*","MeshInstance3D",true,false):
+		if source.mesh == null or source.top_level: continue
+		var mesh := MeshInstance3D.new()
+		mesh.mesh = source.mesh
+		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mesh.material_override = material
+		probe.add_child(mesh)
+		mesh.global_position = point - mesh.get_aabb().get_center()
+	if not frames.is_empty():
+		var arc := preload("res://submarine_weapons.gd").create_arc(probe,frames)
+		probe.add_child(arc)
+		arc.material.albedo_texture = frames[0]
+		arc.material.albedo_color.a = 0.0
+		arc.beam_start = point - camera.global_basis.x * 0.15
+		arc._build_ribbon(camera.global_basis.x * 0.3,camera.global_basis.y,0)
+		arc.beam.show()
+	await world.get_tree().process_frame
+	await world.get_tree().process_frame
+	probe.queue_free()
+
+static func _make_pass(original: Material, scale: float) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = SHADER
+	material.render_priority = 1
+	material.next_pass = original
+	material.set_shader_parameter("arc_scale",scale)
+	return material
+
 static func strike(body: Node3D) -> void:
 	if not is_instance_valid(body) or not body.is_inside_tree() or body.is_queued_for_deletion(): return
 	if not (body.has_method("take_damage") or body.has_method("take_weapon_damage")) or body.get("dead") == true: return
@@ -52,12 +88,7 @@ func _enter_tree() -> void:
 	for mesh in bindings:
 		var original := bindings[mesh]
 		if not passes.has(original):
-			var material := ShaderMaterial.new()
-			material.shader = SHADER
-			material.render_priority = 1
-			material.next_pass = original
-			material.set_shader_parameter("arc_scale",1.0 / size)
-			passes[original] = material
+			passes[original] = _make_pass(original,1.0 / size)
 		mesh.material_overlay = passes[original]
 	if bindings.is_empty():
 		queue_free()

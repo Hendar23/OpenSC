@@ -369,6 +369,8 @@ func _finish_start(folder: String) -> void:
 			await game.get_tree().process_frame
 	await preload("res://asset_cache.gd").maintain(game.get_tree(), game._progress)
 	await SessionExplosion.warm_up(game.world_root,game.get_viewport().get_camera_3d())
+	if game.wildlife != null:
+		await preload("res://zapper_surge.gd").warm_up(game.world_root,game.get_viewport().get_camera_3d(),game.pilot.visual,game.wildlife.zapper_frames)
 	game._progress("Ready")
 	game.front_end.progress_bar.value = 100.0
 	if not game.loading_save: game.loading_canvas.visible = false

@@ -538,6 +538,12 @@ msgstr "Refuser l’amarrage"
 msgid "Deep Sea Lights"
 msgstr "Projecteurs de plongée"
 
+msgid "Night Vision"
+msgstr "Vision nocturne"
+
+msgid "See in dark water like a cat(fish). Night Vision amplifies faint light, but bright lights and daylight wash out the image."
+msgstr "Voyez dans l’eau sombre comme un chat… un poisson-chat, bien sûr. La vision nocturne amplifie la faible lumière, mais les éclairages puissants et la lumière du jour surexposent l’image."
+
 msgid "Deep-Sea Lights"
 msgstr "Projecteurs de plongée"
 

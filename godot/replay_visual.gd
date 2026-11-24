@@ -6,8 +6,10 @@ const MATERIAL_FIELDS := ["opacity","albedo_texture","emission_texture","albedo_
 var source: WeakRef
 var detached := false
 var kind := ""
-var stride := 14
-var data := PackedFloat32Array()
+var transforms := PackedVector3Array()
+var visible_samples := PackedByteArray()
+var blends := PackedFloat32Array()
+var blend_count := 0
 var stamps := PackedInt64Array()
 var blast_phases := PackedFloat32Array()
 var versions: Array[Dictionary] = []
@@ -27,9 +29,12 @@ func setup(node: Node3D, time: float) -> void:
 		var age: Variant = node.get_parent().get("age")
 		if age is float or age is int: born -= float(age)
 	kind = "mesh" if node is MeshInstance3D else "sprite" if node is Sprite3D else "light" if node is Light3D else "multi" if node is MultiMeshInstance3D else "burst"
-	if node is MeshInstance3D and node.mesh is ArrayMesh: stride += node.mesh.get_blend_shape_count()
+	if node is MeshInstance3D and node.mesh is ArrayMesh: blend_count = node.mesh.get_blend_shape_count()
 	mutable_mesh = node.get_meta("replay_mutable_mesh",false)
-	data.resize(CAPACITY*stride); stamps.resize(CAPACITY); stamps.fill(-1)
+	transforms.resize(CAPACITY*4)
+	visible_samples.resize(CAPACITY)
+	blends.resize(CAPACITY*blend_count)
+	stamps.resize(CAPACITY); stamps.fill(-1)
 	if node.get_meta("replay_blast_phase",false): blast_phases.resize(CAPACITY)
 
 func _drop_version() -> void:
@@ -47,46 +52,51 @@ func _prune(tick: int, time: float) -> void:
 
 func record(tick: int, time: float, appearances: Dictionary = {}) -> void:
 	var node: Node3D = null if detached else source.get_ref()
-	var slot := tick%CAPACITY; var offset := slot*stride
-	stamps[slot] = tick
-	data[offset+12] = 0
 	_prune(tick,time)
-	if node == null or not node.is_inside_tree() or not node.is_visible_in_tree(): return
+	if node == null: return
+	var slot := tick%CAPACITY
+	stamps[slot] = tick
+	visible_samples[slot] = 0
+	if not node.is_inside_tree() or not node.is_visible_in_tree(): return
 	# Procedural beams acquire this flag on their first geometry build, which
 	# can happen after replay discovers the initially hidden mesh.
 	mutable_mesh = mutable_mesh or node.get_meta("replay_mutable_mesh",false)
 	var pose := node.global_transform
-	# Avoid nested Variant indexing/loops for every recorded visual at20Hz.
-	var x := pose.basis.x; var y := pose.basis.y; var z := pose.basis.z; var p := pose.origin
-	data[offset] = x.x; data[offset+1] = x.y; data[offset+2] = x.z
-	data[offset+3] = y.x; data[offset+4] = y.y; data[offset+5] = y.z
-	data[offset+6] = z.x; data[offset+7] = z.y; data[offset+8] = z.z
-	data[offset+9] = p.x; data[offset+10] = p.y; data[offset+11] = p.z
+	var offset := slot*4
+	transforms[offset] = pose.basis.x
+	transforms[offset+1] = pose.basis.y
+	transforms[offset+2] = pose.basis.z
+	transforms[offset+3] = pose.origin
 	var values := _values(node,appearances)
 	if versions.is_empty() or values != previous or mutable_mesh or kind == "multi":
 		var state := _state(node,appearances)
 		previous = values
 		versions.append({"tick":tick,"time":time,"state":state})
-	last_seen = time; data[offset+12] = 1
-	data[offset+13] = versions.back().tick
+	last_seen = time; visible_samples[slot] = 1
 	if node is MeshInstance3D:
-		for index in range(stride-14): data[offset+14+index] = node.get_blend_shape_value(index)
+		var blend_offset := slot*blend_count
+		for index in blend_count: blends[blend_offset+index] = node.get_blend_shape_value(index)
 		if not blast_phases.is_empty(): blast_phases[slot] = node.material_override.get_shader_parameter("blast_age")
-	# Keep one preceding appearance for interpolation across the buffer edge.
-	while versions.size() > 1 and (versions[1].tick <= tick-CAPACITY+1 or versions[1].time <= time-30.0): _drop_version()
 
 func _values(node: Node3D, appearances: Dictionary) -> Array:
+	var instance := node as MeshInstance3D
+	if instance != null:
+		var mesh := instance.mesh
+		var material := instance.material_override
+		var overlay := instance.material_overlay
+		var surface_count := mesh.get_surface_count() if mesh != null else 0
+		var values := [_identity(mesh),_identity(material),instance.layers,instance.transparency,_identity(overlay),surface_count]
+		if material != null: values.append(_material_values(material,appearances))
+		if overlay != null: values.append(_material_values(overlay,appearances))
+		for surface in surface_count:
+			var override := instance.get_surface_override_material(surface)
+			if override == null: continue
+			values.append(surface)
+			values.append(_identity(override))
+			values.append(_material_values(override,appearances))
+		return values
 	var result: Array = []
-	if node is MeshInstance3D:
-		result = [_identity(node.mesh),_identity(node.material_override),node.layers,node.transparency]
-		var overlay: Material = node.material_overlay
-		if overlay != null:
-			result.append(_identity(overlay)); result.append(_material_values(overlay,appearances))
-		if node.mesh != null:
-			for surface in node.mesh.get_surface_count():
-				var surface_material: Material = node.get_surface_override_material(surface)
-				result.append(_identity(surface_material)); result.append(_material_values(surface_material,appearances))
-	elif node is Sprite3D:
+	if node is Sprite3D:
 		result = [_identity(node.texture),node.modulate,node.pixel_size,_identity(node.material_override)]
 	elif node is MultiMeshInstance3D:
 		result = [_identity(node.multimesh),node.multimesh.instance_count,_identity(node.multimesh.mesh),_identity(node.material_override)]
@@ -183,12 +193,13 @@ func _mesh_copy(mesh: Mesh, cpu_arrays: Array = []) -> Mesh:
 		result.surface_set_material(surface,mesh.surface_get_material(surface))
 	return result
 
-func _pose(offset: int) -> Transform3D:
-	return Transform3D(Basis(Vector3(data[offset],data[offset+1],data[offset+2]),Vector3(data[offset+3],data[offset+4],data[offset+5]),Vector3(data[offset+6],data[offset+7],data[offset+8])),Vector3(data[offset+9],data[offset+10],data[offset+11]))
+func _pose(slot: int) -> Transform3D:
+	var offset := slot*4
+	return Transform3D(Basis(transforms[offset],transforms[offset+1],transforms[offset+2]),transforms[offset+3])
 
 func show_at(root: Node3D, tick: int, fraction: float, time: float) -> void:
-	var slot := tick%CAPACITY; var offset := slot*stride
-	if stamps[slot] != tick or data[offset+12] == 0:
+	var slot := tick%CAPACITY
+	if stamps[slot] != tick or visible_samples[slot] == 0:
 		if proxy != null: proxy.hide()
 		return
 	var version: Dictionary = {}
@@ -211,17 +222,24 @@ func show_at(root: Node3D, tick: int, fraction: float, time: float) -> void:
 	if proxy.get_meta("version",-1) != version.tick:
 		_apply(version.state); proxy.set_meta("version",version.tick)
 	proxy.show()
-	var pose := _pose(offset)
-	var next := ((tick+1)%CAPACITY)*stride
-	var interpolate := stamps[(tick+1)%CAPACITY] == tick+1 and data[next+12] != 0
+	var pose := _pose(slot)
+	var next := (tick+1)%CAPACITY
+	var interpolate := stamps[next] == tick+1 and visible_samples[next] != 0
 	# Zero scale is used by a few effects; do not decompose a singular basis.
-	if interpolate and absf(pose.basis.determinant()) > 0.000001 and absf(_pose(next).basis.determinant()) > 0.000001: pose = pose.interpolate_with(_pose(next),fraction)
+	if interpolate and absf(pose.basis.determinant()) > 0.000001:
+		var next_pose := _pose(next)
+		if absf(next_pose.basis.determinant()) > 0.000001: pose = pose.interpolate_with(next_pose,fraction)
 	proxy.global_transform = pose
 	if proxy is MeshInstance3D:
-		for index in range(stride-14): proxy.set_blend_shape_value(index,lerpf(data[offset+14+index],data[next+14+index],fraction) if interpolate else data[offset+14+index])
+		var blend_offset := slot*blend_count
+		var next_blend_offset := next*blend_count
+		for index in blend_count:
+			var weight := blends[blend_offset+index]
+			if interpolate: weight = lerpf(weight,blends[next_blend_offset+index],fraction)
+			proxy.set_blend_shape_value(index,weight)
 		if not blast_phases.is_empty():
 			var phase := blast_phases[slot]
-			if interpolate: phase = lerpf(phase,blast_phases[(tick+1)%CAPACITY],fraction)
+			if interpolate: phase = lerpf(phase,blast_phases[next],fraction)
 			proxy.material_override.set_shader_parameter("blast_age",phase)
 	elif kind == "burst": _burst(version.state,time-born)
 
@@ -261,4 +279,5 @@ func dispose() -> void:
 	if is_instance_valid(proxy): proxy.free()
 	while not versions.is_empty(): _drop_version()
 	proxy = null; previous.clear()
-	data.clear(); stamps.clear(); multimesh_copy = null; material_templates.clear()
+	transforms.clear(); visible_samples.clear(); blends.clear(); stamps.clear()
+	multimesh_copy = null; material_templates.clear()

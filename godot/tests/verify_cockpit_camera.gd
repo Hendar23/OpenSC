@@ -41,7 +41,7 @@ func _run() -> void:
 	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
 	var storage = preload("res://player_storage.gd")
 	if folder.is_empty(): folder = preload("res://asset_paths.gd").find_game_folder()
-	storage.root_override = "user://cockpit-camera-%d" % OS.get_process_id()
+	storage.root_override = test_fixture_path("cockpit-camera")
 	storage.ensure_parent(storage.preferences_path())
 	var config := ConfigFile.new()
 	config.set_value("game","folder",folder)
@@ -66,7 +66,7 @@ func _run() -> void:
 	var reset_button: Button = reveal_button.get_parent().get_child(0)
 	reset_button.pressed.emit()
 	check(not game.cockpit_hud.map_data.is_explored(game.cockpit_hud.map_data.bounds.position),"Adjacent reset button clears whole-map reveal again")
-	var config_path := "res://tests/map-radius-export.cfg"
+	var config_path: String = storage.root_override.path_join("map-radius-export.cfg")
 	check(game._export_all_settings(config_path) == OK,"Reveal radius exports with all settings")
 	game.map_reveal_slider.value = 15.0
 	game._load_preferences(config_path)
@@ -98,6 +98,26 @@ func _run() -> void:
 	check(not game.first_person and game.docking.cinematic_camera.is_equal_approx(game.camera.global_position),"Controller Y selects the fixed exterior camera during docking")
 	game._unhandled_input(key)
 	check(cockpit_follows_pilot(game,true) and game.docking.stage == game.Docking.Stage.ALIGN,"Keyboard V restores cockpit view without interrupting docking")
+	game.equipment.set_installed(["deep_sea_lights", "night_vision", "magnet"])
+	var toggle_key := InputEventKey.new(); toggle_key.pressed = true; toggle_key.keycode = KEY_L
+	root.push_input(toggle_key)
+	check(not game.equipment.lamp.visible,"L turns off the Deep-Sea Lights during docking")
+	root.push_input(toggle_key)
+	check(game.equipment.lamp.is_visible_in_tree(),"L turns on the Deep-Sea Lights during docking")
+	var next_equipment := InputEventJoypadButton.new()
+	next_equipment.pressed = true; next_equipment.button_index = JOY_BUTTON_DPAD_RIGHT
+	root.push_input(next_equipment)
+	var toggle_button := InputEventJoypadButton.new()
+	toggle_button.pressed = true; toggle_button.button_index = JOY_BUTTON_B
+	root.push_input(toggle_button)
+	game._process(0)
+	check(game.front_end.player_graphics.night_vision and game.equipment.lamp.is_visible_in_tree(),"Controller B enables Night Vision independently of the lights during docking")
+	root.push_input(toggle_button)
+	game._process(0)
+	check(not game.front_end.player_graphics.night_vision and game.equipment.lamp.is_visible_in_tree(),"Controller B disables Night Vision independently of the lights during docking")
+	root.push_input(next_equipment)
+	root.push_input(toggle_button)
+	check(game.equipment.current().id == "magnet" and not game.equipment.current().enabled,"Automatic docking still blocks activating the magnet")
 	var approach_follows := true
 	var captured_descent := false
 	for frame in range(1000):
@@ -114,6 +134,16 @@ func _run() -> void:
 	check(game.docking.stage == game.Docking.Stage.DOCKED and game.dock_interface.visible and game.game_dock.view.active,"Docking still opens the city interface with its live exterior view")
 	game._dock_ui_action("launch",{})
 	check(game.docking.stage == game.Docking.Stage.EXIT_OPEN and cockpit_follows_pilot(game,true),"Undocking begins in the selected cockpit view")
+	root.push_input(next_equipment)
+	root.push_input(toggle_button)
+	check(not game.equipment.lamp.visible,"Controller B turns off the Deep-Sea Lights during launch")
+	root.push_input(next_equipment)
+	root.push_input(toggle_key)
+	game._process(0)
+	check(game.front_end.player_graphics.night_vision,"L enables Night Vision during launch")
+	root.push_input(toggle_key)
+	game._process(0)
+	check(not game.front_end.player_graphics.night_vision,"L disables Night Vision during launch")
 	game._unhandled_input(key)
 	check(not game.first_person and game.camera.global_position.is_equal_approx(game.docking.cinematic_camera),"Exterior camera remains available during launch")
 	game._unhandled_input(button)

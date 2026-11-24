@@ -18,6 +18,7 @@ static func set_enabled(on: bool) -> void:
 	else: RenderingServer.global_shader_parameter_set("osc_lens_flares_enabled",on)
 
 static func attach(light: Node3D) -> MeshInstance3D:
+	if not light.get_meta("lens_flare_enabled",true): return null
 	var anchor: Node3D = light.pivot if light is Searchlight else light
 	if anchor == null: return null
 	var existing := anchor.get_node_or_null("LensFlare") as MeshInstance3D

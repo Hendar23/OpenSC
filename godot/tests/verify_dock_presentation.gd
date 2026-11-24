@@ -153,6 +153,24 @@ func run() -> void:
    check(mission_accept.highlight_art.size() == 1 and mission_accept.highlight_art[0].rect.position + mission_accept.position == Vector2(edition[2],436),"Mission Accept highlight aligns for %s, race %d" % [edition[1],mission_race])
    check(mission_accept.held_art.size() == 1 and mission_accept.held_art[0].rect.position + mission_accept.position == Vector2(547,415),"Mission Accept pressed knob stays aligned")
    check(not mission_accept.disabled and mission_accept._has_point(Vector2(edition[2],437) - mission_accept.position),"Mission Accept responds over the translated label")
+  var localized: bool = edition[1] != "en"
+  var x_positions := [20,80,472,532] if localized else [27,100,477,550]
+  for shop_race in [1,2,4]:
+   state.race = shop_race; ui.open("equipment")
+   var trade_width := (94 if shop_race == 1 else 93) if localized else 66
+   var info_width := 57 if localized else 66
+   var sell_width := 92 if edition[1] == "de" and shop_race == 4 else trade_width
+   var widths := [info_width,trade_width,info_width,sell_width]
+   var names := ["SaleInfo","BuyShieldRepair","HoldInfo","SellShieldRepair"]
+   for index in range(names.size()):
+    var shop_button: Button = ui.layout.get_node(names[index])
+    var size := Vector2(widths[index],26)
+    var area := Rect2(Vector2(x_positions[index],361),size)
+    var context := "%s, race %d, %s" % [edition[1],shop_race,names[index]]
+    check(shop_button.get_rect() == area and shop_button._has_point(size - Vector2.ONE) and not shop_button._has_point(Vector2(size.x,0)),"Equipment hit area matches retail artwork for " + context)
+    for pieces in [shop_button.highlight_art,shop_button.held_art]:
+     check(pieces.size() == 1 and pieces[0].rect == Rect2(Vector2.ZERO,size),"Equipment button artwork aligns for " + context)
+ state.race = 2
  var offers := []
  for index in range(18):
   offers.append({"id":"offer_%d" % index,"title":"Offer %d" % index,"briefing":"Briefing %d" % index})

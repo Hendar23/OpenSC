@@ -21,6 +21,18 @@ func run() -> void:
 	var env := WorldEnvironment.new(); env.environment = Environment.new(); env.environment.background_mode = Environment.BG_COLOR; env.environment.background_color = Color.BLACK; world.add_child(env)
 	var camera := Camera3D.new(); world.add_child(camera); camera.position = Vector3(0,0,4); camera.current = true
 	var manager := preload("res://lens_flares.gd").new(); world.add_child(manager)
+	var definitions := preload("res://object_definitions.gd")
+	for variant in [[definitions.THORIUM, 0], [definitions.inert_thorium(), 0], [definitions.THORIUM, 1]]:
+		var crystal := preload("res://thorium_body.gd").new()
+		var model := MeshInstance3D.new(); model.mesh = SphereMesh.new(); model.material_override = StandardMaterial3D.new()
+		crystal.setup(variant[0],model,variant[1],10.0,false)
+		world.add_child(crystal)
+		await process_frame
+		await process_frame
+		var label := "%s fragment %d" % [variant[0].id,variant[1]]
+		check(not crystal.glow_light.has_node("LensFlare"),"No optical streak on " + label)
+		check(crystal.glow_light.light_energy > 0 and crystal.glow_light.shadow_enabled and crystal.halo.visible and not crystal.glow_materials.is_empty(),"Pulsing crystal glow remains on " + label)
+		crystal.free()
 	var transient := OmniLight3D.new(); world.add_child(transient); transient.free()
 	var light := OmniLight3D.new(); light.light_energy = 3; light.light_color = Color(1,0.6,0.2); world.add_child(light)
 	for frame in range(3): await process_frame
@@ -65,7 +77,9 @@ func run() -> void:
 	search.free(); disabled.free()
 	spot.hide()
 	if DisplayServer.get_name() != "headless":
-		var clear := await capture(viewport); clear.save_png("res://tests/lens-flare-clear.png")
+		var captures := test_fixture_path("lens-flares")
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(captures))
+		var clear := await capture(viewport); clear.save_png(captures.path_join("lens-flare-clear.png"))
 		var clear_level := brightness(clear)
 		check(clear_level > 5,"Visible point light renders its halo and streaks")
 		paused = true; preload("res://lens_flare.gd").set_enabled(false)
@@ -75,12 +89,12 @@ func run() -> void:
 		paused = false
 		var wall := MeshInstance3D.new(); wall.mesh = BoxMesh.new(); wall.mesh.size = Vector3(3,3,0.2); wall.position.z = 1.0
 		var black := StandardMaterial3D.new(); black.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED; black.albedo_color = Color.BLACK; wall.material_override = black; world.add_child(wall)
-		var blocked := await capture(viewport); blocked.save_png("res://tests/lens-flare-blocked.png")
+		var blocked := await capture(viewport); blocked.save_png(captures.path_join("lens-flare-blocked.png"))
 		check(brightness(blocked) < clear_level*0.01,"Opaque scenery hides the complete flare, including streaks beyond the source")
 		wall.free(); light.hide(); spot.show()
 		var back := brightness(await capture(viewport))
 		spot.rotation.y = PI
-		var front := await capture(viewport); front.save_png("res://tests/lens-flare-spot.png")
+		var front := await capture(viewport); front.save_png(captures.path_join("lens-flare-spot.png"))
 		check(brightness(front) > 5 and back < brightness(front)*0.01,"Spotlight flare appears only when its beam faces the camera")
 		spot.light_energy = 0
 		check(brightness(await capture(viewport)) < 0.01,"Turning a spotlight off removes the rendered flare")
@@ -89,7 +103,7 @@ func run() -> void:
 		spot.hide()
 		env.environment.background_color = Color(0.03,0.28,0.35)
 		light.position = Vector3(0.8,0.3,0); light.light_energy = 0.7; light.show()
-		var daytime := await capture(viewport); daytime.save_png("res://tests/lens-flare-daytime.png")
+		var daytime := await capture(viewport); daytime.save_png(captures.path_join("lens-flare-daytime.png"))
 		light.hide(); var daytime_plain := await capture(viewport)
 		var source_pixel := camera.unproject_position(light.global_position); var ghost_pixels := 0
 		for y in daytime.get_height():
@@ -105,7 +119,7 @@ func run() -> void:
 		var water := MeshInstance3D.new(); water.mesh = PlaneMesh.new(); water.mesh.size = Vector2(20,20)
 		var dark := StandardMaterial3D.new(); dark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED; dark.albedo_color = Color.BLACK; dark.cull_mode = BaseMaterial3D.CULL_DISABLED
 		water.material_override = dark; world.add_child(water)
-		var solar_image := await capture(viewport); solar_image.save_png("res://tests/lens-flare-sun.png")
+		var solar_image := await capture(viewport); solar_image.save_png(captures.path_join("lens-flare-sun.png"))
 		var solar_level := brightness(solar_image)
 		check(sun.has_node("LensFlare") and solar_level > 30,"Sunlight produces a visible optical flare through the water surface")
 		dark.albedo_color = Color(0.14,0.55,0.65)
@@ -117,7 +131,7 @@ func run() -> void:
 				var optical := bright_solar.get_pixel(x,y)-bright_plain.get_pixel(x,y)
 				if maxf(optical.r,maxf(optical.g,optical.b)) > 0.03: solar_ghost_pixels += 1
 		check(solar_ghost_pixels > 100,"Solar reflections retain visible contrast away from the sun on bright daytime water")
-		bright_solar.save_png("res://tests/lens-flare-sun-bright.png")
+		bright_solar.save_png(captures.path_join("lens-flare-sun-bright.png"))
 		solar_mesh.show(); solar_mesh.set_process(true); dark.albedo_color = Color.BLACK
 		var roof := MeshInstance3D.new(); roof.mesh = BoxMesh.new(); roof.mesh.size = Vector3(20,0.2,20); roof.position.y = -1; roof.material_override = dark; world.add_child(roof)
 		check(brightness(await capture(viewport)) < solar_level*0.01,"A roof below the surface blocks all solar rings and reflections")

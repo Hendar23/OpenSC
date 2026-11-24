@@ -64,7 +64,7 @@ func run() -> void:
 	var initial_complete := true
 	for part in early.get_children():
 		var history: RefCounted = replay.tracks.get(part.get_instance_id())
-		if history == null or history.stamps[0] != 0 or history.data[12] != 1: initial_complete = false
+		if history == null or history.stamps[0] != 0 or history.visible_samples[0] != 1: initial_complete = false
 	check(initial_complete,"Every existing actor has the first sample, including an immediate replay")
 	early.free(); replay.clear()
 	# Recycling an object between samples must retain two separate lifetimes.

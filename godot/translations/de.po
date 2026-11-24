@@ -538,6 +538,12 @@ msgstr "Andocken ablehnen"
 msgid "Deep Sea Lights"
 msgstr "Tiefseescheinwerfer"
 
+msgid "Night Vision"
+msgstr "Nachtsicht"
+
+msgid "See in dark water like a cat(fish). Night Vision amplifies faint light, but bright lights and daylight wash out the image."
+msgstr "Sieh im dunklen Wasser wie eine Katze … genauer gesagt, wie ein Katzenwels. Die Nachtsicht verstärkt schwaches Licht, aber helle Lichtquellen und Tageslicht überstrahlen das Bild."
+
 msgid "Deep-Sea Lights"
 msgstr "Tiefseescheinwerfer"
 

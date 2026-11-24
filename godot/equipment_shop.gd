@@ -42,7 +42,7 @@ static func offer(catalogue: Dictionary, city_id: String, stage: int, id: String
 		return {
 			"id": id,
 			"name": TranslationServer.translate(NIGHT_VISION_NAME),
-			"description": TranslationServer.translate("Amplifies low light. Bright lights and daylight wash out the view. Fits the Deep Sea Lights slot."),
+			"description": TranslationServer.translate("See in dark water like a cat(fish). Night Vision amplifies faint light, but bright lights and daylight wash out the image."),
 			"available": price > 0,
 			"price": price,
 			"sell_price": floori(price * 0.5),
@@ -68,7 +68,7 @@ static func offer(catalogue: Dictionary, city_id: String, stage: int, id: String
 				for key in record:
 					if str(key).ends_with(" buy") and int(record[key]) > 0: fallback = int(record[key]) if fallback == 0 else mini(fallback,int(record[key]))
 			prices[city + " buy"] = maxi(1,fallback)
-	var description := str(text.get("Description","Restores shields to full strength."))
+	var description := str(text.get("Description",text.get("Desc","Restores shields to full strength.")))
 	var name: String = text.get("name",id.capitalize())
 	if catalogue.get("provenance",{}).get("locale","en") == "en":
 		description = preload("res://display_text.gd").weapons(description)
