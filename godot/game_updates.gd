@@ -2,6 +2,7 @@ extends CanvasLayer
 ## A startup-only check. Network failures deliberately have no player-facing error.
 const Versions = preload("res://official_mods.gd")
 const Bindings = preload("res://input_bindings.gd")
+const WindowsUpdate = preload("res://windows_game_update.gd")
 const RELEASES_URL := "https://api.github.com/repos/Hendar23/OpenSC/releases?per_page=100"
 const RELEASE_PAGE := "https://github.com/Hendar23/OpenSC/releases/tag/"
 signal decided(download: bool)
@@ -9,6 +10,7 @@ var prompt: Control
 var download_button: Button
 var continue_button: Button
 var message: Label
+var installing := false
 var browser_open: Callable = func(url: String) -> int: return OS.shell_open(url)
 var close_game: Callable = func() -> void: get_tree().quit()
 
@@ -23,6 +25,8 @@ static func available(body: String, current: String) -> Dictionary:
 	if not releases is Array: return {}
 	var tag_pattern := RegEx.new()
 	tag_pattern.compile("^v?[0-9]+\\.[0-9]+\\.[0-9]+(?:-[A-Za-z0-9.-]+)?$")
+	var digest_pattern := RegEx.new()
+	digest_pattern.compile("^sha256:([0-9a-f]{64})$")
 	var best := current
 	var found := {}
 	for release in releases:
@@ -32,6 +36,19 @@ static func available(body: String, current: String) -> Dictionary:
 		if not Versions.newer(tag,best): continue
 		best = tag
 		found = {"version":tag.trim_prefix("v"),"url":RELEASE_PAGE + tag.uri_encode()}
+		var assets = release.get("assets")
+		if assets is Array:
+			var name := "OpenSC-%s-Windows-x64-Setup.exe" % found.version
+			var installer_url := "https://github.com/Hendar23/OpenSC/releases/download/%s/%s" % [tag.uri_encode(),name]
+			for asset in assets:
+				if not asset is Dictionary or asset.get("name") != name or asset.get("browser_download_url") != installer_url or asset.get("state") != "uploaded": continue
+				var digest = asset.get("digest")
+				if not digest is String: continue
+				var hash_match := digest_pattern.search(digest)
+				if hash_match == null: continue
+				found["installer_url"] = installer_url
+				found["installer_sha256"] = hash_match.get_string(1)
+				break
 	return found
 
 func check_latest(url: String = RELEASES_URL) -> Dictionary:
@@ -39,6 +56,7 @@ func check_latest(url: String = RELEASES_URL) -> Dictionary:
 	# This small metadata response uses non-blocking main-loop polling.
 	http.use_threads = false
 	http.timeout = 5.0
+	http.max_redirects = 0
 	http.body_size_limit = 2097152
 	add_child(http)
 	var error := http.request(url,["Accept: application/vnd.github+json","User-Agent: OpenSC"])
@@ -51,15 +69,32 @@ func check_latest(url: String = RELEASES_URL) -> Dictionary:
 	return available(response[3].get_string_from_utf8(),str(ProjectSettings.get_setting("application/config/version","0.0.0")))
 
 func offer(release: Dictionary) -> bool:
-	_build_prompt(release.version)
+	var use_installer := WindowsUpdate.is_installed() and release.has("installer_sha256")
+	_build_prompt(release.version, use_installer)
 	var download: bool = await decided
+	if download and use_installer:
+		installing = true
+		download_button.disabled = true
+		continue_button.disabled = true
+		message.text = "Downloading and verifying the update..."
+		var started: bool = await WindowsUpdate.start(self, release)
+		installing = false
+		if started:
+			close_game.call()
+			return true
+		message.text = "The update could not be downloaded, verified, or started. You can open the release page or continue playing."
+		download_button.text = "Open release page"
+		download_button.disabled = false
+		continue_button.disabled = false
+		continue_button.grab_focus()
+		download = await decided
 	prompt.hide()
 	if download and browser_open.call(release.url) == OK:
 		close_game.call()
 		return true
 	return false
 
-func _build_prompt(version: String) -> void:
+func _build_prompt(version: String, use_installer: bool = false) -> void:
 	prompt = ColorRect.new()
 	(prompt as ColorRect).color = Color(0,0,0,0.7)
 	add_child(prompt)
@@ -81,6 +116,8 @@ func _build_prompt(version: String) -> void:
 	column.add_child(heading)
 	message = Label.new()
 	message.text = tr("OpenSC v%s is available. Would you like to open the download page?") % version
+	if use_installer:
+		message.text = tr("OpenSC v%s is available. Install it and restart the game?") % version
 	message.custom_minimum_size.x = 480
 	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(message)
@@ -89,6 +126,8 @@ func _build_prompt(version: String) -> void:
 	buttons.add_theme_constant_override("separation",16)
 	column.add_child(buttons)
 	download_button = Button.new(); download_button.text = "Download update"
+	if use_installer:
+		download_button.text = "Install update"
 	continue_button = Button.new(); continue_button.text = "Continue"
 	buttons.add_child(download_button); buttons.add_child(continue_button)
 	download_button.pressed.connect(func() -> void: decided.emit(true))
@@ -96,7 +135,7 @@ func _build_prompt(version: String) -> void:
 	continue_button.grab_focus()
 
 func _input(event: InputEvent) -> void:
-	if prompt == null or not prompt.visible: return
+	if prompt == null or not prompt.visible or installing: return
 	if Bindings.pressed(event,"menu_cancel") or (event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE):
 		get_viewport().set_input_as_handled(); decided.emit(false)
 	elif Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right") or Bindings.pressed(event,"menu_up") or Bindings.pressed(event,"menu_down"):

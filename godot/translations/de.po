@@ -1207,6 +1207,21 @@ msgstr "Spielerordner öffnen"
 msgid "OpenSC v%s is available. Would you like to open the download page?"
 msgstr "OpenSC v%s ist verfügbar. Möchtest du die Downloadseite öffnen?"
 
+msgid "Install update"
+msgstr "Update installieren"
+
+msgid "OpenSC v%s is available. Install it and restart the game?"
+msgstr "OpenSC v%s ist verfügbar. Möchtest du das Update installieren und das Spiel neu starten?"
+
+msgid "Downloading and verifying the update..."
+msgstr "Das Update wird heruntergeladen und überprüft …"
+
+msgid "The update could not be downloaded, verified, or started. You can open the release page or continue playing."
+msgstr "Das Update konnte nicht heruntergeladen, überprüft oder gestartet werden. Du kannst die Downloadseite öffnen oder weiterspielen."
+
+msgid "Open release page"
+msgstr "Downloadseite öffnen"
+
 msgid "OpenSubCulture needs your original Sub Culture files. Choose the game folder containing CLUMPS and DATA."
 msgstr "OpenSubCulture benötigt die Originaldateien von Sub Culture. Wähle den Spielordner mit CLUMPS und DATA aus."
 
@@ -2016,3 +2031,4 @@ msgstr "Platzhalter für Zwischensequenzen gefunden"
 
 msgid "Some cutscenes in this folder contain only a single frame. OpenSC will skip those cutscenes. To play them, choose a Sub Culture folder that contains the full video files."
 msgstr "Einige Zwischensequenzen in diesem Ordner bestehen aus nur einem Einzelbild. OpenSC überspringt diese Zwischensequenzen. Wähle zum Abspielen einen Sub-Culture-Ordner mit den vollständigen Videodateien."
+

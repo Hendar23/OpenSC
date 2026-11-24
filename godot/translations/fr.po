@@ -2016,3 +2016,19 @@ msgstr "Fichiers vidéo de remplacement détectés"
 
 msgid "Some cutscenes in this folder contain only a single frame. OpenSC will skip those cutscenes. To play them, choose a Sub Culture folder that contains the full video files."
 msgstr "Certaines cinématiques de ce dossier ne contiennent qu’une seule image. OpenSC ignorera ces cinématiques. Pour les regarder, choisissez un dossier de Sub Culture contenant les vidéos complètes."
+
+msgid "Install update"
+msgstr "Installer la mise à jour"
+
+msgid "OpenSC v%s is available. Install it and restart the game?"
+msgstr "OpenSC v%s est disponible. Installer la mise à jour et redémarrer le jeu ?"
+
+msgid "Downloading and verifying the update..."
+msgstr "Téléchargement et vérification de la mise à jour…"
+
+msgid "The update could not be downloaded, verified, or started. You can open the release page or continue playing."
+msgstr "Impossible de télécharger, de vérifier ou de lancer la mise à jour. Vous pouvez ouvrir la page de la version ou continuer à jouer."
+
+msgid "Open release page"
+msgstr "Ouvrir la page de la version"
+
