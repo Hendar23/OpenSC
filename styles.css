@@ -56,7 +56,7 @@ h1 { font: 900 clamp(4.2rem, 8.55vw, 8.7rem)/.86 var(--display); letter-spacing:
 .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.6rem; margin-top: 2rem; }
 .feature-grid article { border-top: 1px solid var(--line); padding-top: 1.15rem; }
 .feature-grid h3 { margin-top: .85rem; }
-.feature-grid p, .steps p, .setup h2 + p { margin-top: .55rem; }
+.feature-grid p, .setup h2 + p { margin-top: .55rem; }
 .screenshot { display: block; border: 1px solid var(--line); border-radius: .25rem; overflow: hidden; background: #071319; }
 .screenshot:hover { border-color: var(--accent); }
 .screenshot img { display: block; width: 100%; height: auto; }
@@ -67,11 +67,6 @@ h1 { font: 900 clamp(4.2rem, 8.55vw, 8.7rem)/.86 var(--display); letter-spacing:
 .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2.3rem clamp(2rem, 7vw, 7rem); }
 .text-link { color: var(--ink); text-underline-offset: .25rem; font-weight: 650; }
 .setup .button { margin-top: 1.5rem; }
-.steps { list-style: none; margin: 0; padding: 0; counter-reset: setup; }
-.steps li { counter-increment: setup; display: flex; gap: 1.1rem; padding: 1rem 0 1.15rem; border-bottom: 1px solid var(--line); }
-.steps li:first-child { border-top: 1px solid var(--line); }
-.steps li::before { content: counter(setup); display: grid; flex: 0 0 2rem; height: 2rem; place-items: center; border: 1px solid #6a6650; border-radius: 50%; color: var(--accent); font-weight: 750; }
-.steps p { margin-top: .28rem; }
 footer { border-top: 1px solid var(--line); padding-block: 1.75rem; background: #071319; }
 footer p { color: var(--muted); font-size: .875rem; }
 
