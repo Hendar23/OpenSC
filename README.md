@@ -96,7 +96,9 @@ When a docking or delivery prompt is active, **B** declines the prompt instead o
 | View / Back, Menu / Start, or B | Exit photo and replay mode |
  
 ## Credits
-- Screenshot shutter sound: [“camera” by irinairinafomicheva](https://pixabay.com/sound-effects/technology-camera-13695/), from Pixabay. Used under the Pixabay Content License.
+- Screenshot shutter sound by [“camera” by irinairinafomicheva](https://pixabay.com/sound-effects/technology-camera-13695/), from Pixabay. Used under the Pixabay Content License.
+- Underwater explosion sound by <a href="https://pixabay.com/users/dragon-studio-38165424/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=450455">DRAGON-STUDIO</a> from <a href="https://pixabay.com/sound-effects//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=450455">Pixabay</a>
+- Surface ambience sound effects by <a href="https://pixabay.com/users/freesound_community-46691455/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=5932">freesound_community</a> from <a href="https://pixabay.com//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=5932">Pixabay</a>
 
 <img width="1920" height="1080" alt="OpenSC 2026-10-21 20-35-50" src="https://github.com/user-attachments/assets/9b6adf8d-ec6a-4b38-835e-adfb537182a9" />
 
