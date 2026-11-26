@@ -72,6 +72,23 @@ func run() -> void:
 	pop.set_active_limit(30)
 	await finish_spawn(pop)
 	check(shoal.members.size() == 20,"Increasing capacity admits the complete group")
+	var casualty: Node3D = shoal.members[0]
+	casualty.take_damage(casualty.max_health)
+	pop._stream_update(); await finish_spawn(pop)
+	check(shoal.members.size() == 19 and pop.active_count() == 19,"A casualty leaves the surviving members active without spawning replacements")
+	for fish in shoal.members.duplicate():
+		fish.take_damage(fish.max_health)
+	pop._stream_update()
+	check(shoal.members.is_empty() and pop.active_count() == 0,"Killed fish are removed from the active population")
+	for turn in range(4):
+		observer.rotate_y(PI / 2.0)
+		pop._stream_update(); await finish_spawn(pop)
+	check(shoal.members.is_empty(),"Turning in place after killing a shoal never spawns another at the same site")
+	observer.position = Vector3(0,0,100)
+	pop._stream_update(); await finish_spawn(pop)
+	observer.position = Vector3.ZERO
+	pop._stream_update(); await finish_spawn(pop)
+	check(shoal.members.size() == 20,"Leaving the area and returning still allows a fresh shoal")
 	for fish in pop.get_children(): fish.free()
 	pop.random_groups.clear(); pop.max_active = 10; pop.stream_cursor = 0
 	var blocked := state("blocked",20); pop.random_groups.append(blocked)

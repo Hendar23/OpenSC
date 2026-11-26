@@ -133,12 +133,15 @@ func _exit_tree() -> void:
 
 func _retire(fish: Node3D) -> void:
 	if not fish.mission_owner.is_empty(): return
-	fish.group_members.erase(fish)
 	for state in random_groups:
+		if not state.members.has(fish): continue
+		if fish.dead: state.casualty_position = fish.global_position
 		state.members.erase(fish)
 		if state.members.is_empty() and state.attempted:
 			state.attempted = false; state.seed = int(state.seed) + 104729
 			spawned_groups.erase(state.group.id)
+		break
+	fish.group_members.erase(fish)
 	_set_awake(fish,false)
 	remove_child(fish)
 	fish.clear_ambient_state()
@@ -317,6 +320,11 @@ func _stream_update(initial: bool = false) -> void:
 		var home := Document.vector(group.position)
 		var members: Array = state.members
 		if not members.is_empty(): continue
+		# A group with casualties can replenish after the player leaves the area.
+		# Use the submarine's position so turning the camera cannot rearm it.
+		if state.has("casualty_position"):
+			if home.distance_to(center) <= retirement or center.distance_to(state.casualty_position) <= retirement: continue
+			state.erase("casualty_position")
 		if budget <= 0 or (streaming and spawn_budget <= 0): break
 		if state.attempted: continue
 		if streaming and max_active > 0 and awake_count >= max_active: continue
