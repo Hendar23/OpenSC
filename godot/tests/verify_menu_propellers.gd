@@ -19,6 +19,7 @@ func run() -> void:
 	menu.wake = WakeProbe.new(); menu.add_child(menu.wake)
 	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
 	if folder.is_empty(): folder = ProjectSettings.globalize_path("res://../Original Sub Culture")
+	check("PIRATE" in menu.PASS_MODELS and "PIRATE2" not in menu.PASS_MODELS and "PIRATE3" not in menu.PASS_MODELS,"Only the yellow pirate submarine is eligible for menu fly-bys")
 	for id in ["SUB"] + Array(menu.PASS_MODELS):
 		var model: Node3D = preload("res://clump_loader.gd").load_submarine(folder.path_join("CLUMPS/SUB.DFF")) if id == "SUB" else preload("res://map_document.gd").load_model(id,folder)
 		check(model != null,"Menu model loads: " + id)

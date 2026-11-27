@@ -170,6 +170,19 @@ func run() -> void:
     check(shop_button.get_rect() == area and shop_button._has_point(size - Vector2.ONE) and not shop_button._has_point(Vector2(size.x,0)),"Equipment hit area matches retail artwork for " + context)
     for pieces in [shop_button.highlight_art,shop_button.held_art]:
      check(pieces.size() == 1 and pieces[0].rect == Rect2(Vector2.ZERO,size),"Equipment button artwork aligns for " + context)
+   ui.open("goods")
+   var goods_x := [91,235,343] if localized else [86,248,356]
+   var goods_widths := [info_width,trade_width,sell_width]
+   var goods_names := ["CommodityInfo","BuyCommodity","SellCommodity"]
+   for index in range(goods_names.size()):
+    var goods_button: Button = ui.layout.get_node(goods_names[index])
+    var art_size := Vector2(goods_widths[index],26)
+    var hit_size := art_size if localized else Vector2(65,27)
+    var area := Rect2(Vector2(goods_x[index],364),hit_size)
+    var context := "%s, race %d, %s" % [edition[1],shop_race,goods_names[index]]
+    check(goods_button.get_rect() == area and goods_button._has_point(hit_size - Vector2.ONE) and not goods_button._has_point(Vector2(hit_size.x,0)),"Commodity market hit area aligns for " + context)
+    for pieces in [goods_button.highlight_art,goods_button.held_art]:
+     check(pieces.size() == 1 and pieces[0].rect == Rect2(Vector2.ZERO,art_size),"Commodity market artwork aligns for " + context)
  state.race = 2
  var offers := []
  for index in range(18):

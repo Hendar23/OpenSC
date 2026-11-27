@@ -1,5 +1,8 @@
-Exo 2 variable font (upright), used at Medium weight 500.
+Exo 2 Medium (upright), a static weight-500 instance of the Exo 2 variable font.
 Source: https://github.com/google/fonts/tree/main/ofl/exo2
 Font: https://raw.githubusercontent.com/google/fonts/main/ofl/exo2/Exo2%5Bwght%5D.ttf
-Downloaded 16 November 2026. Original font binary is unmodified.
+Source SHA-256: 205a448676a2586f9c57c25f3d5c58ca8db7e6cf5edf7506783a010c6fe2bfb5
+Source downloaded 16 November 2026. Instantiated on 27 November 2026 with FontTools 4.69.1 and skia-pathops 0.9.2:
+python -m fontTools.varLib.instancer SOURCE.ttf wght=500 --update-name-table --remove-overlaps --output Exo2.ttf
+Overlap removal allows Godot's distance-field renderer to fill the glyphs correctly.
 Copyright and SIL Open Font License 1.1: OFL.txt in this directory.

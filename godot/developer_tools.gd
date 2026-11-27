@@ -172,7 +172,7 @@ func _build_interface() -> void:
 	_build_water_controls()
 	_build_equipment_controls()
 	_build_weapon_controls()
-	var canopy_tab := preload("res://canopy_controls.gd").new(); canopy_tab.game = game; game.developer_tabs.add_child(canopy_tab)
+	_build_cockpit_controls()
 	game.bubble_controls = VBoxContainer.new()
 	game.graphics_controls.add_child(game.bubble_controls)
 	var graphics_hint := Label.new()
@@ -354,6 +354,45 @@ func _build_equipment_controls() -> void:
 				game._update_equipment_settings()
 			)
 			slider.value_changed.connect(func(_value: float) -> void: game._schedule_settings_save())
+
+func _build_cockpit_controls() -> void:
+	var scroll := ScrollContainer.new()
+	scroll.name = "Cockpit"
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	game.developer_tabs.add_child(scroll)
+	var tab := VBoxContainer.new()
+	tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tab.add_theme_constant_override("separation", 8)
+	scroll.add_child(tab)
+	for row in preload("res://perspex_cockpit.gd").SLIDERS:
+		var key: String = row[0]
+		var caption: String = row[1]
+		var label := Language.LiveLabel.new()
+		tab.add_child(label)
+		var slider := HSlider.new()
+		slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]
+		slider.scrollable = false; slider.focus_mode = Control.FOCUS_NONE
+		slider.value = game.cockpit_tuning[key]
+		tab.add_child(slider)
+		game.cockpit_controls[key] = slider
+		label.set_message("%s: %.3f", [caption, slider.value])
+		slider.value_changed.connect(func(value: float) -> void:
+			label.set_message("%s: %.3f", [caption, value])
+			_apply_cockpit_control(key, value)
+		)
+	var reflections := CheckButton.new()
+	reflections.text = tr("Perspex reflections")
+	reflections.button_pressed = game.cockpit_tuning.reflections
+	tab.add_child(reflections)
+	game.cockpit_controls["reflections"] = reflections
+	reflections.toggled.connect(func(enabled: bool) -> void: _apply_cockpit_control("reflections", enabled))
+
+
+func _apply_cockpit_control(key: String, value: Variant) -> void:
+	game.cockpit_tuning[key] = value
+	if is_instance_valid(game.perspex_cockpit): game.perspex_cockpit.apply_tuning()
+	game._schedule_settings_save()
+
 
 func _build_weapon_controls() -> void:
 	var scroll = ScrollContainer.new(); scroll.name = "Weapons"; scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; game.developer_tabs.add_child(scroll)

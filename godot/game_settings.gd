@@ -29,6 +29,13 @@ func _load_preferences(path: String = "", preserve_clock: bool = false) -> void:
 	var testing: Variant = config.get_value("developer","testing_all_missions",false)
 	game.mission_runtime.set_testing_missions(game.developer_enabled and testing is bool and testing)
 	game.loading_preferences = true
+	for key in game.cockpit_controls:
+		var control: Control = game.cockpit_controls[key]
+		var value: Variant = config.get_value("view", "cockpit_" + key, game.cockpit_tuning[key])
+		if control is CheckButton:
+			if value is bool: control.button_pressed = value
+		elif (value is float or value is int) and is_finite(float(value)):
+			control.value = clampf(float(value), control.min_value, control.max_value)
 	var ray_brightness: Variant = config.get_value("view","sun_ray_brightness",game.sun_shafts_brightness_slider.value / 100.0)
 	if (ray_brightness is float or ray_brightness is int) and is_finite(float(ray_brightness)):
 		game.sun_shafts_brightness_slider.value = clampf(float(ray_brightness) * 100.0,0.0,500.0)
@@ -111,15 +118,6 @@ func _load_preferences(path: String = "", preserve_clock: bool = false) -> void:
 			if game.cockpit_hud != null:
 				game.cockpit_hud.set_enabled(index,setting,false)
 	game.loading_preferences = false
-	if is_instance_valid(game.first_person_cockpit) and game.first_person_cockpit.model != null:
-		var canopy: Node = game.first_person_cockpit
-		for row in preload("res://first_person_cockpit.gd").CONTROLS:
-			var key: String = "canopy/" + canopy.pack_id + "/" + row[0]
-			var setting: Variant = config.get_value("view",key)
-			if (setting is float or setting is int) and is_finite(float(setting)): canopy.set_setting(row[0],float(setting))
-		if explicit_import:
-			var result: Error = canopy.persist_settings()
-			if result != OK: game._report_settings_error("view_defaults.cfg",result)
 
 func _schedule_settings_save() -> void:
 	if not _can_author() or game.loading_preferences or game.world_loading or not game.startup_complete or game.settings_save_pending: return
@@ -234,6 +232,7 @@ func _view_settings() -> Dictionary:
 	var settings = {"fog_visibility": game.fog_visibility, "fog_enabled": game.fog_button.button_pressed, "fog_start": game.fog_start_slider.value, "fog_curve": game.fog_curve_slider.value}
 	settings.merge(game.day_night.settings())
 	settings.merge(game.natural_light.settings)
+	for key in game.cockpit_tuning: settings["cockpit_" + key] = game.cockpit_tuning[key]
 	settings["sun_ray_brightness"] = game.sun_shafts_brightness_slider.value / 100.0
 	settings["market_speed"] = game.market_speed_slider.value / 100.0
 	settings["dock_zapper_damage_per_tick"] = game.dock_zapper_damage_slider.value
@@ -250,8 +249,6 @@ func _view_settings() -> Dictionary:
 	for key in game.plant_controls:
 		settings["plants_" + str(key)] = game.plant_controls[key].button_pressed if key == "enabled" else game.plant_controls[key].value
 	for key in game.water_controls: settings[key] = game.water_controls[key].value
-	if is_instance_valid(game.first_person_cockpit) and game.first_person_cockpit.model != null:
-		for key in game.first_person_cockpit.settings: settings["canopy/" + game.first_person_cockpit.pack_id + "/" + key] = game.first_person_cockpit.settings[key]
 	return settings
 
 func _export_all_settings(path: String) -> Error:

@@ -18,10 +18,10 @@ static func from_axes(left: Vector2, right: Vector2, reverse: float, forward: fl
 	# The right stick keeps its direct up/down pod thrust convention.
 	return Vector4(trigger(forward) - trigger(reverse), -right.y, -left.x, left.y)
 
-static func read() -> Vector4:
+static func read(freelook_device: int = -1) -> Vector4:
 	var bindings = preload("res://input_bindings.gd")
 	bindings.install()
-	return Vector4(bindings.strength("thrust_forward") - bindings.strength("thrust_reverse"),
-		bindings.strength("thrust_up") - bindings.strength("thrust_down"),
-		bindings.strength("turn_left") - bindings.strength("turn_right"),
-		bindings.strength("pitch_up") - bindings.strength("pitch_down"))
+	return Vector4(bindings.strength("thrust_forward", freelook_device) - bindings.strength("thrust_reverse", freelook_device),
+		bindings.strength("thrust_up", freelook_device) - bindings.strength("thrust_down", freelook_device),
+		bindings.strength("turn_left", freelook_device) - bindings.strength("turn_right", freelook_device),
+		bindings.strength("pitch_up", freelook_device) - bindings.strength("pitch_down", freelook_device))

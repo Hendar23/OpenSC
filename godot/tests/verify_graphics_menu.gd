@@ -21,16 +21,29 @@ func _run() -> void:
 	preload("res://input_bindings.gd").install()
 	var game := Node.new(); root.add_child(game)
 	var front := Front.new(); front.remember_preferences = false; game.add_child(front)
-	front.show_menu(false); front._activate_button("options"); front._activate_button("graphics")
+	front.show_menu(false); front._activate_button("options"); front._activate_button("display")
+	var display: CanvasLayer = front.display_menu
 	var menu: CanvasLayer = front.graphics_menu
 	var graphics: Node = front.player_graphics
-	check(menu.visible and menu.controls.display_mode.has_focus(),"Graphics opens with controller focus")
-	check(not front.buttons.graphics.visible and front.menu_layer.visible,"Graphics replaces the options while retaining the live backdrop")
-	check(menu.order.size() == 12 and not menu.controls.has("hud_scale"),"Eleven settings and Back are navigable; HUD scaling is automatic")
+	check(display.visible and display.controls.display_mode.has_focus(),"Display opens with controller focus")
+	check(not front.buttons.display.visible and front.menu_layer.visible,"Display replaces the options while retaining the live backdrop")
+	check(display.controls.keys() == ["display_mode","resolution","limit_resolutions","vsync","frame_limit","brightness","contrast","fmvs_enabled","fmv_size"],"Display includes output controls and both FMV settings in order")
+	check(not display.controls.has("hud_scale") and not menu.controls.has("hud_scale"),"HUD scaling remains automatic")
+	display.controls.fmv_size.grab_focus()
+	check(display.controls.fmv_size.text.contains("Classic size"),"FMVs default to the existing classic size")
+	for percent in [25,50,75,100]:
+		press(display,"menu_right")
+		check(graphics.settings.fmv_size == percent and display.controls.fmv_size.text.contains("%d%%" % percent),"Right selects and displays %d%% FMV size" % percent)
+	press(display,"menu_accept")
+	check(graphics.settings.fmv_size == Graphics.CLASSIC_FMV_SIZE,"Accept cycles past 100% to classic FMV size")
+	press(display,"menu_cancel")
+	check(not display.visible and front.buttons.display.has_focus(),"Back restores Display option focus")
+	front._activate_button("graphics")
+	check(menu.visible and menu.controls.anti_aliasing.has_focus(),"Graphics focuses the first rendering setting")
+	check(menu.controls.keys() == ["anti_aliasing","shadows","fog_distance","reflective_canopies","sun_shafts_enabled","lens_flares_enabled","classic_explosions","bubble_limit","wildlife_limit"],"Graphics includes the visual options and keeps wildlife beside bubbles")
 	check(menu.order.filter(func(control: Control) -> bool: return control is Button).all(func(control: Control) -> bool: return control.get_theme_font_size("font_size") == 14) and menu.labels.values().all(func(label: Label) -> bool: return label.get_theme_font_size("font_size") == 14),"Graphics uses the main menu font size")
 	check(menu.get_child(0).color.a == 0.0,"Graphics retains the live sea")
 	check(graphics.settings.reflective_canopies and menu.controls.reflective_canopies.text.contains("On"),"Reflective canopies default on")
-	check(not menu.controls.has("bubble_limit"),"Bubble limit belongs to General rather than Graphics")
 	var capture := preload("res://exterior_reflections.gd").new(); game.add_child(capture); capture.setup(root.world_3d)
 	menu._cycle("reflective_canopies",1)
 	check(not graphics.settings.reflective_canopies and not capture.enabled and not capture.is_processing() and menu.controls.reflective_canopies.text.contains("Off"),"Toggle disables reflections and capture work immediately while paused")
@@ -39,20 +52,23 @@ func _run() -> void:
 	var capture_view := SubViewport.new(); capture_view.set_meta("exterior_capture",true); game.add_child(capture_view)
 
 	var font := front.menu_theme.default_font as FontVariation
-	check(font != null and font.variation_opentype.get(&"wght") == 500.0 and font.base_font is FontFile and font.base_font.multichannel_signed_distance_field and menu.layout.theme == front.menu_theme,"Scaled menu text shares Exo 2 Medium backed by a sharp distance-field font")
+	check(font != null and font.get_font_weight() == 500 and font.base_font is FontFile and font.base_font.get_supported_variation_list().is_empty() and font.base_font.multichannel_signed_distance_field and menu.layout.theme == front.menu_theme,"Scaled menu text shares the static Exo 2 Medium distance-field font")
 	paused = true
 	press(menu,"menu_up"); check(menu.back.has_focus(),"Up wraps to Back")
-	press(menu,"menu_up"); check(menu.controls.fog_distance.has_focus(),"Up selects Fog distance")
+	press(menu,"menu_up"); check(menu.controls.wildlife_limit.has_focus(),"Up selects Active wildlife above Back")
+	menu.controls.fog_distance.grab_focus()
 	check(menu.controls.fog_distance.value == 100.0 and menu.controls.fog_distance.max_value == 100.0 and not menu.controls.fog_distance.scrollable,"Fog distance defaults to maximum and ignores the mouse wheel")
 	press(menu,"menu_left")
 	check(graphics.settings.fog_distance == 99.0 and menu.labels.fog_distance.text.ends_with("99%"),"Directional input brings fog closer and updates the value label")
-	press(menu,"menu_up"); check(menu.controls.contrast.has_focus(),"Up selects Contrast")
-	check(menu.controls.contrast.value == 100.0 and not menu.controls.contrast.scrollable,"Contrast defaults to neutral and ignores the mouse wheel")
-	press(menu,"menu_right")
-	check(menu.labels.contrast.text == "Contrast: 101%" and graphics.brightness_material.get_shader_parameter("contrast") == 1.01,"Contrast updates the label and the post-process live")
-	press(menu,"menu_up"); check(menu.controls.brightness.has_focus(),"Up selects Brightness")
-	check(not menu.controls.brightness.scrollable,"Wheel cannot adjust brightness")
-	press(menu,"menu_right")
+	press(menu,"menu_cancel"); check(not menu.visible and front.buttons.graphics.has_focus(),"Back restores Graphics option focus")
+	front._activate_button("display")
+	display.controls.contrast.grab_focus()
+	check(display.controls.contrast.value == 100.0 and not display.controls.contrast.scrollable,"Contrast defaults to neutral and ignores the mouse wheel")
+	press(display,"menu_right")
+	check(display.labels.contrast.text == "Contrast: 101%" and graphics.brightness_material.get_shader_parameter("contrast") == 1.01,"Contrast updates the label and the post-process live")
+	press(display,"menu_up"); check(display.controls.brightness.has_focus(),"Up selects Brightness")
+	check(not display.controls.brightness.scrollable,"Wheel cannot adjust brightness")
+	press(display,"menu_right")
 	check(graphics.brightness_material.get_shader_parameter("brightness") == 1.01,"Brightness updates the post-process live")
 	menu._change("anti_aliasing",2)
 	check(root.msaa_3d == Viewport.MSAA_4X,"Anti-aliasing applies MSAA 4x")
@@ -63,9 +79,9 @@ func _run() -> void:
 	check(not sun.shadow_enabled and root.positional_shadow_atlas_size == 0 and feed.positional_shadow_atlas_size == 0,"Off disables directional and positional shadows, including feeds")
 	menu._change("shadows",3); graphics.apply_sun(sun)
 	check(sun.shadow_enabled and sun.directional_shadow_max_distance == 120.0 and root.positional_shadow_atlas_size == 4096,"High restores shadows at higher resolution and distance")
-	menu._change("frame_limit",120); check(Engine.max_fps == 120,"Frame-rate limit applies")
-	menu._change("frame_limit",0); check(Engine.max_fps == 0,"Unlimited removes the cap")
-	menu._change("vsync",false); check(not graphics.settings.vsync,"VSync toggles independently")
+	display._change("frame_limit",120); check(Engine.max_fps == 120,"Frame-rate limit applies")
+	display._change("frame_limit",0); check(Engine.max_fps == 0,"Unlimited removes the cap")
+	display._change("vsync",false); check(not graphics.settings.vsync,"VSync toggles independently")
 	check(not graphics.resolutions().is_empty() and graphics.settings.resolution in graphics.resolutions(),"Resolution list includes the current monitor size")
 	check(root.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_EXPAND,"Startup canvas expands to the window aspect ratio")
 	root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
@@ -97,6 +113,7 @@ func _run() -> void:
 	graphics.settings_path = path; graphics.remember_preferences = true
 	check(graphics.set_value("brightness",125.0) == OK,"Graphics saves automatically")
 	check(graphics.set_value("contrast",120.0) == OK,"Contrast saves automatically")
+	display._change("fmv_size",25)
 	config.load(path); check(config.get_value("audio","effects_volume") == 175,"Saving graphics preserves audio preferences")
 	graphics.set_value("reflective_canopies",false)
 	check(capture_view.positional_shadow_atlas_size == 0 and capture_view.msaa_3d == Viewport.MSAA_DISABLED,"Graphics changes keep reflection capture lightweight")
@@ -106,6 +123,7 @@ func _run() -> void:
 	restored.load_preferences()
 	check(restored.settings.fog_distance == 99.0,"Fog distance persists across reload")
 	check(restored.settings.contrast == 120.0,"Contrast persists across reload")
+	check(restored.settings.fmv_size == 25,"25% FMV size persists across reload")
 	check(not restored.settings.reflective_canopies,"Disabled canopy preference persists across reload")
 	config.load(path); config.erase_section_key("graphics","reflective_canopies"); config.erase_section_key("graphics","fog_distance"); config.erase_section_key("graphics","contrast"); config.save(path)
 	restored.settings.reflective_canopies = true; restored.settings.fog_distance = Graphics.DEFAULTS.fog_distance
@@ -113,6 +131,8 @@ func _run() -> void:
 	check(restored.settings.reflective_canopies,"Older preferences without canopy setting default on")
 	check(restored.settings.fog_distance == 100.0,"Older preferences without fog distance retain the original fog")
 	check(restored.settings.contrast == 100.0,"Older preferences without contrast retain the original look")
+	restored.set_value("fmv_size","invalid")
+	check(restored.settings.fmv_size == Graphics.CLASSIC_FMV_SIZE,"Malformed FMV sizes fall back to classic size")
 	restored.set_value("contrast",200.0)
 	check(restored.settings.contrast == 150.0,"Contrast clamps to the slider range")
 	restored.set_value("contrast","invalid")
@@ -128,8 +148,8 @@ func _run() -> void:
 		check(choices.all(func(value: Vector2i) -> bool: return choices.find(value) == choices.rfind(value)),"Simulated %s has no duplicate resolution entries" % monitor)
 	simulated.monitor = Vector2i(7680,4320); simulated.settings.resolution = Vector2i(5120,2880)
 	check(Graphics.RESOLUTIONS.all(func(value: Vector2i) -> bool: return simulated.resolutions().has(value)),"8K display offers every common higher, ultrawide and 16:10 resolution")
-	menu.graphics = simulated; menu._refresh()
-	check(menu.controls.resolution.text.contains("5120 × 2880") and menu._choices("resolution").has(Vector2i(7680,4320)),"Menu displays 5K and offers 8K without changing the real window")
+	display.graphics = simulated; display._refresh()
+	check(display.controls.resolution.text.contains("5120 × 2880") and display._choices("resolution").has(Vector2i(7680,4320)),"Menu displays 5K and offers 8K without changing the real window")
 	simulated.remember_preferences = true; simulated.settings_path = path
 	check(simulated.set_value("brightness",100.0) == OK,"High-resolution preference saves without applying a display change")
 	simulated.settings.resolution = Vector2i(1280,720); simulated.load_preferences()
@@ -139,24 +159,25 @@ func _run() -> void:
 	simulated.remember_preferences = false
 	var visited := {}
 	for step in simulated.resolutions().size():
-		menu._cycle("resolution",1); visited[simulated.settings.resolution] = true
+		display._cycle("resolution",1); visited[simulated.settings.resolution] = true
 	check(Graphics.RESOLUTIONS.all(func(value: Vector2i) -> bool: return visited.has(value)),"Resolution control cycles through every preset on a 1080p display without getting stuck")
 	check(not simulated.settings.limit_resolutions,"Resolution restriction defaults off for existing preferences")
-	menu._cycle("limit_resolutions",1)
-	check(simulated.settings.limit_resolutions and menu.controls.limit_resolutions.text.contains("On"),"Resolution restriction toggles on through the normal menu button")
+	display._cycle("limit_resolutions",1)
+	check(simulated.settings.limit_resolutions and display.controls.limit_resolutions.text.contains("On"),"Resolution restriction toggles on through the normal menu button")
 	check(simulated.resolutions().all(func(value: Vector2i) -> bool: return value.x <= 1920 and value.y <= 1080) and simulated.settings.resolution == Vector2i(1920,1080),"Enabling restriction limits the list and replaces an oversized selection with native resolution")
 	simulated.remember_preferences = true; simulated.set_value("brightness",100.0)
 	simulated.settings.limit_resolutions = false; simulated.load_preferences()
 	check(simulated.settings.limit_resolutions,"Resolution restriction preference persists across reload")
-	menu._cycle("limit_resolutions",1)
+	display._cycle("limit_resolutions",1)
 	check(not simulated.settings.limit_resolutions and simulated.resolutions().has(Vector2i(7680,4320)),"Turning restriction off restores all higher presets")
-	var rows: Array[Control] = menu.order.duplicate()
-	rows.append(menu.status)
-	for i in range(1,rows.size()):
-		check(rows[i-1].get_rect().end.y <= rows[i].position.y,"Each graphics control has a separate row")
-	check(menu.status.get_rect().end.y <= menu.layout.size.y,"The graphics rows fit within the menu")
-	menu.graphics = graphics
+	for page in [display,menu,front.difficulty_menu]:
+		var rows: Array[Control] = page.order.duplicate()
+		rows.append(page.status)
+		for i in range(1,rows.size()):
+			check(rows[i-1].get_rect().end.y <= rows[i].position.y,"Each control has a separate row")
+		check(page.status.get_rect().end.y <= page.layout.size.y,"All rows fit within the page")
+	display.graphics = graphics
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
-	press(menu,"menu_cancel"); check(not menu.visible and front.buttons.graphics.has_focus(),"Back restores Graphics option focus")
+	press(display,"menu_cancel"); check(not display.visible and front.buttons.display.has_focus(),"Back restores Display option focus after changes")
 	paused = false; game.free(); Engine.max_fps = 0
 	print("Graphics menu: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

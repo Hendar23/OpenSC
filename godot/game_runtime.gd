@@ -9,6 +9,7 @@ func _init(context: Node3D) -> void:
 const Docking = preload("res://docking_controller.gd")
 
 func _process(delta: float) -> void:
+	game.game_camera.update_damage_shake(delta)
 	_update_night_vision()
 	if game.fmv != null and game.fmv.active: return
 	var in_dock_menu: bool = game.docking != null and game.docking.stage == Docking.Stage.DOCKED and game.dock_interface_active and game.dock_interface.visible and game.dock_interface.page != "load"

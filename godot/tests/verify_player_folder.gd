@@ -22,18 +22,43 @@ func run() -> void:
 	front.show_menu(false)
 	check(not front.buttons.player_folder.visible,"Folder shortcut stays out of the main-menu button list")
 	front._activate_button("options")
+	check(not front.buttons.player_folder.visible and not front.buttons.choose_game_folder.visible and front.buttons.setup.visible,"Folder actions are grouped under Setup")
+	front._activate_button("setup")
 	var button: Button = front.buttons.player_folder
-	check(button.visible and front.is_button_available("player_folder") and button.text == "Open Player Folder","Options exposes an enabled, clearly named folder button")
+	check(button.visible and front.is_button_available("player_folder") and button.text == "Open Player Folder","Setup exposes an enabled, clearly named folder button")
 	var order: Array = front._visible_button_order()
-	check(order.has("player_folder") and order.back() == "back","Folder button participates in controller navigation with Back remaining last")
+	check(order == ["choose_game_folder","player_folder","back"] and front.buttons.choose_game_folder.has_focus(),"Setup focuses the first folder action and keeps Back last")
 	button.pressed.emit()
-	check(front.opened == folder,"Pressing the real Options button opens the common folder through the OS folder action")
+	check(front.opened == folder,"Pressing the real Setup button opens the common folder through the OS folder action")
 	check(DirAccess.dir_exists_absolute(folder.path_join("Screenshots")),"Opening the player folder creates Screenshots even before the first capture")
-	check(front.menu_page == "options" and front.menu_layer.visible,"Opening the folder preserves the current Options page")
+	check(front.menu_page == "setup" and front.menu_layer.visible,"Opening the folder preserves the Setup page")
+	var back := InputEventJoypadButton.new(); back.pressed = true; back.button_index = JOY_BUTTON_B
+	front._input(back)
+	check(front.menu_page == "options" and front.buttons.setup.has_focus(),"Controller Back returns to Options and focuses Setup")
 	# Exercise the destination without launching a graphics device.
 	var picture := Image.create(2,2,false,Image.FORMAT_RGB8); picture.fill(Color.CYAN)
 	var path := capture.screenshot_folder().path_join("folder-test.png")
 	check(picture.save_png(path) == OK and Image.load_from_file(path).get_size() == Vector2i(2,2),"The resolved screenshot destination accepts readable PNG files")
 	DirAccess.remove_absolute(path)
 	front.free(); capture.free()
+	verify_legacy_menu(folder)
 	print("Player folder: %d/%d checks passed" % [checks-failures,checks]); quit(1 if failures else 0)
+
+func verify_legacy_menu(folder: String) -> void:
+	var mods = preload("res://mod_registry.gd")
+	var asset_path := folder.path_join("legacy-menu.json")
+	var layout: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://game_assets/ui/main_menu.json"))
+	layout.buttons = layout.buttons.filter(func(entry: Dictionary) -> bool: return entry.id not in ["display","difficulty","setup"])
+	for entry in layout.buttons:
+		if entry.id == "gameplay": entry.label = "General"
+		if entry.id == "new_game": entry.label = "Custom New Game"
+	var file := FileAccess.open(asset_path,FileAccess.WRITE)
+	file.store_string(JSON.stringify(layout)); file.close()
+	mods.layers["ui.main"] = [{"path":asset_path}]
+	var front := Front.new(); front.remember_preferences = false; root.add_child(front)
+	front.show_menu(false); front._activate_button("options")
+	check(front._visible_button_order() == front.OPTION_BUTTONS,"A legacy menu mod exposes the new Options pages in order")
+	check(front.buttons.gameplay.text == "Gameplay" and front.buttons.new_game.text == "Custom New Game","Legacy General is relabelled and custom main-menu text is retained")
+	front.free()
+	mods.layers.erase("ui.main")
+	DirAccess.remove_absolute(asset_path)

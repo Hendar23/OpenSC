@@ -1,9 +1,10 @@
 extends CanvasLayer
-## Double-size, modal playback. Conversion only runs in prepare(), at startup.
+## Modal playback. Conversion only runs in prepare(), at startup.
 const Library = preload("res://fmv_library.gd")
 const Bindings = preload("res://input_bindings.gd")
 const Mods = preload("res://mod_registry.gd")
-const DISPLAY_SCALE := 2.0
+const Graphics = preload("res://player_graphics.gd")
+const CLASSIC_DISPLAY_SCALE := 2.0
 signal completed(id: String)
 signal idle
 var game: Node
@@ -84,7 +85,7 @@ func prepare(folder: String, progress: Callable = Callable(), decoder: String = 
 			conversions += 1
 		var video := VideoStreamPlayer.new(); video.name = id; video.expand = true
 		video.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST; video.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		video.size = Vector2(info.width,info.height)*DISPLAY_SCALE; video.bus = &"Master"; video.volume = 0.0
+		video.size = Vector2(info.width,info.height)*CLASSIC_DISPLAY_SCALE; video.bus = &"Master"; video.volume = 0.0
 		shade.add_child(video)
 		var stream := VideoStreamTheora.new(); stream.file = ProjectSettings.globalize_path(output)
 		video.stream = stream; video.finished.connect(_finished.bind(id))
@@ -169,7 +170,14 @@ func _layout() -> void:
 	var stretch := get_viewport().get_stretch_transform().get_scale()
 	scale = Vector2.ONE / stretch
 	shade.size = get_viewport().get_visible_rect().size * stretch
-	for entry in movies.values(): entry.player.position = (shade.size-entry.size)*0.5
+	var size_percent: int = game.front_end.player_graphics.settings.fmv_size if game != null else Graphics.CLASSIC_FMV_SIZE
+	for entry in movies.values():
+		var video_size: Vector2 = entry.size
+		if size_percent != Graphics.CLASSIC_FMV_SIZE:
+			var fit := minf(shade.size.x / video_size.x,shade.size.y / video_size.y)
+			video_size *= fit * size_percent / 100.0
+		entry.player.size = video_size
+		entry.player.position = (shade.size - video_size) * 0.5
 
 func _exit_tree() -> void:
 	if worker != null: worker.wait_to_finish(); worker = null

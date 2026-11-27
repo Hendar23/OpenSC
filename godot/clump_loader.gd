@@ -47,6 +47,9 @@ static func conversion_key(kind: String, path: String, options: Variant = null) 
 static func load_submarine(path: String) -> Node3D:
 	return load_clump(path, PackedStringArray(["Hull", "RearPropeller", "LeftPod", "RightPod", "RightPropeller", "LeftPropeller"]))
 
+static func load_original_submarine(path: String) -> Node3D:
+	return _load_legacy(path, PackedStringArray(["Hull", "RearPropeller", "LeftPod", "RightPod", "RightPropeller", "LeftPropeller"]))
+
 # Scenery uses the same legacy frame/atomic format, with varying frame counts.
 static func load_clump(path: String, names: PackedStringArray = PackedStringArray(), include_morphs: bool = false) -> Node3D:
 	if Modern.supports(path): return Modern.load_model(path)

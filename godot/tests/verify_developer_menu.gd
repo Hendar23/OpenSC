@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/test_scene_tree.gd"
 const Game = preload("res://game.gd")
 const Mods = preload("res://mod_registry.gd")
 var checks := 0
@@ -8,6 +8,14 @@ func check(condition: bool, description: String) -> void:
 	checks += 1
 	if not condition: failures += 1; push_error(description)
 func _run() -> void:
+	var folder := OS.get_environment("OPENSC_TEST_GAME_FOLDER")
+	if folder.is_empty(): folder = preload("res://asset_paths.gd").find_game_folder()
+	var storage = preload("res://player_storage.gd")
+	storage.root_override = test_fixture_path("developer-menu")
+	storage.ensure_parent(storage.preferences_path())
+	var preferences := ConfigFile.new()
+	preferences.set_value("game", "folder", folder)
+	preferences.save(storage.preferences_path())
 	Mods.initialize(false)
 	var game := Game.new()
 	game.remember_preferences = false
@@ -49,7 +57,7 @@ func _run() -> void:
 	var visible_tabs: Array[String] = []
 	for index in range(game.developer_tabs.get_tab_count()):
 		if not game.developer_tabs.is_tab_hidden(index): visible_tabs.append(game.developer_tabs.get_tab_title(index))
-	check(visible_tabs.size() == 6 and "Mods" not in visible_tabs and not game.mod_panel.embedded, "Developer tabs exclude inactive canopy controls; mod management is a main-menu popup")
+	check(visible_tabs.size() == 7 and "Cockpit" in visible_tabs and "Mods" not in visible_tabs and not game.mod_panel.embedded, "F1 has a dedicated Cockpit tab and mod management stays in the main menu")
 	check(game.graphics_controls.find_children("*","Label",true,false).all(func(label: Label) -> bool: return not label.text.begins_with("Absolute view distance")),"F1 has no absolute view distance slider")
 	check(game.graphics_controls.find_children("*","Button",true,false).all(func(button: Button) -> bool: return button.text not in ["Original feel", "Clearer water"]),"F1 has no view distance presets")
 	game.front_end.player_graphics.set_value("fog_distance",100.0)
@@ -115,7 +123,7 @@ func _run() -> void:
 	root.mode = Window.MODE_WINDOWED
 	for window_size in [Vector2i(1280, 720), Vector2i(1920,1080), Vector2i(1050, 600)]:
 		root.size = window_size
-		for tab_name in ["Movement", "Sound", "Graphics", "Equipment", "Weapons", "System"]:
+		for tab_name in ["Movement", "Sound", "Graphics", "Equipment", "Weapons", "Cockpit", "System"]:
 			game._select_developer_tab(tab_name)
 			for frame in range(16): await process_frame
 			var panel_rect: Rect2 = game.developer_menu.get_global_rect()

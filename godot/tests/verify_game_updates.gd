@@ -1,10 +1,12 @@
 extends SceneTree
 const Updates = preload("res://game_updates.gd")
+const WindowsUpdate = preload("res://windows_game_update.gd")
 const Bindings = preload("res://input_bindings.gd")
 var checks := 0
 var failures := 0
 var server := TCPServer.new()
 var peers: Array[StreamPeerTCP] = []
+var served: Array[StreamPeerTCP] = []
 var reply := ""
 var stall := false
 var opened := ""
@@ -23,10 +25,10 @@ func _serve() -> void:
 	for peer in peers:
 		peer.poll()
 		if peer.get_status() != StreamPeerTCP.STATUS_CONNECTED: continue
-		if peer.get_available_bytes() > 0 and not stall:
+		if peer.get_available_bytes() > 0 and not stall and peer not in served:
 			peer.get_data(peer.get_available_bytes())
 			peer.put_data(reply.to_utf8_buffer())
-			peer.disconnect_from_host()
+			served.append(peer)
 
 func response(body: String, status: int = 200) -> void:
 	reply = "HTTP/1.1 %d Test\r\nContent-Type: application/json\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s" % [status,body.to_utf8_buffer().size(),body]
@@ -66,6 +68,22 @@ func _run() -> void:
 	var latest := Updates.available(releases,"0.8.2")
 	check(latest.get("version") == "0.8.4-beta.1","Published beta updates count; drafts and unrelated tags are ignored")
 	check(latest.get("url") == Updates.RELEASE_PAGE + "v0.8.4-beta.1","Download goes to that exact game release")
+	var installer_name := "OpenSC-0.8.4-beta.1-Windows-x64-Setup.exe"
+	var installer_url := "https://github.com/Hendar23/OpenSC/releases/download/v0.8.4-beta.1/" + installer_name
+	var sha256 := "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+	var published := {"draft":false,"tag_name":"v0.8.4-beta.1","assets":[
+		{"name":installer_name,"browser_download_url":"https://example.com/" + installer_name,"state":"uploaded","digest":"sha256:" + sha256},
+		{"name":installer_name,"browser_download_url":installer_url,"state":"uploaded","digest":"sha256:" + sha256}]}
+	var installer := Updates.available(JSON.stringify([published]),"0.8.2")
+	check(installer.get("installer_url") == installer_url and installer.get("installer_sha256") == sha256,
+		"Self-update uses the exact pinned GitHub asset and its release digest")
+	for invalid_digest in [null, "", "sha256:" + sha256 + "x"]:
+		published.assets[1].digest = invalid_digest
+		check(not Updates.available(JSON.stringify([published]),"0.8.2").has("installer_url"),
+			"An installer without a valid GitHub digest falls back to the release page")
+	published.assets.pop_back()
+	check(not Updates.available(JSON.stringify([published]),"0.8.2").has("installer_url"),
+		"A URL outside the expected release falls back to the release page")
 	check(Updates.available(releases,"0.8.4-beta.1").is_empty(),"Equal release never prompts")
 	check(Updates.available(releases,"1.0.0").is_empty(),"Older releases never prompt")
 	for invalid in ["", "not JSON", "{}", "[null,3,{}]", '[{"draft":false,"tag_name":"https://example.com"}]']:
@@ -73,6 +91,16 @@ func _run() -> void:
 	var updates := service()
 	check(server.listen(0,"127.0.0.1") == OK,"Local HTTP fixture starts")
 	var url := "http://127.0.0.1:%d/" % server.get_local_port()
+	var fixture_path := "user://update-digest-test-%d.tmp" % OS.get_process_id()
+	var fixture_file := FileAccess.open(fixture_path, FileAccess.WRITE)
+	fixture_file.store_string("abc")
+	fixture_file.close()
+	check(WindowsUpdate.matches_digest(fixture_path, sha256), "Matching unsigned download bytes pass the digest check")
+	check(not WindowsUpdate.matches_digest(fixture_path, "0".repeat(64)), "Changed download bytes fail the digest check")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(fixture_path))
+	response("abc")
+	check(not (await WindowsUpdate.start(updates, {"installer_url":url,"installer_sha256":"0".repeat(64)})),
+		"Downloaded installer with the wrong digest is rejected before launch")
 	response(releases)
 	check(not (await updates.check_latest(url)).is_empty(),"Real HTTP response detects update")
 	response("not JSON")
@@ -108,6 +136,12 @@ func _run() -> void:
 	offer(updates); await process_frame
 	updates.download_button.pressed.emit(); await process_frame
 	check(continued and not closed,"Browser launch failure keeps game open and continues loading")
+	updates.queue_free(); await process_frame
+	updates = service()
+	updates._build_prompt("1.0.0", true)
+	check(updates.message.text == "OpenSC v1.0.0 is available. Install it and restart the game?", "Installed update explains the restart")
+	check(updates.download_button.text == "Install update" and updates.continue_button.text == "Continue", "Installed update uses the approved button labels")
+	check(updates.continue_button.has_focus(), "Continue is initially selected for installed updates")
 	updates.queue_free(); await process_frame
 	print("Game updates: %d checks, %d failures" % [checks,failures])
 	quit(1 if failures else 0)

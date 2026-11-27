@@ -36,18 +36,20 @@ func run() -> void:
 	check(game.startup_complete,"Game loads the optional cockpit hook")
 	if not game.startup_complete: quit(1); return
 	game._begin_new_game(); game.set_process(false); game.pilot.set_physics_process(false); game.pilot.freeze = true; game.world_root.process_mode = Node.PROCESS_MODE_DISABLED
-	check(game.first_person_cockpit.model == null,"No cockpit geometry is installed with the mod disabled")
+	game.front_end.gameplay_menu.cockpit_3d_enabled = false
+	check(not game.perspex_cockpit.visible,"Classic view starts without built-in cockpit geometry")
 	var preferences := FileAccess.get_file_as_string(Mods.preference_path)
 	var enabled: Array[String] = ["bubble-cockpit"]
 	check(Mods.apply(enabled,enabled,false) == OK and Mods.candidates("cockpit.first_person").size() == 1,"Canopy registers through normal mod discovery and priority")
 	check(FileAccess.get_file_as_string(Mods.preference_path) == preferences,"Previewing the mod preserves actual settings")
-	game.first_person_cockpit.free(); game.first_person_cockpit = Cockpit.new(); game.camera.add_child(game.first_person_cockpit); game.first_person_cockpit.setup(game)
-	var canopy: Node3D = game.first_person_cockpit
+	var canopy := Cockpit.new()
+	game.camera.add_child(canopy); canopy.setup(game)
 	check(canopy.model != null and canopy.model.find_children("*","CollisionObject3D",true,false).is_empty(),"Self-contained canopy model loads without gameplay collision")
 	var meshes: Array = canopy.model.find_children("*","MeshInstance3D",true,false)
 	check(meshes.size() == 1 and meshes.all(func(mesh: MeshInstance3D) -> bool: return mesh.layers == Cockpit.RENDER_LAYER and mesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF),"Rimless glass uses the dedicated non-shadow-casting camera layer")
 	check(not canopy.visible,"Canopy stays hidden in third person")
 	game._set_camera_mode(true)
+	canopy.refresh()
 	check(canopy.visible and not (game.camera.cull_mask & game.SUB_RENDER_LAYER),"First person shows glass while hiding the external hull")
 	check(not (game.cockpit_hud.bottom_camera.cull_mask & Cockpit.RENDER_LAYER) and not (game.cockpit_hud.rear_camera.cull_mask & Cockpit.RENDER_LAYER) and not (game.menu_backdrop.view.cull_mask & Cockpit.RENDER_LAYER),"Auxiliary feeds and menu camera exclude cockpit geometry")
 	var pose := canopy.global_transform
@@ -58,31 +60,12 @@ func run() -> void:
 	game.front_end.menu_layer.hide(); game.dock_interface_active = true; canopy.refresh(); check(not canopy.visible,"Dock UI hides the canopy")
 	game.dock_interface_active = false; game.map_open = true; canopy.refresh(); check(not canopy.visible,"Fullscreen map hides the canopy")
 	game.map_open = false; canopy.refresh(); check(canopy.visible,"Returning to first-person piloting restores the canopy")
-	for frame in range(3): await process_frame
-	var panel: Node = game.developer_tabs.find_child("Mods",false,false)
-	check(panel != null and not game.developer_tabs.is_tab_hidden(panel.get_index()) and panel.sliders.size() == Cockpit.CONTROLS.size(),"Enabled canopy exposes all live controls in the developer Mods tab")
+	check(game.developer_tabs.find_child("Mods",false,false) == null,"Enabling the canopy does not add a developer Mods tab")
 	check(canopy.settings.scratch_count == 4.0,"Canopy starts with four individual scratches")
-	panel.sliders.scratch_count.value = 3.0
-	check(canopy.glass_materials[0].get_shader_parameter("scratch_count") == 3.0,"Scratch-count slider updates the actual glass immediately")
-	panel.sliders.scratch_count.value = 4.0
-	var previous_roughness: float = canopy.settings.roughness_value
-	panel.sliders.roughness_value.value = 0.22
-	game.defaults_directory = "user://"
-	game.remember_preferences = true
-	check(canopy.persist_settings() == OK,"Canopy controls save in the shared view config")
-	var saved := ConfigFile.new(); saved.load(game.defaults_directory.path_join("view_defaults.cfg"))
-	check(is_equal_approx(saved.get_value("view","canopy/" + canopy.pack_id + "/roughness_value"),0.22),"Canopy tuning persists per mod pack")
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(game.defaults_directory.path_join("view_defaults.cfg")))
-	game.remember_preferences = false
-	game.defaults_directory = ""
-	panel.sliders.roughness_value.value = previous_roughness
-	if DisplayServer.get_name() != "headless":
-		game.developer_enabled = true
-		game._toggle_developer_ui(); game.developer_tabs.current_tab = panel.get_index()
-		for frame in range(6): await process_frame
-		await RenderingServer.frame_post_draw
-		root.get_texture().get_image().save_png("res://tests/canopy-dev-controls.png")
-		game._toggle_developer_ui()
+	var defaults := ConfigFile.new()
+	check(defaults.load("res://view_defaults.cfg") == OK,"Authored view defaults are available")
+	var roughness_key: String = "canopy/" + canopy.pack_id + "/roughness_value"
+	check(is_equal_approx(canopy.glass_materials[0].get_shader_parameter("roughness_value"),defaults.get_value("view",roughness_key,canopy.settings.roughness_value)),"Canopy still applies authored glass tuning")
 	var glass_mesh := canopy.model.find_child("Canopy_Glass",true,false) as MeshInstance3D
 	var scratch_setting: float = Mods.candidates("cockpit.first_person")[0].glass.scratch_strength
 	check(glass_mesh.material_override.shader == preload("res://cockpit_glass.gdshader") and is_equal_approx(glass_mesh.material_override.get_shader_parameter("scratch_strength"),scratch_setting),"Named glass mesh receives validated mod tuning")
@@ -185,10 +168,8 @@ func run() -> void:
 		for frame in range(8): await process_frame
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/canopy-3d-hud.png")
-	game._set_camera_mode(false); check(not canopy.visible,"Leaving first person removes the dome immediately")
-	Mods.apply([],[],false); game.first_person_cockpit.free(); game.first_person_cockpit = Cockpit.new(); game.camera.add_child(game.first_person_cockpit); game.first_person_cockpit.setup(game)
-	check(game.first_person_cockpit.model == null,"Disabling the mod restores the unobstructed original view")
-	for frame in range(3): await process_frame
-	check(game.developer_tabs.is_tab_hidden(panel.get_index()),"Developer Mods controls disappear when no canopy mod is enabled")
+	game._set_camera_mode(false); canopy.refresh(); check(not canopy.visible,"Leaving first person removes the dome immediately")
+	Mods.apply([],[],false); canopy.free(); canopy = Cockpit.new(); game.camera.add_child(canopy); canopy.setup(game)
+	check(canopy.model == null,"The legacy loader also supports an empty mod selection")
 	game.queue_free(); await process_frame
 	print("First-person cockpit: %d checks, %d failures" % [checks,failures]); quit(1 if failures else 0)

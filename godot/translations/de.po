@@ -364,6 +364,9 @@ msgstr "Stadtbestand: %d"
 msgid "Classic Sub physics: %s"
 msgstr "Klassische U-Boot-Physik: %s"
 
+msgid "Classic size"
+msgstr "Klassische Größe"
+
 msgid "Cleaning asset cache"
 msgstr "Ressourcen-Cache wird bereinigt"
 
@@ -721,6 +724,9 @@ msgstr "Waffe abfeuern"
 msgid "First-person crosshair: %s"
 msgstr "Fadenkreuz in der Egoperspektive: %s"
 
+msgid "3D cockpit: %s"
+msgstr "3D-Cockpit: %s"
+
 msgid "Fish zapper volume"
 msgstr "Lautstärke des Fisch-Zappers"
 
@@ -729,6 +735,9 @@ msgstr "Schwebeteilchen im Wasser"
 
 msgid "Fog build-up curve: %.1f"
 msgstr "Kurve der Nebeldichte: %.1f"
+
+msgid "FMV size"
+msgstr "Videogröße"
 
 msgid "Fog distance"
 msgstr "Nebeldistanz"
@@ -1206,6 +1215,21 @@ msgstr "Spielerordner öffnen"
 
 msgid "OpenSC v%s is available. Would you like to open the download page?"
 msgstr "OpenSC v%s ist verfügbar. Möchtest du die Downloadseite öffnen?"
+
+msgid "Install update"
+msgstr "Update installieren"
+
+msgid "OpenSC v%s is available. Install it and restart the game?"
+msgstr "OpenSC v%s ist verfügbar. Möchtest du das Update installieren und das Spiel neu starten?"
+
+msgid "Downloading and verifying the update..."
+msgstr "Das Update wird heruntergeladen und überprüft …"
+
+msgid "The update could not be downloaded, verified, or started. You can open the release page or continue playing."
+msgstr "Das Update konnte nicht heruntergeladen, überprüft oder gestartet werden. Du kannst die Downloadseite öffnen oder weiterspielen."
+
+msgid "Open release page"
+msgstr "Downloadseite öffnen"
 
 msgid "OpenSubCulture needs your original Sub Culture files. Choose the game folder containing CLUMPS and DATA."
 msgstr "OpenSubCulture benötigt die Originaldateien von Sub Culture. Wähle den Spielordner mit CLUMPS und DATA aus."
@@ -2016,3 +2040,45 @@ msgstr "Platzhalter für Zwischensequenzen gefunden"
 
 msgid "Some cutscenes in this folder contain only a single frame. OpenSC will skip those cutscenes. To play them, choose a Sub Culture folder that contains the full video files."
 msgstr "Einige Zwischensequenzen in diesem Ordner bestehen aus nur einem Einzelbild. OpenSC überspringt diese Zwischensequenzen. Wähle zum Abspielen einen Sub-Culture-Ordner mit den vollständigen Videodateien."
+
+msgid "Display"
+msgstr "Anzeige"
+
+msgid "Gameplay"
+msgstr "Spielablauf"
+
+msgid "Difficulty"
+msgstr "Schwierigkeit"
+
+msgid "Setup"
+msgstr "Einrichtung"
+
+msgid "Play FMVs"
+msgstr "Videos abspielen"
+
+msgid "Sun shafts"
+msgstr "Sonnenstrahlen"
+
+msgid "Lens flares"
+msgstr "Linsenreflexionen"
+
+msgid "Classic explosions"
+msgstr "Klassische Explosionen"
+
+msgid "Maximum bubbles"
+msgstr "Maximale Blasenzahl"
+
+msgid "Active wildlife"
+msgstr "Aktive Tierwelt"
+
+msgid "Disable random pirates"
+msgstr "Zufällige Piraten deaktivieren"
+
+msgid "Random NPC submarine weapons"
+msgstr "Zufällige Waffen für NPC-U-Boote"
+
+msgid "Zapper auto aim"
+msgstr "Zielhilfe für den Zapper"
+
+msgid "Could not save settings: %s"
+msgstr "Einstellungen konnten nicht gespeichert werden: %s"

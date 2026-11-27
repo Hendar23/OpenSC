@@ -25,6 +25,14 @@ func cold_menu() -> void:
 	game.has_started_game = false; game.front_end.can_resume = false
 	game.dock_interface.dismiss(); game._show_main_menu()
 
+func press_back() -> void:
+	var event := InputEventJoypadButton.new()
+	event.button_index = JOY_BUTTON_B
+	event.pressed = true
+	root.push_input(event)
+	event.pressed = false
+	root.push_input(event)
+
 func run() -> void:
 	var saves := preload("res://save_games.gd").new(); clear_saves(saves)
 	check(saves.latest_slot() == -2,"No saves has no Continue target")
@@ -73,6 +81,8 @@ func run() -> void:
 	game.set_process(false)
 	check(game.front_end.is_button_available("continue") and not game.front_end.can_resume,"Startup Continue is available without pretending there is a live game")
 	check(game.front_end.active_button == game.front_end.buttons["continue"],"Continue is focused for controller use when a save exists")
+	press_back()
+	check(game.front_end.menu_layer.visible and not game.loading_save and not game.has_started_game,"Controller Back at startup leaves the menu open even when a save exists")
 	game.front_end._activate_button("load")
 	check(game.dock_interface.visible and game.dock_interface.page == "load" and game.pilot != null,"Cold Load menu lists saves using the prepared player")
 	game.dock_interface.dismiss(); game._show_main_menu()
@@ -92,8 +102,13 @@ func run() -> void:
 	check(not game.loading_canvas.visible and game.dock_interface.visible and game.dock_interface.page == "home" and not game.front_end.menu_layer.visible,"Continue restores saved dock interface")
 	check(not paused and game.world_root.can_process(),"Continue resumes the outside world while docked")
 	game.player_progress.status.credits = 777
-	game._show_main_menu(); await game._continue_game()
-	check(game.player_progress.status.credits == 777 and not game.front_end.menu_layer.visible,"Continue resumes live session without reloading or losing progress")
+	game._show_main_menu()
+	game.front_end._activate_button("options")
+	press_back()
+	check(paused and game.front_end.menu_layer.visible and game.front_end.menu_page == "main","Controller Back leaves Options for the root menu without resuming")
+	press_back()
+	check(not paused and not game.front_end.menu_layer.visible and game.player_progress.status.credits == 777,"Controller Back from the root menu resumes the live session without losing progress")
+	check(game.dock_interface.visible and game.dock_interface.page == "home","Controller Back restores the live docking interface")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_games.path(-1)))
 	cold_menu(); await game._continue_game()
 	check(game.has_started_game and game.player_progress.status.credits == 200,"Continue loads latest manual save when no autosave exists")

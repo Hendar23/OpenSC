@@ -106,12 +106,14 @@ func _run() -> void:
 		root.get_texture().get_image().save_png("res://tests/live-audio-menu-preview.png")
 		check(game.menu_backdrop.active and game.menu_backdrop.view.current and root.get_texture().get_image().get_pixel(10,10).b > 0.1,"Audio page preserves the live sea camera and visible background")
 		game.front_end.audio_menu.close_menu(); game.front_end._activate_button("back")
-		game.front_end._activate_button("options"); game.front_end._activate_button("gameplay")
-		check(not game.weapons.auto_aim_enabled,"Zapper auto aim is off for a fresh player")
-		game.front_end.gameplay_menu._toggle()
-		check(game.weapons.auto_aim_enabled,"Gameplay toggle immediately enables weapon auto aim")
-		game.front_end.gameplay_menu._toggle()
-		check(not game.weapons.auto_aim_enabled,"Gameplay toggle immediately disables weapon auto aim")
+		game.front_end._activate_button("options"); game.front_end._activate_button("difficulty")
+		var aim_before: bool = game.weapons.auto_aim_enabled
+		game.front_end.difficulty_menu.controls.zapper_auto_aim.pressed.emit()
+		check(game.weapons.auto_aim_enabled != aim_before,"Difficulty toggle immediately changes weapon auto aim")
+		game.front_end.difficulty_menu.controls.zapper_auto_aim.pressed.emit()
+		check(game.weapons.auto_aim_enabled == aim_before,"Difficulty toggle restores the previous weapon auto aim setting")
+		game.front_end.difficulty_menu.close_menu()
+		game.front_end._activate_button("gameplay")
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/live-gameplay-menu-preview.png")
 		game.front_end.gameplay_menu.close_menu(); game.front_end._activate_button("back")
@@ -134,10 +136,10 @@ func _run() -> void:
 		root.get_texture().get_image().save_png("res://tests/live-menu-submarine-preview.png")
 	var accept := InputEventJoypadButton.new(); accept.pressed = true; accept.button_index = JOY_BUTTON_A
 	game.front_end.buttons.options.grab_focus(); game.front_end._input(accept)
-	check(game.front_end.menu_page == "options" and game.front_end._visible_button_order() == ["controls","graphics","audio","gameplay","player_folder","choose_game_folder","restore_defaults","back"] and not game.front_end.buttons.new_game.visible,"Controller opens settings, folder selection, restore defaults and Back")
+	check(game.front_end.menu_page == "options" and game.front_end._visible_button_order() == ["display","graphics","audio","controls","gameplay","difficulty","setup","restore_defaults","back"] and not game.front_end.buttons.new_game.visible,"Controller opens the seven Options pages, Restore Defaults and Back")
 	var down := InputEventJoypadButton.new(); down.pressed = true; down.button_index = JOY_BUTTON_DPAD_DOWN
 	game.front_end._input(down)
-	check(root.gui_get_focus_owner() == game.front_end.buttons.graphics,"Options navigation reaches Graphics after Controls")
+	check(root.gui_get_focus_owner() == game.front_end.buttons.graphics,"Options navigation reaches Graphics after Display")
 	if DisplayServer.get_name() != "headless":
 		for frame in range(4): await process_frame
 		await RenderingServer.frame_post_draw

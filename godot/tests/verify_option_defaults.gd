@@ -31,7 +31,7 @@ func run() -> void:
 	check(gameplay.wildlife_limit == int(authored.get_value("gameplay","wildlife_limit")) and gameplay.bubble_limit == int(authored.get_value("gameplay","bubble_limit")),"Fresh population limits use captured choices")
 	var graphics := Graphics.new(); graphics.settings_path = path; root.add_child(graphics)
 	check(graphics.settings.resolution == Vector2i(1920,1080),"Fresh graphics resolution matches the desktop")
-	for key in ["anti_aliasing","shadows","frame_limit","contrast","fog_distance","vsync"]:
+	for key in ["anti_aliasing","shadows","frame_limit","contrast","fog_distance","vsync","fmv_size"]:
 		check(graphics.settings[key] == authored.get_value("graphics",key),"Fresh graphics uses captured " + key)
 	var scope := Node.new(); root.add_child(scope); var front := Node.new(); scope.add_child(front)
 	var audio := preload("res://effects_audio.gd").new(); audio.settings_path = path; front.add_child(audio)
@@ -50,6 +50,7 @@ func run() -> void:
 	var saved_graphics := Graphics.new(); saved_graphics.settings_path = path; root.add_child(saved_graphics)
 	check(saved_graphics.settings.resolution == Vector2i(1600,900) and saved_graphics.settings.fog_distance == 45.0,"Subsequent launches preserve saved resolution and graphics choices")
 	check(saved_graphics.settings.contrast == 100.0,"Older graphics preferences use neutral contrast")
+	check(saved_graphics.settings.fmv_size == Graphics.CLASSIC_FMV_SIZE,"Older graphics preferences keep classic FMV size")
 	var saved_gameplay := preload("res://gameplay_menu.gd").new(); saved_gameplay.settings_path = path; root.add_child(saved_gameplay)
 	check(saved_gameplay.disable_random_pirates != gameplay.disable_random_pirates,"General menu preserves existing player's choice")
 	var saved_audio := preload("res://effects_audio.gd").new(); saved_audio.settings_path = path; front.add_child(saved_audio)

@@ -11,36 +11,30 @@ signal classic_sub_physics_changed(enabled: bool)
 var classic_sub_physics := false
 var classic_sub_physics_button: Button
 var classic_explosions := false
-var classic_explosions_button: Button
 signal random_pirates_changed(disabled: bool)
 var disable_random_pirates := false
-var random_pirates_button: Button
 signal pirate_weapons_changed(enabled: bool)
 var random_pirate_weapons := true
-var pirate_weapons_button: Button
 var crosshair_enabled := true
 var crosshair_button: Button
+signal cockpit_3d_changed(enabled: bool)
+var cockpit_3d_enabled := true
+var cockpit_3d_button: Button
 var replay_button: Button
 var replay_enabled := true
 var fmvs_enabled := true
-var fmv_button: Button
 var sun_shafts_enabled := true
-var sun_shafts_button: Button
 var lens_flares_enabled := true
-var lens_flares_button: Button
 const WILDLIFE_LIMITS := [40,60,80,100,150,200,0]
 const BUBBLE_LIMITS := [0,50,100,200,500,1000,2000,4000,-1]
 var bubble_limit := 200
-var bubble_button: Button
 var wildlife_limit := 80
-var wildlife_button: Button
 var remember_preferences := true
 var settings_path := ""
 var zapper_auto_aim := false
 var layout: Control
 var scroll: ScrollContainer
 var option_rows: VBoxContainer
-var toggle: Button
 var back: Button
 var status: Label
 
@@ -57,6 +51,7 @@ func _load_preferences() -> void:
 		disable_random_pirates = bool(config.get_value("gameplay","disable_random_pirates",false))
 		random_pirate_weapons = bool(config.get_value("gameplay","random_pirate_weapons",true))
 		crosshair_enabled = bool(config.get_value("gameplay","first_person_crosshair",true))
+		cockpit_3d_enabled = bool(config.get_value("gameplay","cockpit_3d",true))
 		classic_sub_physics = bool(config.get_value("gameplay","classic_sub_physics",false))
 		classic_explosions = bool(config.get_value("gameplay","classic_explosions",false))
 		zapper_auto_aim = bool(config.get_value("gameplay","zapper_auto_aim",false))
@@ -76,7 +71,7 @@ func reload_preferences() -> void:
 		"zapper_auto_aim": auto_aim_changed, "classic_sub_physics": classic_sub_physics_changed,
 		"disable_random_pirates": random_pirates_changed, "random_pirate_weapons": pirate_weapons_changed,
 		"wildlife_limit": wildlife_limit_changed, "sun_shafts_enabled": sun_shafts_changed,
-		"replay_enabled": replay_changed,
+		"replay_enabled": replay_changed, "cockpit_3d_enabled": cockpit_3d_changed,
 	}
 	var previous := {}
 	for key in live_options: previous[key] = get(key)
@@ -101,18 +96,10 @@ func _build_menu() -> void:
 	option_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	option_rows.add_theme_constant_override("separation", 6)
 	scroll.add_child(option_rows)
-	wildlife_button = _button(option_rows, _cycle_wildlife_limit)
 	classic_sub_physics_button = _button(option_rows, _toggle_classic_sub_physics)
-	classic_explosions_button = _button(option_rows, _toggle_classic_explosions)
-	random_pirates_button = _button(option_rows, _toggle_random_pirates)
+	cockpit_3d_button = _button(option_rows, _toggle_cockpit_3d)
 	crosshair_button = _button(option_rows, _toggle_crosshair)
-	lens_flares_button = _button(option_rows, _toggle_lens_flares)
-	bubble_button = _button(option_rows, _cycle_bubble_limit)
 	replay_button = _button(option_rows, _toggle_replay)
-	fmv_button = _button(option_rows, _toggle_fmvs)
-	pirate_weapons_button = _button(option_rows, _toggle_pirate_weapons)
-	sun_shafts_button = _button(option_rows, _toggle_sun_shafts)
-	toggle = _button(option_rows, _toggle)
 	back = _button(layout, close_menu, 208.0)
 	back.text = "Back"
 	status = Label.new(); status.size = Vector2(320,32)
@@ -135,18 +122,16 @@ func _button(parent: Control, activate: Callable, width := 248.0) -> Button:
 	return button
 
 func _refresh() -> void:
-	random_pirates_button.text = tr("Disable random pirates: %s") % (tr("On") if disable_random_pirates else tr("Off"))
-	lens_flares_button.text = tr("Lens flares: %s") % (tr("On") if lens_flares_enabled else tr("Off"))
-	pirate_weapons_button.text = tr("Random NPC submarine weapons: %s") % (tr("On") if random_pirate_weapons else tr("Off"))
 	crosshair_button.text = tr("First-person crosshair: %s") % (tr("On") if crosshair_enabled else tr("Off"))
+	cockpit_3d_button.text = tr("3D cockpit: %s") % (tr("On") if cockpit_3d_enabled else tr("Off"))
 	classic_sub_physics_button.text = tr("Classic Sub physics: %s") % (tr("On") if classic_sub_physics else tr("Off"))
-	classic_explosions_button.text = tr("Enable classic explosions: %s") % (tr("On") if classic_explosions else tr("Off"))
-	bubble_button.text = tr("Maximum bubbles: %s") % (tr("Unlimited") if bubble_limit < 0 else tr("Off") if bubble_limit == 0 else str(bubble_limit))
-	fmv_button.text = tr("Play FMVs: %s") % (tr("On") if fmvs_enabled else tr("Off"))
 	replay_button.text = tr("Photo mode replay: %s") % (tr("On") if replay_enabled else tr("Off"))
-	toggle.text = tr("Zapper auto aim: %s") % (tr("On") if zapper_auto_aim else tr("Off"))
-	wildlife_button.text = tr("Active wildlife: %s") % (tr("Unlimited") if wildlife_limit == 0 else str(wildlife_limit))
-	sun_shafts_button.text = tr("Sun shafts: %s") % (tr("On") if sun_shafts_enabled else tr("Off"))
+
+func _toggle_cockpit_3d() -> void:
+	cockpit_3d_enabled = not cockpit_3d_enabled
+	cockpit_3d_changed.emit(cockpit_3d_enabled)
+	_refresh()
+	_save()
 
 func _toggle_crosshair() -> void:
 	crosshair_enabled = not crosshair_enabled
@@ -156,56 +141,60 @@ func _toggle_classic_sub_physics() -> void:
 	classic_sub_physics = not classic_sub_physics
 	_refresh(); classic_sub_physics_changed.emit(classic_sub_physics); _save()
 
-func _toggle_classic_explosions() -> void:
+func _toggle_classic_explosions() -> Error:
 	classic_explosions = not classic_explosions
 	preload("res://mine_explosion.gd").classic_enabled = classic_explosions
-	_refresh(); _save()
+	return _save()
 
-func _toggle_random_pirates() -> void:
+func _toggle_random_pirates() -> Error:
 	disable_random_pirates = not disable_random_pirates
-	_refresh(); random_pirates_changed.emit(disable_random_pirates); _save()
+	random_pirates_changed.emit(disable_random_pirates)
+	return _save()
 
-func _toggle_pirate_weapons() -> void:
+func _toggle_pirate_weapons() -> Error:
 	random_pirate_weapons = not random_pirate_weapons
-	_refresh(); pirate_weapons_changed.emit(random_pirate_weapons); _save()
+	pirate_weapons_changed.emit(random_pirate_weapons)
+	return _save()
 
 func _toggle_replay() -> void:
 	replay_enabled = not replay_enabled
 	_refresh(); replay_changed.emit(replay_enabled); _save()
 
-func _toggle_fmvs() -> void:
+func _toggle_fmvs() -> Error:
 	fmvs_enabled = not fmvs_enabled
-	_refresh(); _save()
+	return _save()
 
-func _toggle_sun_shafts() -> void:
+func _toggle_sun_shafts() -> Error:
 	sun_shafts_enabled = not sun_shafts_enabled
-	_refresh(); sun_shafts_changed.emit(sun_shafts_enabled); _save()
+	sun_shafts_changed.emit(sun_shafts_enabled)
+	return _save()
 
-func _toggle_lens_flares() -> void:
+func _toggle_lens_flares() -> Error:
 	lens_flares_enabled = not lens_flares_enabled
 	preload("res://lens_flare.gd").set_enabled(lens_flares_enabled)
-	_refresh(); _save()
+	return _save()
 
-func _toggle() -> void:
+func _toggle() -> Error:
 	zapper_auto_aim = not zapper_auto_aim
-	_refresh(); auto_aim_changed.emit(zapper_auto_aim)
-	_save()
+	auto_aim_changed.emit(zapper_auto_aim)
+	return _save()
 
-func _cycle_wildlife_limit(step: int = 1) -> void:
+func _cycle_wildlife_limit(step: int = 1) -> Error:
 	wildlife_limit = WILDLIFE_LIMITS[posmod(WILDLIFE_LIMITS.find(wildlife_limit) + step,WILDLIFE_LIMITS.size())]
-	_refresh(); wildlife_limit_changed.emit(wildlife_limit); _save()
+	wildlife_limit_changed.emit(wildlife_limit)
+	return _save()
 
-func _cycle_bubble_limit(step: int = 1) -> void:
-	_set_bubble_limit(BUBBLE_LIMITS[posmod(BUBBLE_LIMITS.find(bubble_limit)+step,BUBBLE_LIMITS.size())])
+func _cycle_bubble_limit(step: int = 1) -> Error:
+	return _set_bubble_limit(BUBBLE_LIMITS[posmod(BUBBLE_LIMITS.find(bubble_limit)+step,BUBBLE_LIMITS.size())])
 
-func _set_bubble_limit(value: int) -> void:
+func _set_bubble_limit(value: int) -> Error:
 	bubble_limit = value if value in BUBBLE_LIMITS else 200
 	preload("res://propeller_bubbles.gd").set_limit(bubble_limit)
-	_refresh(); _save()
+	return _save()
 
-func _save() -> void:
+func _save() -> Error:
 	status.text = ""
-	if not remember_preferences: return
+	if not remember_preferences: return OK
 	var config := ConfigFile.new(); var result := config.load(settings_path)
 	if result == OK or result == ERR_FILE_NOT_FOUND:
 		config.set_value("gameplay","disable_random_pirates",disable_random_pirates)
@@ -219,21 +208,20 @@ func _save() -> void:
 		config.set_value("gameplay","photo_replay",replay_enabled)
 		config.set_value("gameplay","play_fmvs",fmvs_enabled)
 		config.set_value("gameplay","first_person_crosshair",crosshair_enabled)
+		config.set_value("gameplay","cockpit_3d",cockpit_3d_enabled)
 		config.set_value("gameplay","classic_sub_physics",classic_sub_physics)
 		config.set_value("gameplay","classic_explosions",classic_explosions)
 		if config.has_section_key("gameplay","enhanced_explosions"): config.erase_section_key("gameplay","enhanced_explosions")
 		result = Storage.ensure_parent(settings_path)
 		if result == OK: result = config.save(settings_path)
-	if result != OK: status.text = tr("Could not save general settings: %s") % error_string(result)
+	if result != OK: status.text = tr("Could not save settings: %s") % error_string(result)
+	return result
 
 func open_menu() -> void:
 	_refresh()
-	var buttons := option_rows.get_children()
-	buttons.sort_custom(func(a: Button, b: Button) -> bool: return a.text.naturalnocasecmp_to(b.text) < 0)
-	for index in buttons.size(): option_rows.move_child(buttons[index], index)
 	status.text = ""
 	show()
-	buttons[0].grab_focus()
+	classic_sub_physics_button.grab_focus()
 	scroll.scroll_vertical = 0
 
 func close_menu() -> void:
@@ -246,11 +234,12 @@ func _layout() -> void:
 	if available.x <= 0.0 or available.y <= 0.0: return
 	# Account for the project canvas stretch when keeping short windows readable.
 	var pixels_per_unit := maxf(viewport.get_stretch_transform().get_scale().y, 0.001)
-	var factor := minf(available.x / 640.0, maxf(available.y / 480.0, 1.0 / pixels_per_unit))
-	layout.size = Vector2(640.0, minf(480.0, available.y / factor))
+	var list_size := option_rows.get_combined_minimum_size()
+	var full_height := list_size.y + 78.0
+	var factor := minf(available.x / 640.0, maxf(available.y / full_height, 1.0 / pixels_per_unit))
+	layout.size = Vector2(640.0, minf(full_height, available.y / factor))
 	layout.scale = Vector2.ONE * factor
 	layout.position = (available - layout.size * factor) * 0.5
-	var list_size := option_rows.get_combined_minimum_size()
 	var scrollbar_gutter := scroll.get_v_scroll_bar().get_combined_minimum_size().x + scroll.get_theme_constant("scrollbar_h_separation")
 	var list_height := minf(list_size.y, maxf(28.0, layout.size.y - 78.0))
 	scroll.size = Vector2(list_size.x + scrollbar_gutter, list_height)
@@ -266,33 +255,11 @@ func _input(event: InputEvent) -> void:
 		buttons.append(back)
 		var selected := buttons.find(get_viewport().gui_get_focus_owner())
 		buttons[posmod(selected + (-1 if Bindings.pressed(event,"menu_up") else 1),buttons.size())].grab_focus()
-	elif toggle.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle()
-	elif classic_sub_physics_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_classic_sub_physics()
-	elif classic_explosions_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_classic_explosions()
-	elif wildlife_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")):
-		_cycle_wildlife_limit(-1 if Bindings.pressed(event,"menu_left") else 1)
-	elif sun_shafts_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_sun_shafts()
-	elif lens_flares_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_lens_flares()
-	elif replay_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_replay()
-	elif bubble_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")):
-		_cycle_bubble_limit(-1 if Bindings.pressed(event,"menu_left") else 1)
-	elif crosshair_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_crosshair()
-	elif pirate_weapons_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_pirate_weapons()
-	elif random_pirates_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_random_pirates()
-	elif fmv_button.has_focus() and (Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")): _toggle_fmvs()
-	elif Bindings.pressed(event,"menu_accept"):
-		if toggle.has_focus(): _toggle()
-		elif classic_sub_physics_button.has_focus(): _toggle_classic_sub_physics()
-		elif classic_explosions_button.has_focus(): _toggle_classic_explosions()
-		elif wildlife_button.has_focus(): _cycle_wildlife_limit()
-		elif sun_shafts_button.has_focus(): _toggle_sun_shafts()
-		elif lens_flares_button.has_focus(): _toggle_lens_flares()
-		elif replay_button.has_focus(): _toggle_replay()
-		elif fmv_button.has_focus(): _toggle_fmvs()
-		elif bubble_button.has_focus(): _cycle_bubble_limit()
-		elif crosshair_button.has_focus(): _toggle_crosshair()
-		elif pirate_weapons_button.has_focus(): _toggle_pirate_weapons()
-		elif random_pirates_button.has_focus(): _toggle_random_pirates()
-		elif back.has_focus(): close_menu()
-	else: return
+	else:
+		var focused := get_viewport().gui_get_focus_owner() as Button
+		var accept := Bindings.pressed(event,"menu_accept")
+		var adjust := Bindings.pressed(event,"menu_left") or Bindings.pressed(event,"menu_right")
+		if focused == back and accept: close_menu()
+		elif focused != null and focused.get_parent() == option_rows and (accept or adjust): focused.pressed.emit()
+		else: return
 	get_viewport().set_input_as_handled()

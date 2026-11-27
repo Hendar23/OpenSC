@@ -1,5 +1,6 @@
 extends RigidBody3D
 signal health_changed(remaining: float, capacity: float)
+signal hull_damaged(loss: float, capacity: float, collision: bool)
 signal destroyed
 var max_health := 100.0
 var health := 100.0
@@ -23,12 +24,13 @@ func restore_health(capacity: float = 100.0, remaining: float = 100.0) -> void:
 	dead = health <= 0.0
 	health_changed.emit(health,max_health)
 
-func take_damage(amount: float, _source: Vector3 = Vector3.ZERO, feedback: bool = true) -> void:
+func take_damage(amount: float, _source: Vector3 = Vector3.ZERO, feedback: bool = true, collision: bool = false) -> void:
 	if dead or not active or not controls_enabled or not is_finite(amount) or amount <= 0.0: return
 	var loss := minf(health,amount * Damage.sustain(hull_rating) / Damage.BASE_SUSTAIN)
 	health -= loss
 	if feedback and health > 0.0 and impact_rumble != null: impact_rumble.damage(loss,max_health)
 	health_changed.emit(health,max_health)
+	if loss > 0.0 and health > 0.0: hull_damaged.emit(loss,max_health,collision)
 	if health <= 0.0:
 		fatal_momentum = velocity
 		dead = true; controls_enabled = false; active = false
@@ -78,6 +80,7 @@ var active := false:
 		if is_inside_tree(): reset_physics_interpolation()
 		if not value and impact_rumble != null: impact_rumble.stop()
 var controls_enabled := true
+var freelook_device := -1
 var remote_controlled := false
 var visual: Node3D
 var damage_smoke: Node3D
@@ -267,7 +270,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		previous_velocity = Vector3.ZERO
 	var impact := _contact_impact(state)
 	var impact_speed: float = impact.speed
-	var controls := Controls.read() if controls_enabled and not remote_controlled and not get_meta("diplomat_system_failure",false) else Vector4.ZERO
+	var controls := Controls.read(freelook_device) if controls_enabled and not remote_controlled and not get_meta("diplomat_system_failure",false) else Vector4.ZERO
 	movement.velocity = state.linear_velocity
 	movement.angular_velocity = state.angular_velocity
 	movement.step(state.step, state.transform.basis, controls.x, controls.y, controls.z, controls.w)
@@ -311,7 +314,7 @@ func impact_damage(speed: float, inflict: float = -1.0) -> float:
 	return damage * float(movement.settings.impact_damage_scale)
 
 func apply_impact_damage(speed: float, inflict: float = -1.0) -> void:
-	take_damage(impact_damage(speed,inflict),Vector3.ZERO,false)
+	take_damage(impact_damage(speed,inflict),Vector3.ZERO,false,true)
 
 func receive_explosion(source: Vector3, damage: float, impulse: float) -> void:
 	if not active or not controls_enabled: return
@@ -359,7 +362,7 @@ func _contact_impact(state: PhysicsDirectBodyState3D) -> Dictionary:
 		if body != null and body.has_method("receive_sub_push"):
 			if body.has_method("submarine_contact_damage") and not old_rumble_normals.any(func(old: Vector3) -> bool: return old.dot(rumble_normal) > 0.9):
 				var contact_damage: float = body.submarine_contact_damage(previous_velocity,rumble_normal)
-				if contact_damage > 0: take_damage.call_deferred(contact_damage,body.global_position)
+				if contact_damage > 0: take_damage.call_deferred(contact_damage,body.global_position,true,true)
 			body.call_deferred("receive_sub_push",previous_velocity if previous_velocity.length_squared() > state.linear_velocity.length_squared() else state.linear_velocity,collision_height() * 0.5)
 			continue
 		var collider := state.get_contact_collider_id(index)

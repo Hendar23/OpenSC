@@ -32,7 +32,10 @@ func enter(controller: int = -1) -> bool:
 	view.fov = source.fov; view.near = source.near; view.far = source.far
 	view.keep_aspect = source.keep_aspect; view.environment = source.environment; view.attributes = source.attributes
 	# Include the player's hull/ROV, but never camera-local canopy geometry.
-	view.cull_mask = (source.cull_mask | game.SUB_RENDER_LAYER | preload("res://remote_vehicle.gd").RENDER_LAYER) & ~preload("res://first_person_cockpit.gd").RENDER_LAYER
+	var cockpit: Node3D = game.perspex_cockpit
+	var scene_mask: int = cockpit.scene_mask() if is_instance_valid(cockpit) and source == game.camera else source.cull_mask
+	if is_instance_valid(cockpit): cockpit.stop()
+	view.cull_mask = (scene_mask | game.SUB_RENDER_LAYER | preload("res://remote_vehicle.gd").RENDER_LAYER) & ~preload("res://first_person_cockpit.gd").RENDER_LAYER
 	var angles := view.global_basis.get_euler(); yaw = angles.y; pitch = clampf(angles.x,-PI*0.495,PI*0.495)
 	device = controller; mouse_mode = Input.mouse_mode; saved.clear()
 	game.game_runtime._update_night_vision()
@@ -80,7 +83,7 @@ func leave() -> void:
 		if node is CanvasLayer: node.visible = entry.visible
 	saved.clear(); get_tree().paused = false; Input.mouse_mode = mouse_mode
 	if is_instance_valid(game.pilot) and game.pilot.is_inside_tree():
-		if is_instance_valid(game.first_person_cockpit): game.first_person_cockpit.refresh()
+		if is_instance_valid(game.perspex_cockpit): game.perspex_cockpit.refresh()
 		game._update_daylight()
 		game.game_runtime._update_night_vision()
 

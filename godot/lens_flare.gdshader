@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode unshaded, blend_add, cull_disabled, depth_draw_never, depth_test_disabled, fog_disabled;
+render_mode unshaded, blend_premul_alpha, cull_disabled, depth_draw_never, depth_test_disabled, fog_disabled;
 
 #include "res://water_waves.gdshaderinc"
 global uniform float osc_natural_surface;
@@ -117,7 +117,9 @@ void fragment() {
    p = (clip.xy/max(clip.w,0.001)*0.5+0.5-source_uv)*aspect;
   }
  }
- ALPHA = clamp(brightness*visibility*unobstructed,0.0,1.0);
+ float intensity = clamp(brightness*visibility*unobstructed,0.0,1.0);
+ // Emit light without replacing the scene behind the flare's screen quad.
+ ALPHA = 0.0;
  if (lunar) {
   vec2 disc_position = p/0.013;
   float radius = length(disc_position);
@@ -127,7 +129,7 @@ void fragment() {
   vec2 basin = (disc_position-vec2(0.37,-0.21))*vec2(1.4,1.0);
   float surface_detail = 1.0-0.24*exp(-6.0*dot(sea,sea))-0.18*exp(-8.0*dot(basin,basin));
   float halo = exp(-radius*radius*0.30)*0.065;
-  ALBEDO = mix(flare_color,vec3(1.0),0.65)*(disc*surface_detail+halo);
+  ALBEDO = mix(flare_color,vec3(1.0),0.65)*(disc*surface_detail+halo)*intensity;
  } else {
   float scale = clamp(diameter,0.8,1.4);
   p /= scale;
@@ -147,6 +149,6 @@ void fragment() {
   // The solar aperture is already a bright, tonemapped sky. Squaring its
   // faint optical reflections again erased their daytime contrast in Forward+.
   // Keep the accepted local-lamp treatment; solar optics add linear radiance.
-  ALBEDO = OUTPUT_IS_SRGB ? optics : (solar ? optics*0.65 : pow(max(optics,vec3(0.0)),vec3(2.2)));
+  ALBEDO = (OUTPUT_IS_SRGB ? optics : (solar ? optics*0.65 : pow(max(optics,vec3(0.0)),vec3(2.2))))*intensity;
  }
 }

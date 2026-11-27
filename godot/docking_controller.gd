@@ -18,6 +18,7 @@ var pilot: RigidBody3D
 var ports: Array[Dictionary] = []
 var nearby: Dictionary = {}
 var current: Dictionary = {}
+var departing_port: Dictionary = {}
 var launch_pending := false
 var elapsed := 0.0
 var saved_collision_mask := 13
@@ -114,10 +115,12 @@ static func approach_basis(pose: Basis, position: Vector3, destination: Vector3)
 	if Vector2(offset.x, offset.z).length() < 0.0001: return upright_basis(pose)
 	return Basis(Vector3.UP, atan2(-offset.x, -offset.z))
 
-func update_approach() -> void:
+func update_approach(include_departing_port: bool = false) -> void:
 	if stage != Stage.IDLE: return
 	_update_greeting()
 	nearby = {}
+	if not departing_port.is_empty() and pilot.global_position.distance_to(departing_port.entry) >= approach_radius:
+		departing_port = {}
 	# Retail 0044c610 only offers docking with no attached cargo
 	# (DAT_0089a41c, shared by MAGNET and TOW).
 	if towing_cargo():
@@ -126,6 +129,7 @@ func update_approach() -> void:
 	var nearest := approach_radius
 	for port in ports:
 		if Access.disabled(port): continue
+		if not include_departing_port and port == departing_port: continue
 		var distance: float = pilot.global_position.distance_to(port.entry)
 		if distance < nearest:
 			nearest = distance
@@ -205,7 +209,7 @@ func request_docking() -> bool:
 		_transition(Stage.EXIT_OPEN)
 		return true
 	if stage != Stage.IDLE: return false
-	update_approach()
+	update_approach(true)
 	if nearby.is_empty() or pilot.velocity.length() > maximum_docking_speed(): return false
 	current = nearby
 	_prepare_transit_settings()
@@ -393,6 +397,8 @@ func _physics_process(delta: float) -> void:
 			current.collision.collision_layer = 1
 			_restore_pilot()
 			Access.release(current,self)
+			# A departure is not a fresh approach to the same dock.
+			departing_port = current
 			_transition(Stage.IDLE)
 			current = {}
 			update_approach()
@@ -451,6 +457,7 @@ func _restore_pilot() -> void:
 
 func cancel() -> void:
 	launch_pending = false
+	departing_port = {}
 	if audio != null: audio.stop()
 	if stage == Stage.IDLE: return
 	if Access.owner(current) == self:

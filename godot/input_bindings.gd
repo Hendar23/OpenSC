@@ -158,10 +158,13 @@ static func pressed(event: InputEvent, action: String) -> bool:
 		if not event.is_action_pressed(action,true): return false
 		return bool(axis_edges.get(1 if event.axis_value > 0 else -1,false))
 	return event.is_action_pressed(action,true)
-static func strength(action: String) -> float:
+static func strength(action: String, freelook_device: int = -1) -> float:
 	if capture_active: return 0.0
+	var slots: Array = bindings.get(action, [])
+	if freelook_device >= 0 and slots.any(_is_right_stick_axis):
+		return _strength_without_look_stick(action, slots, freelook_device)
 	var value := Input.get_action_strength(action)
-	for binding in bindings.get(action,[]):
+	for binding in slots:
 		if binding == null or binding.kind != "button": continue
 		for device in Input.get_connected_joypads():
 			if binding.modifier >= 0:
@@ -179,6 +182,37 @@ static func strength(action: String) -> float:
 						elif other.kind == "axis":
 							var deadzone := InputMap.action_get_deadzone(action)
 							value = maxf(value,clampf((Input.get_joy_axis(device,other.axis) * other.sign - deadzone) / (1.0 - deadzone),0.0,1.0))
+	return value
+
+static func _is_right_stick_axis(binding: Variant) -> bool:
+	return binding != null and binding.kind == "axis" and binding.axis in [JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y]
+
+static func _strength_without_look_stick(action: String, slots: Array, freelook_device: int) -> float:
+	var value := 0.0
+	var deadzone := InputMap.action_get_deadzone(action)
+	for binding in slots:
+		if binding == null: continue
+		match binding.kind:
+			"key":
+				var held: bool = Input.is_physical_key_pressed(binding.code) if binding.physical else Input.is_key_pressed(binding.code)
+				if held and (not binding.ctrl or Input.is_key_pressed(KEY_CTRL)) and (not binding.alt or Input.is_key_pressed(KEY_ALT)) and (not binding.shift or Input.is_key_pressed(KEY_SHIFT)) and (not binding.meta or Input.is_key_pressed(KEY_META)): return 1.0
+			"mouse":
+				if Input.is_mouse_button_pressed(binding.button): return 1.0
+			"button":
+				for device in Input.get_connected_joypads():
+					if not button_held(device, binding.button): continue
+					if binding.modifier >= 0:
+						if button_held(device, binding.modifier): return 1.0
+					else:
+						var event := InputEventJoypadButton.new()
+						event.device = device
+						event.button_index = binding.button
+						if not claimed_by_chord(event): return 1.0
+			"axis":
+				for device in Input.get_connected_joypads():
+					if device == freelook_device and _is_right_stick_axis(binding): continue
+					var raw := Input.get_joy_axis(device, binding.axis) * float(binding.sign)
+					value = maxf(value, clampf((raw - deadzone) / (1.0 - deadzone), 0.0, 1.0))
 	return value
 static func describe(value: Variant) -> String:
 	if value == null: return TranslationServer.translate("Unbound")

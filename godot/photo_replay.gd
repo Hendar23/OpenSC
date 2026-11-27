@@ -2,6 +2,7 @@ extends Node3D
 ## Thirty-second visual/audio recording. Playback never runs gameplay controllers.
 const Visual = preload("res://replay_visual.gd")
 const Wake = preload("res://replay_wake.gd")
+const COCKPIT_RENDER_LAYER := preload("res://first_person_cockpit.gd").RENDER_LAYER
 const INTERVAL := 0.05
 const DURATION := 30.0
 var game: Node
@@ -117,6 +118,8 @@ func _dynamic(node: Node) -> bool:
 	return dynamic
 
 func _register(node: Node3D) -> void:
+	# The photo camera masks out cockpit-only geometry during playback.
+	if node is VisualInstance3D and node.layers == COCKPIT_RENDER_LAYER: return
 	if not node.is_inside_tree() or node.get_script() == preload("res://water_particles.gd") or not _dynamic(node): return
 	var id := node.get_instance_id()
 	# Constructors and streamed shoals can be incomplete when node_added fires.

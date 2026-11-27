@@ -53,8 +53,9 @@ func _lined_up() -> bool:
 		reach = Arsenal.RIPPER_RANGE if id == "ripper" else game.camera.far if id == "electro" else Projectile.powered_range(id)
 		if id != "ripper": mask = 15
 	else: return false
-	var camera_origin: Vector3 = game.camera.global_position
-	var camera_forward: Vector3 = -game.camera.global_basis.z
+	var aim: Transform3D = game.game_camera.aim_pose()
+	var camera_origin := aim.origin
+	var camera_forward := -aim.basis.z
 	var query := PhysicsRayQueryParameters3D.create(camera_origin,camera_origin + camera_forward * (reach + camera_origin.distance_to(origin)),mask,[game.pilot.get_rid()])
 	query.hit_back_faces = true; query.hit_from_inside = true
 	var space := game.get_world_3d().direct_space_state
@@ -74,6 +75,15 @@ static func _damageable(body: Node3D) -> bool:
 func _draw() -> void:
 	var factor := maxf(1.0,get_viewport_rect().size.y / 720.0)
 	var center := (get_viewport_rect().size * 0.5).round()
+	if game.game_camera.uses_perspex():
+		var point := aim_screen_position()
+		if not point.is_finite() or not get_viewport_rect().has_point(point): return
+		center = point.round()
 	var tint := RED if on_target else GREEN
 	for direction in [Vector2.LEFT,Vector2.RIGHT,Vector2.UP,Vector2.DOWN]:
 		draw_line(center + direction * 3.0 * factor,center + direction * 7.0 * factor,tint,1.2 * factor,true)
+
+func aim_screen_position() -> Vector2:
+	var aim: Transform3D = game.game_camera.aim_pose()
+	var target := aim.origin - aim.basis.z * 20.0
+	return Vector2.INF if game.camera.is_position_behind(target) else game.camera.unproject_position(target)

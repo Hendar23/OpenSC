@@ -364,6 +364,9 @@ msgstr "Stock de la ville : %d"
 msgid "Classic Sub physics: %s"
 msgstr "Physique classique : %s"
 
+msgid "Classic size"
+msgstr "Taille classique"
+
 msgid "Cleaning asset cache"
 msgstr "Nettoyage du cache des ressources"
 
@@ -721,6 +724,9 @@ msgstr "Tirer"
 msgid "First-person crosshair: %s"
 msgstr "Réticule en vue subjective : %s"
 
+msgid "3D cockpit: %s"
+msgstr "Cockpit 3D : %s"
+
 msgid "Fish zapper volume"
 msgstr "Volume du Zapper sur les poissons"
 
@@ -729,6 +735,9 @@ msgstr "Particules en suspension"
 
 msgid "Fog build-up curve: %.1f"
 msgstr "Courbe de densité du brouillard : %.1f"
+
+msgid "FMV size"
+msgstr "Taille des cinématiques"
 
 msgid "Fog distance"
 msgstr "Distance du brouillard"
@@ -2016,3 +2025,60 @@ msgstr "Fichiers vidéo de remplacement détectés"
 
 msgid "Some cutscenes in this folder contain only a single frame. OpenSC will skip those cutscenes. To play them, choose a Sub Culture folder that contains the full video files."
 msgstr "Certaines cinématiques de ce dossier ne contiennent qu’une seule image. OpenSC ignorera ces cinématiques. Pour les regarder, choisissez un dossier de Sub Culture contenant les vidéos complètes."
+
+msgid "Install update"
+msgstr "Installer la mise à jour"
+
+msgid "OpenSC v%s is available. Install it and restart the game?"
+msgstr "OpenSC v%s est disponible. Installer la mise à jour et redémarrer le jeu ?"
+
+msgid "Downloading and verifying the update..."
+msgstr "Téléchargement et vérification de la mise à jour…"
+
+msgid "The update could not be downloaded, verified, or started. You can open the release page or continue playing."
+msgstr "Impossible de télécharger, de vérifier ou de lancer la mise à jour. Vous pouvez ouvrir la page de la version ou continuer à jouer."
+
+msgid "Open release page"
+msgstr "Ouvrir la page de la version"
+
+msgid "Display"
+msgstr "Affichage"
+
+msgid "Gameplay"
+msgstr "Jouabilité"
+
+msgid "Difficulty"
+msgstr "Difficulté"
+
+msgid "Setup"
+msgstr "Configuration"
+
+msgid "Play FMVs"
+msgstr "Lire les cinématiques"
+
+msgid "Sun shafts"
+msgstr "Rayons du soleil"
+
+msgid "Lens flares"
+msgstr "Reflets de lentille"
+
+msgid "Classic explosions"
+msgstr "Explosions classiques"
+
+msgid "Maximum bubbles"
+msgstr "Nombre maximal de bulles"
+
+msgid "Active wildlife"
+msgstr "Faune active"
+
+msgid "Disable random pirates"
+msgstr "Désactiver les pirates aléatoires"
+
+msgid "Random NPC submarine weapons"
+msgstr "Armes aléatoires des sous-marins PNJ"
+
+msgid "Zapper auto aim"
+msgstr "Visée automatique du Zapper"
+
+msgid "Could not save settings: %s"
+msgstr "Impossible d’enregistrer les réglages : %s"

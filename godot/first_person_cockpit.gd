@@ -3,22 +3,24 @@ extends Node3D
 const RENDER_LAYER := 1 << 19
 const Mods = preload("res://mod_registry.gd")
 const Modern = preload("res://modern_model.gd")
-const CONTROLS := [
-	["scratch_count","Scratch count",0.0,12.0,1.0],
-	["scratch_strength","Scratch brightness",0.0,2.0,0.01],
-	["scratch_length","Scratch length",0.01,0.3,0.005],
-	["scratch_width","Scratch width",0.0002,0.004,0.0001],
-	["reflection_strength","Reflection strength",0.0,2.0,0.01],
-	["inner_reflection_mix","Inner reflection",0.0,1.0,0.01],
-	["roughness_value","Glass roughness",0.05,0.8,0.01],
-	["grime_strength","Dirt and smudges",0.0,2.0,0.01],
-	["refraction_strength","Curved-edge distortion",0.0,2.0,0.01],
-	["edge_tint","Edge tint",0.0,2.0,0.01],
-	["tint_red","Glass red",0.0,1.0,0.01],
-	["tint_green","Glass green",0.0,1.0,0.01],
-	["tint_blue","Glass blue",0.0,1.0,0.01],
-	["reflection_resolution","Reflection resolution",64.0,512.0,64.0],
-	["reflection_range","Reflection distance",5.0,100.0,1.0]]
+# Each entry holds the minimum, maximum and import increment.
+const SETTING_LIMITS := {
+	"scratch_count": [0.0,12.0,1.0],
+	"scratch_strength": [0.0,2.0,0.01],
+	"scratch_length": [0.01,0.3,0.005],
+	"scratch_width": [0.0002,0.004,0.0001],
+	"reflection_strength": [0.0,2.0,0.01],
+	"inner_reflection_mix": [0.0,1.0,0.01],
+	"roughness_value": [0.05,0.8,0.01],
+	"grime_strength": [0.0,2.0,0.01],
+	"refraction_strength": [0.0,2.0,0.01],
+	"edge_tint": [0.0,2.0,0.01],
+	"tint_red": [0.0,1.0,0.01],
+	"tint_green": [0.0,1.0,0.01],
+	"tint_blue": [0.0,1.0,0.01],
+	"reflection_resolution": [64.0,512.0,64.0],
+	"reflection_range": [5.0,100.0,1.0],
+}
 const DEFAULTS := {"scratch_count":4.0,"scratch_strength":0.4,"scratch_length":0.12,"scratch_width":0.0008,"reflection_strength":0.4,"inner_reflection_mix":0.75,"roughness_value":0.14,"grime_strength":0.08,"refraction_strength":0.0,"edge_tint":0.025,"tint_red":0.82,"tint_green":0.94,"tint_blue":0.96,"reflection_resolution":256.0,"reflection_range":40.0}
 var game: Node
 var model: Node3D
@@ -69,9 +71,10 @@ func setup(context: Node) -> void:
 		game.natural_light.attach(model)
 		var preferences := ConfigFile.new()
 		if preferences.load(preload("res://current_settings.gd").path("view_defaults.cfg",game.defaults_directory)) == OK:
-			for row in CONTROLS:
-				var saved: Variant = preferences.get_value("view","canopy/" + pack_id + "/" + row[0],settings[row[0]])
-				if (saved is float or saved is int) and is_finite(float(saved)): settings[row[0]] = clampf(float(saved),row[2],row[3])
+			for key in SETTING_LIMITS:
+				var limits: Array = SETTING_LIMITS[key]
+				var saved: Variant = preferences.get_value("view","canopy/" + pack_id + "/" + key,settings[key])
+				if (saved is float or saved is int) and is_finite(float(saved)): settings[key] = clampf(float(saved),limits[0],limits[1])
 		if not glass_materials.is_empty():
 			reflections = preload("res://canopy_reflections.gd").new(); add_child(reflections)
 			reflections.setup(get_world_3d(),glass_materials,game.camera)
@@ -81,9 +84,10 @@ func setup(context: Node) -> void:
 	refresh()
 
 func set_setting(key: String, value: float) -> void:
-	for row in CONTROLS:
-		if row[0] != key: continue
-		settings[key] = snappedf(clampf(value,row[2],row[3]),row[4]); _apply_settings(); return
+	if not SETTING_LIMITS.has(key): return
+	var limits: Array = SETTING_LIMITS[key]
+	settings[key] = snappedf(clampf(value,limits[0],limits[1]),limits[2])
+	_apply_settings()
 
 func persist_settings() -> Error:
 	return game._save_preferences()

@@ -5,7 +5,9 @@ const MIN_CONTRAST := 50.0
 const MAX_CONTRAST := 150.0
 const MIN_FOG_DISTANCE := 20.0
 const MAX_FOG_DISTANCE := 100.0
-const DEFAULTS := {"display_mode":0,"resolution":Vector2i.ZERO,"limit_resolutions":false,"vsync":true,"frame_limit":0,"anti_aliasing":0,"shadows":2,"reflective_canopies":true,"brightness":100.0,"contrast":100.0,"fog_distance":MAX_FOG_DISTANCE}
+const CLASSIC_FMV_SIZE := 0
+const FMV_SIZES := [CLASSIC_FMV_SIZE,25,50,75,100]
+const DEFAULTS := {"display_mode":0,"resolution":Vector2i.ZERO,"limit_resolutions":false,"vsync":true,"frame_limit":0,"anti_aliasing":0,"shadows":2,"reflective_canopies":true,"brightness":100.0,"contrast":100.0,"fog_distance":MAX_FOG_DISTANCE,"fmv_size":CLASSIC_FMV_SIZE}
 const FRAME_LIMITS := [0,30,60,90,120,144,165,240]
 const RESOLUTIONS := [
 	Vector2i(1280,720),Vector2i(1600,900),Vector2i(1920,1080),Vector2i(1920,1200),
@@ -84,6 +86,7 @@ func _validate() -> void:
 	settings.vsync = bool(settings.vsync)
 	settings.limit_resolutions = bool(settings.limit_resolutions)
 	if int(settings.frame_limit) not in FRAME_LIMITS: settings.frame_limit = 0
+	if settings.fmv_size not in FMV_SIZES: settings.fmv_size = CLASSIC_FMV_SIZE
 	if not settings.resolution is Vector2i: settings.resolution = desktop_size()
 	settings.resolution = settings.resolution.clamp(Vector2i(1050,600),RESOLUTIONS.back().max(desktop_size()))
 	if settings.limit_resolutions: settings.resolution = settings.resolution.min(desktop_size())

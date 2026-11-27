@@ -49,7 +49,8 @@ static func offer(catalogue: Dictionary, city_id: String, stage: int, id: String
 			"quantity": 1,
 			"maximum": 1,
 			"slot": SLOTS[id],
-			"square_bitmap": "res://game_assets/ui/night_vision_dock.png"
+			"square_bitmap": "res://game_assets/ui/night_vision_dock.png",
+			"info_bitmap": "res://game_assets/ui/night_vision_info.png"
 		}
 	var source_id := "lights" if id == "deep_sea_lights" else id
 	var tables: Dictionary = catalogue.get("tables",{})

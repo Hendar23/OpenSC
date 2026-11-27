@@ -66,6 +66,9 @@ func _start_game(folder: String) -> void:
 		game.docking.free()
 		game.docking = null
 	if game.pilot != null: game.pilot.active = false
+	if is_instance_valid(game.perspex_cockpit):
+		game.perspex_cockpit.free()
+		game.perspex_cockpit = null
 	if game.cockpit_hud != null:
 		game.cockpit_hud.free()
 		game.cockpit_hud = null
@@ -187,6 +190,7 @@ func _setup_vehicle(folder: String) -> void:
 		game.pilot.remember_settings = game.remember_preferences
 		game.add_child(game.pilot)
 		game.pilot.health_changed.connect(game._submarine_health_changed)
+		game.pilot.hull_damaged.connect(game.game_camera.shake_on_damage)
 		game.pilot.destroyed.connect(game._submarine_destroyed)
 	else: game.pilot.movement.load_settings(false,"",preload("res://current_settings.gd").path("submarine_tuning.cfg",game.defaults_directory))
 	game.pilot.movement.classic_sub_physics = game.front_end.gameplay_menu.classic_sub_physics
@@ -255,8 +259,9 @@ func _setup_vehicle(folder: String) -> void:
 	game.cockpit_hud.map_data.landmarks.setup(game.gameplay_catalogue)
 	game.cockpit_hud.setup_lighting(game.water_environment,game.sun)
 	game.cockpit_hud.natural_light = game.natural_light
-	if is_instance_valid(game.first_person_cockpit): game.first_person_cockpit.free()
-	game.first_person_cockpit = preload("res://first_person_cockpit.gd").new(); game.camera.add_child(game.first_person_cockpit); game.first_person_cockpit.setup(game)
+	game.perspex_cockpit = preload("res://perspex_cockpit.gd").new()
+	game.pilot.add_child(game.perspex_cockpit)
+	game.perspex_cockpit.setup(game, folder)
 	game._build_expanded_map()
 	game._update_hud_settings()
 	for index in range(5):

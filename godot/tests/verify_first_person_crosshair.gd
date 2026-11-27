@@ -16,7 +16,7 @@ func check(ok: bool, caption: String) -> void:
 
 func _initialize() -> void:
 	var storage = preload("res://player_storage.gd")
-	storage.root_override = "user://crosshair-fixture-" + str(OS.get_process_id())
+	storage.root_override = test_fixture_path("first-person-crosshair")
 	storage.ensure_parent(storage.preferences_path())
 	var config := ConfigFile.new()
 	config.set_value("game","folder",OS.get_environment("OPENSC_TEST_GAME_FOLDER"))

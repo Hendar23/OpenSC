@@ -54,6 +54,7 @@ func _run() -> void:
 	check(game.startup_complete,"Game loads")
 	if not game.startup_complete: quit(1); return
 	game.front_end.gameplay_menu.fmvs_enabled = false
+	game.front_end.gameplay_menu.cockpit_3d_enabled = false
 	await game._begin_new_game()
 	if native:
 		root.mode = Window.MODE_WINDOWED; root.size = Vector2i(1280,720)
@@ -86,6 +87,11 @@ func _run() -> void:
 	var key := InputEventKey.new(); key.pressed = true; key.keycode = KEY_V
 	game._unhandled_input(key)
 	check(not game.first_person and game.camera.cull_mask & Game.SUB_RENDER_LAYER != 0,"Keyboard V restores third person and the visible sub")
+	game.equipment.set_installed(["deep_sea_lights", "night_vision", "magnet", "escape"])
+	game.equipment.cycle(-1)
+	game.equipment.toggle_selected()
+	check(game.equipment.support_tools.pod_enabled,"Escape Pod is deployed before docking")
+	game.equipment.cycle(1)
 	game.pilot.global_basis = Basis.IDENTITY
 	game.pilot.global_position = game.docking.ports[0].entry; game.pilot.velocity = Vector3.ZERO
 	game.pilot.angular_velocity = Vector3.ZERO; game.pilot.reset_physics_interpolation()
@@ -93,12 +99,13 @@ func _run() -> void:
 	game._set_camera_mode(true)
 	game._request_docking()
 	check(game.docking.stage == game.Docking.Stage.ALIGN and cockpit_follows_pilot(game,true),"Docking begins in the selected cockpit view")
+	game.equipment.support_tools._physics_process(0.04)
+	check(not game.equipment.support_tools.pod_enabled and not game.equipment.mounted[3].enabled,"Docking recalls the Escape Pod and clears its equipment state")
 	check(not game.first_person_crosshair._enabled(),"Weapons crosshair is hidden during automatic docking")
 	game._unhandled_input(button)
 	check(not game.first_person and game.docking.cinematic_camera.is_equal_approx(game.camera.global_position),"Controller Y selects the fixed exterior camera during docking")
 	game._unhandled_input(key)
 	check(cockpit_follows_pilot(game,true) and game.docking.stage == game.Docking.Stage.ALIGN,"Keyboard V restores cockpit view without interrupting docking")
-	game.equipment.set_installed(["deep_sea_lights", "night_vision", "magnet"])
 	var toggle_key := InputEventKey.new(); toggle_key.pressed = true; toggle_key.keycode = KEY_L
 	root.push_input(toggle_key)
 	check(not game.equipment.lamp.visible,"L turns off the Deep-Sea Lights during docking")
@@ -134,6 +141,13 @@ func _run() -> void:
 	check(game.docking.stage == game.Docking.Stage.DOCKED and game.dock_interface.visible and game.game_dock.view.active,"Docking still opens the city interface with its live exterior view")
 	game._dock_ui_action("launch",{})
 	check(game.docking.stage == game.Docking.Stage.EXIT_OPEN and cockpit_follows_pilot(game,true),"Undocking begins in the selected cockpit view")
+	root.push_input(toggle_button)
+	check(game.equipment.current().enabled and game.equipment.magnet.enabled,"First B press deploys the magnet immediately at launch, before another physics tick")
+	root.push_input(toggle_button)
+	root.push_input(next_equipment)
+	root.push_input(toggle_key)
+	check(game.equipment.current().enabled and game.equipment.support_tools.pod_enabled,"First L press redeploys the Escape Pod after docking")
+	root.push_input(toggle_key)
 	root.push_input(next_equipment)
 	root.push_input(toggle_button)
 	check(not game.equipment.lamp.visible,"Controller B turns off the Deep-Sea Lights during launch")
@@ -155,6 +169,17 @@ func _run() -> void:
 		launch_follows = launch_follows and cockpit_follows_pilot(game)
 		if game.docking.stage == game.Docking.Stage.IDLE: break
 	check(launch_follows and game.docking.stage == game.Docking.Stage.IDLE,"Cockpit view follows launch and remains selected when piloting resumes")
+	root.push_input(toggle_button)
+	game._process(0)
+	check(game.front_end.player_graphics.night_vision,"First B press after undocking switches on Night Vision at the departing port")
+	var departure_position: Vector3 = game.pilot.global_position
+	game.pilot.global_position += Vector3.UP * (game.docking.approach_radius + 1.0)
+	game.docking.update_approach()
+	game.pilot.global_position = departure_position
+	game.docking.update_approach()
+	check(not game.docking.nearby.is_empty(),"Returning to the port offers docking again")
+	root.push_input(toggle_button)
+	check(game.equipment.night_vision_enabled() and game.docking.nearby.is_empty(),"B still declines a new docking offer without changing equipment")
 	game.queue_free(); await process_frame
 	print("Cockpit camera and exploration: %d checks, %d failures" % [checks,failures])
 	quit(1 if failures else 0)

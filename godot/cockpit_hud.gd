@@ -5,6 +5,15 @@ const Modern = preload("res://modern_model.gd")
 const Mods = preload("res://mod_registry.gd")
 const Display = preload("res://hud_display.gd")
 const Map = preload("res://hud_map.gd")
+const HUD_WIDTH := 641.0
+const HUD_REFERENCE_SIZE := Vector2(1280.0, 720.0)
+const MODEL_PIXELS_PER_UNIT := 3
+const MOUNT_DEPTH := 0.075
+const MOUNT_REFERENCE_FOV := 75.0
+const MOUNT_UNITS_PER_PIXEL := 2.0 * MOUNT_DEPTH * tan(deg_to_rad(MOUNT_REFERENCE_FOV) * 0.5) / HUD_REFERENCE_SIZE.y
+const INSTRUMENT_TILT := deg_to_rad(24.0)
+const INSTRUMENT_SCALE := 0.96
+const INSTRUMENT_TOP_MARGIN := 4.0
 const DEFINITIONS := [
 	{"id": "tilt", "frame": "ATTITUDE", "mask": "MATTITUD", "size": Vector2(94,100), "screen": Rect2(17,37,48,48)},
 	{"id": "equipment", "frame": "TOOLS", "mask": "MTOOLS", "size": Vector2(130,94), "screen": Rect2(42,18,68,48)},
@@ -19,6 +28,9 @@ var model_views: Array[SubViewport] = []
 var slide_tweens: Array[Tween] = [null,null,null,null,null]
 var map_data := Map.new()
 var holder: Control
+var mounted_root: Node3D
+var mounted_panels: Array[Node3D] = []
+var mounted_sprites: Array[SubViewport] = []
 var map_zoom := 2.0:
 	set(value):
 		map_zoom = clampf(value,0.5,4.0)
@@ -71,6 +83,7 @@ func _update_instrument_lighting(delta: float) -> void:
 	var cave_ambient: float = float(natural_light.settings.cave_ambient) * (1.0 - natural) if natural_light != null else 0.0
 	ambient += Color(0.75,0.8,0.88) * cave_ambient
 	var illumination := ambient + sunlight.light_color * direct * 0.55
+	var instrument_light_basis := pilot.global_basis.inverse() * sunlight.global_basis
 	var casing := Color(clampf(illumination.r,0.0,1.0),clampf(illumination.g,0.0,1.0),clampf(illumination.b,0.0,1.0))
 	for display in displays: display.casing_light = casing
 	for view in model_views:
@@ -78,11 +91,12 @@ func _update_instrument_lighting(delta: float) -> void:
 		environment.environment.ambient_light_color = ambient
 		environment.environment.ambient_light_energy = 1.0
 		var light: DirectionalLight3D = view.get_node("InstrumentSun")
-		light.basis = pilot.global_basis.inverse() * sunlight.global_basis
+		light.basis = instrument_light_basis
 		light.light_color = sunlight.light_color
 		light.light_energy = direct
 		var glass: ShaderMaterial = view.get_meta("crt_glass")
-		glass.set_shader_parameter("sunlight_direction",light.basis.z)
+		var mounted := is_instance_valid(mounted_root) and mounted_root.visible
+		glass.set_shader_parameter("sunlight_direction", sunlight.global_basis.z if mounted else light.basis.z)
 		glass.set_shader_parameter("sunlight_color",sunlight.light_color)
 		glass.set_shader_parameter("sunlight_energy",direct)
 
@@ -122,7 +136,11 @@ func setup(player: Node3D, mounted_equipment: Node3D, world: Node3D, folder: Str
 		display.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		displays.append(display)
 		var replacement := _model_instrument(definition, display)
-		var instrument: Control = replacement if replacement != null else display
+		var instrument := replacement
+		if instrument == null:
+			instrument = Control.new()
+			instrument.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			instrument.add_child(display)
 		instrument.name = definition.id.capitalize() + "Instrument"
 		holder.add_child(instrument)
 		instruments.append(instrument)
@@ -234,28 +252,130 @@ func set_enabled(index: int,show_panel: bool,animate: bool = true) -> void:
 
 func _layout() -> void:
 	var viewport := get_viewport().get_visible_rect().size
-	var total := 641.0
-	var fit_scale := (viewport.x - 16.0) / total
+	var fit_scale := (viewport.x - 16.0) / HUD_WIDTH
 	# Preserve the previous 641-pixel HUD at 1280×720, proportionally sized
 	# at higher resolutions and constrained to fit narrow windows.
-	var scale_factor := minf(minf(viewport.x / 1280.0,viewport.y / 720.0),fit_scale)
-	holder.position = Vector2((viewport.x - total * scale_factor) * 0.5, 0)
+	var scale_factor := minf(minf(viewport.x / HUD_REFERENCE_SIZE.x,viewport.y / HUD_REFERENCE_SIZE.y),fit_scale)
+	holder.position = Vector2((viewport.x - HUD_WIDTH * scale_factor) * 0.5, 0)
 	holder.scale = Vector2.ONE * scale_factor
 	var x := 0.0
 	for i in range(instruments.size()):
-		instruments[i].position.x = x
-		instruments[i].size = DEFINITIONS[i].size
+		if instruments[i].get_parent() == holder:
+			instruments[i].position.x = x
+			instruments[i].size = DEFINITIONS[i].size
 		x += DEFINITIONS[i].size.x + 6.0
 
+func mount_instruments(cockpit: Node3D, neutral_eye: Vector3, render_layer: int) -> void:
+	if not is_instance_valid(mounted_root): _setup_mounted_instruments(cockpit, neutral_eye, render_layer)
+	if mounted_root.visible: return
+	for i in instruments.size():
+		var model_view := instruments[i].get_node_or_null("ModelViewport") as SubViewport
+		if model_view != null:
+			var model: Node3D = model_view.get_meta("instrument_model")
+			model.reparent(mounted_panels[i], false)
+			model.transform = model_view.get_meta("mounted_transform")
+			for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+				mesh.set_meta("hud_render_layers", mesh.layers)
+				mesh.set_meta("hud_shadow_mode", mesh.cast_shadow)
+				mesh.layers = render_layer
+				mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		else:
+			displays[i].reparent(mounted_sprites[i], false)
+	holder.hide()
+	mounted_root.show()
+	_refresh_views()
+
+
+func _setup_mounted_instruments(cockpit: Node3D, neutral_eye: Vector3, render_layer: int) -> void:
+	mounted_root = Node3D.new()
+	mounted_root.name = "InstrumentMounts"
+	cockpit.add_child(mounted_root)
+	mounted_root.hide()
+	# The physical mounts use the reference HUD layout at the default seat.
+	# A resize only changes how the camera projects that geometry.
+	var row_x := -HUD_WIDTH * 0.5
+	for i in instruments.size():
+		var frame: Vector2 = DEFINITIONS[i].size
+		var model_view := instruments[i].get_node_or_null("ModelViewport") as SubViewport
+		var top_margin := INSTRUMENT_TOP_MARGIN if model_view != null else 0.0
+		var offset := Vector2(row_x + frame.x * 0.5, (HUD_REFERENCE_SIZE.y - frame.y) * 0.5 - top_margin) * MOUNT_UNITS_PER_PIXEL
+		var panel := Node3D.new()
+		panel.name = "%sMount" % DEFINITIONS[i].id.capitalize()
+		panel.position = neutral_eye + Vector3(offset.x, offset.y, -MOUNT_DEPTH)
+		panel.set_meta("rest_height", panel.position.y)
+		mounted_root.add_child(panel)
+		mounted_panels.append(panel)
+		if model_view != null:
+			var bounds: AABB = model_view.get_meta("instrument_bounds")
+			var rest: Transform3D = model_view.get_meta("instrument_transform")
+			var factor := frame.y * MOUNT_UNITS_PER_PIXEL * INSTRUMENT_SCALE / model_view.get_camera_3d().size
+			var front_centre := Vector3(bounds.get_center().x, bounds.get_center().y, bounds.end.z)
+			var basis := Basis(Vector3.RIGHT, INSTRUMENT_TILT).scaled(Vector3.ONE * factor)
+			model_view.set_meta("mounted_transform", Transform3D(basis, -(basis * front_centre)) * rest)
+		mounted_sprites.append(null if model_view != null else _mount_sprite(panel, frame, render_layer))
+		row_x += frame.x + 6.0
+
+func _mount_sprite(panel: Node3D, frame: Vector2, render_layer: int) -> SubViewport:
+	var sprite := SubViewport.new()
+	sprite.size = Vector2i(frame.ceil())
+	sprite.disable_3d = true
+	sprite.transparent_bg = true
+	sprite.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	panel.add_child(sprite)
+	var plane := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = frame * MOUNT_UNITS_PER_PIXEL
+	plane.mesh = quad
+	plane.layers = render_layer
+	plane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var artwork := StandardMaterial3D.new()
+	artwork.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	artwork.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
+	artwork.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	artwork.albedo_texture = sprite.get_texture()
+	plane.material_override = artwork
+	panel.add_child(plane)
+	return sprite
+
+
+func release_mounted_instruments() -> void:
+	if not is_instance_valid(mounted_root) or not mounted_root.visible: return
+	for i in instruments.size():
+		var model_view := instruments[i].get_node_or_null("ModelViewport") as SubViewport
+		if model_view != null:
+			var model: Node3D = model_view.get_meta("instrument_model")
+			model.reparent(model_view, false)
+			model.transform = model_view.get_meta("instrument_transform")
+			for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+				mesh.layers = mesh.get_meta("hud_render_layers")
+				mesh.cast_shadow = mesh.get_meta("hud_shadow_mode")
+		else:
+			displays[i].reparent(instruments[i], false)
+	mounted_root.hide()
+	holder.show()
+	_refresh_views()
+
 func _refresh_views() -> void:
+	var mounted := is_instance_valid(mounted_root) and mounted_root.visible
+	if is_instance_valid(mounted_root):
+		for i in mounted_panels.size():
+			var shown := mounted and visible and instruments[i].visible
+			mounted_panels[i].visible = shown
+			var panel := mounted_panels[i]
+			var height := float(panel.get_meta("rest_height")) - instruments[i].position.y * MOUNT_UNITS_PER_PIXEL
+			if panel.position.y != height: panel.position.y = height
+			if mounted_sprites[i] != null:
+				mounted_sprites[i].render_target_update_mode = SubViewport.UPDATE_ALWAYS if shown else SubViewport.UPDATE_DISABLED
 	if bottom_view != null:
 		_refresh_camera_feed()
 		bottom_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if displays[2].camera_feed != null and visible and enabled[2] and instruments[2].visible and is_instance_valid(pilot) and not pilot.dead else SubViewport.UPDATE_DISABLED
-	for i in range(displays.size()): displays[i].set_process(visible and instruments[i].visible)
+	for i in range(displays.size()):
+		displays[i].set_process(visible and instruments[i].visible)
 	for view in model_views:
-		view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if visible and view.get_parent().visible else SubViewport.UPDATE_DISABLED
+		var shown: bool = visible and view.get_parent().visible
+		view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if shown and not mounted else SubViewport.UPDATE_DISABLED
 		for child in view.get_children():
-			if child is SubViewport: child.render_target_update_mode = view.render_target_update_mode
+			if child is SubViewport: child.render_target_update_mode = SubViewport.UPDATE_ALWAYS if shown else SubViewport.UPDATE_DISABLED
 
 func _process(delta: float) -> void:
 	_refresh_views()
@@ -266,6 +386,7 @@ func _process(delta: float) -> void:
 		map_data.explore(pilot.get_global_transform_interpolated().origin + Vector3.UP * 0.05,750)
 
 func _exit_tree() -> void:
+	if is_instance_valid(mounted_root): mounted_root.queue_free()
 	for tween in slide_tweens:
 		if tween != null: tween.kill()
 	slide_tweens.clear()
@@ -303,7 +424,8 @@ func _model_instrument(definition: Dictionary, display: Control) -> Control:
 		var container := Control.new()
 		container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var view := SubViewport.new()
-		view.size = Vector2i(definition.size * 3.0)
+		view.name = "ModelViewport"
+		view.size = Vector2i(definition.size * MODEL_PIXELS_PER_UNIT)
 		view.own_world_3d = true
 		view.transparent_bg = true
 		container.add_child(view)
@@ -372,8 +494,12 @@ func _model_instrument(definition: Dictionary, display: Control) -> Control:
 		var camera := Camera3D.new()
 		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 		camera.size = maxf(box.size.y, box.size.x / (definition.size.x / definition.size.y)) * 1.12
-		camera.position = box.get_center() + Vector3(0,0,maxf(box.size.length() * 2.0, 1.0))
+		var view_distance := maxf(box.size.length() * 2.0, 1.0)
+		camera.position = box.get_center() + Vector3.BACK * view_distance
 		view.add_child(camera)
+		view.set_meta("instrument_model", model)
+		view.set_meta("instrument_transform", model.transform)
+		view.set_meta("instrument_bounds", box)
 		var environment := WorldEnvironment.new()
 		environment.name = "InstrumentEnvironment"
 		environment.environment = Environment.new()
@@ -387,6 +513,7 @@ func _model_instrument(definition: Dictionary, display: Control) -> Control:
 		light.rotation_degrees = Vector3(-25,-25,0)
 		view.add_child(light)
 		var image := TextureRect.new()
+		image.name = "InstrumentImage"
 		image.texture = view.get_texture()
 		image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		image.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

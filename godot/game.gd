@@ -137,7 +137,9 @@ var camera_follow := FollowCamera.new()
 var camera_was_frozen := false
 const SUB_RENDER_LAYER := 2
 var first_person := false
-var first_person_cockpit: Node3D
+var perspex_cockpit: Node3D
+var cockpit_tuning: Dictionary = preload("res://perspex_cockpit.gd").DEFAULTS.duplicate()
+var cockpit_controls := {}
 var cockpit_camera_offset := Vector3(0,0.025,-0.16)
 var fog_visibility := DEFAULT_VISIBILITY
 var remember_preferences := true
@@ -264,6 +266,12 @@ func _build_interface() -> void:
 	front_end.player_graphics.changed.connect(func() -> void: _update_hud_settings(); _update_water_environment())
 	front_end.gameplay_menu.auto_aim_changed.connect(func(enabled: bool) -> void:
 		if weapons != null: weapons.auto_aim_enabled = enabled)
+	front_end.gameplay_menu.cockpit_3d_changed.connect(func(_enabled: bool) -> void:
+		game_camera.cancel_freelook()
+		if is_instance_valid(perspex_cockpit): perspex_cockpit.refresh()
+		if first_person and is_instance_valid(pilot) and docking != null and docking.stage != Docking.Stage.DOCKED:
+			_update_follow_camera(0.0, true)
+	)
 	front_end.gameplay_menu.classic_sub_physics_changed.connect(func(enabled: bool) -> void:
 		if is_instance_valid(pilot): pilot.movement.classic_sub_physics = enabled)
 	front_end.gameplay_menu.random_pirates_changed.connect(func(disabled: bool) -> void:
@@ -552,6 +560,11 @@ func _fail_startup(message: String) -> void:
 	canvas.visible = developer_enabled
 	status_label.text = message
 	if not developer_enabled: _prompt_game_folder(message)
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and game_camera != null and game_camera.freelook:
+		game_camera.cancel_freelook()
+		_update_mouse_pointer()
 
 func _input(event: InputEvent) -> void:
 	# Let the update overlay receive GUI mouse events before loading resumes.
