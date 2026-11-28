@@ -209,8 +209,8 @@ func _set_menu_page(next_page: String, focus_id: String = "") -> void:
 	var spacing := float(menu_config.button_spacing)
 	var y := float(area[1])
 	if menu_page != "main":
-		# Leave room below the list for the version and original-game credit.
-		y = minf(y, 456.0 - float(area[3]) - (page_buttons.size() - 1) * spacing)
+		var height := float(area[3]) + (page_buttons.size() - 1) * spacing
+		y = (menu_layout.size.y - height) * 0.5
 	for row in page_buttons.size():
 		var button: Button = buttons[page_buttons[row]]
 		button.size.x = width

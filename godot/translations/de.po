@@ -1354,6 +1354,9 @@ msgstr "Mod-Umgebung wird platziert"
 msgid "Plant current direction (degrees)"
 msgstr "Strömungsrichtung für Pflanzen (Grad)"
 
+msgid "Plant current twist strength"
+msgstr "Stärke der Pflanzenverdrehung in der Strömung"
+
 msgid "Plant ripple strength"
 msgstr "Stärke der Kräuselbewegung der Pflanzen"
 
@@ -1365,12 +1368,6 @@ msgstr "Stärke der Pflanzenbewegung"
 
 msgid "Plant sway variation"
 msgstr "Variation der Pflanzenbewegung"
-
-msgid "Plant twist strength"
-msgstr "Stärke der Pflanzenverdrehung"
-
-msgid "Plant wash recovery (seconds)"
-msgstr "Erholungszeit der Pflanzen nach Propellerstrom (Sekunden)"
 
 msgid "Plant wave length (plant heights)"
 msgstr "Wellenlänge der Pflanzenbewegung (in Pflanzenhöhen)"
@@ -1443,12 +1440,6 @@ msgstr "Procha"
 
 msgid "Propeller spin-down time"
 msgstr "Auslaufzeit der Propeller"
-
-msgid "Propeller wash range"
-msgstr "Reichweite des Propellerstroms"
-
-msgid "Propeller wash strength"
-msgstr "Stärke des Propellerstroms"
 
 msgid "Protected assets must be preconverted model scenes: %s"
 msgstr "Geschützte Ressourcen müssen vorkonvertierte Modellszenen sein: %s"
@@ -1719,6 +1710,12 @@ msgstr "Wellengeschwindigkeit an der Oberfläche"
 
 msgid "Switch camera"
 msgstr "Kamera wechseln"
+
+msgid "First-person view toggle"
+msgstr "Zur Cockpitansicht wechseln"
+
+msgid "Cockpit stick freelook"
+msgstr "Freier Blick per Stick"
 
 msgid "System"
 msgstr "System"

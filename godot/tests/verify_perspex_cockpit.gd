@@ -37,10 +37,13 @@ func run() -> void:
 	config.set_value("game", "folder", OS.get_environment("OPENSC_TEST_GAME_FOLDER"))
 	config.save(Storage.preferences_path())
 	var model_instruments := "--model-instruments" in OS.get_cmdline_user_args()
-	if model_instruments:
+	var player_remaster := "--player-remaster" in OS.get_cmdline_user_args()
+	if model_instruments or player_remaster:
 		Mods.initialize(false)
-		var ids: Array[String] = ["test-3d-map-instrument"]
-		Mods.apply(ids, ids, false)
+		var ids: Array[String] = []
+		if model_instruments: ids.append("test-3d-map-instrument")
+		if player_remaster: ids.append("remastered-player-submarine")
+		check(Mods.apply(ids, ids, false) == OK, "Fixture mods apply through normal discovery")
 	var game := Game.new()
 	game.remember_preferences = false
 	root.add_child(game)
@@ -61,14 +64,61 @@ func run() -> void:
 	game.pilot.reset_physics_interpolation()
 	var cockpit = game.perspex_cockpit
 	var hud = game.cockpit_hud
-	check(cockpit.hull != null and cockpit.hull.get_meta("asset_source").get_file().to_upper() == "SUB.DFF",
-		"The cockpit uses the original player asset")
+	var original_path := str(cockpit.hull.get_meta("asset_source", ""))
+	if player_remaster:
+		check(cockpit.hull != game.model and original_path == game.model.get_meta("asset_source")
+			and game.model.get_meta("asset_mod", "") == "Remastered Player Submarine"
+			and cockpit.hull.transform.is_equal_approx(game.model.transform),
+			"The cockpit copies the active remaster and keeps its exterior alignment")
+		var exterior_materials := surface_materials(game.model)
+		var cockpit_materials := surface_materials(cockpit.hull)
+		check(exterior_materials.any(func(m: Material) -> bool: return m.get_meta("exterior_canopy", false)),
+			"The visible exterior keeps its canopy")
+		check(cockpit_materials.any(func(m: Material) -> bool:
+			return m is StandardMaterial3D and m.get_meta("cockpit_interior", false) and m.albedo_texture != null
+		), "The cockpit keeps the remaster's textured interior")
+	else:
+		check(original_path.get_file().to_upper() == "SUB.DFF", "Stock first person uses the original player asset")
+	var opaque_replacement := Node3D.new()
+	opaque_replacement.set_meta("asset_mod", "Glass-only replacement fixture")
+	opaque_replacement.set_meta("modern_model", true)
+	var glass_only := MeshInstance3D.new()
+	glass_only.mesh = BoxMesh.new()
+	glass_only.material_override = StandardMaterial3D.new()
+	glass_only.material_override.set_meta("exterior_canopy", true)
+	opaque_replacement.add_child(glass_only)
+	var fallback := Cockpit.prepare_hull(opaque_replacement, game.game_folder)
+	check(fallback != null and str(fallback.get_meta("asset_source", "")).get_file().to_upper() == "SUB.DFF",
+		"A replacement without an interior falls back to the original cockpit")
+	if fallback != null: fallback.free()
+	opaque_replacement.free()
 	var retained_surfaces := 0
+	var console_points := PackedVector3Array()
+	var hull_points := PackedVector3Array()
 	for mesh: MeshInstance3D in cockpit.hull.find_children("*", "MeshInstance3D", true, false):
 		for i in range(mesh.mesh.get_surface_count()):
 			retained_surfaces += 1
-			check(not mesh.get_active_material(i).get_meta("exterior_canopy", false), "No exterior glazing in the cockpit model")
-	check(retained_surfaces == 7, "Original hull, console and assemblies remain")
+			var material := mesh.get_active_material(i)
+			check(not material.get_meta("natural_original", material).get_meta("exterior_canopy", false),
+				"No exterior glazing in the cockpit model")
+			var index_count: int = mesh.mesh.surface_get_array_index_len(i)
+			if index_count == 8 * 16 * 3:
+				console_points = mesh.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]
+			if index_count == (162 + 8 * 15) * 3:
+				hull_points = mesh.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]
+	check(retained_surfaces == (8 if player_remaster else 7), "Hull, console and assemblies remain")
+	var rim_samples := 8 * 15
+	var rim_matches := console_points.size() >= rim_samples and hull_points.size() >= rim_samples
+	if rim_matches:
+		var hull_rim := Array(hull_points.slice(hull_points.size() - rim_samples))
+		for point in console_points.slice(console_points.size() - rim_samples):
+			rim_matches = rim_matches and hull_rim.any(
+				func(other: Vector3) -> bool: return point.is_equal_approx(other)
+			)
+	if player_remaster:
+		check(console_points.size() >= rim_samples, "Remaster console uses the curved opening")
+	else:
+		check(rim_matches, "Console and adjoining hull share every rounded rim sample")
 	var authored := ConfigFile.new()
 	authored.load("res://view_defaults.cfg")
 	var matches_authored := true
@@ -84,6 +134,7 @@ func run() -> void:
 	check(third_person_layout.size() == 5, "Third person displays all five instruments")
 	if native: await capture("third-person")
 	game._set_camera_mode(true)
+	await verify_side_monitors(game, native)
 	check(cockpit.visible and not hud.holder.visible and hud.mounted_panels.size() == 5,
 		"First person renders five fixed cockpit mounts")
 	var mounts := mounted_poses(hud)
@@ -278,6 +329,64 @@ func verify_wall_collision_shake(game: Node3D) -> void:
 	wall.free()
 
 
+func verify_side_monitors(game: Node3D, native: bool) -> void:
+	var hud = game.cockpit_hud
+	var monitors = hud.side_monitors
+	check(is_instance_valid(monitors) and monitors.get_parent() == hud.mounted_root,
+		"Side monitors are part of the cockpit mounts")
+	check(monitors.face_sizes[0].is_equal_approx(monitors.face_sizes[1] * 1.5),
+		"The full map monitor is 50 percent larger in each dimension")
+	check(monitors.seen == [false, false] and hud.bottom_view.render_target_update_mode == SubViewport.UPDATE_DISABLED,
+		"Straight ahead, both monitors and the unused camera feed are off")
+	var positions: Array[Transform3D] = [monitors.panels[0].transform, monitors.panels[1].transform]
+	game.game_camera.mouse_freelook = true
+	game.game_camera.look_angles = Vector2(0, deg_to_rad(60))
+	game._update_follow_camera(0, true)
+	hud._refresh_views()
+	check(monitors.seen == [true, false] and monitors.displays[0].full_world
+		and monitors.displays[0].map_data == hud.map_data and monitors.displays[0].mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"Left freelook shows the read-only whole-world map using shared exploration data")
+	if native: await capture("monitor-left")
+	game.game_camera.look_angles.y = deg_to_rad(-60)
+	game._update_follow_camera(0, true)
+	hud._refresh_views()
+	check(monitors.seen == [false, true] and monitors.displays[1].camera_feed == hud.bottom_view.get_texture()
+		and hud.bottom_view.get_camera_3d() == hud.bottom_camera and hud.displays[2].camera_feed == null,
+		"Right freelook shows the bottom camera independently of the centre map")
+	if native: await capture("monitor-right")
+	check(monitors.panels[0].transform == positions[0] and monitors.panels[1].transform == positions[1],
+		"Looking left and right leaves both monitor mounts fixed")
+	hud.set_bottom_camera_enabled(true)
+	check(hud.displays[2].camera_feed == monitors.displays[1].camera_feed
+		and hud.monitor_bottom_view.render_target_update_mode == SubViewport.UPDATE_DISABLED,
+		"Centre and right share a single render when both show down")
+	hud.set_rear_camera_enabled(true)
+	check(hud.bottom_view.get_camera_3d() == hud.rear_camera
+		and monitors.displays[1].camera_feed == hud.monitor_bottom_view.get_texture()
+		and hud.monitor_bottom_view.get_camera_3d() == hud.monitor_bottom_camera
+		and hud.monitor_bottom_view.render_target_update_mode == SubViewport.UPDATE_ALWAYS,
+		"Centre rear feed leaves the right monitor on the downward camera")
+	game.front_end.gameplay_menu.cockpit_3d_enabled = false
+	game.perspex_cockpit.refresh()
+	check(monitors.seen == [false, false] and not monitors.is_visible_in_tree()
+		and hud.monitor_bottom_view.render_target_update_mode == SubViewport.UPDATE_DISABLED
+		and hud.bottom_view.get_camera_3d() == hud.rear_camera,
+		"Disabling the 3D cockpit turns the monitors off while the centre feed keeps working")
+	hud.set_rear_camera_enabled(false)
+	game.front_end.gameplay_menu.cockpit_3d_enabled = true
+	game.game_camera.cancel_freelook()
+	game._update_follow_camera(0, true)
+
+
+func surface_materials(model: Node3D) -> Array[Material]:
+	var materials: Array[Material] = []
+	for visual: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		for i in range(visual.mesh.get_surface_count()):
+			var material := visual.get_active_material(i)
+			if material != null: materials.append(material.get_meta("natural_original", material))
+	return materials
+
+
 func capture(label: String) -> void:
 	for i in range(3): await RenderingServer.frame_post_draw
 	var path := Storage.root_override.path_join(label + ".png")
@@ -285,6 +394,49 @@ func capture(label: String) -> void:
 
 
 func verify_stick_freelook(game: Node3D) -> void:
+	var pan := InputEventJoypadMotion.new()
+	pan.device = 7
+	pan.axis = JOY_AXIS_RIGHT_X
+	pan.axis_value = -1.0
+	game._input(pan)
+	game._update_follow_camera(0.5, true)
+	game.cockpit_hud._refresh_views()
+	check(game.game_camera.look_angles.y > 1.0 and game.game_camera.look_angles.x == 0.0
+		and game.pilot.freelook_device < 0 and game.cockpit_hud.side_monitors.seen[0],
+		"Deflecting the right stick left shows the map without entering two-axis mode")
+	var lift := InputEventJoypadMotion.new()
+	lift.device = pan.device
+	lift.axis = JOY_AXIS_RIGHT_Y
+	lift.axis_value = -0.75
+	Input.parse_input_event(lift)
+	Input.flush_buffered_events()
+	check(PilotInput.read(game.pilot.freelook_device).y > 0.5 and game.game_camera.look_angles.x == 0.0,
+		"Vertical thrust remains available while panning horizontally")
+	lift = lift.duplicate() as InputEventJoypadMotion
+	lift.axis_value = 0.0
+	Input.parse_input_event(lift)
+	Input.flush_buffered_events()
+	pan.axis_value = 1.0
+	game._input(pan)
+	game._update_follow_camera(1.0, true)
+	game.cockpit_hud._refresh_views()
+	check(game.game_camera.look_angles.y < -1.0 and game.cockpit_hud.side_monitors.seen[1],
+		"Right deflection looks at the bottom camera without a click")
+	var held_view: Transform3D = game.camera.global_transform
+	pan.axis_value = 0.0
+	game._input(pan)
+	game._update_follow_camera(1.0, true)
+	game.cockpit_hud._refresh_views()
+	check(game.camera.global_transform.is_equal_approx(held_view) and game.cockpit_hud.side_monitors.seen[1]
+		and game.pilot.freelook_device < 0, "Releasing horizontal input holds the view without taking over vertical thrust")
+	game.front_end.gameplay_menu.cockpit_3d_enabled = false
+	pan.axis_value = 1.0
+	game._input(pan)
+	game._update_follow_camera(0.5, true)
+	check(not game.game_camera.freelook and game.game_camera.look_angles.is_zero_approx(),
+		"Horizontal stick panning is disabled in the classic first-person view")
+	game.front_end.gameplay_menu.cockpit_3d_enabled = true
+	game._update_follow_camera(0.0, true)
 	var button := InputEventJoypadButton.new()
 	button.device = 7
 	button.button_index = JOY_BUTTON_RIGHT_STICK

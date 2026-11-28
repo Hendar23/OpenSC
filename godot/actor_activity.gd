@@ -20,9 +20,11 @@ func refresh_views() -> void:
 		cameras.clear()
 		if is_instance_valid(game.camera): cameras.append(game.camera)
 		var hud: Node = game.cockpit_hud
-		if is_instance_valid(hud) and is_instance_valid(hud.bottom_view) and hud.bottom_view.render_target_update_mode != SubViewport.UPDATE_DISABLED:
-			var feed: Camera3D = hud.bottom_view.get_camera_3d()
-			if feed != null: cameras.append(feed)
+		if is_instance_valid(hud):
+			for view: SubViewport in [hud.bottom_view, hud.monitor_bottom_view]:
+				if is_instance_valid(view) and view.render_target_update_mode != SubViewport.UPDATE_DISABLED:
+					var feed := view.get_camera_3d()
+					if feed != null: cameras.append(feed)
 	views.clear()
 	for camera in cameras:
 		if is_instance_valid(camera): views.append({"origin":camera.global_position,"range":camera.far,"planes":camera.get_frustum()})

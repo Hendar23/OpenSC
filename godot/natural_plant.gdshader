@@ -2,11 +2,7 @@ shader_type spatial;
 render_mode cull_disabled, ambient_light_disabled, fog_disabled;
 #include "res://natural_light.gdshaderinc"
 #include "res://plant_bend.gdshaderinc"
-uniform sampler2D albedo_texture : source_color, filter_nearest, repeat_enable;
-uniform sampler2D terrain_albedo_texture : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform bool terrain_mipmaps = false;
-uniform vec4 albedo_color : source_color = vec4(1.0);
-uniform bool has_texture = false;
+#include "res://plant_albedo.gdshaderinc"
 uniform float roughness_value = 0.7;
 uniform float metallic_value = 0.0;
 varying vec3 natural_position;
@@ -16,8 +12,7 @@ void vertex() {
 	natural_position = (MODEL_MATRIX * vec4(VERTEX,1.0)).xyz;
 }
 void fragment() {
-	vec4 color = albedo_color;
-	if (has_texture) color *= terrain_mipmaps ? texture(terrain_albedo_texture,UV) : texture(albedo_texture,UV);
+	vec4 color = plant_albedo(UV);
 	if (color.a < 0.5) discard;
 	vec3 air_normal = normalize((INV_VIEW_MATRIX * vec4(NORMAL,0.0)).xyz);
 	if (dot(NORMAL,VIEW) < 0.0) air_normal = -air_normal;

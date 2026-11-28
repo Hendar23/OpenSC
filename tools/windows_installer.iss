@@ -18,6 +18,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 DisableStartupPrompt=yes
 CloseApplications=yes
 RestartApplications=no
+SetupIconFile=..\OpenSC.ico
 UninstallDisplayIcon={app}\OpenSC.exe
 OutputBaseFilename=OpenSC-{#ReleaseVersion}-Windows-x64-Setup
 Compression=lzma2
@@ -29,15 +30,16 @@ SignedUninstaller=yes
 
 [Files]
 Source: "{#PayloadDir}\OpenSC.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#PayloadDir}\*"; DestDir: "{app}"; Excludes: "OpenSC.exe"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "{#PayloadDir}\*"; DestDir: "{app}"; Excludes: "OpenSC.exe,OpenSC-Head-On.ico"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\OpenSC.ico"; DestDir: "{app}"; DestName: "OpenSC-Head-On.ico"; Flags: ignoreversion
 Source: "windows_installer_marker.txt"; DestDir: "{app}"; DestName: "OpenSC.installed"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"
 
 [Icons]
-Name: "{autoprograms}\OpenSC"; Filename: "{app}\OpenSC.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\OpenSC"; Filename: "{app}\OpenSC.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autoprograms}\OpenSC"; Filename: "{app}\OpenSC.exe"; WorkingDir: "{app}"; IconFilename: "{app}\OpenSC-Head-On.ico"
+Name: "{autodesktop}\OpenSC"; Filename: "{app}\OpenSC.exe"; WorkingDir: "{app}"; IconFilename: "{app}\OpenSC-Head-On.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\OpenSC.exe"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent

@@ -3,6 +3,7 @@ extends Node3D
 const RENDER_LAYER := preload("res://first_person_cockpit.gd").RENDER_LAYER
 const Assets = preload("res://clump_loader.gd")
 const Pilot = preload("res://submarine_controller.gd")
+const CockpitRim = preload("res://cockpit_rim.gd")
 const STUDY_SCALE := 6.0
 const DOME_RADII := Vector3(2.71, 1.61, 2.4)
 const EYE_HOME := Vector3(0.0, 0.003, -0.150)
@@ -32,7 +33,50 @@ var redirected := false
 var reflection_capture: Node
 
 
-func setup(context: Node3D, folder: String) -> void:
+static func prepare_hull(active: Node3D, folder: String) -> Node3D:
+	var original := not active.has_meta("asset_mod")
+	var model: Node3D
+	if original or _supports_cockpit(active):
+		model = active.duplicate(0) as Node3D
+	else:
+		original = true
+		model = Assets.load_original_submarine(folder.path_join("CLUMPS/SUB.DFF"))
+		if model == null: return null
+		model.rotation.y = PI
+		model.scale *= Pilot.VISUAL_SCALE
+	# A cockpit copy is visual only. Imported lights, cameras and physics
+	# belong to the actual replacement model.
+	for type in ["Camera3D", "Light3D", "CollisionObject3D", "AudioStreamPlayer3D"]:
+		for node in model.find_children("*", type, true, false):
+			if is_instance_valid(node): node.free()
+	var round_legacy := original or str(model.get_meta("asset_source", "")).get_extension().to_lower() == "dff"
+	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		if mesh.mesh == null: continue
+		_remove_glazing(mesh, round_legacy)
+		mesh.layers = RENDER_LAYER
+		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return model
+
+
+static func _supports_cockpit(model: Node3D) -> bool:
+	var interior := false
+	var glazing := false
+	for visual: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		if visual.mesh == null: continue
+		for i in range(visual.mesh.get_surface_count()):
+			var material := visual.get_active_material(i)
+			if material == null: continue
+			if material.get_meta("exterior_canopy", false):
+				glazing = true
+				# A legacy replacement can use the retail console topology.
+				if not model.get_meta("modern_model", false):
+					interior = interior or not CockpitRim.find_edges(visual.mesh, i).is_empty()
+			elif material.get_meta("cockpit_interior", false):
+				interior = true
+	return glazing and interior
+
+
+func setup(context: Node3D, cockpit_hull: Node3D) -> void:
 	game = context
 	name = "PerspexCockpit"
 	top_level = true
@@ -41,14 +85,8 @@ func setup(context: Node3D, folder: String) -> void:
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	hide()
-	hull = Assets.load_original_submarine(folder.path_join("CLUMPS/SUB.DFF"))
+	hull = cockpit_hull
 	if hull == null: return
-	hull.rotation.y = PI
-	hull.scale *= Pilot.VISUAL_SCALE
-	for mesh: MeshInstance3D in hull.find_children("*", "MeshInstance3D", true, false):
-		_remove_glazing(mesh)
-		mesh.layers = RENDER_LAYER
-		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(hull)
 	game.natural_light.attach(hull)
 
@@ -66,17 +104,39 @@ func setup(context: Node3D, folder: String) -> void:
 	apply_tuning()
 
 
-func _remove_glazing(mesh: MeshInstance3D) -> void:
-	var opaque := ArrayMesh.new()
-	var removed := false
+static func _remove_glazing(mesh: MeshInstance3D, round_legacy: bool = true) -> void:
+	var glazing := -1
+	var remaster_console := -1
 	for i in range(mesh.mesh.get_surface_count()):
 		var material := mesh.get_active_material(i)
 		if material != null and material.get_meta("exterior_canopy", false):
-			removed = true
-			continue
-		opaque.add_surface_from_arrays(mesh.mesh.surface_get_primitive_type(i), mesh.mesh.surface_get_arrays(i))
+			glazing = i
+		elif material != null and material.get_meta("cockpit_interior", false) and material.resource_name == "Canopy interior":
+			remaster_console = i
+	if glazing == -1 and remaster_console == -1: return
+
+	var source := mesh.mesh as ArrayMesh
+	if source == null: return
+	var rim := {}
+	if source.get_blend_shape_count() == 0:
+		if round_legacy: rim = CockpitRim.find_edges(source, glazing)
+		elif remaster_console != -1: rim = CockpitRim.find_edges(source, glazing, remaster_console)
+	var opaque := ArrayMesh.new()
+	opaque.blend_shape_mode = source.blend_shape_mode
+	for shape in range(source.get_blend_shape_count()):
+		opaque.add_blend_shape(source.get_blend_shape_name(shape))
+	for i in range(source.get_surface_count()):
+		var material := mesh.get_active_material(i)
+		if material != null and material.get_meta("exterior_canopy", false): continue
+		var arrays := source.surface_get_arrays(i)
+		if not rim.is_empty() and (round_legacy or i == remaster_console):
+			arrays = CockpitRim.round_edges(arrays, rim)
+		opaque.add_surface_from_arrays(source.surface_get_primitive_type(i), arrays, source.surface_get_blend_shape_arrays(i))
 		opaque.surface_set_material(opaque.get_surface_count() - 1, material)
-	if removed: mesh.mesh = opaque
+		opaque.surface_set_name(opaque.get_surface_count() - 1, source.surface_get_name(i))
+	for i in range(source.get_surface_count()): mesh.set_surface_override_material(i, null)
+	mesh.material_override = null
+	mesh.mesh = opaque
 
 
 func _add_surface(shell: ArrayMesh, material: Material) -> MeshInstance3D:

@@ -56,6 +56,7 @@ static func defaults() -> Dictionary:
 	result.map_toggle[1] = {"kind":"button","button":JOY_BUTTON_Y,"modifier":JOY_BUTTON_LEFT_SHOULDER}
 	result.bottom_camera_toggle = [null,{"kind":"button","button":JOY_BUTTON_Y,"modifier":JOY_BUTTON_RIGHT_SHOULDER}]
 	result.rear_camera_toggle = [null,{"kind":"button","button":JOY_BUTTON_B,"modifier":JOY_BUTTON_RIGHT_SHOULDER}]
+	result.cockpit_freelook_toggle = [null,{"kind":"button","button":JOY_BUTTON_RIGHT_STICK,"modifier":-1}]
 	return result
 static func install() -> void:
 	if installed: return

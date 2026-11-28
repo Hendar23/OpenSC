@@ -10,7 +10,6 @@ uniform float sway_twist = 0.3;
 uniform float root_height = 0.0;
 uniform float plant_height = 1.0;
 uniform vec3 root_center = vec3(0.0);
-uniform vec3 propeller_bend = vec3(0.0);
 uniform bool sway_uniform_basis = false;
 
 void bend_plant(inout vec3 vertex, inout vec3 normal, mat4 model) {
@@ -26,17 +25,14 @@ void bend_plant(inout vec3 vertex, inout vec3 normal, mat4 model) {
 	mat3 world_to_plant = sway_uniform_basis ? transpose(basis) : inverse(basis);
 	vec3 local_direction = normalize(world_to_plant * vec3(cos(sway_direction), 0.0, sin(sway_direction)));
 	vec3 bend = local_direction * sway_strength * wave;
-	float wash = length(propeller_bend);
-	if (wash > 0.0001) bend += normalize(world_to_plant * propeller_bend) * wash;
 	bend.y = max(bend.y,-0.35);
-	// A travelling wave changes phase along the stem, rather than moving the
-	// whole leaf as a rigid sheet. Wash adds quicker eddies and stronger torsion.
+	// The travelling wave changes phase along the stem.
 	float k = 6.283185 / max(sway_wavelength,0.4);
-	float ripple_phase = clock * 1.7 + visual_time() * wash * 3.0 + phase - fraction * k;
+	float ripple_phase = clock * 1.7 + phase - fraction * k;
 	float ripple = sin(ripple_phase);
-	float amplitude = sway_ripple * (sway_strength + wash * 0.65);
+	float amplitude = sway_ripple * sway_strength;
 	vec3 across = normalize(world_to_plant * vec3(-sin(sway_direction),0.0,cos(sway_direction)));
-	float angle = sway_twist * (sway_strength + wash) * fraction * ripple;
+	float angle = sway_twist * sway_strength * fraction * ripple;
 	mat2 torsion = mat2(vec2(cos(angle),sin(angle)),vec2(-sin(angle),cos(angle)));
 	vertex.xz = root_center.xz + torsion * (vertex.xz - root_center.xz);
 	normal.xz = torsion * normal.xz;

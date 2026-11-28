@@ -434,7 +434,7 @@ func _build_plant_controls() -> void:
 	enabled.button_pressed = true; enabled.focus_mode = Control.FOCUS_NONE
 	game.graphics_controls.add_child(enabled); game.plant_controls.enabled = enabled
 	enabled.toggled.connect(func(on: bool) -> void: game.plant_current.configure({"enabled":on}); game._save_preferences())
-	for row in [["strength","Plant sway strength",0.0,0.5,0.01],["speed","Plant sway speed",0.0,2.0,0.05],["direction","Plant current direction (degrees)",0.0,360.0,5.0],["variation","Plant sway variation",0.0,1.0,0.05],["wavelength","Plant wave length (plant heights)",0.4,4.0,0.1],["ripple","Plant ripple strength",0.0,1.0,0.01],["twist","Plant twist strength",0.0,2.0,0.05],["wash_strength","Propeller wash strength",0.0,1.5,0.05],["wash_range","Propeller wash range",0.5,12.0,0.25],["wash_recovery","Plant wash recovery (seconds)",0.1,4.0,0.1]]:
+	for row in [["strength","Plant sway strength",0.0,0.5,0.01],["speed","Plant sway speed",0.0,2.0,0.05],["direction","Plant current direction (degrees)",0.0,360.0,5.0],["variation","Plant sway variation",0.0,1.0,0.05],["wavelength","Plant wave length (plant heights)",0.4,4.0,0.1],["ripple","Plant ripple strength",0.0,1.0,0.01],["twist","Plant current twist strength",0.0,2.0,0.05]]:
 		var key: String = row[0]; var caption: String = row[1]
 		var label = Language.LiveLabel.new(); game.graphics_controls.add_child(label)
 		var slider := HSlider.new(); slider.scrollable = false; slider.min_value = row[2]; slider.max_value = row[3]; slider.step = row[4]

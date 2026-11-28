@@ -4,8 +4,11 @@ extends RefCounted
 var game: Node3D
 var mouse_freelook := false
 var stick_freelook_device := -1
+var horizontal_look_device := -1
+var horizontal_look_amount := 0.0
+var held_horizontal_yaw := 0.0
 var freelook: bool:
-	get: return mouse_freelook or stick_freelook_device >= 0
+	get: return mouse_freelook or stick_freelook_device >= 0 or horizontal_look_device >= 0 or not is_zero_approx(held_horizontal_yaw)
 var look_angles := Vector2.ZERO
 var damage_shake_strength := 0.0
 var damage_shake_phase := 0.0
@@ -54,7 +57,11 @@ func _update_follow_camera(delta: float, snap: bool = false) -> void:
 			var stick := Vector2(Input.get_joy_axis(stick_freelook_device, JOY_AXIS_RIGHT_X),
 				Input.get_joy_axis(stick_freelook_device, JOY_AXIS_RIGHT_Y))
 			_rotate_look(PilotInput.stick(stick) * STICK_LOOK_SPEED * delta)
-		if not freelook: look_angles = look_angles.lerp(Vector2.ZERO, 1.0 - exp(-18.0 * delta))
+		elif horizontal_look_device >= 0 and can_freelook():
+			_rotate_look(Vector2(horizontal_look_amount * STICK_LOOK_SPEED * delta, 0.0))
+			held_horizontal_yaw = look_angles.y
+		elif not mouse_freelook:
+			look_angles = look_angles.lerp(Vector2(0.0, held_horizontal_yaw), 1.0 - exp(-18.0 * delta))
 		if look_angles.length_squared() < 0.0000000001: look_angles = Vector2.ZERO
 		game.camera.near = 0.01 if active else 0.03
 		var view := Basis.from_euler(Vector3(look_angles.x, look_angles.y, 0.0))
@@ -98,7 +105,15 @@ func cancel_freelook() -> void:
 
 func set_stick_freelook(device: int) -> void:
 	stick_freelook_device = device
+	horizontal_look_device = -1
+	horizontal_look_amount = 0.0
+	held_horizontal_yaw = 0.0
 	if is_instance_valid(game.pilot): game.pilot.freelook_device = device
+
+func set_horizontal_look(device: int, value: float) -> void:
+	if horizontal_look_device >= 0 and device != horizontal_look_device: return
+	horizontal_look_amount = PilotInput.stick(Vector2(value, 0.0)).x
+	horizontal_look_device = device if horizontal_look_amount != 0.0 else -1
 
 func look(relative: Vector2) -> void:
 	_rotate_look(relative * 0.003)

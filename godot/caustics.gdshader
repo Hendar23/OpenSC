@@ -2,6 +2,7 @@ shader_type spatial;
 render_mode blend_add, depth_draw_never, cull_disabled, ambient_light_disabled, specular_disabled, fog_disabled;
 #include "res://plant_bend.gdshaderinc"
 #include "res://natural_light.gdshaderinc"
+#include "res://plant_albedo.gdshaderinc"
 global uniform sampler2D osc_caustics_texture : filter_linear, repeat_enable;
 global uniform float osc_caustics_strength;
 global uniform float osc_caustics_size;
@@ -27,7 +28,9 @@ void vertex() {
 }
 void fragment() {
 	if (osc_caustics_strength <= 0.0 || osc_sun_direction.y <= 0.01 || world_position.y > osc_water_height) discard;
-	if (alpha_cutout && texture(alpha_texture,UV).a < alpha_threshold) discard;
+	if (is_plant && clamp_plant_texture) {
+		if (plant_albedo(UV).a < alpha_threshold) discard;
+	} else if (alpha_cutout && texture(alpha_texture,UV).a < alpha_threshold) discard;
 	float depth = max(0.0,osc_water_height - world_position.y);
 	vec2 projected = world_position.xz + osc_sun_direction.xz * depth / max(osc_sun_direction.y,0.2);
 	vec2 flow = vec2(cos(osc_wave_direction),sin(osc_wave_direction));

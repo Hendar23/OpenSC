@@ -195,9 +195,10 @@ func _clear_shot(from: Vector3, to: Vector3) -> bool:
 	return system.space.intersect_ray(PhysicsRayQueryParameters3D.create(from,to,1)).is_empty()
 
 func _attack_route(target: Vector3) -> PackedVector3Array:
+	var distance := preferred_attack_distance()
 	var away := global_position - target
 	if away.length_squared() < 0.001: away = Vector3.FORWARD
-	var direct := target + away.normalized() * 5.5
+	var direct := target + away.normalized() * distance
 	if _clear_shot(direct,target):
 		var direct_path: PackedVector3Array = system.route(global_position,direct)
 		if not direct_path.is_empty(): return direct_path
@@ -208,9 +209,10 @@ func _attack_route(target: Vector3) -> PackedVector3Array:
 	# Spread failed alternative searches over successive decisions rather than
 	# running every angle/height for every combatant in the same physics tick.
 	var angles := [45.0,-45.0,90.0,-90.0,180.0]
+	var rise := minf(3.0,distance)
 	for attempt in range(3):
 		var probe := fallback_probe; fallback_probe = (fallback_probe+1)%10
-		var point: Vector3 = target + away.rotated(Vector3.UP,deg_to_rad(angles[probe%5])) * 5.5 + Vector3.UP * (0.0 if probe < 5 else 3.0)
+		var point: Vector3 = target + away.rotated(Vector3.UP,deg_to_rad(angles[probe%5])) * distance + Vector3.UP * (0.0 if probe < 5 else rise)
 		if not system.water_clear(point) or not _clear_shot(point,target): continue
 		var candidate: PackedVector3Array = system.route(global_position,point)
 		if not candidate.is_empty(): return candidate

@@ -117,13 +117,8 @@ func attach(node: Node) -> void:
 	for child in node.get_children(): attach(child)
 
 func sync_plants(current: RefCounted) -> void:
-	# Shared plant batches also need their caustic pass to follow sway settings.
+	# Plant caustic passes use the same sway settings as their base materials.
 	for material in current.materials.duplicate():
 		var overlay: Material = material.get_meta("caustics_overlay") if material.has_meta("caustics_overlay") else null
 		if overlay != null and overlay not in current.materials: current.materials.append(overlay)
-	for patch in current.patches:
-		for material in patch.materials.duplicate():
-			var overlay: Material = material.get_meta("caustics_overlay") if material.has_meta("caustics_overlay") else null
-			if overlay != null:
-				if overlay not in patch.materials: patch.materials.append(overlay)
 	current.configure({})

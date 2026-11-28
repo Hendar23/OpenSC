@@ -53,6 +53,10 @@ func run() -> void:
 	var menu := Menu.new(); menu.settings_path = FIXTURE; root.add_child(menu)
 	menu.open_menu()
 	check(menu.binding_buttons.size() == Bindings.bindings.size(),"Controls UI covers every action")
+	check(menu.config.labels.camera_toggle == "First-person view toggle"
+		and menu.binding_buttons.camera_toggle[1].text == "Controller Y"
+		and menu.binding_buttons.cockpit_freelook_toggle[1].text == "Controller Right stick click",
+		"Controls distinguishes switching the view from clicking the stick for freelook")
 	for column in range(4):
 		menu.navigation_rows[0][column].grab_focus()
 		menu._input(key(KEY_DOWN))

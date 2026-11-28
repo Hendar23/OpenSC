@@ -227,6 +227,8 @@ func _setup_vehicle(folder: String) -> void:
 	game.model.rotation.y = PI
 	game.pilot.add_child(game.model)
 	game.pilot.visual = game.model
+	# Copy the selected model before attaching equipment and exterior lighting.
+	var cockpit_hull := preload("res://perspex_cockpit.gd").prepare_hull(game.model, folder)
 	game.pilot.setup_damage_smoke(folder)
 	game.pilot.fit_collision_to_visual()
 	if map_data.is_empty():
@@ -261,7 +263,7 @@ func _setup_vehicle(folder: String) -> void:
 	game.cockpit_hud.natural_light = game.natural_light
 	game.perspex_cockpit = preload("res://perspex_cockpit.gd").new()
 	game.pilot.add_child(game.perspex_cockpit)
-	game.perspex_cockpit.setup(game, folder)
+	game.perspex_cockpit.setup(game, cockpit_hull)
 	game._build_expanded_map()
 	game._update_hud_settings()
 	for index in range(5):

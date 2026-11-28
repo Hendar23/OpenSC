@@ -5,6 +5,7 @@ const Modern = preload("res://modern_model.gd")
 const Mods = preload("res://mod_registry.gd")
 const Display = preload("res://hud_display.gd")
 const Map = preload("res://hud_map.gd")
+const SideMonitors = preload("res://cockpit_side_monitors.gd")
 const HUD_WIDTH := 641.0
 const HUD_REFERENCE_SIZE := Vector2(1280.0, 720.0)
 const MODEL_PIXELS_PER_UNIT := 3
@@ -31,6 +32,7 @@ var holder: Control
 var mounted_root: Node3D
 var mounted_panels: Array[Node3D] = []
 var mounted_sprites: Array[SubViewport] = []
+var side_monitors: Node3D
 var map_zoom := 2.0:
 	set(value):
 		map_zoom = clampf(value,0.5,4.0)
@@ -48,6 +50,8 @@ var natural_light: RefCounted
 var bottom_camera_enabled := false
 var bottom_view: SubViewport
 var bottom_camera: Camera3D
+var monitor_bottom_view: SubViewport
+var monitor_bottom_camera: Camera3D
 var rear_camera_enabled := false
 var rear_camera: Camera3D
 var rov_camera: Camera3D
@@ -86,6 +90,8 @@ func _update_instrument_lighting(delta: float) -> void:
 	var instrument_light_basis := pilot.global_basis.inverse() * sunlight.global_basis
 	var casing := Color(clampf(illumination.r,0.0,1.0),clampf(illumination.g,0.0,1.0),clampf(illumination.b,0.0,1.0))
 	for display in displays: display.casing_light = casing
+	if is_instance_valid(side_monitors):
+		for display in side_monitors.displays: display.casing_light = casing
 	for view in model_views:
 		var environment: WorldEnvironment = view.get_node("InstrumentEnvironment")
 		environment.environment.ambient_light_color = ambient
@@ -151,12 +157,7 @@ func setup(player: Node3D, mounted_equipment: Node3D, world: Node3D, folder: Str
 
 func _setup_bottom_camera(world: Node3D) -> void:
 	# Auxiliary cameras share one feed; only the selected one renders the world.
-	bottom_view = SubViewport.new(); bottom_view.name = "HUDCameraFeed"
-	bottom_view.size = Vector2i(384,246)
-	bottom_view.world_3d = world.get_world_3d()
-	bottom_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
-	bottom_view.handle_input_locally = false
-	add_child(bottom_view)
+	bottom_view = _create_feed_view("HUDCameraFeed", world.get_world_3d())
 	bottom_camera = Camera3D.new(); bottom_camera.name = "BottomCamera"
 	bottom_camera.near = 0.01; bottom_camera.fov = 65
 	bottom_camera.cull_mask &= ~(2 | preload("res://first_person_cockpit.gd").RENDER_LAYER) # Hull/tools/canopy stay out of auxiliary feeds.
@@ -169,8 +170,24 @@ func _setup_bottom_camera(world: Node3D) -> void:
 	rov_camera.near = 0.01
 	rov_camera.cull_mask &= ~(preload("res://remote_vehicle.gd").RENDER_LAYER | preload("res://first_person_cockpit.gd").RENDER_LAYER)
 	bottom_view.add_child(rov_camera)
+	# A second viewport is needed only when the centre shows rear or ROV
+	# while the dedicated bottom monitor is also in view.
+	monitor_bottom_view = _create_feed_view("CockpitBottomFeed", world.get_world_3d())
+	monitor_bottom_camera = bottom_camera.duplicate(0) as Camera3D
+	monitor_bottom_view.add_child(monitor_bottom_camera)
+	monitor_bottom_camera.make_current()
 	_update_bottom_camera()
 	_update_rear_camera()
+
+func _create_feed_view(view_name: String, world: World3D) -> SubViewport:
+	var view := SubViewport.new()
+	view.name = view_name
+	view.size = Vector2i(384, 246)
+	view.world_3d = world
+	view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	view.handle_input_locally = false
+	add_child(view)
+	return view
 
 func set_bottom_camera_enabled(on: bool) -> void:
 	bottom_camera_enabled = on
@@ -192,7 +209,18 @@ func controlled_rover() -> Node3D:
 func _refresh_camera_feed() -> void:
 	var rover := controlled_rover()
 	var selected: Camera3D = rov_camera if rover != null else rear_camera if rear_camera_enabled else bottom_camera if bottom_camera_enabled else null
-	if selected != null and bottom_view.get_camera_3d() != selected: selected.make_current()
+	var alive: bool = is_instance_valid(pilot) and not pilot.dead
+	var centre_active: bool = selected != null and visible and enabled[2] and instruments[2].visible and alive
+	var monitor_active: bool = is_instance_valid(side_monitors) and side_monitors.seen[1] and alive
+	var separate := monitor_active and centre_active and selected != bottom_camera
+	var shared := bottom_camera if monitor_active and not centre_active else selected
+	if shared != null and bottom_view.get_camera_3d() != shared: shared.make_current()
+	bottom_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if (centre_active or monitor_active) else SubViewport.UPDATE_DISABLED
+	monitor_bottom_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if separate else SubViewport.UPDATE_DISABLED
+	if monitor_active:
+		var display: Control = side_monitors.displays[1]
+		var feed := monitor_bottom_view.get_texture() if separate else bottom_view.get_texture()
+		if display.camera_feed != feed: display.set_camera_feed(feed)
 	var texture: Texture2D = bottom_view.get_texture() if selected != null else null
 	if displays[2].camera_feed != texture: displays[2].set_camera_feed(texture)
 	displays[2].rov_recording = rover != null and rover.recording > 0
@@ -221,6 +249,8 @@ func _update_bottom_camera() -> void:
 	bottom_camera.global_transform = Transform3D(Basis.looking_at(-axes.y,-axes.z),pose.origin)
 	var main_camera := get_viewport().get_camera_3d()
 	if main_camera != null: bottom_camera.far = main_camera.far
+	monitor_bottom_camera.global_transform = bottom_camera.global_transform
+	monitor_bottom_camera.far = bottom_camera.far
 
 func toggle(index: int) -> void:
 	if index < 0 or index >= enabled.size(): return
@@ -264,6 +294,8 @@ func _layout() -> void:
 			instruments[i].position.x = x
 			instruments[i].size = DEFINITIONS[i].size
 		x += DEFINITIONS[i].size.x + 6.0
+	if is_instance_valid(side_monitors) and get_viewport().get_camera_3d() != null:
+		side_monitors.layout(viewport, get_viewport().get_camera_3d())
 
 func mount_instruments(cockpit: Node3D, neutral_eye: Vector3, render_layer: int) -> void:
 	if not is_instance_valid(mounted_root): _setup_mounted_instruments(cockpit, neutral_eye, render_layer)
@@ -314,17 +346,21 @@ func _setup_mounted_instruments(cockpit: Node3D, neutral_eye: Vector3, render_la
 			model_view.set_meta("mounted_transform", Transform3D(basis, -(basis * front_centre)) * rest)
 		mounted_sprites.append(null if model_view != null else _mount_sprite(panel, frame, render_layer))
 		row_x += frame.x + 6.0
+	side_monitors = SideMonitors.new()
+	mounted_root.add_child(side_monitors)
+	side_monitors.setup(self, neutral_eye, render_layer)
+	_layout()
 
-func _mount_sprite(panel: Node3D, frame: Vector2, render_layer: int) -> SubViewport:
+func _mount_sprite(panel: Node3D, frame: Vector2, render_layer: int, units_per_pixel := MOUNT_UNITS_PER_PIXEL, resolution_scale := 1) -> SubViewport:
 	var sprite := SubViewport.new()
-	sprite.size = Vector2i(frame.ceil())
+	sprite.size = Vector2i((frame * resolution_scale).ceil())
 	sprite.disable_3d = true
 	sprite.transparent_bg = true
 	sprite.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	panel.add_child(sprite)
 	var plane := MeshInstance3D.new()
 	var quad := QuadMesh.new()
-	quad.size = frame * MOUNT_UNITS_PER_PIXEL
+	quad.size = frame * units_per_pixel
 	plane.mesh = quad
 	plane.layers = render_layer
 	plane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -366,9 +402,9 @@ func _refresh_views() -> void:
 			if panel.position.y != height: panel.position.y = height
 			if mounted_sprites[i] != null:
 				mounted_sprites[i].render_target_update_mode = SubViewport.UPDATE_ALWAYS if shown else SubViewport.UPDATE_DISABLED
-	if bottom_view != null:
-		_refresh_camera_feed()
-		bottom_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if displays[2].camera_feed != null and visible and enabled[2] and instruments[2].visible and is_instance_valid(pilot) and not pilot.dead else SubViewport.UPDATE_DISABLED
+	if is_instance_valid(side_monitors):
+		side_monitors.refresh(get_viewport().get_camera_3d(), mounted and visible)
+	if bottom_view != null: _refresh_camera_feed()
 	for i in range(displays.size()):
 		displays[i].set_process(visible and instruments[i].visible)
 	for view in model_views:
@@ -498,6 +534,7 @@ func _model_instrument(definition: Dictionary, display: Control) -> Control:
 		camera.position = box.get_center() + Vector3.BACK * view_distance
 		view.add_child(camera)
 		view.set_meta("instrument_model", model)
+		view.set_meta("instrument_screen", screen_mesh)
 		view.set_meta("instrument_transform", model.transform)
 		view.set_meta("instrument_bounds", box)
 		var environment := WorldEnvironment.new()

@@ -8,6 +8,15 @@ class Target extends CharacterBody3D:
 	var dead := false
 	func take_damage(_amount: float, _point: Vector3 = Vector3.ZERO) -> void: pass
 	func take_weapon_damage_from(amount: float, _point: Vector3, _owner: Node3D) -> void: received += amount
+class ConfinedWater extends "res://submarine_traffic.gd":
+	var raised_firing_point := false
+	func water_clear(point: Vector3) -> bool:
+		return point.z <= player.global_position.z
+	func segment_clear(a: Vector3, b: Vector3) -> bool:
+		return water_clear(a) and water_clear(b)
+	func route(start: Vector3, finish: Vector3) -> PackedVector3Array:
+		if not segment_clear(start,finish) or (raised_firing_point and finish.y <= 0): return PackedVector3Array()
+		return PackedVector3Array([finish])
 func _initialize() -> void:
 	preload("res://player_storage.gd").root_override = "res://tests/cache-pirate-weapons-fixtures"
 	preload("res://mod_registry.gd").initialize(false,"res://tests/cache-pirate-weapons-fixtures/Mods")
@@ -17,7 +26,7 @@ func check(ok: bool, message: String) -> void:
 	if not ok: failures += 1; push_error(message)
 func run() -> void:
 	var world := Node3D.new(); root.add_child(world)
-	var traffic := preload("res://submarine_traffic.gd").new(); world.add_child(traffic); traffic.set_physics_process(false)
+	var traffic := ConfinedWater.new(); world.add_child(traffic); traffic.set_physics_process(false)
 	var camera := Camera3D.new(); world.add_child(camera); camera.position = Vector3(5,3,-4); camera.look_at(Vector3(0,0,2)); camera.current = true
 	var target := Target.new(); world.add_child(target); target.position.z = 2.0; target.collision_layer = 2
 	var shape := CollisionShape3D.new(); shape.shape = SphereShape3D.new(); shape.shape.radius = 0.3; target.add_child(shape)
@@ -63,8 +72,32 @@ func run() -> void:
 	for tick in range(10): agent.armament.begin_frame(0.04)
 	agent.armament.attack(0.04,target)
 	check(is_equal_approx(target.received,0.375),"Ticks without a target expire rather than being banked")
+	target.position = Vector3.ZERO
+	agent.home.origin = Vector3(0,0,-5.5)
+	for kind in ["zapper","zapperup"]:
+		agent.reset()
+		agent.armament.select_weapon(kind)
+		target.received = 0
+		await physics_frame
+		for tick in range(240):
+			agent.advance(0.04)
+			if target.received > 0: break
+			await physics_frame
+		check(agent.attack_run.passes > 0 and target.received > 0,kind+" closes from torpedo standoff and fires when the usual pass is blocked")
+		agent.reset()
+		agent.armament.select_weapon(kind)
+		traffic.raised_firing_point = true
+		var raised_route: PackedVector3Array = agent._attack_route(target.global_position)
+		if raised_route.is_empty(): raised_route = agent._attack_route(target.global_position)
+		check(not raised_route.is_empty() and raised_route[-1].y > 0 and raised_route[-1].distance_to(target.global_position) < agent.armament.weapon_range(),kind+" keeps elevated fallback positions within firing range")
+		traffic.raised_firing_point = false
+	agent.armament.select_weapon("missile")
+	var torpedo_route: PackedVector3Array = agent._attack_route(target.global_position)
+	check(not torpedo_route.is_empty() and is_equal_approx(torpedo_route[-1].length(),5.5),"Torpedo fallback keeps its usual standoff distance")
 	agent.armament.select_weapon("electro")
 	check(agent.armament.weapon_id == "missile","Legacy NPC Electro Bolt loadouts fall back to torpedoes")
+	target.position = model.global_position + Vector3.BACK * 4.0
+	await physics_frame
 	agent.armament.select_weapon("zapperup"); agent.armament.attack(0.04,target)
 	agent.dead = true; agent.armament._process(0)
 	check(agent.armament.arcs.all(func(arc: Node3D) -> bool: return not arc.firing) and not agent.armament.zap_audio.playing,"Death stops zapper visuals and loop audio")

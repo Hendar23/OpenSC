@@ -46,7 +46,7 @@ static func load_model(path: String, descriptor: Dictionary = {}) -> Node3D:
 	_apply_material_textures(state, descriptor)
 	var asset_id := str(descriptor.get("id", ""))
 	if asset_id in ["submarine.player", "model.pirate"]:
-		_tag_exterior_canopy(state, json)
+		_tag_submarine_materials(state, json, asset_id == "submarine.player")
 	if descriptor.get("scenery_lods",false) or str(descriptor.get("id","")) in ["model.reed","model.bush1","model.bush2","model.bush3","model.bush4"]:
 		# Runtime GLTF loading does not run the editor's automatic LOD import.
 		# Keep the full-detail surface and add distance-only index buffers once,
@@ -87,7 +87,7 @@ static func load_model(path: String, descriptor: Dictionary = {}) -> Node3D:
 	cache.save_scene(cache_key, root)
 	return root
 
-static func _tag_exterior_canopy(state: GLTFState, source: Dictionary) -> void:
+static func _tag_submarine_materials(state: GLTFState, source: Dictionary, player: bool) -> void:
 	# Allow replacement submarines to use the same live reflections as retail glass.
 	# Material extras are an explicit opt-in, so hull paint and other GLBs retain
 	# their imported material behavior.
@@ -97,12 +97,16 @@ static func _tag_exterior_canopy(state: GLTFState, source: Dictionary) -> void:
 	for index in mini(materials.size(), descriptions.size()):
 		var entry: Variant = descriptions[index]
 		if not entry is Dictionary: continue
-		var extras: Variant = entry.get("extras", {})
-		if not extras is Dictionary or extras.get("osc_exterior_canopy", false) != true: continue
 		var material := materials[index] as StandardMaterial3D
 		if material == null: continue
-		material.set_meta("exterior_canopy", true)
-		material.set_meta("canopy_original_color", material.albedo_color)
+		var extras: Variant = entry.get("extras", {})
+		if not extras is Dictionary: extras = {}
+		if extras.get("osc_exterior_canopy", false) == true:
+			material.set_meta("exterior_canopy", true)
+			material.set_meta("canopy_original_color", material.albedo_color)
+		# Existing remaster releases predate the interior extra.
+		if player and (extras.get("osc_cockpit_interior", false) == true or entry.get("name") == "Canopy interior"):
+			material.set_meta("cockpit_interior", true)
 
 static func _apply_source_bounds(state: GLTFState, json: Dictionary) -> void:
 	# Offline simplification may drop extreme vertices. Retain the source bounds

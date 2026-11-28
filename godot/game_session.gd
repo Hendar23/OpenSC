@@ -100,9 +100,6 @@ func _reset_loaded_world() -> void:
 	if game.weapons.arsenal != null: game.weapons.arsenal.reset()
 	for particle in game.weapons.hit_blood.particles: particle.node.free()
 	game.weapons.hit_blood.particles.clear()
-	for patch in game.plant_current.patches:
-		patch.bend = Vector3.ZERO
-		for material in patch.materials: material.set_shader_parameter("propeller_bend",Vector3.ZERO)
 	game._clear_session_effects(game.world_root)
 	game.pilot.hull_rating = 100; game.pilot.radiation_rating = 0
 	game.pilot.restore_health(); game.pilot.collision_layer = 2

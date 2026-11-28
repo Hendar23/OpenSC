@@ -1339,6 +1339,9 @@ msgstr "Mise en place des décors des mods"
 msgid "Plant current direction (degrees)"
 msgstr "Direction du courant sur les plantes (degrés)"
 
+msgid "Plant current twist strength"
+msgstr "Amplitude de torsion des plantes dans le courant"
+
 msgid "Plant ripple strength"
 msgstr "Amplitude des ondulations des plantes"
 
@@ -1350,12 +1353,6 @@ msgstr "Amplitude du balancement des plantes"
 
 msgid "Plant sway variation"
 msgstr "Variation du balancement des plantes"
-
-msgid "Plant twist strength"
-msgstr "Amplitude de torsion des plantes"
-
-msgid "Plant wash recovery (seconds)"
-msgstr "Temps de retour des plantes après le sillage (secondes)"
 
 msgid "Plant wave length (plant heights)"
 msgstr "Longueur d’onde des plantes (en hauteurs de plante)"
@@ -1428,12 +1425,6 @@ msgstr "Procha"
 
 msgid "Propeller spin-down time"
 msgstr "Temps d’arrêt des hélices"
-
-msgid "Propeller wash range"
-msgstr "Portée du sillage des hélices"
-
-msgid "Propeller wash strength"
-msgstr "Force du sillage des hélices"
 
 msgid "Protected assets must be preconverted model scenes: %s"
 msgstr "Les ressources protégées doivent être des scènes de modèle préconverties : %s"
@@ -1704,6 +1695,12 @@ msgstr "Vitesse des vagues"
 
 msgid "Switch camera"
 msgstr "Changer de caméra"
+
+msgid "First-person view toggle"
+msgstr "Basculer la vue cockpit"
+
+msgid "Cockpit stick freelook"
+msgstr "Vue libre au stick"
 
 msgid "System"
 msgstr "Système"

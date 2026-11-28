@@ -31,7 +31,6 @@ func _process(delta: float) -> void:
 	if not game.pilot_mode:
 		game._update_daylight()
 		return
-	if not game.world_loading: game.plant_current.update_wash(game.pilot,delta)
 	if game.docked_screen != null:
 		game.docked_screen.visible = false
 		if game.docking.stage == Docking.Stage.DOCKED and not game.front_end.menu_layer.visible:

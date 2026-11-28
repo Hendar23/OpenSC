@@ -78,36 +78,6 @@ func _run() -> void:
 				if first.get_pixel(x,y) != second.get_pixel(x,y): changed += 1
 		check(changed > 100,"Plant current visibly bends the rendered plant")
 		print("Plant sway changed pixels: ",changed)
-		game.plant_current.configure({"strength":0.0})
-		for frame in range(4): await process_frame
-		await RenderingServer.frame_post_draw
-		first = viewport.get_texture().get_image()
-		var mesh := specimen.find_children("*","MeshInstance3D",true,false)[0] as MeshInstance3D
-		var patch: Dictionary = game.plant_current.patches.filter(func(entry: Dictionary) -> bool: return entry.materials.has(mesh.get_active_material(0)))[0]
-		var sources: Array[Dictionary] = [{"position":patch.point - Vector3.BACK * 0.5,"direction":Vector3.BACK,"power":1.0}]
-		game.plant_current.update_sources(sources,0.3)
-		for frame in range(4): await process_frame
-		await RenderingServer.frame_post_draw
-		second = viewport.get_texture().get_image(); second.save_png("res://tests/plant-propeller-wash.png")
-		changed = 0
-		for y in range(400):
-			for x in range(400):
-				if first.get_pixel(x,y) != second.get_pixel(x,y): changed += 1
-		check(changed > 100,"Propeller wash visibly bends the rendered foliage")
-		print("Propeller wash changed pixels: ",changed)
-		# Hold the wash bend constant and stop ordinary sway. Moving pixels now
-		# come from the travelling wash ripples/torsion, not a changing lean.
-		game.plant_current.configure({"speed":0.0,"ripple":0.5,"twist":1.0})
-		for frame in range(4): await process_frame
-		await RenderingServer.frame_post_draw
-		first = viewport.get_texture().get_image()
-		await create_timer(0.5).timeout; await RenderingServer.frame_post_draw
-		second = viewport.get_texture().get_image(); second.save_png("res://tests/plant-wash-twist.png")
-		changed = 0
-		for y in range(400):
-			for x in range(400):
-				if first.get_pixel(x,y) != second.get_pixel(x,y): changed += 1
-		check(changed > 100,"Constant propeller wash produces travelling distortion with ordinary sway stopped")
 		viewport.queue_free()
 	game.queue_free(); await process_frame
 	print("Wildlife visuals: %d checks, %d failures" % [checks,failures])

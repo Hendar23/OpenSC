@@ -12,14 +12,18 @@ const Docking = preload("res://docking_controller.gd")
 
 func _input(event: InputEvent) -> void:
 	var camera = game.game_camera
-	if event is InputEventJoypadButton and event.button_index == JOY_BUTTON_RIGHT_STICK and event.pressed:
+	if Bindings.pressed(event, "cockpit_freelook_toggle") and not Bindings.pressed(event, "camera_toggle") and camera.can_freelook():
 		var active_device: int = camera.stick_freelook_device
-		if (active_device < 0 or active_device == event.device) and camera.can_freelook() \
-				and not Bindings.capture_active and not Bindings.claimed_by_chord(event):
-			camera.set_stick_freelook(-1 if active_device == event.device else event.device)
+		var device := _freelook_controller(event, active_device)
+		if device >= 0 and (active_device < 0 or active_device == device):
+			camera.set_stick_freelook(-1 if active_device == device else device)
 			game.get_viewport().set_input_as_handled(); return
-	if event is InputEventJoypadMotion and event.device == camera.stick_freelook_device and event.axis in [JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y]:
-		game.get_viewport().set_input_as_handled(); return
+	if event is InputEventJoypadMotion:
+		if event.device == camera.stick_freelook_device and event.axis in [JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y]:
+			game.get_viewport().set_input_as_handled(); return
+		if event.axis == JOY_AXIS_RIGHT_X and camera.stick_freelook_device < 0 and not Bindings.capture_active \
+				and camera.can_freelook() and not Bindings.pressed(event, "camera_toggle"):
+			camera.set_horizontal_look(event.device, event.axis_value)
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed and camera.can_freelook():
 			camera.mouse_freelook = true
@@ -55,6 +59,12 @@ func _input(event: InputEvent) -> void:
 		game._set_map_open(false)
 		game._toggle_developer_ui()
 		game.get_viewport().set_input_as_handled()
+
+func _freelook_controller(event: InputEvent, active: int) -> int:
+	if event is InputEventJoypadButton or event is InputEventJoypadMotion: return event.device
+	if active >= 0: return active
+	var controllers := Input.get_connected_joypads()
+	return controllers[0] if not controllers.is_empty() else -1
 
 func _unhandled_input(event: InputEvent) -> void:
 	if game.get_tree().paused or not game.pilot_mode or game.world_loading or game.loading_save or game.map_open or (game.dock_interface != null and game.dock_interface.visible): return
@@ -126,6 +136,8 @@ func _update_pilot_controls() -> void:
 func _joy_connection_changed(device: int, connected: bool) -> void:
 	if not connected and game.game_camera.stick_freelook_device == device:
 		game.game_camera.set_stick_freelook(-1)
+	if not connected and game.game_camera.horizontal_look_device == device:
+		game.game_camera.set_horizontal_look(device, 0.0)
 
 func _desired_mouse_mode() -> int:
 	if game.game_camera.mouse_freelook and game.game_camera.can_freelook(): return Input.MOUSE_MODE_CAPTURED

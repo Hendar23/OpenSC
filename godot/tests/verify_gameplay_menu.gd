@@ -14,7 +14,10 @@ func _run() -> void:
 	root.size = Vector2i(1280,720)
 	preload("res://input_bindings.gd").install()
 	var front := Front.new(); front.remember_preferences = false; root.add_child(front)
-	front.show_menu(false); front._activate_button("options"); front._activate_button("gameplay")
+	front.show_menu(false); front._activate_button("options")
+	var options_bounds: Rect2 = front.buttons.display.get_global_rect().merge(front.buttons.back.get_global_rect())
+	check(is_equal_approx(options_bounds.get_center().y, root.get_visible_rect().get_center().y), "The Options buttons are vertically centred")
+	front._activate_button("gameplay")
 	var menu: CanvasLayer = front.gameplay_menu
 	check(menu.visible and menu.classic_sub_physics_button.has_focus() and not front.buttons.gameplay.visible,"Gameplay opens focused on Classic Sub physics")
 	check(front.buttons.gameplay.text == "Gameplay" and menu.option_rows.get_child_count() == 4,"Gameplay contains its four play preferences")
@@ -23,6 +26,13 @@ func _run() -> void:
 		for frame in range(5): await process_frame
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://tests/gameplay-wildlife-cap.png")
+	else:
+		for frame in range(3): await process_frame
+	var gameplay_button: Button = menu.classic_sub_physics_button
+	var gameplay_bounds := gameplay_button.get_global_rect().merge(menu.back.get_global_rect())
+	check(menu.layout.scale.is_equal_approx(front.menu_layout.scale), "Gameplay uses the Options menu scale")
+	check(is_equal_approx(gameplay_button.get_global_rect().size.y, front.buttons.display.get_global_rect().size.y), "Gameplay and Options buttons are the same height")
+	check(is_equal_approx(gameplay_bounds.get_center().y, root.get_visible_rect().get_center().y), "The Gameplay buttons are vertically centred")
 	var bubbles = preload("res://propeller_bubbles.gd")
 	check(menu.bubble_limit == 200,"Global bubble limit defaults to 200")
 	var wakes: Array[Node3D] = []

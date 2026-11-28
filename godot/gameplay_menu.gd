@@ -94,22 +94,22 @@ func _build_menu() -> void:
 	layout.add_child(scroll)
 	option_rows = VBoxContainer.new()
 	option_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	option_rows.add_theme_constant_override("separation", 6)
+	option_rows.add_theme_constant_override("separation", 3)
 	scroll.add_child(option_rows)
 	classic_sub_physics_button = _button(option_rows, _toggle_classic_sub_physics)
 	cockpit_3d_button = _button(option_rows, _toggle_cockpit_3d)
 	crosshair_button = _button(option_rows, _toggle_crosshair)
 	replay_button = _button(option_rows, _toggle_replay)
-	back = _button(layout, close_menu, 208.0)
+	back = _button(layout, close_menu)
 	back.text = "Back"
 	status = Label.new(); status.size = Vector2(320,32)
 	status.add_theme_font_size_override("font_size",14); status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; layout.add_child(status)
 	option_rows.minimum_size_changed.connect(_layout)
 	get_viewport().size_changed.connect(_layout); _refresh(); _layout(); hide()
 
-func _button(parent: Control, activate: Callable, width := 248.0) -> Button:
+func _button(parent: Control, activate: Callable) -> Button:
 	var button := Button.new()
-	button.custom_minimum_size = Vector2(width,28)
+	button.custom_minimum_size = Vector2(208,28)
 	button.add_theme_font_size_override("font_size",14)
 	var normal := StyleBoxFlat.new(); normal.bg_color = Color(0.01,0.05,0.07,0.82)
 	normal.border_color = Color(0.24,0.55,0.6,0.7); normal.set_border_width_all(1); normal.set_corner_radius_all(5)
@@ -229,22 +229,20 @@ func close_menu() -> void:
 	hide(); closed.emit()
 
 func _layout() -> void:
-	var viewport := get_viewport()
-	var available := viewport.get_visible_rect().size
+	var available := get_viewport().get_visible_rect().size
 	if available.x <= 0.0 or available.y <= 0.0: return
-	# Account for the project canvas stretch when keeping short windows readable.
-	var pixels_per_unit := maxf(viewport.get_stretch_transform().get_scale().y, 0.001)
 	var list_size := option_rows.get_combined_minimum_size()
-	var full_height := list_size.y + 78.0
-	var factor := minf(available.x / 640.0, maxf(available.y / full_height, 1.0 / pixels_per_unit))
-	layout.size = Vector2(640.0, minf(full_height, available.y / factor))
+	var factor := minf(available.x / layout.size.x, available.y / layout.size.y)
 	layout.scale = Vector2.ONE * factor
 	layout.position = (available - layout.size * factor) * 0.5
 	var scrollbar_gutter := scroll.get_v_scroll_bar().get_combined_minimum_size().x + scroll.get_theme_constant("scrollbar_h_separation")
-	var list_height := minf(list_size.y, maxf(28.0, layout.size.y - 78.0))
+	var list_height := minf(list_size.y, layout.size.y - 78.0)
+	var column_left := (layout.size.x - list_size.x) * 0.5
+	var group_height := list_height + 3.0 + back.size.y
 	scroll.size = Vector2(list_size.x + scrollbar_gutter, list_height)
-	scroll.position = Vector2((layout.size.x - list_size.x) * 0.5, 12.0)
-	back.position = Vector2(216.0, scroll.position.y + scroll.size.y + 5.0)
+	scroll.position = Vector2(column_left, (layout.size.y - group_height) * 0.5)
+	back.size.x = list_size.x
+	back.position = Vector2(column_left, scroll.position.y + scroll.size.y + 3.0)
 	status.position = Vector2(160.0, back.position.y + back.size.y + 5.0)
 
 func _input(event: InputEvent) -> void:
